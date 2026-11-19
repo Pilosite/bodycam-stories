@@ -5242,7 +5242,7 @@ const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
    entre les deux, le chargement suivant le sait (PT_KO) et ne réessaie pas : il démarre sur le moteur v3, qui n'en a pas besoin.
    Sur ordinateur, on ne le compile qu'à la demande. balade.reessayerRayons() efface la marque. */
 const bureau=!matchMedia("(pointer:coarse)").matches && !CFG.mobile;
-let PT_KO=false; try{ PT_KO=localStorage.getItem("bodycam-rayons")==="essai"; }catch(_){}
+let PT_KO=false; try{ PT_KO=localStorage.getItem("bodycam-rayons-2")==="essai"; }catch(_){}
 const progs=[null,null,null,null], lances=[];
 const varCourante=()=>(S.semN?1:0)+(S.kit===2?2:0);
 const ptDispo=()=>compilerPT(varCourante());                    // le lanceur de rayons peut-il dessiner le monde courant ? (le compile au besoin)
@@ -5254,14 +5254,14 @@ const fini=x=>!EXTP||gl.getProgramParameter(x.p,EXTP.COMPLETION_STATUS_KHR);
 function compilerPT(v,attendre){
   if(progs[v]) return true; if(PT_KO) return false;
   if(!lances[v]||!lances[v].marque){
-    try{ localStorage.setItem("bodycam-rayons","essai"); }catch(_){}
+    try{ localStorage.setItem("bodycam-rayons-2","essai"); }catch(_){}
     etapeGL("compilation : moteur à rayons, variante "+v);
     lances[v]=lances[v]||lancer(variante(v)); lances[v].marque=true;
   }
   if(!attendre&&!fini(lances[v])) return false;                 // pas encore prêt : on repassera
   try{ progs[v]=finir(lances[v]); lances[v]=null; etapeGL("  compilé : moteur à rayons"); }
   catch(e){ PT_KO=true; const el=$("err"); if(!gl.isContextLost()){ el.style.display="none"; el.textContent=""; } return false; }
-  try{ localStorage.removeItem("bodycam-rayons"); }catch(_){}
+  try{ localStorage.removeItem("bodycam-rayons-2"); }catch(_){}
   return true;
 }
 const ptEnCours=()=>{ const l=lances[varCourante()]; return !!(l&&l.marque&&!progs[varCourante()]&&!PT_KO); };
@@ -6959,7 +6959,7 @@ $("fin-quitter").onclick=()=>quitterHistoire(false);
 
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
-  reessayerRayons(){ try{ localStorage.removeItem("bodycam-rayons"); }catch(_){} location.reload(); },
+  reessayerRayons(){ try{ localStorage.removeItem("bodycam-rayons-2"); }catch(_){} location.reload(); },
   fiches:()=>FICHES.map(f=>f.id),
   lieu(i){ ficheIdx=((i%FICHES.length)+FICHES.length)%FICHES.length; applyFiche(FICHES[ficheIdx]); },
   fiche(f){ applyFiche(f); },
