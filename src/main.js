@@ -808,12 +808,13 @@ const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},          // dmax : 150 m quand l'eau est à l'horizon (au-delà, le lanceur de rayons ne touche plus rien : c'est la mer)
   tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
 function v3Init(){                                             // rend vrai quand tous les programmes sont prêts (compilation sans bloquer)
+  if((V3.gp||V3.lance) && V3.avecSem!==(S.semN>0)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }   // la variante de l'ombrage dépend des semis de la fiche
   if(V3.gp) return true;
-  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
+  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; V3.avecSem=S.semN>0; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
     const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
     V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), grainsF:lancer(F(FS_V3GBUF),F(VS_V3GRAINS)), sol:lancer(FS_V3GBUF,VS_V3SOL),
       ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombreF:lancer(F(FS_V3OMBRE),F(VS_V3GRAINS)), proches:lancer(FS_V3PROCHES,VS_V3PROCHES),
-      ombrage:lancer(V3.avecTapis?FS_V3OMBRAGE.replace("\n","\n#define TAPIS 1\n"):FS_V3OMBRAGE) };
+      ombrage:lancer(FS_V3OMBRAGE.replace("\n","\n#define TAPIS "+(V3.avecTapis?1:0)+"\n#define SEMO "+(V3.avecSem?1:0)+"\n")) };
     if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;

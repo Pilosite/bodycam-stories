@@ -8100,6 +8100,9 @@ uniform int   uDamier;
 uniform float uAlphaD;
 // TAPIS : variante choisie à la compilation (src/main.js). Sans tapis, ce code n'existe pas dans le programme : sur Direct3D
 // (Intel Arc), sa présence seule empêchait la compilation d'aboutir.
+#ifndef SEMO
+#define SEMO 0              // 1 : la fiche a des semis (variante compilee a la demande : sur Direct3D, sdSemis deplie ici bloquait la compilation)
+#endif
 #ifndef TAPIS
 #define TAPIS 0
 #endif
@@ -8279,7 +8282,9 @@ void main(){
       else if(id==1 && par>=1.) matCone(p,gn,alb,n,spec);   // cœur de feuillage d'un conifère
       else if(id==4 || id==6){                               // objet, ou élément de semis (retrouvé à partir du point du monde, comme objId()) ; un seul appel à matProp
         vec4 info=vec4(0.,0.,0.,floor(par*128.+.5));
+#if SEMO
         if(id==6){ vec4 inst; gTol=.002; sdSemis(q,int(par*4.+.5),info,inst); gInst=inst; }
+#endif
         vec3 qr; r0=matProp(q,gn,info,id==6,alb,n,spec,emis,qr,nr0,rot); q=qr; }
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
       if(r0>=0 && (uProf&1)==0 && !((uProf&64)!=0 && id==0) && !((uProf&128)!=0 && id!=0)){
@@ -11825,12 +11830,13 @@ const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},          // dmax : 150 m quand l'eau est à l'horizon (au-delà, le lanceur de rayons ne touche plus rien : c'est la mer)
   tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
 function v3Init(){                                             // rend vrai quand tous les programmes sont prêts (compilation sans bloquer)
+  if((V3.gp||V3.lance) && V3.avecSem!==(S.semN>0)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }   // la variante de l'ombrage dépend des semis de la fiche
   if(V3.gp) return true;
-  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
+  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; V3.avecSem=S.semN>0; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
     const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
     V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), grainsF:lancer(F(FS_V3GBUF),F(VS_V3GRAINS)), sol:lancer(FS_V3GBUF,VS_V3SOL),
       ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombreF:lancer(F(FS_V3OMBRE),F(VS_V3GRAINS)), proches:lancer(FS_V3PROCHES,VS_V3PROCHES),
-      ombrage:lancer(V3.avecTapis?FS_V3OMBRAGE.replace("\n","\n#define TAPIS 1\n"):FS_V3OMBRAGE) };
+      ombrage:lancer(FS_V3OMBRAGE.replace("\n","\n#define TAPIS "+(V3.avecTapis?1:0)+"\n#define SEMO "+(V3.avecSem?1:0)+"\n")) };
     if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;

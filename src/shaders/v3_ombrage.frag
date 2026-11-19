@@ -32,6 +32,9 @@ uniform int   uDamier;
 uniform float uAlphaD;
 // TAPIS : variante choisie à la compilation (src/main.js). Sans tapis, ce code n'existe pas dans le programme : sur Direct3D
 // (Intel Arc), sa présence seule empêchait la compilation d'aboutir.
+#ifndef SEMO
+#define SEMO 0              // 1 : la fiche a des semis (variante compilee a la demande : sur Direct3D, sdSemis deplie ici bloquait la compilation)
+#endif
 #ifndef TAPIS
 #define TAPIS 0
 #endif
@@ -211,7 +214,9 @@ void main(){
       else if(id==1 && par>=1.) matCone(p,gn,alb,n,spec);   // cœur de feuillage d'un conifère
       else if(id==4 || id==6){                               // objet, ou élément de semis (retrouvé à partir du point du monde, comme objId()) ; un seul appel à matProp
         vec4 info=vec4(0.,0.,0.,floor(par*128.+.5));
+#if SEMO
         if(id==6){ vec4 inst; gTol=.002; sdSemis(q,int(par*4.+.5),info,inst); gInst=inst; }
+#endif
         vec3 qr; r0=matProp(q,gn,info,id==6,alb,n,spec,emis,qr,nr0,rot); q=qr; }
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
       if(r0>=0 && (uProf&1)==0 && !((uProf&64)!=0 && id==0) && !((uProf&128)!=0 && id!=0)){
