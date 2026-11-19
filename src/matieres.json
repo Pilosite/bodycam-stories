@@ -2067,18 +2067,20 @@
    "relief": {
     "bosses": [
      {
+      "echelle": 14,
+      "fbm": true,
+      "decalage": 5,
+      "force": 0.004
+     },
+     {
       "echelle": 70,
       "fbm": true,
       "decalage": 2,
       "force": 0.0022
-     },
-     {
-      "echelle": 260,
-      "force": 0.0005
      }
     ]
    },
-   "brillance": 0.6
+   "brillance": 0.75
   }
  },
  "surfaces": {

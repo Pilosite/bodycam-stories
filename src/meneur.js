@@ -754,13 +754,29 @@ export function secoursChercher(texte) {
   const m = /\b(?:chercher|cherche|ramasser|ramasse|rapporter|rapporte|trouver|trouve)\s+(.+?)(?=\s+(?:et|puis|pour)\s+(?:fais|fait|faire|mets|met|construis|fabrique|en\b)|[,.;!?]|$)/.exec(t);
   return m && /[a-z]{3,}/.test(m[1]) ? { type: 'chercher', quoi: m[1].trim().slice(0, 60) } : null;
 }
-/* Une chose posée là où se tient le porteur (« dessous » une chose de 30 cm) : poussée hors de son corps, marge comprise.
-   Une petite chose (moins de 20 cm) peut tomber à ses talons : elle passe sous la caméra, il s'en écarte en repartant. */
+/* Une chose n'est jamais posée là où se tient le porteur. Plus large que 25 cm (rayon > 12,5 cm), elle est posée DEVANT lui, à
+   une distance faite pour son envergure (son rayon, la marge du corps, 25 cm) ; une petite chose peut tomber à ses talons :
+   elle passe sous la caméra, il s'en écarte en repartant. */
 export function horsDuCorps(pos, corps, rayon, marge = REGLAGES.MARGE_CORPS) {
-  const r = num(rayon, 0, 30, 0), dx = pos.x - corps.x, dz = pos.z - corps.z, m = Math.hypot(dx, dz), d = r + (r > 0.1 ? marge : 0.05);
+  const r = num(rayon, 0, 30, 0), dx = pos.x - corps.x, dz = pos.z - corps.z, m = Math.hypot(dx, dz), grand = r > 0.125, d = r + (grand ? marge + 0.25 : 0.05);
   if (m >= d) return { x: pos.x, z: pos.z };
+  if (grand) return { x: corps.x + Math.sin(corps.yaw || 0) * d, z: corps.z + Math.cos(corps.yaw || 0) * d };
   const ux = m > 1e-3 ? dx / m : -Math.sin(corps.yaw || 0), uz = m > 1e-3 ? dz / m : -Math.cos(corps.yaw || 0);
   return { x: corps.x + ux * d, z: corps.z + uz * d };
+}
+
+/* Une chose nouvelle ne se pose pas sur une autre : si la place est prise (cercles {x, z, r} des choses déjà là), elle glisse
+   autour du porteur, à la même distance ou un peu plus loin, jusqu'à une place libre. */
+export function placeLibre(pos, rayon, autres, corps, marge = REGLAGES.MARGE_CORPS) {
+  const r = num(rayon, 0, 30, 0), A = liste(autres).filter(o => isObj(o) && Number.isFinite(o.x));
+  const libre = p => A.every(o => Math.hypot(p.x - o.x, p.z - o.z) >= o.r + r + 0.1);
+  if (libre(pos)) return { x: pos.x, z: pos.z };
+  const d0 = Math.max(Math.hypot(pos.x - corps.x, pos.z - corps.z), r + (r > 0.125 ? marge + 0.25 : 0.3)), a0 = Math.atan2(pos.x - corps.x, pos.z - corps.z);
+  for (const d of [d0, d0 + r + 0.3, d0 + 2 * r + 0.6]) for (let k = 1; k <= 8; k++) for (const sg of [1, -1]) {
+    const a = a0 + sg * k * 0.3, p = { x: corps.x + Math.sin(a) * d, z: corps.z + Math.cos(a) * d };
+    if (libre(p)) return p;
+  }
+  return { x: pos.x, z: pos.z };
 }
 
 /* ---- Retoucher une chose déjà là (§14) : ajouter des formes dessus, en retirer, en repeindre, la déplacer, la casser.
@@ -849,7 +865,8 @@ export function aEchelle(formes, k, centre = [0, 0, 0]) {
   return liste(formes).map(f => Object.assign({}, f, { p: f.p.map((v, i) => r3(centre[i] + (v - centre[i]) * k)), taille: f.taille.map(v => r3(Math.max(0.005, v * k))) },
     f.arrondi !== undefined ? { arrondi: Math.min(0.3, r3(f.arrondi * k)) } : {}));
 }
-const PETIT_CORPS = /\b(caca|crotte|chie|pipi|vomi|crachat|morve|pet|bouse|fiente)\b/;
+const PETIT_CORPS = /\b(caca|crottes?|chie|pipi|vomi|crachat|morve|pet|bouses?|fientes?|merde|etrons?|colombins?|selles|dejections?|popo|excrements?)\b/;
+const ENORME = /\b(enormes?|geante?s?|gigantesques?|immenses?|colossa(?:l|le|les|ux)|monstrueu(?:x|se|ses)|monumenta(?:l|le|les|ux))\b/;
 const EN_MAIN = /\b(caillou|cailloux|baton|batons|brindille|feuille|bouton|cle|cles|telephone|mouchoir|bague|piece|fleur|pomme|bille)\b/;
 /* « de la taille d'une noix », « gros comme un poing » : des choses que tout le monde connaît, et leur envergure (m). Des données. */
 export const TAILLES_CONNUES = { noisette: 0.02, bille: 0.016, noix: 0.035, cerise: 0.022, piece: 0.025, oeuf: 0.06, abricot: 0.05, prune: 0.05,
@@ -874,8 +891,10 @@ export function bornesTaille(texte) {
   else if (comme(t)) { const [L, mot] = comme(t); mn = 0.6 * L; mx = 1.5 * L; raison = 'comme ' + mot; }
   else if (PETIT_CORPS.test(t)) { mx = 0.4; raison = 'sort du corps'; }
   else if (EN_MAIN.test(t)) { mx = 0.5; raison = 'tient dans la main'; }
+  // « énorme » sans taille chiffrée : jusqu'à 2,5 fois ce que permet la nature de la chose ; sans nature connue, pas au-delà
+  // de la borne par défaut (« géant » ne donne jamais 15 m)
   if (comme(t)) {}                                                // une comparaison dit déjà la taille
-  else if (/\b(enorme|geant|gigantesque|immense)\b/.test(t)) { mx *= 2.5; raison += ', énorme'; }
+  else if (ENORME.test(t)) { if (raison !== 'défaut' && !masse && !lg) mx *= 2.5; raison += ', énorme'; }
   else if (/\b(minuscule|tout petit|toute petite|petit|petite)\b/.test(t)) { mx *= 0.6; mn *= 0.6; raison += ', petit'; }
   return [mn, mx, raison];
 }
@@ -898,11 +917,32 @@ export function distanceArret(taille) { return Math.round(Math.max(0.55, num(tai
    s'accroupir tout près ET de zoomer (zoom numérique d'un téléphone, 8 × au plus) : sans zoom, le grand angle la réduit à
    quelques pixels. oeil : hauteur des yeux debout (m). */
 export const CHAMP_RAD = 2.18;
-export function planCadrage(taille, oeil = 1.36) {
-  const t = num(taille, 0.005, 30, 0.3);
-  const m = t < 0.12 ? 0.4 : Math.min(9, Math.max(0.6, 0.45 + 1.6 * t));
-  const hauteur = t < 0.12 ? 0.35 : t < 0.35 ? 0.5 : t < 0.8 ? 0.75 : 1;
-  return { m: Math.round(m * 100) / 100, hauteur, zoom: zoomPour(t, m, oeil * hauteur) };
+export function planCadrage(taille, oeil = 1.36, haut) {
+  const t = num(taille, 0.005, 30, 0.3), H = Number.isFinite(haut) && haut > 0 ? num(haut, 0.005, 30, t) : t;
+  let m = t < 0.12 ? 0.4 : Math.max(0.6, 0.45 + 1.6 * t), hauteur = t < 0.12 ? 0.35 : t < 0.35 ? 0.5 : t < 0.8 ? 0.75 : 1;
+  m = Math.max(m, t / 2 + REGLAGES.MARGE_CORPS);                  // jamais dans la chose
+  let zoom = zoomPour(t, m, oeil * hauteur);
+  // ENTIÈRE dans l'image, avec de la marge, en portrait (téléphone) comme en paysage (ordinateur) : il dézoome, puis recule
+  // et se relève jusqu'à ce qu'elle tienne (projection fisheye du capteur, tientDansImage)
+  for (let i = 0; i < 400 && !(tientDansImage(t, H, m, oeil * hauteur, zoom, 0.5) && tientDansImage(t, H, m, oeil * hauteur, zoom, 16 / 9)); i++) {
+    if (zoom > 1) zoom = Math.max(1, Math.round(zoom * 0.9 * 100) / 100);
+    else { m += 0.05 + 0.04 * m; if (hauteur < 1 && (H > oeil * hauteur * 0.8 || m > 1.2 + 1.2 * t)) hauteur = hauteur < 0.5 ? 0.5 : hauteur < 0.75 ? 0.75 : 1; }
+  }
+  return { m: Math.round(m * 100) / 100, hauteur, zoom: Math.round(zoom * 10) / 10 };
+}
+/* La chose (envergure t, hauteur H, posée au sol à m mètres devant) tient-elle entière dans l'image, à « marge » près ? La
+   caméra est à y mètres du sol et vise le milieu de sa hauteur ; projection équidistante du capteur (camera.frag, v3) : un angle
+   θ à l'axe donne un rayon θ / uFish, uFish = CHAMP_RAD / max(1, largeur/hauteur) / zoom ; l'image va de ±aspect/2 en x, ±1/2 en y. */
+export function tientDansImage(t, H, m, y, zoom = 1, aspect = 0.5, marge = 0.8) {
+  const R = t / 2, fy = H / 2 - y, fz = m, l = Math.hypot(fy, fz), f = [0, fy / l, fz / l], u = [0, f[2], -f[1]];
+  const fish = CHAMP_RAD / Math.max(1, aspect) / Math.max(1, zoom);
+  for (const x of [-R, R]) for (const yy of [0, H]) for (const z of [m - R, m + R]) {
+    const d = [x, yy - y, z], dz = d[1] * f[1] + d[2] * f[2], dx = x, dy = d[1] * u[1] + d[2] * u[2];
+    const h = Math.hypot(dx, dy); if (dz <= 0) return false;
+    const th = Math.atan2(h, dz), k = h > 1e-9 ? th / fish / h : 0;
+    if (Math.abs(dx * k) > marge * 0.5 * Math.min(aspect, 99) || Math.abs(dy * k) > marge * 0.5) return false;
+  }
+  return true;
 }
 /* Le zoom qui fait tenir une chose (envergure t) au sixième de l'image, vue à m mètres au sol, les yeux à y mètres. */
 export function zoomPour(taille, m, y) {
@@ -977,21 +1017,26 @@ export function formesModele(m, texte) {
     const V = volumeFormes(formes);
     if (V > 0) { k = Math.cbrt(masse / num(ech.densite, 0.1, 20, 1) / 1000 / V); raison = `${masse} kg (densité ${num(ech.densite, 0.1, 20, 1)})`; }
   } else if (/(cm|m|metres?|comme)\b/.test(pq) || /^comme /.test(pq)) { k = (mn + mx) / 2 / e0; raison = pq; }
-  else if (/\b(enorme|geant|gigantesque|immense)\b/.test(t)) { k = 2.5; raison = 'énorme'; }
-  else if (/\b(gros|grosse|grand|grande)\b/.test(t)) { k = 1.6; raison = 'gros'; }
+  // sans taille chiffrée, les mots donnent un contraste franc (la petite, puis l'énorme : comique, mais lisible entière)
+  else if (ENORME.test(t)) { k = num(ech.enorme, 1, 20, 5); raison = 'énorme'; }
+  else if (/\b(gros|grosse|grosses|grand|grande|grandes|big)\b/.test(t)) { k = num(ech.gros, 1, 20, 3.5); raison = 'gros'; }
   else if (/\b(minuscule|toute? petite?)\b/.test(t)) { k = 0.35; raison = 'minuscule'; }
-  else if (/\b(petit|petite|petits|petites)\b/.test(t)) { k = 0.6; raison = 'petit'; }
+  else if (/\b(petit|petite|petits|petites)\b/.test(t)) { k = num(ech.petit, 0.1, 1, 0.85); raison = 'petit'; }
   const e = e0 * k, lo = num(ech.min_m, 0.005, 30, 0.005), hi = num(ech.max_m, 0.01, 30, 30);
   if (e < lo) k = lo / e0; else if (e > hi) k = hi / e0;
   k = Math.round(k * 1000) / 1000;
   return { formes: k === 1 ? formes : aEchelle(formes, k), facteur: k, envergure: Math.round(e0 * k * 1000) / 1000, raison };
 }
 /* La matière dominante d'une chose (ses formes en relief) : celle que garde ce qu'on en façonne. */
-function dominante(formes) {
-  const n = new Map();
-  for (const f of liste(formes).filter(f => !plate(f))) { const k = f.matiere + '|' + f.couleur; n.set(k, (n.get(k) || 0) + 1); }
+const volForme = f => f.f === 'boite' ? f.taille[0] * f.taille[1] * f.taille[2] : f.f === 'capsule' ? Math.PI * (f.taille[0] / 2) ** 2 * (f.taille[1] + f.taille[0] * 2 / 3)
+  : f.f === 'cylindre' ? Math.PI / 4 * f.taille[0] * f.taille[2] * f.taille[1] : Math.PI / 6 * f.taille[0] * f.taille[1] * f.taille[2];
+function dominante(formes) {                                     // la matière qui fait le plus de volume, et la couleur de sa plus grosse forme
+  const n = new Map(), F = liste(formes).filter(f => !plate(f));
+  for (const f of F) n.set(f.matiere, (n.get(f.matiere) || 0) + volForme(f));
   const k = [...n.entries()].sort((a, b) => b[1] - a[1])[0];
-  return k ? { matiere: k[0].split('|')[0], couleur: k[0].split('|')[1] } : { matiere: 'mat', couleur: '#777777' };
+  if (!k) return { matiere: 'mat', couleur: '#777777' };
+  const g = F.filter(f => f.matiere === k[0]).sort((a, b) => volForme(b) - volForme(a))[0];
+  return { matiere: k[0], couleur: g.couleur };
 }
 /* Un modèle « transforme » appliqué à une chose : ses parties sont écrites en unité de longueur relative ; l'unité est
    choisie pour que la masse façonnée (parties de matière "@") ait le volume de la chose ; "@" prend sa matière et sa couleur. */
@@ -1073,6 +1118,12 @@ export function planTrajet(de, vers, obstacles, { marge = REGLAGES.MARGE_CORPS, 
     if (D < 0) return null; const t = -B - Math.sqrt(D);
     return t < 0 || t > L ? null : { t, x: a.x + ux * Math.max(0, t - 0.05), z: a.z + uz * Math.max(0, t - 0.05) };
   };
+  // le corps n'est jamais dans une chose : s'il s'y trouve (une grande chose posée sur lui), il en sort d'abord, tout droit
+  const sortie = [], de0 = de;
+  for (const o of tous.filter(o => o.r > 0.125 && Math.hypot(de.x - o.x, de.z - o.z) < R(o) - 0.05)) {
+    const ex = de.x - o.x, ez = de.z - o.z, l = Math.hypot(ex, ez), ux = l > 1e-3 ? ex / l : 0, uz = l > 1e-3 ? ez / l : -1;
+    de = { x: o.x + ux * (R(o) + 0.05), z: o.z + uz * (R(o) + 0.05) }; sortie.push(de);
+  }
   const dx = vers.x - de.x, dz = vers.z - de.z, L = Math.hypot(dx, dz) || 1e-9;
   if (tgt) arret = Math.max(arret, tgt.r + marge);
   let fin = { x: vers.x - dx / L * arret, z: vers.z - dz / L * arret }, bloque = null;
@@ -1095,7 +1146,7 @@ export function planTrajet(de, vers, obstacles, { marge = REGLAGES.MARGE_CORPS, 
     pts.splice(hit.i + 1, 0, wp);
   }
   const r2 = v => Math.round(v * 1000) / 1000;
-  return { points: pts.slice(1).map(p => ({ x: r2(p.x), z: r2(p.z) })), bloque };
+  return { points: [...sortie, ...pts.slice(1)].map(p => ({ x: r2(p.x), z: r2(p.z) })), bloque, sortie: sortie.length > 0 };
 }
 
 /* La promenade libre : pas d'histoire écrite, mais le même meneur. Le personnage fait ce qu'on lui demande, ce qu'il fait
@@ -1482,8 +1533,13 @@ export function creerMeneur(o) {
      (nommée, désignée, ou la plus récente : « fais-EN »). */
   function modeleTransforme(texte) { return R.MODELES === 'non' ? null : modeleDe(BIB, texte, { transforme: true }); }
   function designerTrace(texte) {
+    const L = partie.monde.crees.filter(c => !c.retire), t = sansAccents(texte || '');
+    const taille = c => envergure(c.liste) * (c.echelle || 1);
+    // « avec la grosse », « la petite » : la plus grosse ou la plus petite de ses traces
+    if (L.length > 1 && (ENORME.test(t) || /\b(grosse?s?|grande?s?|geante?s?)\b/.test(t))) return L.slice().sort((a, b) => taille(b) - taille(a))[0].id;
+    if (L.length > 1 && /\b(petite?s?|minuscules?)\b/.test(t)) return L.slice().sort((a, b) => taille(a) - taille(b))[0].id;
     const d = designer(texte, null, true); if (d) return d;
-    const L = partie.monde.crees.filter(c => !c.retire); return L.length ? L[L.length - 1].id : null;
+    return L.length ? L[L.length - 1].id : null;                 // sinon la dernière faite (« fais-EN », « avec »)
   }
   /* Un tour qui touche une chose déjà là : la modifier, à sa place, plutôt que d'en refaire une à côté. */
   function preparerModif(v, texte) {
@@ -1501,12 +1557,19 @@ export function creerMeneur(o) {
       if (x || xt) { v.modifie = { objet: (x || xt).id, quoi: str(v.fabrique.quoi || v.fabrique.nom, 160) }; log('fabrique_vers_modifie', { id: (x || xt).id, nom: v.fabrique.nom }); v.fabrique = null; }
     }
     if (!v.modifie) return;
-    const id = designer(texte, v.modifie.objet, true);
+    // façonner une trace en un modèle (« fais un bonhomme avec la grosse », « fais-en un ») : c'est la phrase du joueur qui désigne
+    // (la taille dite, la chose nommée, sinon la DERNIÈRE faite), pas l'id que Claude propose (essai : il visait la petite)
+    const tmc = modeleTransforme((v.modifie.quoi || '') + ' ' + texte) && partie.monde.crees.some(c => !c.retire);
+    const id = tmc ? designerTrace(texte) : designer(texte, v.modifie.objet, true);
+    if (tmc && v.modifie.objet && id !== v.modifie.objet) log('cible_corrigee', { de: v.modifie.objet, vers: id });
     if (!id || !formesDe(id)) { log('modifie_sans_cible', { objet: v.modifie.objet }); v.modifie = null; return; }
     v.modifie.objet = id;
     // façonner (§15.3) : aller chercher ce qu'il faut s'il le faut, revenir, s'accroupir devant elle, la travailler (la page joue
     // les états intermédiaires), se relever ; le cadrage du résultat vient ensuite (montrer)
-    const tm = modeleTransforme((v.modifie.quoi || '') + ' ' + texte), ch = liste(v.actions).find(a => a.type === 'chercher');
+    const tm = modeleTransforme((v.modifie.quoi || '') + ' ' + texte);
+    let ch = liste(v.actions).find(a => a.type === 'chercher');
+    // ce que le modèle demande et qu'on n'a pas (« besoin » : des bâtons et des cailloux) : il décide seul d'aller le chercher
+    if (!ch && tm && str(tm.modele.besoin, 60)) { ch = { type: 'chercher', quoi: str(tm.modele.besoin, 60) }; log('chercher_seul', { quoi: ch.quoi }); }
     if (ch || tm || /\b(fais-en|faconne|faconner|modele|modeler|sculpte|sculpter|petris|petrir|transforme)\b/.test(t)) {
       v.modifie.faconner = true; if (ch) v.modifie.chercher = ch.quoi; if (tm) v.modifie.modele = tm.id;
       const reste = liste(v.actions).filter(a => !['chercher', 'rejoindre', 'posture', 'faconner', 'marcher', 'attendre', 'cadrer'].includes(a.type) && !(a.type === 'viser' && a.objet === id));
@@ -1602,7 +1665,7 @@ export function creerMeneur(o) {
     }
     let objet = null;
     // la bibliothèque : si la chose demandée est un modèle de référence, il sert de base sûre, à l'échelle demandée (§15)
-    const mf = dem.fabrique && R.MODELES === 'base' ? modeleNomme(dem.fabrique.nom) : null;
+    const mf = dem.fabrique && R.MODELES === 'base' ? modeleNomme(dem.fabrique.nom, dem.fabrique.quoi, dem.texte) : null;
     if (mf) { const x = formesModele(mf.modele, demande);
       if (x) { objet = { nom: str(isObj(r) && isObj(r.objet) && r.objet.nom, 60) || dem.fabrique.nom || str(mf.modele.nom, 60), formes: x.formes, degage: 0 }; source = 'modele';
         log('modele', { id: mf.id, envergure: x.envergure, facteur: x.facteur, raison: x.raison }); } }
@@ -1625,9 +1688,13 @@ export function creerMeneur(o) {
   }
   /* Le modèle que nomme une chose fabriquée : par son premier nom (« crotte de 5 kg » ; pas « tas de pierres », qui n'est pas
      un caillou). */
-  function modeleNomme(nom) {
-    const tete = (sansAccents(nom || '').match(/[a-z]{3,}/g) || []).find(m => !/^(une?|des|les|petite?s?|grande?s?|grosse?s?|gros|belle?s?|beau|vieux|vieille|enorme)$/.test(m));
-    return tete ? modeleDe(BIB, tete) : null;
+  function modeleNomme(nom, quoi, texte) {
+    const tete = (sansAccents(nom || '').match(/[a-z]{3,}/g) || []).find(m => !/^(une?|des|les|petite?s?|grande?s?|grosse?s?|gros|belle?s?|beau|vieux|vieille|enormes?|geante?s?)$/.test(m) && !ENORME.test(m));
+    const m = tete ? modeleDe(BIB, tete) : null;
+    if (m) return m;
+    // Claude l'a nommée autrement (« tas de merde », « étron colossal ») : un modèle cité dans son nom, sa description ou la
+    // phrase du joueur, sauf ce qui se ramasse (un « tas de pierres » n'est pas un caillou)
+    return modeleDe(BIB, [nom, quoi, texte].join(' '), { ramassable: false });
   }
   /* Ce qu'on ajoute à une chose reste à sa mesure : rien de plus grand que 1,2 fois son envergure. */
   function proportionner(avant, apres) {

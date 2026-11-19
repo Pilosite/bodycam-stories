@@ -571,7 +571,7 @@ function simulate(dt){
     else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(1.35,Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*dt); if(Math.abs(d)<.012) queue.shift(); }
     else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
-    else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet);   // vers un objet : la page calcule cap et inclinaison
+    else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet,a.cadre);   // vers un objet : la page calcule cap et inclinaison
       if(v&&v.raide&&!a.cadre) queue.unshift({type:"cadrer",objet:a.objet});              // presque sous lui : il recule et se baisse pour la voir
       else if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
     else if(a.type==="rejoindre"||a.type==="cadrer"||a.type==="monter"||a.type==="chercher"){ queue.shift(); queue.unshift(...planCorps(a)); }   // trajet calculé au moment de partir
@@ -1943,7 +1943,8 @@ function objetMeneur(o){
     else if(o.reserve&&reserves.has(o.reserve)){ pos=reserves.get(o.reserve); reserves.delete(o.reserve); }
     else pos=placeGeste(o);
     if(!base){ const w=posObjet(pos), F=(o.objet.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));   // jamais dans le corps du porteur
-      const r=Math.max(0,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2)), q=MENEUR.horsDuCorps(w,{x:cam.x,z:cam.z,yaw:cam.yaw},r);
+      const r=Math.max(0,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2)), corps={x:cam.x,z:cam.z,yaw:cam.yaw};
+      const q=MENEUR.placeLibre(MENEUR.horsDuCorps(w,corps,r),r,obstaclesConnus(),corps);   // ni sur lui, ni sur une autre chose, un tronc, un rocher
       if(q.x!==w.x||q.z!==w.z) pos=versFiche(q.x,q.z); }
     const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
     if(!v||!v[0]) return;
@@ -1959,7 +1960,11 @@ function objetMeneur(o){
     if(Array.isArray(o.decale)){ const b=posObjet(x), q=versFiche(b.x+(+o.decale[0]||0),b.z+(+o.decale[1]||0)); x.devant=q.devant; x.cote=q.cote; }
     if(o.vacille!==undefined||o.lumineux===false) x.formes=x.formes.map(f=>f.matiere!=="lumineux"?f:o.lumineux===false?Object.assign({},f,{matiere:"mat",couleur:"#1f1a16",vacille:0},f.vacille>0?{p:[f.p[0],f.p[1]*.12,f.p[2]],taille:[f.taille[0]*.9,f.taille[1]*.12,f.taille[2]*.9]}:{}):Object.assign({},f,{vacille:clampN(o.vacille,0,1,0)}));
     L[i]=x; }
-  fiche=Object.assign({},fiche,{objets:L}); buildShapes(fiche);
+  fiche=Object.assign({},fiche,{objets:L});
+  // une forme qui nomme une recette pas encore chargée (une chose fabriquée en cours de partie) : les recettes sont rechargées,
+  // sinon la forme retombe sur la matière « mat » (avant : la recette d'un modèle n'était jamais chargée en promenade)
+  const lib=recettesDe(fiche); if(L.some(x=>x&&(x.formes||[]).some(f=>f&&typeof f.matiere==="string"&&isObj(lib[f.matiere])&&!matIdx.has(f.matiere)))) buildMats(fiche);
+  buildShapes(fiche);
 }
 /* Le façonnage, joué par la page (§15.3) : accroupi devant la chose, il pose ce qu'il a rapporté, la tourne vers lui, puis
    elle change d'état environ chaque seconde pendant que la caméra bouge un peu (quelqu'un qui travaille de ses mains) ;
@@ -1994,10 +1999,10 @@ function faconnerPas(a,dt){
   while(a.i<=k&&a.i<n){ objetMeneur({type:"objet",op:"remplacer",id:a.objet,formes:op.etapes[a.i],nom:a.i===n-1?op.nom:undefined,echelle:a.i===0?op.echelle:undefined}); a.i++; }
   if(a.i>=n&&t-a.t0>.9+n*1.1+.5){ for(const c of op.consomme||[]) objetMeneur({type:"objet",op:"retirer",id:c}); faconnages.delete(a.objet); fin(); }
 }
-function viserObjet(id){                                       // cap (relatif au corps) et inclinaison vers un objet de la fiche ou un support
+function viserObjet(id,cadre){                                 // cap (relatif au corps) et inclinaison vers un objet de la fiche ou un support
   const q=cibleMonde(id); if(!q) return null;
   const dx=q.x-cam.x, dz=q.z-cam.z, m=Math.max(.3,Math.hypot(dx,dz));
-  const haut=Math.max(.05,q.milieu);                              // vers le milieu de l'objet
+  const haut=cadre?Math.max(.01,q.haut/2):Math.max(.05,q.milieu);   // vers le milieu de l'objet (cadrer : le milieu de sa hauteur, comme MENEUR.planCadrage)
   let yaw=Math.atan2(dx,dz)-cam.yaw; yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));
   const dy=terrainH(q.x,q.z)+haut-(terrainH(cam.x,cam.z)+S.eye*cam.haut+cam.elev);
   return {yaw,pitch:Math.max(-1.05,Math.min(1.3,Math.atan2(dy,m))),raide:Math.atan2(dy,m)<-1.05};
@@ -2135,7 +2140,7 @@ function planCorps(a){
   }
   const q=cibleMonde(a.objet); if(!q) return [];
   if(a.type==="rejoindre") return [...pre,...versPoint(q.x,q.z,MENEUR.distanceArret(q.taille),q.sorte==="objet"?q.id:null)];
-  const pl=MENEUR.planCadrage(q.taille,S.eye), m=Math.hypot(q.x-cam.x,q.z-cam.z);
+  const pl=MENEUR.planCadrage(q.taille,S.eye,q.haut), m=Math.hypot(q.x-cam.x,q.z-cam.z);
   if(m>12) return [{type:"viser",objet:a.objet}];                    // trop loin pour y aller : il la montre d'où il est
   if(a.sur_place) return [...pre,{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:MENEUR.zoomPour(q.taille,m,S.eye*pl.hauteur)}];   // d'où il est
   return [...pre,...versPoint(q.x,q.z,pl.m,q.sorte==="objet"?q.id:null),{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:pl.zoom}];

@@ -1,6 +1,6 @@
 // Outils de test du meneur : un monde de papier, de faux Claude, de faux joueurs, et une partie simulée en accéléré.
 import { readFileSync } from 'node:fs';
-import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour, planTrajet, lieuChercher, horsDuCorps } from '../src/meneur.js';
+import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour, planTrajet, lieuChercher, horsDuCorps, placeLibre } from '../src/meneur.js';
 
 export const MODELES = JSON.parse(readFileSync(new URL('../src/modeles.json', import.meta.url), 'utf8'));
 
@@ -93,7 +93,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
         if (objets.filter(x => !caches.has(x.id)).length >= 8) return;
         let x, z; const base = o.pres_de && objets.find(b => b.id === o.pres_de);
         if (base) { x = base.x + (o.decale ? o.decale[0] : 0); z = base.z + (o.decale ? o.decale[1] : 0); }
-        else ({ x, z } = horsDuCorps((o.reserve && w.reserves[o.reserve]) || place(), w, envergure(o.objet.formes) / 2));   // jamais dans le corps du porteur
+        else ({ x, z } = placeLibre(horsDuCorps((o.reserve && w.reserves[o.reserve]) || place(), w, envergure(o.objet.formes) / 2), envergure(o.objet.formes) / 2, obstacles(), w));   // ni dans le corps du porteur, ni sur une autre chose
         const ob = { id: o.objet.id, nom: o.objet.nom, x, z, formes: o.objet.formes.length, formesL: o.objet.formes, echelle: 1, lumineux: o.objet.formes.some(f => f.matiere === 'lumineux') };
         if (o.differe) (w.differes[o.differe] = w.differes[o.differe] || []).push(ob); else objets.push(ob);
       } else if (o.op === 'faconner') { w.faconnages[o.id] = o; if (!w.file.some(a => a.type === 'faconner' && a.objet === o.id)) faconner(o);
@@ -146,7 +146,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     if (a.type === 'rejoindre' || a.type === 'cadrer') {           // comme main.js : la page calcule le trajet, l'arrêt et le cadrage
       w.file.shift();
       const ob = objets.find(x => x.id === a.objet) || supports().find(x => x.id === a.objet); if (!ob) return;
-      const t = ob.formesL ? taille(ob) : ob.rayon * 2, pl = planCadrage(t);
+      const t = ob.formesL ? taille(ob) : ob.rayon * 2, pl = planCadrage(t, 1.36, ob.formesL ? Math.max(0, ...ob.formesL.map(f => f.p[1] + f.taille[1] / 2)) * (ob.echelle || 1) : undefined);
       const pre = w.elev > 0 ? [{ type: 'descendre' }] : [];
       if (a.type === 'rejoindre') w.file.unshift(...pre, ...versPoint(ob.x, ob.z, distanceArret(t), ob.formesL ? ob.id : null));
       else if (a.sur_place) w.file.unshift(...pre, { type: 'posture', rest: pl.hauteur }, { type: 'viser', objet: a.objet, cadre: true }, { type: 'zoom', rest: zoomPour(t, Math.hypot(ob.x - w.x, ob.z - w.z), 1.36 * pl.hauteur) });

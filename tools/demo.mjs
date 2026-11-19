@@ -1,13 +1,14 @@
 // La démonstration jouée dans dist/index.html, moteur v3, en promenade libre, avec un Claude simulé (window.claude remplacé
 // avant le chargement : mêmes réponses que le faux Claude de tests/demo.test.mjs, 1,5 s de délai) :
-//   « fais une crotte », « avance de 3 mètres », « fais une crotte de 5 kg »,
-//   « va chercher des bâtons et des cailloux et fais-en un bonhomme de neige ».
+//   « fais une petite crotte », « maintenant fais une énorme bouse », « fais comme un bonhomme de neige avec »
+//   (d'autres phrases : PHRASES='…|…|…'). Claude simulé nomme la grosse « bouse énorme » et vise la petite pour le bonhomme,
+//   sans dire d'aller chercher : la page corrige la cible, et il décide seul d'aller chercher bâtons et cailloux.
 // Puis une marche forcée droit sur un bloc de grès (§16) : avant, pendant, après.
 // Captures (format téléphone 390 × 780, et une vue PC 960 × 540), journal et vérifications dans out/demo/.
 //
 // Usage : node tools/demo.mjs [pixels internes pendant les gestes] [pixels des captures] [docile]
 //   docile : le Claude simulé « oublie » gestes et objets ; le mode DOCILE de la page complète.
-// Variables : PASSES (images accumulées par capture, 10), SANS_OBSTACLE=1, SANS_PC=1.
+// Variables : PASSES (images accumulées par capture, 10), SCENE (indice de la fiche, 8 : 09-champcueil-aube), SANS_OBSTACLE=1, SANS_PC=1.
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -38,15 +39,16 @@ await page.addInitScript(([c, oublie]) => {
     const v = voixDe(c) || '', ids = [...c.matchAll(/\((fab-\d+)\)/g)].map(m => m[1]);
     if (oublie) return { sas, pensee: 'Ha. Si tu veux.', attitude: 'suit', actions: [] };
     if (/avance/.test(v)) return { sas, pensee: 'Un peu plus loin, alors.', attitude: 'suit', actions: [{ type: 'marcher', metres: 3 }] };
-    if (/5 kg/.test(v)) return { sas, pensee: 'Cinq kilos. Rien que ça. Bon…', attitude: 'suit', actions: [{ type: 'posture', hauteur: 0.45 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }], fabrique: { nom: 'crotte de 5 kg', quoi: 'une énorme crotte de 5 kg', ou: 'dessous' } };
-    if (/crotte/.test(v)) return { sas, pensee: 'Sérieux ? … Bon. Personne regarde.', attitude: 'suit', actions: [{ type: 'posture', hauteur: 0.45 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }], fabrique: { nom: 'crotte', quoi: 'une crotte', ou: 'dessous' } };
-    if (/bonhomme/.test(v)) return { sas, pensee: 'Un bonhomme de neige. Avec ça. D\'accord, artiste.', attitude: 'suit',
-      actions: [{ type: 'chercher', quoi: 'des bâtons et des cailloux' }], modifie: { objet: ids[ids.length - 1], quoi: 'en faire un bonhomme de neige avec les bâtons et les cailloux' } };
+    const accroupi = [{ type: 'posture', hauteur: 0.45 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }];
+    if (/bonhomme/.test(v)) return { sas, pensee: 'Un bonhomme de neige. Avec ça. D\'accord, artiste.', attitude: 'suit',   // il vise la première (la petite), sans aller chercher : la page corrige
+      actions: [], modifie: { objet: ids[0], quoi: 'en faire un bonhomme de neige' } };
+    if (/enorme|énorme|géant|grosse|bouse/.test(v)) return { sas, pensee: 'Ah ouais. Là, quand même… Bon.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'bouse énorme', quoi: 'une énorme bouse, colossale', ou: 'dessous' } };
+    if (/crotte|caca/.test(v)) return { sas, pensee: 'Sérieux ? … Bon. Personne regarde.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'petite crotte', quoi: 'une petite crotte', ou: 'dessous' } };
     return { sas, pensee: 'Hm.', attitude: 'suit', actions: [] };
   }
   const sampler = { json: c => new Promise(r => setTimeout(() => r(repondre(c)), 1500)) };
   window.claude = { use: () => Promise.resolve(sampler) };
-}, [{ maxPx: +px, mobile: true, still: true, graine: 7, debug: true, v3: true, grains: GESTES, dtMax: 0.4 }, mode === 'docile']);
+}, [{ maxPx: +px, mobile: true, still: true, graine: 7, debug: true, v3: true, grains: GESTES, dtMax: 0.4, scene: +(process.env.SCENE ?? 8) }, mode === 'docile']);
 await page.goto('file://' + join(root, 'dist/index.html'), { timeout: 240000 });
 await page.waitForFunction(() => window.balade && window.__state && window.__state.n > 2, null, { timeout: 240000 });
 
@@ -71,51 +73,56 @@ async function capture(nom, quoi) {                                  // le corps
 }
 const objet = id => page.evaluate(i => (balade.percevoir().objets || []).find(o => o.id === i), id);
 
-// 1. une crotte, de taille normale, cadrée de près
+// Le parcours de la démo (§15.6) : une petite crotte, une énorme bouse, « fais comme un bonhomme de neige avec ».
+const PH = (process.env.PHRASES || 'fais une petite crotte|maintenant fais une énorme bouse|fais comme un bonhomme de neige avec').split('|');
+// 1. une petite crotte, cadrée de près
 await attendre(1500);
-await dire('fais une crotte');
+await dire(PH[0]);
 await quand(() => balade.objets().some(o => o.id === 'fab-1'));
 await auRepos();
 const o1 = await objet('fab-1');
-verifier(o1 && o1.taille >= 0.12 && o1.taille <= 0.18, `crotte normale : ${o1 && o1.taille} m`);
+verifier(o1 && o1.taille >= 0.08 && o1.taille <= 0.16, `petite crotte : ${o1 && o1.taille} m`);
 verifier(o1 && Math.abs(o1.angle) < 10 && o1.m < 1, `cadrée de près : ${o1 && o1.m} m, ${o1 && o1.angle}°, zoom ${(await corps()).zoom.toFixed(1)}`);
-await capture('1-crotte', 'crotte normale, cadrée de près');
+await capture('1-petite', 'la petite crotte, cadrée de près');
 
-// 2. un peu plus loin, une crotte de 5 kg
-await dire('avance de 3 mètres');
-await auRepos();
-await dire('fais une crotte de 5 kg');
+// 2. une énorme bouse, posée devant lui (pas sur lui, pas sur la petite), cadrée entière
+await dire(PH[1]);
 await quand(() => balade.objets().some(o => o.id === 'fab-2'));
 await auRepos();
-const o2 = await objet('fab-2');
-verifier(o2 && o2.taille >= 0.3 && o2.taille <= 0.35, `crotte de 5 kg : ${o2 && o2.taille} m`);
-await capture('2-crotte-5kg', 'crotte de 5 kg, cadrée');
+const o2 = await objet('fab-2'), c2 = await corps();
+verifier(o2 && o2.taille >= 0.45 && o2.taille <= 0.9 && o2.taille >= 3 * o1.taille, `énorme : ${o2 && o2.taille} m (petite : ${o1.taille} m)`);
+verifier(o2 && o2.m >= o2.taille / 2 + 0.3, `il n'est pas dedans : ${o2 && o2.m} m du centre`);
+const entiere = await page.evaluate(([t, h, m, y, z]) => MENEUR.tientDansImage(t, h, m, y, z, innerWidth / innerHeight), [o2.taille, o2.haut, o2.m, 1.36 * c2.haut, c2.zoom]);
+verifier(entiere, `entière à l'image : ${o2.m} m, accroupi ${c2.haut}, zoom ${c2.zoom.toFixed(1)}`);
+await capture('2-enorme', 'l\'énorme bouse, entière');
 
-// 3. aller chercher des bâtons et des cailloux, revenir, façonner, cadrer
-await dire('va chercher des bâtons et des cailloux et fais-en un bonhomme de neige');
+// 3. « fais comme un bonhomme de neige avec » : il décide d'aller chercher bâtons et cailloux, revient, façonne, cadre en pied
+await dire(PH[2]);
 await quand(() => balade.corps().file.includes('marcher') && balade.lieuCherche());
 await attendre(2500);
 const lieu = await page.evaluate(() => balade.lieuCherche());
 console.log(sec(), 'il va chercher', JSON.stringify(lieu));
 await capture('3-depart', 'il part chercher (' + (lieu && lieu.ou) + ')');
 await quand(() => { const c = balade.corps(), l = balade.lieuCherche(); return l && Math.hypot(c.x - l.x, c.z - l.z) < 0.4 && c.haut < 0.6 && c.pitch < -0.5; });
-const c4 = await corps(), o4 = await objet('fab-2');
-verifier(o4 && o4.m > 2.5, `il s'est éloigné de la crotte pour chercher : ${o4 && o4.m} m`);
+const o4 = await objet('fab-2');
+verifier(o4 && o4.m > 2.5, `il s'est éloigné pour chercher : ${o4 && o4.m} m`);
 await capture('4-ramassage', 'il ramasse, accroupi');
 await quand(() => balade.faconnage().file.some(f => f.i >= 0));
 const ram = await page.evaluate(() => balade.objets().find(o => /ramass/.test(o.nom || '')));
-verifier(ram, 'ce qu\'il a rapporté est posé près de la crotte : ' + (ram && ram.nom));
+verifier(ram, 'ce qu\'il a rapporté est posé près de la bouse : ' + (ram && ram.nom));
 await capture('5-retour', 'retour : il pose ce qu\'il a ramassé, accroupi devant elle');
 await quand(() => balade.faconnage().file.some(f => f.i >= 2));
 await capture('6-faconnage-a', 'façonnage, un état intermédiaire');
 await quand(() => balade.faconnage().file.some(f => f.i >= 4) || balade.faconnage().file.length === 0);
 await capture('7-faconnage-b', 'façonnage, un état plus loin');
 await auRepos();
-const b = await page.evaluate(() => balade.objets().find(o => o.id === 'fab-2')), ob = await objet('fab-2');
-verifier(b && /bonhomme/.test(b.nom) && b.formes === 8, `bonhomme : ${b && b.nom}, ${b && b.formes} formes`);
+const b = await page.evaluate(() => balade.objets().find(o => o.id === 'fab-2')), ob = await objet('fab-2'), cb = await corps();
+verifier(b && /bonhomme/.test(b.nom) && b.formes === 8, `bonhomme fait avec l'énorme (fab-2) : ${b && b.nom}, ${b && b.formes} formes`);
+verifier(ob && ob.haut >= 0.75 && ob.haut <= 1.2, `environ un mètre de haut : ${ob && ob.haut} m`);
 verifier(!(await page.evaluate(() => balade.objets().some(o => /ramass/.test(o.nom || '')))), 'ce qu\'il a ramassé a servi (retiré)');
-verifier(ob && Math.abs(ob.angle) < 10, `bonhomme cadré : ${ob && ob.m} m, ${ob && ob.angle}°`);
-await capture('8-bonhomme', 'le bonhomme fini, cadré de près');
+const enPied = await page.evaluate(([t, h, m, y, z]) => MENEUR.tientDansImage(t, h, m, y, z, innerWidth / innerHeight), [ob.taille, ob.haut, ob.m, 1.36 * cb.haut, cb.zoom]);
+verifier(ob && Math.abs(ob.angle) < 10 && enPied, `bonhomme cadré en pied, entier : ${ob && ob.m} m, ${ob && ob.angle}°`);
+await capture('8-bonhomme', 'le bonhomme fini, cadré en pied');
 
 const ev = (await page.evaluate(() => balade.trace().evenements)).filter(e => /modele|faconnage|objet_|cadrage|docile|consomme/.test(e.type));
 console.log(sec(), 'événements', JSON.stringify(ev.map(e => e.type + (e.id ? ':' + e.id : '') + (e.raison ? ' (' + e.raison + ')' : ''))));
