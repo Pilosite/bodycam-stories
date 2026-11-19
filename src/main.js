@@ -187,7 +187,7 @@ function reglerRelief(f){
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
-  if(f!==fiche){ errance=arrivee(); immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
+  if(f!==fiche){ montrerDit(""); errance=arrivee(); immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
@@ -1356,6 +1356,8 @@ try{ if(localStorage.getItem("bodycam-suivi")==="0"){ gyro.coupe=true; $("suivi"
 let sampler=null; const echanges=[], tempsFaits=[];
 if(window.claude && window.claude.use) window.claude.use("sample").then(s=>{ sampler=s; }).catch(()=>{});
 let sayTimer=0;
+function montrerDit(t){ const el=$("dit"); t=String(t||"").trim(); el.textContent=t?"« "+t+" »":""; el.classList.toggle("on",!!t&&!CFG.nohud);
+  const d=document.getElementById("debug-meneur"); el.style.top=d&&!d.hidden?"calc(env(safe-area-inset-top,0px) + 168px)":""; }
 function say(text,bref){ const el=$("pensee"); el.textContent=text; el.classList.toggle("on",!!text);
   clearTimeout(sayTimer); if(text) sayTimer=setTimeout(()=>el.classList.remove("on"),bref?3500:9000); }
 /* Obstacles devant (1,5 m, 3 m, 5 m) : le meneur les lit deux fois par seconde. Lecture différée comme la sonde : on rend
@@ -1427,6 +1429,7 @@ function lexique(t){                                          // secours sans IA
   return out;
 }
 async function entendre(texte){
+  montrerDit(texte);                                            // ce que le joueur vient de dire reste en haut pendant qu'il y pense et répond en bas
   if(!meneur&&typeof MENEUR!=="undefined"&&!CFG.sansMeneur) demarrerLibre();   // promenade libre : le même meneur, sans histoire écrite
   if(meneur) return meneurEntendre(texte);                      // une histoire se joue : voir « meneur de jeu »
   say("…");

@@ -35,6 +35,10 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .pensee{max-width:34em;text-align:center;font-size:16px;line-height:1.35;font-style:italic;color:var(--ink);
   text-shadow:0 0 4px rgba(0,0,0,.95),0 1px 8px rgba(0,0,0,.8);opacity:0;transition:opacity .5s;text-wrap:balance}
 .pensee.on{opacity:1}
+.dit{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 92px);z-index:3;width:calc(100% - 32px);max-width:34em;text-align:center;
+  font-size:15px;line-height:1.35;font-style:italic;color:var(--ink-dim);text-shadow:0 0 4px rgba(0,0,0,.95),0 1px 8px rgba(0,0,0,.8);opacity:0;transition:opacity .4s;
+  text-wrap:balance;pointer-events:none;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.dit.on{opacity:1}
 .dire{display:flex;gap:8px;width:100%;max-width:30em;pointer-events:auto}
 .dire[hidden]{display:none}
 .dire input{flex:1;min-width:0;font:500 16px/1.2 var(--f-ui);color:var(--ink);background:var(--scrim);border:1px solid var(--line);
@@ -190,6 +194,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   <div class="chip"><span class="dot"></span><span id="rec">00:00</span></div>
   <div class="osd"><span id="clock">----</span><span id="camid">CAM 07</span><span id="stat">MISE AU POINT</span></div>
 </div>
+<div class="dit" id="dit" aria-live="off"></div>
 <div class="hud bottom">
   <div class="pensee" id="pensee" aria-live="polite"></div>
   <button id="taire" type="button" class="ghost" hidden>Silence</button>
@@ -12531,7 +12536,7 @@ function reglerRelief(f){
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
-  if(f!==fiche){ errance=arrivee(); immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
+  if(f!==fiche){ montrerDit(""); errance=arrivee(); immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
@@ -13700,6 +13705,8 @@ try{ if(localStorage.getItem("bodycam-suivi")==="0"){ gyro.coupe=true; $("suivi"
 let sampler=null; const echanges=[], tempsFaits=[];
 if(window.claude && window.claude.use) window.claude.use("sample").then(s=>{ sampler=s; }).catch(()=>{});
 let sayTimer=0;
+function montrerDit(t){ const el=$("dit"); t=String(t||"").trim(); el.textContent=t?"« "+t+" »":""; el.classList.toggle("on",!!t&&!CFG.nohud);
+  const d=document.getElementById("debug-meneur"); el.style.top=d&&!d.hidden?"calc(env(safe-area-inset-top,0px) + 168px)":""; }
 function say(text,bref){ const el=$("pensee"); el.textContent=text; el.classList.toggle("on",!!text);
   clearTimeout(sayTimer); if(text) sayTimer=setTimeout(()=>el.classList.remove("on"),bref?3500:9000); }
 /* Obstacles devant (1,5 m, 3 m, 5 m) : le meneur les lit deux fois par seconde. Lecture différée comme la sonde : on rend
@@ -13771,6 +13778,7 @@ function lexique(t){                                          // secours sans IA
   return out;
 }
 async function entendre(texte){
+  montrerDit(texte);                                            // ce que le joueur vient de dire reste en haut pendant qu'il y pense et répond en bas
   if(!meneur&&typeof MENEUR!=="undefined"&&!CFG.sansMeneur) demarrerLibre();   // promenade libre : le même meneur, sans histoire écrite
   if(meneur) return meneurEntendre(texte);                      // une histoire se joue : voir « meneur de jeu »
   say("…");
