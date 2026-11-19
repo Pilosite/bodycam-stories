@@ -7138,10 +7138,11 @@ function setFrozen(v,m){
   $("monde").textContent=v&&mode==="monde"?"Annuler":"Décrire un monde";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
-  if(v){ $("msg").value=""; $("hint").classList.add("off"); if(!dict) setTimeout(()=>$("msg").focus(),50); }
+  if(v){ $("msg").value=""; $("hint").classList.add("off"); setTimeout(()=>$("msg").focus(),50); }
 }
-$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); if(on) ecouter(); };
-$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); if(on) ecouter(); };
+// Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
+$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); };
 $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
   const t=$("msg").value.trim(); if(!t) return;
