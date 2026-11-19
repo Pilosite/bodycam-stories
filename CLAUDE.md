@@ -73,4 +73,6 @@ Essai du moteur v2 (« tourner, puis projeter ») : bouton « Moteur v2 », opti
 
 Essai n° 1 du moteur v3 (« on ne trace plus, on sème ») : bouton « Moteur v3 », option `v3` ; compte rendu dans `docs/moteur-v3.md`, planche et test du triptyque par `node tools/v3essai.mjs out/v3`. Le semeur ne connaît pas encore les semis, le relief réglable ni le kit nu : sur ces fiches le bouton est désactivé et la page reste sur le lanceur de rayons (`v3Refus` dans `src/main.js`, liste dans `docs/moteur-v3.md`).
 
+Ouverture de démo (« Quel monde veux-tu filmer ? », rejeu accéléré d'une préparation réellement faite, `ouvertures/*.json`, mention éteinte par défaut) et arrivée immobile dans un lieu : `docs/ouverture.md`, `node tools/ouverture.mjs`.
+
 Autres pistes : `docs/rendu.md` et `docs/contrat-histoire.md`.

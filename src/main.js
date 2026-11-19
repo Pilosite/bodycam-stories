@@ -166,7 +166,7 @@ function reglerRelief(f){
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
-  if(f!==fiche){ errance=true; immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
+  if(f!==fiche){ errance=arrivee(); immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
@@ -1211,6 +1211,7 @@ function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
+  if(ouvRepos) return;                                            // l'ouverture pose sa question : rien n'est visible derrière, le moteur se repose (docs/ouverture.md)
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
   const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=(k,cible)=>{ if(!pf) return; if(cible!==undefined) v3Sync(cible); const t=performance.now(); pf[k]=t-pt; pt=t; };
   simulate(dt); etape("sim");
@@ -2176,3 +2177,55 @@ if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();
 sondeProg();                                                     // option v3sonde : la sonde se compile dès le départ, sans bloquer
 requestAnimationFrame(frame);
+
+/* ------------------------------------------------------------------ ouverture de démo et arrivée dans un lieu
+   Le code est dans src/ouverture.js (OUVERTURE) et ouvertures/*.json (OUVERTURES, journaux de préparation réels) ; ici, les
+   raccords. Voir docs/ouverture.md. La voix du personnage est ailleurs (window.voix, quand elle existe). */
+function reglage(cle,cfg,defaut){ if(cfg!==undefined) return !!cfg; try{ const v=localStorage.getItem(cle); if(v!==null) return v==="1"; }catch(_){} return defaut; }
+function memoriser(cle,on){ try{ localStorage.setItem(cle,on?"1":"0"); }catch(_){} }
+const DEMO=CFG.demo!==undefined?!!CFG.demo:/[?&#]demo(\b|=1)/.test(location.search+location.hash)||reglage("bodycam-demo",undefined,!window.__CFG);   // démarrer sur l'ouverture
+let mentionRejeu=reglage("bodycam-demo-mention",CFG.demoMention,false);   // « rejeu accéléré d'une génération enregistrée » : éteinte par défaut
+{ const o=$("outils"), d=document.createElement("button"); d.type="button"; d.id="demo"; d.className="ghost"; d.textContent="Démo"; o.prepend(d); d.onclick=()=>{ fermerOutils(); lancerOuverture(); };
+  const m=document.createElement("button"); m.type="button"; m.id="mention"; m.className="ghost"; o.appendChild(m);
+  const maj=()=>{ m.setAttribute("aria-pressed",String(mentionRejeu)); m.textContent="Mention rejeu : "+(mentionRejeu?"oui":"non"); }; maj();
+  m.onclick=()=>{ mentionRejeu=!mentionRejeu; memoriser("bodycam-demo-mention",mentionRejeu); if(ouverture) ouverture.mention(mentionRejeu); maj(); }; }
+function pensee(t){ penser(t); }
+
+/* Arrivée dans un lieu (hors histoire) : il ne part pas se promener, il regarde autour de lui et se demande ce qu'il fait là.
+   Il ne repart que si on le lui dit (« promène-toi », « fais ta vie » : meneurEntendre). Les outils de capture (window.__CFG)
+   gardent l'ancien comportement (promenade), sauf avec l'option arrivee. */
+const ARRIVEE=["Qu'est-ce que je fous là ?","Attends… je suis où, là ?","Bon. Et maintenant, je fais quoi ?","Personne m'a dit ce que je venais faire ici."];
+function arriveeActive(){ return !window.__CFG||!!CFG.arrivee; }
+var arriveeJeton=0, ouverture=null, ouvRepos=false;                              // var : applyFiche passe par arrivee() dès le démarrage, avant ces lignes
+function arrivee(){                                               // appelée par applyFiche à chaque nouveau lieu ; rend la valeur d'errance
+  if(!arriveeActive()) return true;
+  const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1600);
+  return false;
+}
+function tourHorizon(k){
+  if(k!==arriveeJeton||(meneur&&!meneurLibre)||frozen||(ouverture&&ouverture.ouvert())) return;
+  queue.length=0;                                                 // un tour d'horizon sur place : tourner et lever la tête, aucun pas
+  queue.push({type:"attendre",rest:.6},{type:"tourner",rest:-.55},{type:"attendre",rest:.9},{type:"regarder",pitch:.18},{type:"tourner",rest:1.1},
+    {type:"attendre",rest:.7},{type:"regarder",pitch:-.03},{type:"tourner",rest:-.55});
+  setTimeout(()=>{ if(k===arriveeJeton&&!(meneur&&!meneurLibre)) pensee(ARRIVEE[(seedN>>>0)%ARRIVEE.length]); },2200);   // même fiche, même phrase
+}
+
+/* L'ouverture : « Quel monde veux-tu filmer ? » ; rejeu d'une préparation enregistrée, ou vraie chaîne du constructeur. */
+function lancerOuverture(){
+  if(ouverture&&ouverture.ouvert()) return;
+  if(meneur&&!meneurLibre) quitterHistoire(false);
+  setFrozen(false); voixP.taire(); voixInter(true);                         // la démo se joue avec la voix
+  const voulue=id=>FICHES.find(f=>f.id===id);
+  ouverture=OUVERTURE.creerOuverture({ rejeux:OUVERTURES, fiches:FICHES, C:CONSTRUCTEUR, recettes:Object.keys(MAT_LIB.recettes), mention:mentionRejeu,
+    ficheDe:r=>voulue(r.fiche)||voulue(r.ficheSecours)||null,
+    appliquer:f=>{ const i=FICHES.indexOf(f); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); arriveeJeton++; },   // l'arrivée attend la fin du fondu
+    pret:ms=>attendreImage(V3.on?6:4,ms),
+    dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
+    surDebut:()=>{ ouvRepos=false; },
+    surFin:o=>{ ouvRepos=false; if(o.constructeur){ creerMonde(o.texte); return; } const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1200); } });
+  ouverture.ouvrir(); ouvRepos=true;
+}
+setInterval(()=>{ if(ouverture&&ouverture.ouvert()) ouverture.dictee(listening); },300);
+if(DEMO&&!CFG.histoire) lancerOuverture();
+window.balade.ouverture=()=>{ lancerOuverture(); return ouverture; };
+window.balade.arrivee=()=>({ errance, file:queue.map(a=>a.type), pensee:$("pensee").textContent });

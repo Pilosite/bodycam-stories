@@ -133,6 +133,55 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .outils button{padding:11px 14px;font-size:14px;min-height:44px}
 #plus[aria-expanded="true"]{color:var(--ink);border-color:var(--ink)}
 .banque-liste .groupe{font:500 11.5px/1 var(--f-mono);color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;padding:10px 2px 2px}
+/* ouverture de démo (src/ouverture.js) : la question, puis le journal de préparation qui défile, puis le fondu sur le monde */
+.ouv{position:fixed;inset:0;z-index:20;display:flex;justify-content:center;background:radial-gradient(120% 90% at 50% 18%,#161b14 0%,var(--bg) 62%,#070906 100%);
+  transition:opacity 2.2s ease,background-color .6s;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))}
+.ouv[hidden]{display:none}
+.ouv.ouv-fondu{opacity:0;pointer-events:none}
+.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(8vh,calc(50vh - 260px));transition:padding-top .7s ease}
+.ouv-travail .ouv-cadre{padding-top:28px}
+.ouv-sur{margin:0 0 14px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
+.ouv-pt{width:7px;height:7px;border-radius:50%;background:var(--rec);box-shadow:0 0 10px var(--rec)}
+.ouv-q{margin:0 0 22px;font:600 32px/1.08 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
+@media (min-width:760px){.ouv-q{font-size:44px}}
+.ouv-travail .ouv-q{font-size:15px;margin:0 0 10px;color:var(--ink-dim);font-weight:500}
+.ouv-form{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:18px;padding:12px;background:rgba(243,240,232,.045)}
+.ouv-form:focus-within{border-color:rgba(243,240,232,.55)}
+.ouv-form textarea{font:500 18px/1.4 var(--f-ui);color:var(--ink);background:transparent;border:0;resize:none;outline:none;min-height:54px;padding:4px 4px 0}
+.ouv-form textarea::placeholder{color:rgba(243,240,232,.45)}
+.ouv-actions{display:flex;justify-content:flex-end;gap:8px}
+.ouv-actions button{min-height:44px;padding:0 20px}
+#ouv-go{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ouv-sugg{margin:14px 2px 0;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font:400 13px/1.4 var(--f-ui);color:var(--ink-dim)}
+.ouv-chip{font:500 14px/1.35 var(--f-ui);text-align:left;padding:9px 13px;min-height:40px;border-radius:12px;color:var(--ink);background:rgba(243,240,232,.06);border:1px dashed rgba(243,240,232,.32);max-width:100%}
+.ouv-travail .ouv-form,.ouv-travail .ouv-sugg{display:none}
+.ouv-demande{align-self:flex-end;max-width:85%;margin:2px 0 14px;padding:10px 14px;border-radius:16px 16px 4px 16px;background:rgba(243,240,232,.1);font:500 16px/1.35 var(--f-ui)}
+.ouv-pense{margin:0 0 12px;font-size:15px;line-height:1.45;color:var(--ink);font-style:italic}
+.ouv-log{list-style:none;margin:0;padding:0 2px 6px;flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 22px);mask-image:linear-gradient(to bottom,transparent 0,#000 22px)}
+.ouv-log::-webkit-scrollbar{display:none}
+.ouv-etape{animation:ouvApparait .35s ease both}
+.ouv-et{display:flex;align-items:center;gap:10px;font:600 14px/1.2 var(--f-ui)}
+.ouv-compte{margin-left:auto;font:400 12px/1 var(--f-mono);color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.ouv-roue{width:14px;height:14px;flex:none;border-radius:50%;border:2px solid rgba(243,240,232,.25);border-top-color:var(--ink);animation:ouvTourne .8s linear infinite}
+.ouv-etape.fait .ouv-roue{animation:none;border:0;background:var(--ink);-webkit-mask:radial-gradient(circle,#000 38%,transparent 42%);mask:radial-gradient(circle,#000 38%,transparent 42%)}
+.ouv-etape.fait .ouv-titre{color:var(--ink-dim)}
+.ouv-items{list-style:none;margin:8px 0 0 24px;padding:0;display:flex;flex-direction:column;gap:6px}
+.ouv-it{font:400 12.5px/1.45 var(--f-mono);color:var(--ink);animation:ouvApparait .3s ease both;overflow-wrap:anywhere}
+.ouv-k{color:var(--ink-dim);margin-right:6px}
+.ouv-dom{color:var(--ink-dim)}
+.ouv-src{font-family:var(--f-ui);font-size:13.5px}
+.ouv-etat{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);font-size:11px;color:var(--ink-dim)}
+.ouv-lu{color:var(--ink);border-color:rgba(243,240,232,.5)}
+.ouv-constat{display:flex;flex-direction:column;gap:2px}
+.ouv-c{font:500 14px/1.4 var(--f-ui)}
+.ouv-r{color:var(--ink-dim);font-size:12px}
+.ouv-mention{margin:10px 0 0;font:400 11px/1.4 var(--f-mono);letter-spacing:.04em;color:var(--ink-dim)}
+.ouv-passer{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:14px;min-height:36px;padding:0 14px;font-size:13px}
+.ouv-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@keyframes ouvTourne{to{transform:rotate(360deg)}}
+@keyframes ouvApparait{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.ouv-roue,.ouv-etape,.ouv-it{animation:none}.ouv{transition:opacity .4s}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 @media (prefers-reduced-motion:reduce){button.pulse{animation:none}}
 </style>
@@ -3105,6 +3154,213 @@ function voixNavigateur(w) {
 
 return {REGLAGES_VOIX,VOIX_TTS,aLire,creerVoix,voixNavigateur};
 })();
+const OUVERTURE=(function(){"use strict";
+// Ouverture de démo : « Quel monde veux-tu filmer ? ». Une demande qui correspond à une préparation enregistrée
+// (ouvertures/*.json : requêtes, sources, constats réellement faits) est rejouée en accéléré pendant que le moteur compile et
+// rend le lieu derrière ; une autre demande part dans la vraie chaîne du constructeur (atelier.js), en temps réel.
+// Rien n'est inventé : le rejeu ne montre que le journal enregistré, et la traduction et le contrôle sont calculés sur la
+// fiche embarquée au moment même. La mention « rejeu accéléré » est un réglage (docs/ouverture.md).
+// Partie pure (normaliser, correspond, programme, traduction) testée par tests/ouverture.test.mjs ; creerOuverture touche au DOM.
+
+function normaliser(t) {
+  return String(t == null ? '' : t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/* Le rejeu qui répond à une demande : il faut au moins un mot requis (le lieu ou « forêt ») et deux mots en tout. */
+function correspond(texte, rejeux) {
+  const t = ' ' + normaliser(texte) + ' ';
+  let mieux = null, score = 0;
+  for (const r of Array.isArray(rejeux) ? rejeux : []) {
+    if (!r || r.type !== 'rejeu') continue;
+    const a = m => t.includes(' ' + normaliser(m) + ' ') || (normaliser(m).length > 5 && t.includes(normaliser(m)));
+    const req = (r.motsRequis || []).filter(a).length, n = (r.mots || []).filter(a).length;
+    if (!req || n < 2 || (r.motsExclus || []).some(a)) continue;   // « Champcueil la nuit » n'est pas ce qui a été préparé
+    const s = n + 2 * req;
+    if (s > score) { score = s; mieux = r; }
+  }
+  return mieux;
+}
+
+/* Hasard reproductible (tests) ou Math.random. */
+function alea(graine) { let s = (graine >>> 0) || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+/* Ce que la fiche dit, en vocabulaire du moteur, avec ses vraies valeurs. Une ligne : [rubrique, texte]. */
+function traduction(f) {
+  const L = [], a = f.ambiance || {}, so = a.soleil || {}, fo = f.foret || {};
+  const v = x => String(x).replace('.', ',');
+  const kit = f.kit === 'dunes' ? 'dunes' : f.kit === 'nu' || (!f.kit && Array.isArray(f.semis)) ? 'nu' : 'foret';
+  if (kit === 'foret') {
+    L.push(['relief', f.relief ? `amplitude ${v(f.relief.amplitude ?? 0.8)} m, échelle ${v(f.relief.echelle ?? 150)} m` : 'ondulations de la forêt (≈ 1,5 m sur 150 m), sentier sinueux']);
+    L.push(['semis', `arbres : densité ${v(fo.densite ?? 0.7)} — pins, chênes, bouleaux`]);
+    L.push(['semis', `perches (jeunes châtaigniers) ${v(fo.perches ?? 1)}, blocs de grès ${v(fo.rochers ?? 1)}`]);
+    L.push(['semis', `canopée ${v(fo.feuillage ?? 1)}${fo.houppier === 'cone' ? ', conifères en cône' : ', voûte de feuillus'}`]);
+    L.push(['matières', 'sentier-sable, litiere, gres, gres-patine, ecorce-chene, ecorce-pin, ecorce-bouleau, ecorce-chataignier']);
+  } else if (kit === 'dunes') L.push(['relief', 'dunes, rides de vent']);
+  else {
+    if (f.relief) L.push(['relief', `amplitude ${v(f.relief.amplitude ?? 0.8)} m`]);
+    for (const s of f.semis || []) L.push(['semis', `${s.nom || s.id}, cellule ${(s.cellule || []).join(' × ')} m`]);
+    if (f.surfaces) L.push(['matières', Object.values(f.surfaces).join(', ')]);
+  }
+  L.push(['saison', a.saison || 'automne']);
+  if (so.hauteur !== undefined) L.push(['lumière', `soleil à ${v(so.hauteur)}° au-dessus de l'horizon, azimut ${v(so.azimut)}° par rapport au sentier${so.hauteur < 10 && so.hauteur >= 0 ? ' : lumière rasante, rougie' : ''}`]);
+  if (a.brume !== undefined) L.push(['air', `brume ${v(a.brume)} par mètre`]);
+  if (a.brume_basse) L.push(['air', `brume au sol ${v(a.brume_basse.densite)} sur ${v(a.brume_basse.hauteur)} m, éclairée par le soleil`]);
+  L.push(['caméra', `bodycam à ${v((f.camera && f.camera.hauteur) || 1.36)} m, ${((f.camera && f.camera.champ) || 125)}°`]);
+  return L;
+}
+
+/* Le programme du rejeu : une suite d'événements datés (secondes), aux durées un peu irrégulières comme en direct.
+   Les durées de chaque étape viennent du journal ; chaque élément reçoit sa part, tirée au hasard (±40 %). */
+function programme(r, f, hasard = Math.random, controle = null) {
+  const ev = [], jit = (d, k = .4) => d * (1 - k + 2 * k * hasard());
+  let t = 0;
+  const etape = (id, titre, duree, items, rendre) => {
+    ev.push({ t, type: 'etape', id, titre });
+    t += jit(.3, .5);
+    const n = items.length, poids = items.map(() => .4 + hasard() * 1.2), somme = poids.reduce((a, b) => a + b, 0) || 1;
+    items.forEach((it, i) => { ev.push(Object.assign({ t, type: 'ligne', etape: id }, rendre(it, i))); t += jit(duree) * poids[i] / somme; });
+    ev.push({ t, type: 'fin-etape', id }); t += jit(.25, .6);
+  };
+  ev.push({ t: 0, type: 'pense', texte: r.comprendre.texte });
+  t = jit(r.comprendre.duree, .2);
+  etape('recherche', 'Recherche', r.recherche.duree, r.recherche.requetes, q => ({ genre: 'requete', texte: q }));
+  etape('lecture', 'Lecture des sources', r.lecture.duree, r.lecture.sources, s => ({ genre: 'source', texte: s.titre, domaine: s.domaine, etat: s.etat, pourquoi: s.pourquoi || '' }));
+  etape('constats', 'Ce que j\'en retiens', r.constats.duree, r.constats.liste, c => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage }));
+  etape('traduction', 'Traduction en vocabulaire du moteur', r.traduction.duree, traduction(f), ([k, x]) => ({ genre: 'valeur', cle: k, texte: x }));
+  const lignes = controle ? (controle.lignes.length ? controle.lignes.filter(l => l.niveau !== 'info').slice(0, 3).map(l => (l.niveau === 'erreur' ? 'erreur : ' : 'à noter : ') + l.texte) : []) : [];
+  etape('controle', 'Contrôle', r.controle.duree, [r.controle.texte, ...lignes, controle ? (controle.ok ? 'passage libre, rien de bloquant' : 'des erreurs : voir le constat') : 'contrôle indisponible'], x => ({ genre: 'controle', texte: x }));
+  ev.push({ t, type: 'monde' });
+  t += r.fondu.duree;
+  ev.push({ t, type: 'fin' });
+  return ev;
+}
+
+/* ------------------------------------------------------------------ interface (DOM)
+   deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
+            construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
+            surDebut(), surFin(fiche), hasard } */
+function creerOuverture(deps) {
+  const d = document, $ = id => d.getElementById(id);
+  const racine = d.createElement('section');
+  racine.id = 'ouverture'; racine.className = 'ouv'; racine.setAttribute('aria-labelledby', 'ouv-q'); racine.hidden = true;
+  racine.innerHTML = `<div class="ouv-cadre">
+  <p class="ouv-sur"><span class="ouv-pt"></span>CAM 07 · nouveau tournage</p>
+  <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>
+  <form id="ouv-form" class="ouv-form" autocomplete="off">
+    <label class="ouv-vh" for="ouv-txt">Décris le monde</label>
+    <textarea id="ouv-txt" rows="2" maxlength="600" enterkeyhint="send" placeholder="Un lieu, une saison, une heure…"></textarea>
+    <div class="ouv-actions"><button type="button" id="ouv-dicter" class="ghost" hidden aria-pressed="false">Micro</button><button type="submit" id="ouv-go">Filmer</button></div>
+  </form>
+  <div class="ouv-sugg"><span>Essaie :</span> <button type="button" id="ouv-sugg" class="ouv-chip"></button></div>
+  <div id="ouv-demande" class="ouv-demande" hidden></div>
+  <div id="ouv-pense" class="ouv-pense" hidden></div>
+  <ol id="ouv-log" class="ouv-log" aria-live="polite"></ol>
+  <p id="ouv-mention" class="ouv-mention" hidden></p>
+</div>
+<button type="button" id="ouv-passer" class="ghost ouv-passer">Passer</button>`;
+  d.body.appendChild(racine);
+  const txt = $('ouv-txt'), log = $('ouv-log'), rejeux = deps.rejeux || [];
+  const sugg = (rejeux.find(r => r.suggestion) || {}).suggestion || '';
+  $('ouv-sugg').textContent = sugg; $('ouv-sugg').parentNode.hidden = !sugg;
+  let mention = !!deps.mention, timers = [], enCours = false, fini = false;
+
+  function afficherMention(r) {
+    const m = $('ouv-mention');
+    m.hidden = !(mention && r);
+    if (r) m.textContent = 'Rejeu accéléré d\'une génération enregistrée' + (r.enregistre ? ' le ' + r.enregistre.split('-').reverse().join('/') : '') + ' · recherche réelle, durées raccourcies';
+  }
+  $('ouv-sugg').onclick = () => {                       // la suggestion s'écrit dans le champ, comme tapée ; on garde la main pour envoyer
+    if (enCours) return;
+    txt.value = ''; let i = 0; const s = sugg;
+    const tape = () => { txt.value = s.slice(0, ++i); if (i < s.length) timers.push(setTimeout(tape, 14 + 30 * Math.random())); else txt.focus(); };
+    tape();
+  };
+  txt.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ouv-form').requestSubmit(); } });
+  Promise.resolve(deps.dicteeDispo).then(ok => { if (ok) $('ouv-dicter').hidden = false; }).catch(() => {});
+  $('ouv-dicter').onclick = () => { if ($('ouv-dicter').getAttribute('aria-pressed') === 'true') deps.arreterDictee && deps.arreterDictee(); else deps.dicter && deps.dicter(txt); };
+  $('ouv-form').addEventListener('submit', e => { e.preventDefault(); const t = txt.value.trim(); if (!t) { txt.focus(); return; } envoyer(t); });
+  $('ouv-passer').onclick = () => terminer(null, true);
+
+  function li(cls, html) { const x = d.createElement('li'); x.className = cls; x.innerHTML = html; log.appendChild(x); x.scrollIntoView({ block: 'end', behavior: 'smooth' }); return x; }
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const ETAT = { lu: 'lu', illisible: 'illisible', refuse: 'accès refusé', extrait: 'extrait de recherche' };
+
+  function envoyer(t) {
+    if (enCours) return; enCours = true;
+    deps.arreterDictee && deps.arreterDictee();
+    racine.classList.add('ouv-travail');
+    $('ouv-demande').hidden = false; $('ouv-demande').textContent = t;
+    const r = correspond(t, rejeux);
+    const f = r && (deps.ficheDe ? deps.ficheDe(r) : (deps.fiches || []).find(x => x.id === r.fiche || x.id === r.ficheSecours));
+    if (deps.surDebut) deps.surDebut(t, !!(r && f));
+    if (r && f) return rejouer(r, f);
+    afficherMention(null);
+    // Pas de rejeu : la vraie chaîne du constructeur, en temps réel, suivie dans son chantier.
+    $('ouv-pense').hidden = false; $('ouv-pense').textContent = 'Je prépare ce monde pour de vrai : compte quelques minutes. Tu peux suivre la fabrication.';
+    timers.push(setTimeout(() => terminer(null, false, true), 2200));
+  }
+
+  function rejouer(r, f) {
+    afficherMention(r);
+    deps.appliquer(f);                                  // le moteur compile et rend derrière, pendant le rejeu
+    let controle = null;
+    try { controle = deps.C ? deps.C.controler(f, null, { recettes: deps.recettes }) : null; } catch (_) { controle = null; }
+    const ev = programme(r, f, deps.hasard || Math.random, controle);
+    const blocs = {};
+    for (const e of ev) timers.push(setTimeout(() => jouer(e, blocs), e.t * 1000));
+  }
+
+  function jouer(e, blocs) {
+    if (fini) return;
+    if (e.type === 'pense') { $('ouv-pense').hidden = false; $('ouv-pense').textContent = e.texte; return; }
+    if (e.type === 'etape') {
+      const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">${esc(e.titre)}</span><span class="ouv-compte"></span></div><ul class="ouv-items"></ul>`);
+      blocs[e.id] = { x, ul: x.querySelector('.ouv-items'), n: 0 };
+      return;
+    }
+    const b = blocs[e.etape || e.id];
+    if (e.type === 'ligne' && b) {
+      const it = d.createElement('li'); it.className = 'ouv-it ouv-' + e.genre;
+      if (e.genre === 'requete') it.innerHTML = `<span class="ouv-k">cherche</span> ${esc(e.texte)}`;
+      else if (e.genre === 'source') it.innerHTML = `<span class="ouv-dom">${esc(e.domaine)}</span> <span class="ouv-src">${esc(e.texte)}</span> <span class="ouv-etat ouv-${esc(e.etat)}">${esc(ETAT[e.etat] || e.etat)}${e.pourquoi ? ' · ' + esc(e.pourquoi) : ''}</span>`;
+      else if (e.genre === 'constat') it.innerHTML = `<span class="ouv-c">${esc(e.texte)}</span><span class="ouv-r">→ ${esc(e.reglage)}</span>`;
+      else if (e.genre === 'valeur') it.innerHTML = `<span class="ouv-k">${esc(e.cle)}</span> ${esc(e.texte)}`;
+      else it.textContent = e.texte;
+      b.ul.appendChild(it); b.n++;
+      const c = b.x.querySelector('.ouv-compte'); if (e.genre === 'requete' || e.genre === 'source') c.textContent = b.n;
+      it.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      return;
+    }
+    if (e.type === 'fin-etape' && b) { b.x.classList.remove('en-cours'); b.x.classList.add('fait'); return; }
+    if (e.type === 'monde') {
+      const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">Le monde se construit</span></div>`);
+      // Le fondu attend une vraie image du moteur : si le GPU est lent, cette ligne reste le temps qu'il faut.
+      Promise.resolve(deps.pret ? deps.pret(45000) : null).catch(() => {}).then(() => { if (fini) return; x.classList.remove('en-cours'); x.classList.add('fait'); racine.classList.add('ouv-fondu');
+        timers.push(setTimeout(() => terminer(e.fiche), 2400)); });
+      return;
+    }
+  }
+
+  function terminer(fiche, passe, constructeur) {
+    if (fini) return; fini = true;
+    timers.forEach(clearTimeout); timers = [];
+    racine.classList.add('ouv-fondu');
+    setTimeout(() => { racine.hidden = true; racine.remove(); d.body.classList.remove('ouverture-on'); }, passe ? 300 : 900);
+    if (deps.surFin) deps.surFin({ passe: !!passe, constructeur: !!constructeur, texte: $('ouv-demande').textContent });
+  }
+
+  return {
+    ouvrir() { racine.hidden = false; d.body.classList.add('ouverture-on'); setTimeout(() => { try { txt.focus({ preventScroll: true }); } catch (_) {} }, 60); },
+    mention(on) { mention = !!on; const m = $('ouv-mention'); if (m && m.textContent) m.hidden = !mention; return mention; },
+    dictee(on) { const b = $('ouv-dicter'); if (b) { b.setAttribute('aria-pressed', String(!!on)); b.textContent = on ? 'J\'écoute' : 'Micro'; } },
+    envoyer: t => { txt.value = t; envoyer(t); },
+    ouvert: () => !fini && !racine.hidden
+  };
+}
+
+return {normaliser,correspond,alea,traduction,programme,creerOuverture};
+})();
+const OUVERTURES=[{"type":"rejeu","id":"ouverture-champcueil","titre":"Forêt de Champcueil au lever du soleil","note":"Journal réel d'une préparation faite le 19 novembre 2026 (recherche web par Claude, puis écriture de scenes/09-champcueil-aube.json ; à défaut de cette fiche dans la page, le rejeu débouche sur scenes/01-grands-avaux.json). Rien n'est ajouté : requêtes, pages lues, pages illisibles et constats sont ceux de cette séance. Les durées sont celles du rejeu, pas celles de la séance (environ une demi-heure de recherche et d'essais de rendu). Aucun texte de source n'est recopié, aucune image n'est importée.","fiche":"champcueil-aube","ficheSecours":"grands-avaux-sentier","suggestion":"fais-moi une forêt en automne au lever du soleil, genre Champcueil","mots":["champcueil","grands avaux","avaux","essonne","foret","bois","automne","aube","lever","matin","soleil levant","fontainebleau","gres"],"motsRequis":["champcueil","avaux","foret","bois"],"motsExclus":["nuit","minuit","soir","hiver","neige","ete","desert","plage","ville","rue","pluie","orage","midi"],"enregistre":"2026-11-19","comprendre":{"duree":1.3,"texte":"Une forêt d'automne au lever du soleil, sur le modèle de Champcueil (Essonne) : je cherche à quoi ressemble ce lieu avant de le construire.","reperes":["lieu réel : Champcueil, Essonne","saison : automne","heure : lever du soleil"]},"recherche":{"duree":4,"requetes":["forêt départementale des Grands Avaux Champcueil","Champcueil platières grès chaos rochers pins sylvestres bruyère sable","Grands Avaux Champcueil escalade bloc Essonne forêt chênes châtaigniers","grès de Fontainebleau couleur blocs arrondis gris lichen chaos platière formation","Essonne espace naturel sensible Grands Avaux Champcueil département forêt 182 hectares","massif des Trois Pignons Champcueil grès gris blocs arrondis pins sylvestres fougère aigle callune bouleaux","pin sylvestre écorce rouge orangé partie haute du tronc écailles plaques grises en bas","fougère aigle automne couleur rousse sous-bois landes sableuses Île-de-France","lumière lever du soleil sous-bois rayons crépusculaires brume matinale forêt automne photographie","sunrise sun elevation color temperature golden hour Kelvin low sun forest crepuscular rays mist"]},"lecture":{"duree":4.4,"sources":[{"titre":"The Forest of Grands Avaux (randonnée)","domaine":"visorando.com","etat":"lu"},{"titre":"Forêt des Grands Avaux (avis et photos de randonneurs)","domaine":"decathlon-outdoor.com","etat":"lu"},{"titre":"Varape aux Grands Avaux, Essonne","domaine":"outzer.fr","etat":"lu"},{"titre":"Boucle des Grands Avaux, et Tour du Buisson (randonnée)","domaine":"decathlon-outdoor.com","etat":"lu"},{"titre":"Pin sylvestre : qu'est-ce que c'est ?","domaine":"futura-sciences.com","etat":"lu"},{"titre":"Les Grands Avaux (dépliant du Val d'Essonne)","domaine":"api.valessonne.fr","etat":"illisible","pourquoi":"PDF fait d'images, sans texte"},{"titre":"Fiche du site Natura 2000 « Buttes gréseuses de l'Essonne »","domaine":"drieat.ile-de-france.developpement-durable.gouv.fr","etat":"refuse","pourquoi":"accès refusé (403)"},{"titre":"Fiche ZNIEFF (INPN)","domaine":"inpn.mnhn.fr","etat":"refuse","pourquoi":"accès refusé (403)"},{"titre":"Résultats de recherche : Natura 2000, Platière du Télégraphe à Champcueil","domaine":"drieat.ile-de-france.developpement-durable.gouv.fr","etat":"extrait"},{"titre":"Résultats de recherche : photographier la brume et les rais du matin","domaine":"lartdelaphoto.fr","etat":"extrait"},{"titre":"Résultats de recherche : golden hour, hauteur du soleil","domaine":"timeanddate.com","etat":"extrait"},{"titre":"Résultats de recherche : température de couleur au lever","domaine":"adobe.com","etat":"extrait"},{"titre":"Résultats de recherche : fougère aigle, brune à rousse en fin de saison","domaine":"jardiner-malin.fr, photo-paysage.com","etat":"extrait"}]},"constats":{"duree":4.6,"liste":[{"texte":"Le sentier traverse des chaos de grès et des platières","source":"visorando.com","reglage":"kit forêt, foret.rochers 1 (blocs de grès semés le long du sentier)"},{"texte":"Pins, châtaigniers, chênes et bouleaux, fougères en sous-bois","source":"visorando.com","reglage":"kit forêt : pins, chênes, bouleaux, perches (jeunes châtaigniers) ; pas de fougères dans le vocabulaire"},{"texte":"Larges chemins de sable par endroits","source":"visorando.com","reglage":"sentier en matière « sentier-sable »"},{"texte":"Ailleurs, sentier rocailleux ou de terre battue, boueux après la pluie","source":"decathlon-outdoor.com","reglage":"écart : la fiche garde un sentier de sable partout"},{"texte":"Rochers couverts de mousse et de lichen, sentiers jonchés de feuilles mortes","source":"decathlon-outdoor.com","reglage":"grès moussu, litière de feuilles (saison automne)"},{"texte":"Pins et feuillus mêlés, dense par endroits ; la canopée laisse filtrer la lumière","source":"decathlon-outdoor.com","reglage":"foret.densite 0,7, canopée de feuillus"},{"texte":"Pin sylvestre : écorce creusée de sillons en bas, plus fine et brun orangé en haut chez les vieux arbres","source":"futura-sciences.com","reglage":"recette ecorce-pin (le haut orangé n'est pas encore rendu)"},{"texte":"Arbres en partie dénudés sur les photos d'arrière-saison","source":"decathlon-outdoor.com","reglage":"canopée moins dense qu'en été (foret.feuillage)"},{"texte":"Fougère aigle brune à rousse à l'automne, en sous-bois","source":"jardiner-malin.fr, photo-paysage.com (résultats)","reglage":"non rendu : pas encore de sous-bois dans le vocabulaire"},{"texte":"Platière du Télégraphe : landes à bruyère et petites mares","source":"visorando.com, drieat (résultats)","reglage":"non rendu : ni bruyère ni mare proche dans le vocabulaire"},{"texte":"Châtaignes et champignons ramassés à l'automne","source":"outzer.fr","reglage":"confirme la saison et les châtaigniers"},{"texte":"Lumière dorée tant que le soleil est sous 6° environ ; vers 2 000 K juste après le lever","source":"timeanddate.com, adobe.com","reglage":"soleil bas, sous 10° : le moteur rougit alors la lumière et l'horizon"},{"texte":"Soleil bas d'automne et brume : rais de lumière en sous-bois, la brume diffuse","source":"lartdelaphoto.fr","reglage":"brume au ras du sol, éclairée par le soleil"},{"texte":"À 48,5° de latitude fin novembre : lever vers 121° (sud-est), soleil à 21° au plus haut","source":"calcul astronomique","reglage":"la fiche du jour (21°) est juste ; à l'aube on place le soleil en face du sentier, légèrement à gauche"}]},"traduction":{"duree":2.6,"texte":"Je traduis en vocabulaire du moteur : relief, semis, matières, lumière."},"controle":{"duree":1.3,"texte":"Contrôle sans image : champ du téléphone, portée de la brume, passage libre."},"fondu":{"duree":2.2}}];
 </script>
 <script>
 "use strict";
@@ -11188,7 +11444,7 @@ function reglerRelief(f){
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
-  if(f!==fiche){ errance=true; immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
+  if(f!==fiche){ errance=arrivee(); immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
@@ -12233,6 +12489,7 @@ function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
+  if(ouvRepos) return;                                            // l'ouverture pose sa question : rien n'est visible derrière, le moteur se repose (docs/ouverture.md)
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
   const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=(k,cible)=>{ if(!pf) return; if(cible!==undefined) v3Sync(cible); const t=performance.now(); pf[k]=t-pt; pt=t; };
   simulate(dt); etape("sim");
@@ -13198,5 +13455,57 @@ if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();
 sondeProg();                                                     // option v3sonde : la sonde se compile dès le départ, sans bloquer
 requestAnimationFrame(frame);
+
+/* ------------------------------------------------------------------ ouverture de démo et arrivée dans un lieu
+   Le code est dans src/ouverture.js (OUVERTURE) et ouvertures/*.json (OUVERTURES, journaux de préparation réels) ; ici, les
+   raccords. Voir docs/ouverture.md. La voix du personnage est ailleurs (window.voix, quand elle existe). */
+function reglage(cle,cfg,defaut){ if(cfg!==undefined) return !!cfg; try{ const v=localStorage.getItem(cle); if(v!==null) return v==="1"; }catch(_){} return defaut; }
+function memoriser(cle,on){ try{ localStorage.setItem(cle,on?"1":"0"); }catch(_){} }
+const DEMO=CFG.demo!==undefined?!!CFG.demo:/[?&#]demo(\b|=1)/.test(location.search+location.hash)||reglage("bodycam-demo",undefined,!window.__CFG);   // démarrer sur l'ouverture
+let mentionRejeu=reglage("bodycam-demo-mention",CFG.demoMention,false);   // « rejeu accéléré d'une génération enregistrée » : éteinte par défaut
+{ const o=$("outils"), d=document.createElement("button"); d.type="button"; d.id="demo"; d.className="ghost"; d.textContent="Démo"; o.prepend(d); d.onclick=()=>{ fermerOutils(); lancerOuverture(); };
+  const m=document.createElement("button"); m.type="button"; m.id="mention"; m.className="ghost"; o.appendChild(m);
+  const maj=()=>{ m.setAttribute("aria-pressed",String(mentionRejeu)); m.textContent="Mention rejeu : "+(mentionRejeu?"oui":"non"); }; maj();
+  m.onclick=()=>{ mentionRejeu=!mentionRejeu; memoriser("bodycam-demo-mention",mentionRejeu); if(ouverture) ouverture.mention(mentionRejeu); maj(); }; }
+function pensee(t){ penser(t); }
+
+/* Arrivée dans un lieu (hors histoire) : il ne part pas se promener, il regarde autour de lui et se demande ce qu'il fait là.
+   Il ne repart que si on le lui dit (« promène-toi », « fais ta vie » : meneurEntendre). Les outils de capture (window.__CFG)
+   gardent l'ancien comportement (promenade), sauf avec l'option arrivee. */
+const ARRIVEE=["Qu'est-ce que je fous là ?","Attends… je suis où, là ?","Bon. Et maintenant, je fais quoi ?","Personne m'a dit ce que je venais faire ici."];
+function arriveeActive(){ return !window.__CFG||!!CFG.arrivee; }
+var arriveeJeton=0, ouverture=null, ouvRepos=false;                              // var : applyFiche passe par arrivee() dès le démarrage, avant ces lignes
+function arrivee(){                                               // appelée par applyFiche à chaque nouveau lieu ; rend la valeur d'errance
+  if(!arriveeActive()) return true;
+  const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1600);
+  return false;
+}
+function tourHorizon(k){
+  if(k!==arriveeJeton||(meneur&&!meneurLibre)||frozen||(ouverture&&ouverture.ouvert())) return;
+  queue.length=0;                                                 // un tour d'horizon sur place : tourner et lever la tête, aucun pas
+  queue.push({type:"attendre",rest:.6},{type:"tourner",rest:-.55},{type:"attendre",rest:.9},{type:"regarder",pitch:.18},{type:"tourner",rest:1.1},
+    {type:"attendre",rest:.7},{type:"regarder",pitch:-.03},{type:"tourner",rest:-.55});
+  setTimeout(()=>{ if(k===arriveeJeton&&!(meneur&&!meneurLibre)) pensee(ARRIVEE[(seedN>>>0)%ARRIVEE.length]); },2200);   // même fiche, même phrase
+}
+
+/* L'ouverture : « Quel monde veux-tu filmer ? » ; rejeu d'une préparation enregistrée, ou vraie chaîne du constructeur. */
+function lancerOuverture(){
+  if(ouverture&&ouverture.ouvert()) return;
+  if(meneur&&!meneurLibre) quitterHistoire(false);
+  setFrozen(false); voixP.taire(); voixInter(true);                         // la démo se joue avec la voix
+  const voulue=id=>FICHES.find(f=>f.id===id);
+  ouverture=OUVERTURE.creerOuverture({ rejeux:OUVERTURES, fiches:FICHES, C:CONSTRUCTEUR, recettes:Object.keys(MAT_LIB.recettes), mention:mentionRejeu,
+    ficheDe:r=>voulue(r.fiche)||voulue(r.ficheSecours)||null,
+    appliquer:f=>{ const i=FICHES.indexOf(f); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); arriveeJeton++; },   // l'arrivée attend la fin du fondu
+    pret:ms=>attendreImage(V3.on?6:4,ms),
+    dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
+    surDebut:()=>{ ouvRepos=false; },
+    surFin:o=>{ ouvRepos=false; if(o.constructeur){ creerMonde(o.texte); return; } const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1200); } });
+  ouverture.ouvrir(); ouvRepos=true;
+}
+setInterval(()=>{ if(ouverture&&ouverture.ouvert()) ouverture.dictee(listening); },300);
+if(DEMO&&!CFG.histoire) lancerOuverture();
+window.balade.ouverture=()=>{ lancerOuverture(); return ouverture; };
+window.balade.arrivee=()=>({ errance, file:queue.map(a=>a.type), pensee:$("pensee").textContent });
 
 </script>

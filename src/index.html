@@ -137,6 +137,55 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .outils button{padding:11px 14px;font-size:14px;min-height:44px}
 #plus[aria-expanded="true"]{color:var(--ink);border-color:var(--ink)}
 .banque-liste .groupe{font:500 11.5px/1 var(--f-mono);color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;padding:10px 2px 2px}
+/* ouverture de démo (src/ouverture.js) : la question, puis le journal de préparation qui défile, puis le fondu sur le monde */
+.ouv{position:fixed;inset:0;z-index:20;display:flex;justify-content:center;background:radial-gradient(120% 90% at 50% 18%,#161b14 0%,var(--bg) 62%,#070906 100%);
+  transition:opacity 2.2s ease,background-color .6s;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))}
+.ouv[hidden]{display:none}
+.ouv.ouv-fondu{opacity:0;pointer-events:none}
+.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(8vh,calc(50vh - 260px));transition:padding-top .7s ease}
+.ouv-travail .ouv-cadre{padding-top:28px}
+.ouv-sur{margin:0 0 14px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
+.ouv-pt{width:7px;height:7px;border-radius:50%;background:var(--rec);box-shadow:0 0 10px var(--rec)}
+.ouv-q{margin:0 0 22px;font:600 32px/1.08 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
+@media (min-width:760px){.ouv-q{font-size:44px}}
+.ouv-travail .ouv-q{font-size:15px;margin:0 0 10px;color:var(--ink-dim);font-weight:500}
+.ouv-form{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:18px;padding:12px;background:rgba(243,240,232,.045)}
+.ouv-form:focus-within{border-color:rgba(243,240,232,.55)}
+.ouv-form textarea{font:500 18px/1.4 var(--f-ui);color:var(--ink);background:transparent;border:0;resize:none;outline:none;min-height:54px;padding:4px 4px 0}
+.ouv-form textarea::placeholder{color:rgba(243,240,232,.45)}
+.ouv-actions{display:flex;justify-content:flex-end;gap:8px}
+.ouv-actions button{min-height:44px;padding:0 20px}
+#ouv-go{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ouv-sugg{margin:14px 2px 0;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font:400 13px/1.4 var(--f-ui);color:var(--ink-dim)}
+.ouv-chip{font:500 14px/1.35 var(--f-ui);text-align:left;padding:9px 13px;min-height:40px;border-radius:12px;color:var(--ink);background:rgba(243,240,232,.06);border:1px dashed rgba(243,240,232,.32);max-width:100%}
+.ouv-travail .ouv-form,.ouv-travail .ouv-sugg{display:none}
+.ouv-demande{align-self:flex-end;max-width:85%;margin:2px 0 14px;padding:10px 14px;border-radius:16px 16px 4px 16px;background:rgba(243,240,232,.1);font:500 16px/1.35 var(--f-ui)}
+.ouv-pense{margin:0 0 12px;font-size:15px;line-height:1.45;color:var(--ink);font-style:italic}
+.ouv-log{list-style:none;margin:0;padding:0 2px 6px;flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 22px);mask-image:linear-gradient(to bottom,transparent 0,#000 22px)}
+.ouv-log::-webkit-scrollbar{display:none}
+.ouv-etape{animation:ouvApparait .35s ease both}
+.ouv-et{display:flex;align-items:center;gap:10px;font:600 14px/1.2 var(--f-ui)}
+.ouv-compte{margin-left:auto;font:400 12px/1 var(--f-mono);color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.ouv-roue{width:14px;height:14px;flex:none;border-radius:50%;border:2px solid rgba(243,240,232,.25);border-top-color:var(--ink);animation:ouvTourne .8s linear infinite}
+.ouv-etape.fait .ouv-roue{animation:none;border:0;background:var(--ink);-webkit-mask:radial-gradient(circle,#000 38%,transparent 42%);mask:radial-gradient(circle,#000 38%,transparent 42%)}
+.ouv-etape.fait .ouv-titre{color:var(--ink-dim)}
+.ouv-items{list-style:none;margin:8px 0 0 24px;padding:0;display:flex;flex-direction:column;gap:6px}
+.ouv-it{font:400 12.5px/1.45 var(--f-mono);color:var(--ink);animation:ouvApparait .3s ease both;overflow-wrap:anywhere}
+.ouv-k{color:var(--ink-dim);margin-right:6px}
+.ouv-dom{color:var(--ink-dim)}
+.ouv-src{font-family:var(--f-ui);font-size:13.5px}
+.ouv-etat{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);font-size:11px;color:var(--ink-dim)}
+.ouv-lu{color:var(--ink);border-color:rgba(243,240,232,.5)}
+.ouv-constat{display:flex;flex-direction:column;gap:2px}
+.ouv-c{font:500 14px/1.4 var(--f-ui)}
+.ouv-r{color:var(--ink-dim);font-size:12px}
+.ouv-mention{margin:10px 0 0;font:400 11px/1.4 var(--f-mono);letter-spacing:.04em;color:var(--ink-dim)}
+.ouv-passer{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:14px;min-height:36px;padding:0 14px;font-size:13px}
+.ouv-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@keyframes ouvTourne{to{transform:rotate(360deg)}}
+@keyframes ouvApparait{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.ouv-roue,.ouv-etape,.ouv-it{animation:none}.ouv{transition:opacity .4s}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 @media (prefers-reduced-motion:reduce){button.pulse{animation:none}}
 </style>

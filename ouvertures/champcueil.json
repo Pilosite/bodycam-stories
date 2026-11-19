@@ -1,0 +1,229 @@
+{
+  "type": "rejeu",
+  "id": "ouverture-champcueil",
+  "titre": "Forêt de Champcueil au lever du soleil",
+  "note": "Journal réel d'une préparation faite le 19 novembre 2026 (recherche web par Claude, puis écriture de scenes/09-champcueil-aube.json ; à défaut de cette fiche dans la page, le rejeu débouche sur scenes/01-grands-avaux.json). Rien n'est ajouté : requêtes, pages lues, pages illisibles et constats sont ceux de cette séance. Les durées sont celles du rejeu, pas celles de la séance (environ une demi-heure de recherche et d'essais de rendu). Aucun texte de source n'est recopié, aucune image n'est importée.",
+  "fiche": "champcueil-aube",
+  "ficheSecours": "grands-avaux-sentier",
+  "suggestion": "fais-moi une forêt en automne au lever du soleil, genre Champcueil",
+  "mots": [
+    "champcueil",
+    "grands avaux",
+    "avaux",
+    "essonne",
+    "foret",
+    "bois",
+    "automne",
+    "aube",
+    "lever",
+    "matin",
+    "soleil levant",
+    "fontainebleau",
+    "gres"
+  ],
+  "motsRequis": [
+    "champcueil",
+    "avaux",
+    "foret",
+    "bois"
+  ],
+  "motsExclus": [
+    "nuit",
+    "minuit",
+    "soir",
+    "hiver",
+    "neige",
+    "ete",
+    "desert",
+    "plage",
+    "ville",
+    "rue",
+    "pluie",
+    "orage",
+    "midi"
+  ],
+  "enregistre": "2026-11-19",
+  "comprendre": {
+    "duree": 1.3,
+    "texte": "Une forêt d'automne au lever du soleil, sur le modèle de Champcueil (Essonne) : je cherche à quoi ressemble ce lieu avant de le construire.",
+    "reperes": [
+      "lieu réel : Champcueil, Essonne",
+      "saison : automne",
+      "heure : lever du soleil"
+    ]
+  },
+  "recherche": {
+    "duree": 4.0,
+    "requetes": [
+      "forêt départementale des Grands Avaux Champcueil",
+      "Champcueil platières grès chaos rochers pins sylvestres bruyère sable",
+      "Grands Avaux Champcueil escalade bloc Essonne forêt chênes châtaigniers",
+      "grès de Fontainebleau couleur blocs arrondis gris lichen chaos platière formation",
+      "Essonne espace naturel sensible Grands Avaux Champcueil département forêt 182 hectares",
+      "massif des Trois Pignons Champcueil grès gris blocs arrondis pins sylvestres fougère aigle callune bouleaux",
+      "pin sylvestre écorce rouge orangé partie haute du tronc écailles plaques grises en bas",
+      "fougère aigle automne couleur rousse sous-bois landes sableuses Île-de-France",
+      "lumière lever du soleil sous-bois rayons crépusculaires brume matinale forêt automne photographie",
+      "sunrise sun elevation color temperature golden hour Kelvin low sun forest crepuscular rays mist"
+    ]
+  },
+  "lecture": {
+    "duree": 4.4,
+    "sources": [
+      {
+        "titre": "The Forest of Grands Avaux (randonnée)",
+        "domaine": "visorando.com",
+        "etat": "lu"
+      },
+      {
+        "titre": "Forêt des Grands Avaux (avis et photos de randonneurs)",
+        "domaine": "decathlon-outdoor.com",
+        "etat": "lu"
+      },
+      {
+        "titre": "Varape aux Grands Avaux, Essonne",
+        "domaine": "outzer.fr",
+        "etat": "lu"
+      },
+      {
+        "titre": "Boucle des Grands Avaux, et Tour du Buisson (randonnée)",
+        "domaine": "decathlon-outdoor.com",
+        "etat": "lu"
+      },
+      {
+        "titre": "Pin sylvestre : qu'est-ce que c'est ?",
+        "domaine": "futura-sciences.com",
+        "etat": "lu"
+      },
+      {
+        "titre": "Les Grands Avaux (dépliant du Val d'Essonne)",
+        "domaine": "api.valessonne.fr",
+        "etat": "illisible",
+        "pourquoi": "PDF fait d'images, sans texte"
+      },
+      {
+        "titre": "Fiche du site Natura 2000 « Buttes gréseuses de l'Essonne »",
+        "domaine": "drieat.ile-de-france.developpement-durable.gouv.fr",
+        "etat": "refuse",
+        "pourquoi": "accès refusé (403)"
+      },
+      {
+        "titre": "Fiche ZNIEFF (INPN)",
+        "domaine": "inpn.mnhn.fr",
+        "etat": "refuse",
+        "pourquoi": "accès refusé (403)"
+      },
+      {
+        "titre": "Résultats de recherche : Natura 2000, Platière du Télégraphe à Champcueil",
+        "domaine": "drieat.ile-de-france.developpement-durable.gouv.fr",
+        "etat": "extrait"
+      },
+      {
+        "titre": "Résultats de recherche : photographier la brume et les rais du matin",
+        "domaine": "lartdelaphoto.fr",
+        "etat": "extrait"
+      },
+      {
+        "titre": "Résultats de recherche : golden hour, hauteur du soleil",
+        "domaine": "timeanddate.com",
+        "etat": "extrait"
+      },
+      {
+        "titre": "Résultats de recherche : température de couleur au lever",
+        "domaine": "adobe.com",
+        "etat": "extrait"
+      },
+      {
+        "titre": "Résultats de recherche : fougère aigle, brune à rousse en fin de saison",
+        "domaine": "jardiner-malin.fr, photo-paysage.com",
+        "etat": "extrait"
+      }
+    ]
+  },
+  "constats": {
+    "duree": 4.6,
+    "liste": [
+      {
+        "texte": "Le sentier traverse des chaos de grès et des platières",
+        "source": "visorando.com",
+        "reglage": "kit forêt, foret.rochers 1 (blocs de grès semés le long du sentier)"
+      },
+      {
+        "texte": "Pins, châtaigniers, chênes et bouleaux, fougères en sous-bois",
+        "source": "visorando.com",
+        "reglage": "kit forêt : pins, chênes, bouleaux, perches (jeunes châtaigniers) ; pas de fougères dans le vocabulaire"
+      },
+      {
+        "texte": "Larges chemins de sable par endroits",
+        "source": "visorando.com",
+        "reglage": "sentier en matière « sentier-sable »"
+      },
+      {
+        "texte": "Ailleurs, sentier rocailleux ou de terre battue, boueux après la pluie",
+        "source": "decathlon-outdoor.com",
+        "reglage": "écart : la fiche garde un sentier de sable partout"
+      },
+      {
+        "texte": "Rochers couverts de mousse et de lichen, sentiers jonchés de feuilles mortes",
+        "source": "decathlon-outdoor.com",
+        "reglage": "grès moussu, litière de feuilles (saison automne)"
+      },
+      {
+        "texte": "Pins et feuillus mêlés, dense par endroits ; la canopée laisse filtrer la lumière",
+        "source": "decathlon-outdoor.com",
+        "reglage": "foret.densite 0,7, canopée de feuillus"
+      },
+      {
+        "texte": "Pin sylvestre : écorce creusée de sillons en bas, plus fine et brun orangé en haut chez les vieux arbres",
+        "source": "futura-sciences.com",
+        "reglage": "recette ecorce-pin (le haut orangé n'est pas encore rendu)"
+      },
+      {
+        "texte": "Arbres en partie dénudés sur les photos d'arrière-saison",
+        "source": "decathlon-outdoor.com",
+        "reglage": "canopée moins dense qu'en été (foret.feuillage)"
+      },
+      {
+        "texte": "Fougère aigle brune à rousse à l'automne, en sous-bois",
+        "source": "jardiner-malin.fr, photo-paysage.com (résultats)",
+        "reglage": "non rendu : pas encore de sous-bois dans le vocabulaire"
+      },
+      {
+        "texte": "Platière du Télégraphe : landes à bruyère et petites mares",
+        "source": "visorando.com, drieat (résultats)",
+        "reglage": "non rendu : ni bruyère ni mare proche dans le vocabulaire"
+      },
+      {
+        "texte": "Châtaignes et champignons ramassés à l'automne",
+        "source": "outzer.fr",
+        "reglage": "confirme la saison et les châtaigniers"
+      },
+      {
+        "texte": "Lumière dorée tant que le soleil est sous 6° environ ; vers 2 000 K juste après le lever",
+        "source": "timeanddate.com, adobe.com",
+        "reglage": "soleil bas, sous 10° : le moteur rougit alors la lumière et l'horizon"
+      },
+      {
+        "texte": "Soleil bas d'automne et brume : rais de lumière en sous-bois, la brume diffuse",
+        "source": "lartdelaphoto.fr",
+        "reglage": "brume au ras du sol, éclairée par le soleil"
+      },
+      {
+        "texte": "À 48,5° de latitude fin novembre : lever vers 121° (sud-est), soleil à 21° au plus haut",
+        "source": "calcul astronomique",
+        "reglage": "la fiche du jour (21°) est juste ; à l'aube on place le soleil en face du sentier, légèrement à gauche"
+      }
+    ]
+  },
+  "traduction": {
+    "duree": 2.6,
+    "texte": "Je traduis en vocabulaire du moteur : relief, semis, matières, lumière."
+  },
+  "controle": {
+    "duree": 1.3,
+    "texte": "Contrôle sans image : champ du téléphone, portée de la brume, passage libre."
+  },
+  "fondu": {
+    "duree": 2.2
+  }
+}
