@@ -963,6 +963,12 @@ float gT;                    // distance du premier impact, gardée pour la repr
 // Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
 // Les paramètres d'un objet (arbreA, percheB, blocGres) sont calculés en un seul endroit : le lanceur de rayons
 // s'en sert pour sa distance, le semeur pour poser ses grains au même endroit.
+#ifndef SEMIS
+#define SEMIS 0              // variantes fixes compilées par src/main.js (progMonde) : avec ou sans semis, avec ou sans arbres. Jamais de code généré par monde.
+#endif
+#ifndef NU
+#define NU 0                 // monde nu : ni arbres, ni rochers, ni canopée dans le code
+#endif
 uniform vec2  uRes;
 uniform vec3  uCamPos;
 uniform mat3  uCam;
@@ -973,7 +979,7 @@ uniform vec3  uSunDir;
 uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
 uniform vec3  uSky;        // teinte et niveau du ciel
 uniform float uTorch;      // lampe du téléphone, 0 = éteinte
-uniform int   uKit;        // 0 forêt, 1 dunes
+uniform int   uKit;        // 0 forêt, 1 dunes, 2 nu (rien de prédéfini : tout vient de la fiche)
 uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
 uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
 uniform vec2  uCan;        // tranche du feuillage : bas, haut
@@ -1008,15 +1014,24 @@ vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
-/* ---- terrain et sentier */
-float pathX(float z){ return 3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.); }
+/* ---- relief et trajet, réglés par la fiche (mêmes formules dans src/main.js : à modifier des deux côtés).
+   Valeurs de la forêt d'origine : uRel (1, 1, 0, 0), uTraj (1, .85, .3, .5), uCreux (.10, 1.8, .4, 0). */
+uniform vec4  uRel;        // ondulation : amplitude (1 = forêt), fréquence (1 = forêt, longueur d'onde 150 m), pente le long de z, demi-largeur nivelée en travers du trajet
+uniform vec4  uTraj;       // trajet : sinuosité (1 = sentier de forêt, 0 = droit), demi-largeur, fondu du bord, irrégularité du bord
+uniform vec4  uCreux;      // creux du trajet : profondeur, bord haut, bord bas (distances au centre)
+float gAx;                   // écart au trajet du dernier point évalué par terrainH
+float pathX(float z){ return uTraj.x*(3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.)); }
+float ondul(vec2 p){ vec2 q=p*uRel.y;
+  return uRel.x*(1.5*sin(q.x*.041+.6+uSeed.z)*cos(q.y*.035+1.1)+.65*sin(q.x*.097+q.y*.071+2.)+.22*sin(q.x*.29-q.y*.21+uSeed.z*3.)); }
 float terrainH(vec2 p){
   if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
     float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
     return 3.2*(1.-abs(sin(a)))*(.62+.38*sin(p.y*.03+2.+uSeed.z))+.5*sin(p.x*.11+p.y*.08);
   }
-  float h=1.5*sin(p.x*.041+.6+uSeed.z)*cos(p.y*.035+1.1)+.65*sin(p.x*.097+p.y*.071+2.)+.22*sin(p.x*.29-p.y*.21+uSeed.z*3.);
-  h-=.10*smoothstep(1.8,.4,abs(p.x-pathX(p.y)));
+  float px=pathX(p.y); gAx=abs(p.x-px);
+  float h=ondul(vec2(uRel.w>0.?mix(p.x,px,smoothstep(uRel.w+5.,uRel.w,gAx)):p.x,p.y));   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe (un seul appel)
+  h+=uRel.z*p.y;
+  h-=uCreux.x*smoothstep(uCreux.y,uCreux.z,gAx);
   return h;
 }
 
@@ -1216,6 +1231,101 @@ float sdProps(vec3 p, out vec4 info){
   return d;
 }
 
+/* ---- semis : la fiche décrit un élément (jusqu'à 6 formes), le moteur le répète sur une grille, un élément par cellule.
+   Aucune famille d'objets n'est écrite ici : immeubles, réverbères, voitures, tombes sont des données.
+   Couche k : lignes SEM0+10k à SEM0+10k+9 de uShapes.
+   ligne 0 : (cellule x, cellule z, cos, sin de la rotation) (densité, groupes, fréquence des groupes, rangée le long du trajet)
+             (écart au trajet min, max, côté -1/0/1, orientation 0 aléatoire 1 face au trajet 2 fixe) (cap, cap aléatoire, penche, teinte)
+   ligne 1 : (jeu x, jeu z, échelle min, max) (hauteur min, max, nombre de formes, rangées) (centre de la boîte englobante, couleurs de palette)
+             (demi-tailles de la boîte englobante, suit la pente)
+   lignes 2 et 3 : palette, 8 couleurs.   lignes 4 à 9 : les formes, comme celles des objets, dans le repère de l'élément.
+   Le lanceur de rayons ne compile ce code que dans sa variante SEMIS ; le semeur (moteur v3) ne sait pas encore semer ces couches. */
+const int SEM0=72, SEML=10;
+uniform int   uSemN;       // nombre de couches de semis
+uniform vec4  uSemTop;     // hauteur au-dessus du sol au-delà de laquelle une couche n'a plus rien
+float gTol;                  // tolérance de la marche en cours : au loin, la marge des cellules s'élargit d'autant
+vec4 gInst;                  // élément touché : cap, échelle, étirement, aléa (écrit par objId)
+vec2 semMonde(vec2 g, float side, float t0, vec4 A, bool rg){   // repère de la grille -> monde
+  return rg?vec2(pathX(g.y)+side*(g.x+t0),g.y):g*mat2(A.z,A.w,-A.w,A.z);
+}
+float sdSemis(vec3 p, int k, out vec4 info, out vec4 inst){
+  int r0=SEM0+k*SEML;
+  vec4 A=texelFetch(uShapes,ivec2(0,r0),0), B=texelFetch(uShapes,ivec2(1,r0),0), T=texelFetch(uShapes,ivec2(2,r0),0);
+  info=vec4(0.); inst=vec4(0.);
+  bool rg=B.w>.5; float side=1.; vec2 g;
+  vec4 K=texelFetch(uShapes,ivec2(1,r0+1),0);
+  float marge=max(.08,1.5*gTol)+(uMode==1?50.:0.);          // jamais sous la tolérance de la marche : pas de faux impact sur une limite de cellule
+  if(rg){                                                    // rangée : la grille suit le trajet, les deux rives en miroir
+    float u=p.x-pathX(p.z); side=u<0.?-1.:1.;
+    if(T.z*side<-.5) return abs(u)+T.x+marge;                // rive exclue
+    g=vec2(abs(u)-T.x,p.z);
+    if(g.x<0.) return -g.x+marge;
+    float far=g.x-K.w*A.x; if(far>0.) return far+marge;
+  } else g=mat2(A.z,A.w,-A.w,A.z)*p.xz;
+  vec2 id=floor(g/A.xy), f=g-(id+.5)*A.xy;
+  float dOut=min(.5*A.x-abs(f.x),.5*A.y-abs(f.y))+marge;
+  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.)));
+  float dens=B.x;
+  if(B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*B.z+uSeed.xy+float(k)*17.)),B.y);
+  if(h.x>=dens) return dOut;
+  vec4 J=texelFetch(uShapes,ivec2(0,r0+1),0), D=texelFetch(uShapes,ivec2(3,r0),0);
+  vec2 o=(h.yz-.5)*2.*J.xy;
+  vec2 gc=(id+.5)*A.xy+o;
+  vec2 w=semMonde(gc,side,T.x,A,rg);
+  float dx=0.;
+  if(!rg){ dx=w.x-pathX(w.y); if(abs(dx)<T.x || abs(dx)>T.y || dx*T.z<0.) return dOut; }
+  if(cleared(w)) return dOut;
+  vec4 h2=h42(id*1.37+h.yz*91.+float(k)*3.1+side);
+  float yaw=D.x;                                             // cap dans le repère de la grille
+  if(T.w<.5) yaw=h2.z*6.2832;
+  else if(T.w<1.5){
+    if(rg) yaw=-1.5708;
+    else { float sg=dx<0.?-1.:1., z=w.y, sl=uTraj.x*(.1504*cos(z*.047+uSeed.z)+.1808*cos(z*.113+1.7+uSeed.z*2.)); yaw=atan(-sg,sg*sl)-atan(A.w,A.z); }
+  }
+  yaw+=(h2.w-.5)*D.y;
+  vec4 E=texelFetch(uShapes,ivec2(3,r0+1),0);
+  vec3 th=vec3(0.);
+  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+    th[i]=terrainH(i==0?w:semMonde(gc+(i==1?vec2(1.,0.):vec2(0.,1.)),side,T.x,A,rg));
+    if(E.w<.5) break;
+  }
+  vec3 lp=vec3(f.x-o.x,p.y-th.x,f.y-o.y);
+  float sh=1.;
+  if(E.w>.5){                                                // suit la pente : cisaillé selon le sol sous l'élément
+    vec2 sl=th.yz-th.x;
+    lp.y-=dot(sl,lp.xz); sh=inversesqrt(1.+dot(sl,sl));
+  }
+  float c=cos(yaw), sn=sin(yaw); lp.xz=vec2(c*lp.x-sn*lp.z,sn*lp.x+c*lp.z);
+  if(rg && side<0.) lp.x=-lp.x;                              // l'autre rive : on défait le miroir
+  if(D.z>0.){ vec2 pa=(fract(h2.zw*17.31)-.5)*2.*D.z; float c1=cos(pa.x), s1=sin(pa.x), c2=cos(pa.y), s2=sin(pa.y);
+    lp.xy=vec2(c1*lp.x+s1*lp.y,-s1*lp.x+c1*lp.y); lp.zy=vec2(c2*lp.z+s2*lp.y,-s2*lp.z+c2*lp.y); }
+  float s=mix(J.z,J.w,h2.x), sy=mix(K.x,K.y,h2.y);
+  lp/=s; lp.y/=sy;
+  float sc=s*min(1.,sy)*sh;
+  vec4 bc=texelFetch(uShapes,ivec2(2,r0+1),0);
+  float bb=sdBox(lp-bc.xyz,E.xyz);                           // boîte englobante : on ne détaille que de près
+  if(bb>.3) return min(bb*sc*.9,dOut);
+  float od=1e5, best=1e5, brow=0.; int cn=int(K.z);
+  for(int j=0;j<cn;j++){
+    int row=r0+4+j;
+    vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+    float dd=sdPrim(primLocal(lp,row),a.w,b.xyz)-e.y;
+    if(dd<best){ best=dd; brow=float(row); }
+    od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+  }
+  info=vec4(lp,brow+.9*h2.w);
+  inst=vec4(yaw,s,sy,h2.w);
+  return min(od*sc*.85,dOut);
+}
+vec3 formeCol(int row, float hv){                            // couleur d'une forme ; "palette" : une couleur par élément
+  vec4 cm=texelFetch(uShapes,ivec2(2,row),0);
+  if(cm.r>=0.) return cm.rgb;
+  int r0=SEM0+((row-SEM0)/SEML)*SEML;
+  float np=texelFetch(uShapes,ivec2(2,r0+1),0).w;
+  int i=int(min(floor(fract(hv*7.13)*np),np-1.));
+  return texelFetch(uShapes,ivec2(i&3,r0+2+(i>>2)),0).rgb;
+}
+
 /* ---- canopée : densité, transmittance, feuilles et branches discrètes */
 float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
   vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
@@ -1241,6 +1351,9 @@ float canopyDens(vec3 c){
   return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
 }
 float canopyT(vec3 ro, vec3 rd){
+#if NU
+  return 1.;
+#endif
   if(uKitP.z<=0. || uKit!=0) return 1.;
   float ry=abs(rd.y)<1e-4?1e-4:rd.y;
   float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
@@ -1303,6 +1416,15 @@ vec3 lointain(vec3 rd, vec3 c){
   return c;
 }
 vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+uniform vec4 uEau;           // eau à l'horizon (mer, baie, lac) sous les rayons qui ne touchent rien : couleur, présence
+vec3 eauLoin(vec3 rd){
+  vec2 w=rd.xz/max(-rd.y,.004);                              // vagues : la normale bouge, plus serrée vers l'horizon
+  vec3 n=normalize(vec3((vnoise(w*.9+uSeed.xy)-.5)*.12,1.,(vnoise(w*.9+uSeed.xy+7.)-.5)*.12));
+  vec3 rr=reflect(rd,n); rr.y=abs(rr.y);
+  float fr=.02+.98*pow(1.-max(dot(-rd,n),0.),5.);
+  vec3 c=mix(uEau.rgb*(uSun*.05+uSky*.35),min(skyCol(rr),vec3(40.)),fr);
+  return mix(c,fogCol(rd),.25*smoothstep(-.08,0.,rd.y));
+}
 
 /* ---- éclairage */
 vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
@@ -1331,39 +1453,61 @@ vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
   col+=alb*vec3(1.2,1.1,.6)*ambUp*.35*max(-n.y,0.);
   return col;
 }
+uniform vec2  uTerK;       // pas de marche sur le relief : partout, et près d'un bord de trajet raide (0 = inutile)
+uniform float uYTop;       // hauteur au-dessus du plan de pente au-delà de laquelle il n'y a plus rien
+uniform vec3  uSolAlb;     // couleur du sol vue par l'éclairage indirect
+
 float map(vec3 p){
   float th=terrainH(p.xz);
   float y=p.y-th;
-  float d=y*.88;
+  float d=y*(uTerK.y>0. && abs(gAx-.5*(uCreux.y+uCreux.z))<abs(uCreux.y-uCreux.z)*.5+.3?uTerK.y:uTerK.x);   // pas réduit près d'un bord de trajet raide
   vec4 nf;
+#if !NU
   if(uKit==0){
     if(y<19.) d=min(d,sdTreeA(p,th,nf)); else d=min(d,y-17.8);
     if(y<12.) d=min(d,sdTreeB(p,th,nf)); else d=min(d,y-11.3);
   }
   if(uKitP.y>0.){ if(y<4.5) d=min(d,sdRock(p,th,nf)); else d=min(d,y-3.9); }
+#endif
+#if SEMIS
+  for(int k=0;k<uSemN;k++){                                  // une seule évaluation de semis, dans une boucle : le compilateur n'en déplie qu'une.
+    float tp=uSemTop[k];                                     // En rendu logiciel, ce code coûte même quand il ne s'exécute pas : d'où la variante SEMIS.
+    if(y<tp+1.){ vec4 si; d=min(d,sdSemis(p,k,nf,si)); } else d=min(d,y-tp);   // au-dessus de la couche : borne simple, jamais nulle
+  }
+#endif
   if(uObjN>0) d=min(d,sdProps(p,nf));
   return d;
 }
 int objId(vec3 p, out vec4 info){
   float th=terrainH(p.xz); float d=(p.y-th)*.88; int id=0; info=vec4(0.,0.,0.,th); vec4 nf;
   float d1;
+#if !NU
   if(uKit==0){
     d1=sdTreeA(p,th,nf); if(d1<d){ d=d1; id=1; info=nf; }
     d1=sdTreeB(p,th,nf); if(d1<d){ d=d1; id=2; info=nf; }
   }
   if(uKitP.y>0.){ d1=sdRock(p,th,nf); if(d1<d){ d=d1; id=3; info=nf; } }
+#endif
+#if SEMIS
+  for(int k=0;k<uSemN;k++){
+    vec4 si; d1=sdSemis(p,k,nf,si); if(d1<d){ d=d1; id=5; info=nf; gInst=si; }
+  }
+#endif
   if(uObjN>0){ d1=sdProps(p,nf); if(d1<d){ d=d1; id=4; info=nf; } }
   return id;
 }
-vec3 calcN(vec3 p, float t){ vec2 e=vec2(1.,-1.)*(.0006*t+.0008);
-  return normalize(e.xyy*map(p+e.xyy)+e.yyx*map(p+e.yyx)+e.yxy*map(p+e.yxy)+e.xxx*map(p+e.xxx)); }
+vec3 calcN(vec3 p, float t){ vec2 e=vec2(1.,-1.)*(.0006*t+.0008); vec3 n=vec3(0.);
+  for(int i=0;i<4;i++){                                      // un seul appel à map dans la boucle : le compilateur n'en déplie pas quatre copies
+    vec3 o=i==0?e.xyy:i==1?e.yyx:i==2?e.yxy:e.xxx; n+=o*map(p+o); }
+  return normalize(n); }
 
 float march(vec3 ro, vec3 rd, float tmax, int steps){
   float t=.02;
   for(int i=0;i<130;i++){
     if(i>=steps) break;
     vec3 p=ro+rd*t;
-    if(rd.y>0. && p.y>23.) return -1.;
+    if(rd.y>0. && p.y-uRel.z*p.z>uYTop) return -1.;
+    gTol=.0012*t+.0008;
     float d=map(p);
     if(d<.0012*t+.0008) return t;
     t+=d;
@@ -1376,7 +1520,8 @@ float shadow(vec3 ro, vec3 rd, float tmax, int steps){
   for(int i=0;i<56;i++){
     if(i>=steps) break;
     vec3 p=ro+rd*t;
-    if(rd.y>0. && p.y>23.) break;
+    if(rd.y>0. && p.y-uRel.z*p.z>uYTop) break;
+    gTol=.002*t+.001;
     float d=map(p);
     if(d<.002*t+.001) return 0.;
     t+=max(d,.03);
@@ -1484,6 +1629,8 @@ int foliage(vec3 ro, vec3 rd, float tmax, out float tHit, out vec3 nHit, out vec
    Une recette s'évalue une fois par impact, dans cet ordre : couleur, nuance, taches sous le motif, motif,
    variation, grain, taches, relief, mousse, salissure. Disposition des texels : voir packRecette dans src/main.js. */
 uniform sampler2D uMats;
+uniform float uNuit;         // 0 le jour, 1 la nuit : part des fenêtres allumées qui éclairent
+vec3 gQo; float gYo; vec3 gFormCol;   // décalage des motifs propre à chaque élément ; passage de la coordonnée locale à la hauteur au-dessus de la base ; couleur de la forme touchée, pour une recette « couleur de la forme »
 uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
 uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
 uniform vec2  uSurfP;        // part de l'écorce a, arbres et perches
@@ -1504,17 +1651,31 @@ vec3 palette(int r, float h){
   return vec3(0.);
 }
 vec2 motifUV(vec3 q, vec3 n, bool sol){ if(sol || abs(n.y)>.7) return q.xz; return abs(n.x)>abs(n.z)?q.zy:q.xy; }
-float planches(vec2 uv, float e, vec4 P, out vec2 id){       // 1 sur la planche, 0 dans le joint
+float planches(vec2 uv, float e, vec4 P, out vec2 id){       // 1 sur la planche, 0 dans le joint ; P.w : planches couchées (bardage)
+  if(P.w>.5) uv=uv.yx;
   float u=uv.x*e, i=floor(u), L=max(P.y,.2);
   float v=uv.y/L+h21(vec2(i,7.)), j=floor(v);
   id=vec2(i,j);
   return smoothstep(0.,P.x,min(fract(u),1.-fract(u)))*smoothstep(0.,P.x/(e*L),min(fract(v),1.-fract(v)));
 }
-float paves(vec2 uv, float e, vec4 P, out vec2 id){          // 1 au sommet du pavé, 0 dans le joint
+float paves(vec2 uv, vec2 e, vec4 P, out vec2 id){           // 1 au sommet du pavé, 0 dans le joint ; e : échelle en largeur et en hauteur (briques)
   vec2 x=uv*e; x.x+=P.y*floor(x.y); id=floor(x);
   vec2 f=fract(x)-.5+(h22(id)-.5)*.08;
   float m=min(.5-abs(f.x),.5-abs(f.y));
   return smoothstep(0.,P.x,m)*(1.-P.w*dot(f,f));
+}
+float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 sur la vitre, 0 sur le mur ; uv : (le long de la façade, hauteur au-dessus de la base)
+  // P : largeur, hauteur, pas, étage ; Q : allège, cadre, rez-de-chaussée (0 = comme les étages), part allumée
+  float W=P.x, Hh=P.y, al=Q.x, y=uv.y, fl;
+  if(Q.z>0. && y<Q.z){ fl=-1.; W=P.z*.8; Hh=Q.z-.6; al=.3; }   // rez-de-chaussée : vitrine ou porte large
+  else { y-=Q.z; fl=floor(y/P.w); y-=fl*P.w; }
+  float u=uv.x/P.z+.5, uf=(fract(u)-.5)*P.z;
+  id=vec2(floor(u),fl);
+  float m=max(abs(uf)-.5*W,abs(y-al-.5*Hh)-.5*Hh);          // < 0 dans l'embrasure
+  float g=smoothstep(-Q.y+.012,-Q.y-.012,m);
+  if(W>.9) g*=smoothstep(.3*Q.y,.3*Q.y+.012,abs(uf));         // meneau
+  cadre=smoothstep(.012,-.012,m)-g;
+  return g;
 }
 float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
   vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
@@ -1529,17 +1690,18 @@ float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relie
     int ty=int(mo.x+.5); float mh=1.; vec2 id;
     if(ty==3) mh=fissH(r,q,sol);
     else if(ty==4) mh=planches(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
-    else if(ty==5) mh=paves(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
+    else if(ty==5) mh=paves(motifUV(q,n,sol),sol?rT(r,7).xz:rT(r,7).xy,rT(r,9),id);
+    else if(ty==6) for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){ vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; float fr; mh=1.-fenetres(uv,rT(r,9),rT(r,10),id,fr); }
     for(int k=0;k<4;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,q,hs,sol); }
     H+=mo.w*mh;
   }
   for(int k=0;k<2;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.){ vec4 b=rT(r,42+k*2); H+=a.w*rN(q,a.xyz,b.y,b.x>.5,sol); } }
   return H;
 }
-void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec){
+void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec, out float em){
   vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39);
-  bool sol=c0.w<.5;
-  alb=c0.rgb; tilt=vec3(0.); spec=nup.w;
+  bool sol=mod(c0.w,2.)<.5;
+  alb=c0.w>1.5?gFormCol:c0.rgb; tilt=vec3(0.); spec=nup.w; em=0.;
   vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
   if(nc.w>0.){ vec4 ns=rT(r,4); alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,rN(q,ns.xyz,nup.z,ns.w>.5,sol))); }
   for(int k=0;k<4;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
@@ -1571,10 +1733,32 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     alb=mix(alb,as>0.?alb*(1.-as):rT(r,8).rgb,(1.-h)*mo.y);
   } else if(ty==4 || ty==5){                                 // planches, pavés : éléments répétés et joints
     vec4 e=rT(r,7), P=rT(r,9); vec2 id;
-    float s=ty==4?planches(motifUV(q,n,sol),e.x,P,id):paves(motifUV(q,n,sol),e.x,P,id);
+    float s=ty==4?planches(motifUV(q,n,sol),e.x,P,id):paves(motifUV(q,n,sol),sol?e.xz:e.xy,P,id);
     if(rT(r,12).w>0.) alb=palette(r,h21(id+.5));
     alb*=1.-.5*P.z+P.z*h21(id+3.7);
     alb=mix(alb,rT(r,8).rgb,mo.y*(1.-smoothstep(.0,.6,s)));
+  } else if(ty==6){                                          // fenêtres : grille d'étages sur les faces verticales
+    for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){
+      vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; vec2 id; float fr;
+      vec4 Q=rT(r,10);
+      float g=fenetres(uv,rT(r,9),Q,id,fr)*mo.y;
+      float lit=step(h21(id+gQo.xz*.37+3.1),Q.w)*uNuit;
+      vec3 vit=mix(rT(r,8).rgb*(.6+.8*h21(id+gQo.xz)),rT(r,12).rgb*(.5+.5*h21(id*1.7+gQo.xz)),lit);
+      alb=mix(alb,rT(r,11).rgb,fr*mo.y); alb=mix(alb,vit,g);
+      spec=mix(spec,.6*(1.-lit),g); em=g*lit; mm=g;
+    }
+  } else if(ty==7){                                          // marquage au sol, mesuré depuis l'axe du trajet
+    for(int i=0;i<(ty==7?1:0);i++){
+    vec4 P=rT(r,9), Q=rT(r,10);                              // P : largeur du trait, tiret, intervalle, écart des lignes de bord ; Q : axe (0, 1 simple, 2 double), période des passages piétons
+    float dx=q.x-pathX(q.z), lw=.5*P.x, m=0.;
+    float dash=P.y>0.?step(fract(q.z/(P.y+P.z)),P.y/(P.y+P.z)):1.;
+    if(Q.x>1.5) m=smoothstep(lw+.01,lw-.01,abs(abs(dx)-lw*2.5));
+    else if(Q.x>.5) m=smoothstep(lw+.01,lw-.01,abs(dx))*dash;
+    if(P.w>0.) m=max(m,smoothstep(lw+.01,lw-.01,abs(abs(dx)-P.w)));
+    if(Q.y>0.) m=max(m,step(fract(q.z/Q.y)*Q.y,3.)*step(.5,fract(dx*1.6))*step(abs(dx),P.w>0.?P.w-.3:3.5));
+    m*=1.-.7*smoothstep(.45,.75,fbm(q.xz*vec2(1.2,.5)+7.));   // usure
+    alb=mix(alb,rT(r,8).rgb,m*mo.y); mm=m;
+    }
   }
   vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*rN(q,va.xyz,0.,true,sol);
   vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*rN(q,gr.xyz,0.,false,sol);
@@ -1610,11 +1794,23 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   if(!sol && rel.x>0.) alb*=mix(1.-rel.x,1.,smoothstep(0.,rel.y,hs));   // salissure : le pied s'assombrit
 }
 
-int matProp(vec3 p, vec3 n, vec4 info, out vec3 alb, out vec3 nn, out float spec, out float emis, out vec3 qr){   // rend une recette, ou -1
-  int row=int(info.w);
-  vec3 q=primLocal(p,row);
-  vec4 b=texelFetch(uShapes,ivec2(1,row),0), cm=texelFetch(uShapes,ivec2(2,row),0);
-  alb=cm.rgb; nn=n; spec=.05; emis=0.;
+int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out float spec, out float emis, out vec3 qr, out vec3 nl, out mat2 rot){   // rend une recette, ou -1
+  int row=int(info.w); float hv=fract(info.w)/.9;           // forme touchée, aléa de l'élément de semis
+  vec3 q=primLocal(sem?info.xyz:p,row);
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), cm=texelFetch(uShapes,ivec2(2,row),0);
+  { vec4 hd=vec4(0.);                                        // normale dans le repère de la forme : c'est elle qui oriente les motifs
+    for(int i=0;i<4;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
+    nl=normalize(hd.yzw-hd.x+1e-6); }
+  float an=abs(nl.y)<.9&&abs(n.y)<.9?atan(n.z,n.x)-atan(nl.z,nl.x):0.;
+  rot=mat2(cos(an),-sin(an),sin(an),cos(an));               // repère de la forme -> monde, pour le relief des recettes
+  alb=formeCol(row,hv); nn=n; spec=.05; emis=0.;
+  if(sem){                                                   // élément de semis : motifs en mètres, propres à l'élément, teinte variée
+    float te=texelFetch(uShapes,ivec2(3,SEM0+((row-SEM0)/SEML)*SEML),0).w;
+    alb*=max(vec3(0.),1.+te*(h33(vec3(hv*91.7,hv*37.3,5.1))-.5)*1.6);
+    q*=vec3(gInst.y,gInst.y*gInst.z,gInst.y);
+    gQo=vec3(hv*61.3,0.,hv*17.9); gYo=info.y*gInst.y*gInst.z-q.y;
+  } else { gQo=vec3(0.); gYo=p.y-terrainH(p.xz)-q.y; }
+  q+=gQo; gFormCol=alb;
   float m=cm.a;
   qr=q;
   if(m>15.5) return int(m-16.);                              // la forme nomme une recette de la fiche
@@ -1673,7 +1869,8 @@ vec3 Li(vec3 ro, vec3 rd){
   }
   vec3 p=ro+rd*t; vec4 info; int id=objId(p,info);
   vec3 n=calcN(p,t);
-  vec3 alb=id==0?vec3(.24,.15,.07):id==3?vec3(.34,.33,.29):id==4?texelFetch(uShapes,ivec2(2,int(info.w)),0).rgb*(texelFetch(uShapes,ivec2(2,int(info.w)),0).a>6.5?9.:1.):vec3(.11,.095,.08);
+  float ma=id>=4?texelFetch(uShapes,ivec2(2,int(info.w)),0).a:0.;
+  vec3 alb=id==0?uSolAlb:id==3?vec3(.34,.33,.29):id>=4?formeCol(int(info.w),fract(info.w)/.9)*(ma>6.5&&ma<7.5?9.:1.):vec3(.11,.095,.08);
   vec3 c=alb*vec3(.20,.21,.20)*uSky;
   float ndl=max(dot(n,uSunDir),0.);
   if(ndl>0.){ vec3 po=p+n*.02; float vis=shadow(po,uSunDir,50.,30); if(vis>0.) c+=alb*SUN*ndl*vis*canopyT(po,uSunDir); }
@@ -1712,7 +1909,11 @@ vec3 render(vec3 ro, vec3 rd){
   float tS=march(ro,rd,150.,uQ==0?90:130);
   float tmax=tS<0.?400.:tS;
   float tl; vec3 ln; vec3 la;
+#if NU
+  int kind=0; tl=0.; ln=vec3(0.); la=vec3(0.);
+#else
   int kind=foliage(ro,rd,tmax,tl,ln,la);
+#endif
   vec3 col; float t;
   if(kind==1){
     t=tl; col=shadeLeaf(ro+rd*t,ln,la,rd);
@@ -1720,7 +1921,7 @@ vec3 render(vec3 ro, vec3 rd){
     t=tl; if(dot(ln,rd)>0.) ln=-ln; col=lightSurf(ro+rd*t,ln,ln,la,.05,rd);
   } else if(tS<0.){
     gT=1e4;
-    vec3 c=rd.y>0.?skyCol(rd):fogCol(rd);
+    vec3 c=rd.y>0.?skyCol(rd):uEau.w>0.?eauLoin(rd):fogCol(rd);
     if(uLoin.w>0. && rd.y>-.02) c=lointain(rd,c);
     if(uTorch>0.) c+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.07;
     return c;
@@ -1730,28 +1931,28 @@ vec3 render(vec3 ro, vec3 rd){
     vec3 gn=calcN(p,t);
     vec3 alb; vec3 n=gn; float spec; float emis=0.;
     // Quelle recette pour cette surface ? Un seul appel à recette() plus bas : le shader reste compact.
-    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.);
+    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
     if(id==0){                                               // sol, et trajet par-dessus
       r0=uSurf.x; hs=0.;
-      if(uSurf.y!=uSurf.x){ w=smoothstep(1.15,.55,abs(p.x-pathX(p.z))+.5*(fbm(p.xz*.8+3.)-.5)); r1=uSurf.y;
+      if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(p.x-pathX(p.z))+(uTraj.w>0.?uTraj.w*(fbm(p.xz*.8+3.)-.5):0.)); r1=uSurf.y;
         if(w>=1.) r0=r1; else if(w>0.) nr=2; }
     }
     else if(id==3){ r0=uSurf.z; q=info.xyz; }
-    else if(id==4) r0=matProp(p,gn,info,alb,n,spec,emis,q);
+    else if(id>=4){ for(int i=0;i<(id>=4?1:0);i++) r0=matProp(p,gn,info,id==5,alb,n,spec,emis,q,nr0,rot); }   // garde en boucle : sautée en rendu logiciel quand aucun pixel n'est une forme
     else if(id==1 && info.w>1.5){                            // cœur de feuillage d'un conifère
       alb=leafCol(p,vnoise3(p*5.))*(.5+.6*vnoise3(p*vec3(8.,13.,8.))); spec=.02;
       n=normalize(gn+(vec3(vnoise3(p*17.),vnoise3(p*17.+7.),vnoise3(p*17.+13.))-.5)*.9);
     }
     else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz; hs=info.y; rot=id==1?RA:RB; }
     if(r0>=0){
-      vec3 A=vec3(0.), T=vec3(0.); float SP=0.;
+      vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
       for(int k=0;k<2;k++){
         if(k>=nr) break;
-        vec3 a, tt; float sp; recette(k==0?r0:r1,q,gn,hs,rot,a,tt,sp);
+        vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,nr0,hs,rot,a,tt,sp,em);
         float wk=nr==1?1.:(k==0?1.-w:w);
-        A+=a*wk; T+=tt*wk; SP+=sp*wk;
+        A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
       }
-      alb=A; n=normalize(gn+T); spec=SP;
+      alb=A; n=normalize(gn+T); spec=SP; emis=EM;
     }
     col=lightSurf(p,gn,n,alb,spec,rd)+alb*emis*8.;
   }
@@ -1946,6 +2147,12 @@ precision highp float; precision highp int; precision highp sampler2D;
 // Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
 // Les paramètres d'un objet (arbreA, percheB, blocGres) sont calculés en un seul endroit : le lanceur de rayons
 // s'en sert pour sa distance, le semeur pour poser ses grains au même endroit.
+#ifndef SEMIS
+#define SEMIS 0              // variantes fixes compilées par src/main.js (progMonde) : avec ou sans semis, avec ou sans arbres. Jamais de code généré par monde.
+#endif
+#ifndef NU
+#define NU 0                 // monde nu : ni arbres, ni rochers, ni canopée dans le code
+#endif
 uniform vec2  uRes;
 uniform vec3  uCamPos;
 uniform mat3  uCam;
@@ -1956,7 +2163,7 @@ uniform vec3  uSunDir;
 uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
 uniform vec3  uSky;        // teinte et niveau du ciel
 uniform float uTorch;      // lampe du téléphone, 0 = éteinte
-uniform int   uKit;        // 0 forêt, 1 dunes
+uniform int   uKit;        // 0 forêt, 1 dunes, 2 nu (rien de prédéfini : tout vient de la fiche)
 uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
 uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
 uniform vec2  uCan;        // tranche du feuillage : bas, haut
@@ -1991,15 +2198,24 @@ vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
-/* ---- terrain et sentier */
-float pathX(float z){ return 3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.); }
+/* ---- relief et trajet, réglés par la fiche (mêmes formules dans src/main.js : à modifier des deux côtés).
+   Valeurs de la forêt d'origine : uRel (1, 1, 0, 0), uTraj (1, .85, .3, .5), uCreux (.10, 1.8, .4, 0). */
+uniform vec4  uRel;        // ondulation : amplitude (1 = forêt), fréquence (1 = forêt, longueur d'onde 150 m), pente le long de z, demi-largeur nivelée en travers du trajet
+uniform vec4  uTraj;       // trajet : sinuosité (1 = sentier de forêt, 0 = droit), demi-largeur, fondu du bord, irrégularité du bord
+uniform vec4  uCreux;      // creux du trajet : profondeur, bord haut, bord bas (distances au centre)
+float gAx;                   // écart au trajet du dernier point évalué par terrainH
+float pathX(float z){ return uTraj.x*(3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.)); }
+float ondul(vec2 p){ vec2 q=p*uRel.y;
+  return uRel.x*(1.5*sin(q.x*.041+.6+uSeed.z)*cos(q.y*.035+1.1)+.65*sin(q.x*.097+q.y*.071+2.)+.22*sin(q.x*.29-q.y*.21+uSeed.z*3.)); }
 float terrainH(vec2 p){
   if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
     float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
     return 3.2*(1.-abs(sin(a)))*(.62+.38*sin(p.y*.03+2.+uSeed.z))+.5*sin(p.x*.11+p.y*.08);
   }
-  float h=1.5*sin(p.x*.041+.6+uSeed.z)*cos(p.y*.035+1.1)+.65*sin(p.x*.097+p.y*.071+2.)+.22*sin(p.x*.29-p.y*.21+uSeed.z*3.);
-  h-=.10*smoothstep(1.8,.4,abs(p.x-pathX(p.y)));
+  float px=pathX(p.y); gAx=abs(p.x-px);
+  float h=ondul(vec2(uRel.w>0.?mix(p.x,px,smoothstep(uRel.w+5.,uRel.w,gAx)):p.x,p.y));   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe (un seul appel)
+  h+=uRel.z*p.y;
+  h-=uCreux.x*smoothstep(uCreux.y,uCreux.z,gAx);
   return h;
 }
 
@@ -2199,6 +2415,101 @@ float sdProps(vec3 p, out vec4 info){
   return d;
 }
 
+/* ---- semis : la fiche décrit un élément (jusqu'à 6 formes), le moteur le répète sur une grille, un élément par cellule.
+   Aucune famille d'objets n'est écrite ici : immeubles, réverbères, voitures, tombes sont des données.
+   Couche k : lignes SEM0+10k à SEM0+10k+9 de uShapes.
+   ligne 0 : (cellule x, cellule z, cos, sin de la rotation) (densité, groupes, fréquence des groupes, rangée le long du trajet)
+             (écart au trajet min, max, côté -1/0/1, orientation 0 aléatoire 1 face au trajet 2 fixe) (cap, cap aléatoire, penche, teinte)
+   ligne 1 : (jeu x, jeu z, échelle min, max) (hauteur min, max, nombre de formes, rangées) (centre de la boîte englobante, couleurs de palette)
+             (demi-tailles de la boîte englobante, suit la pente)
+   lignes 2 et 3 : palette, 8 couleurs.   lignes 4 à 9 : les formes, comme celles des objets, dans le repère de l'élément.
+   Le lanceur de rayons ne compile ce code que dans sa variante SEMIS ; le semeur (moteur v3) ne sait pas encore semer ces couches. */
+const int SEM0=72, SEML=10;
+uniform int   uSemN;       // nombre de couches de semis
+uniform vec4  uSemTop;     // hauteur au-dessus du sol au-delà de laquelle une couche n'a plus rien
+float gTol;                  // tolérance de la marche en cours : au loin, la marge des cellules s'élargit d'autant
+vec4 gInst;                  // élément touché : cap, échelle, étirement, aléa (écrit par objId)
+vec2 semMonde(vec2 g, float side, float t0, vec4 A, bool rg){   // repère de la grille -> monde
+  return rg?vec2(pathX(g.y)+side*(g.x+t0),g.y):g*mat2(A.z,A.w,-A.w,A.z);
+}
+float sdSemis(vec3 p, int k, out vec4 info, out vec4 inst){
+  int r0=SEM0+k*SEML;
+  vec4 A=texelFetch(uShapes,ivec2(0,r0),0), B=texelFetch(uShapes,ivec2(1,r0),0), T=texelFetch(uShapes,ivec2(2,r0),0);
+  info=vec4(0.); inst=vec4(0.);
+  bool rg=B.w>.5; float side=1.; vec2 g;
+  vec4 K=texelFetch(uShapes,ivec2(1,r0+1),0);
+  float marge=max(.08,1.5*gTol)+(uMode==1?50.:0.);          // jamais sous la tolérance de la marche : pas de faux impact sur une limite de cellule
+  if(rg){                                                    // rangée : la grille suit le trajet, les deux rives en miroir
+    float u=p.x-pathX(p.z); side=u<0.?-1.:1.;
+    if(T.z*side<-.5) return abs(u)+T.x+marge;                // rive exclue
+    g=vec2(abs(u)-T.x,p.z);
+    if(g.x<0.) return -g.x+marge;
+    float far=g.x-K.w*A.x; if(far>0.) return far+marge;
+  } else g=mat2(A.z,A.w,-A.w,A.z)*p.xz;
+  vec2 id=floor(g/A.xy), f=g-(id+.5)*A.xy;
+  float dOut=min(.5*A.x-abs(f.x),.5*A.y-abs(f.y))+marge;
+  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.)));
+  float dens=B.x;
+  if(B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*B.z+uSeed.xy+float(k)*17.)),B.y);
+  if(h.x>=dens) return dOut;
+  vec4 J=texelFetch(uShapes,ivec2(0,r0+1),0), D=texelFetch(uShapes,ivec2(3,r0),0);
+  vec2 o=(h.yz-.5)*2.*J.xy;
+  vec2 gc=(id+.5)*A.xy+o;
+  vec2 w=semMonde(gc,side,T.x,A,rg);
+  float dx=0.;
+  if(!rg){ dx=w.x-pathX(w.y); if(abs(dx)<T.x || abs(dx)>T.y || dx*T.z<0.) return dOut; }
+  if(cleared(w)) return dOut;
+  vec4 h2=h42(id*1.37+h.yz*91.+float(k)*3.1+side);
+  float yaw=D.x;                                             // cap dans le repère de la grille
+  if(T.w<.5) yaw=h2.z*6.2832;
+  else if(T.w<1.5){
+    if(rg) yaw=-1.5708;
+    else { float sg=dx<0.?-1.:1., z=w.y, sl=uTraj.x*(.1504*cos(z*.047+uSeed.z)+.1808*cos(z*.113+1.7+uSeed.z*2.)); yaw=atan(-sg,sg*sl)-atan(A.w,A.z); }
+  }
+  yaw+=(h2.w-.5)*D.y;
+  vec4 E=texelFetch(uShapes,ivec2(3,r0+1),0);
+  vec3 th=vec3(0.);
+  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+    th[i]=terrainH(i==0?w:semMonde(gc+(i==1?vec2(1.,0.):vec2(0.,1.)),side,T.x,A,rg));
+    if(E.w<.5) break;
+  }
+  vec3 lp=vec3(f.x-o.x,p.y-th.x,f.y-o.y);
+  float sh=1.;
+  if(E.w>.5){                                                // suit la pente : cisaillé selon le sol sous l'élément
+    vec2 sl=th.yz-th.x;
+    lp.y-=dot(sl,lp.xz); sh=inversesqrt(1.+dot(sl,sl));
+  }
+  float c=cos(yaw), sn=sin(yaw); lp.xz=vec2(c*lp.x-sn*lp.z,sn*lp.x+c*lp.z);
+  if(rg && side<0.) lp.x=-lp.x;                              // l'autre rive : on défait le miroir
+  if(D.z>0.){ vec2 pa=(fract(h2.zw*17.31)-.5)*2.*D.z; float c1=cos(pa.x), s1=sin(pa.x), c2=cos(pa.y), s2=sin(pa.y);
+    lp.xy=vec2(c1*lp.x+s1*lp.y,-s1*lp.x+c1*lp.y); lp.zy=vec2(c2*lp.z+s2*lp.y,-s2*lp.z+c2*lp.y); }
+  float s=mix(J.z,J.w,h2.x), sy=mix(K.x,K.y,h2.y);
+  lp/=s; lp.y/=sy;
+  float sc=s*min(1.,sy)*sh;
+  vec4 bc=texelFetch(uShapes,ivec2(2,r0+1),0);
+  float bb=sdBox(lp-bc.xyz,E.xyz);                           // boîte englobante : on ne détaille que de près
+  if(bb>.3) return min(bb*sc*.9,dOut);
+  float od=1e5, best=1e5, brow=0.; int cn=int(K.z);
+  for(int j=0;j<cn;j++){
+    int row=r0+4+j;
+    vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+    float dd=sdPrim(primLocal(lp,row),a.w,b.xyz)-e.y;
+    if(dd<best){ best=dd; brow=float(row); }
+    od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+  }
+  info=vec4(lp,brow+.9*h2.w);
+  inst=vec4(yaw,s,sy,h2.w);
+  return min(od*sc*.85,dOut);
+}
+vec3 formeCol(int row, float hv){                            // couleur d'une forme ; "palette" : une couleur par élément
+  vec4 cm=texelFetch(uShapes,ivec2(2,row),0);
+  if(cm.r>=0.) return cm.rgb;
+  int r0=SEM0+((row-SEM0)/SEML)*SEML;
+  float np=texelFetch(uShapes,ivec2(2,r0+1),0).w;
+  int i=int(min(floor(fract(hv*7.13)*np),np-1.));
+  return texelFetch(uShapes,ivec2(i&3,r0+2+(i>>2)),0).rgb;
+}
+
 /* ---- canopée : densité, transmittance, feuilles et branches discrètes */
 float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
   vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
@@ -2224,6 +2535,9 @@ float canopyDens(vec3 c){
   return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
 }
 float canopyT(vec3 ro, vec3 rd){
+#if NU
+  return 1.;
+#endif
   if(uKitP.z<=0. || uKit!=0) return 1.;
   float ry=abs(rd.y)<1e-4?1e-4:rd.y;
   float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
@@ -2286,6 +2600,15 @@ vec3 lointain(vec3 rd, vec3 c){
   return c;
 }
 vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+uniform vec4 uEau;           // eau à l'horizon (mer, baie, lac) sous les rayons qui ne touchent rien : couleur, présence
+vec3 eauLoin(vec3 rd){
+  vec2 w=rd.xz/max(-rd.y,.004);                              // vagues : la normale bouge, plus serrée vers l'horizon
+  vec3 n=normalize(vec3((vnoise(w*.9+uSeed.xy)-.5)*.12,1.,(vnoise(w*.9+uSeed.xy+7.)-.5)*.12));
+  vec3 rr=reflect(rd,n); rr.y=abs(rr.y);
+  float fr=.02+.98*pow(1.-max(dot(-rd,n),0.),5.);
+  vec3 c=mix(uEau.rgb*(uSun*.05+uSky*.35),min(skyCol(rr),vec3(40.)),fr);
+  return mix(c,fogCol(rd),.25*smoothstep(-.08,0.,rd.y));
+}
 
 /* ---- éclairage */
 vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
@@ -2635,6 +2958,12 @@ precision highp float; precision highp int; precision highp sampler2D;
 // Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
 // Les paramètres d'un objet (arbreA, percheB, blocGres) sont calculés en un seul endroit : le lanceur de rayons
 // s'en sert pour sa distance, le semeur pour poser ses grains au même endroit.
+#ifndef SEMIS
+#define SEMIS 0              // variantes fixes compilées par src/main.js (progMonde) : avec ou sans semis, avec ou sans arbres. Jamais de code généré par monde.
+#endif
+#ifndef NU
+#define NU 0                 // monde nu : ni arbres, ni rochers, ni canopée dans le code
+#endif
 uniform vec2  uRes;
 uniform vec3  uCamPos;
 uniform mat3  uCam;
@@ -2645,7 +2974,7 @@ uniform vec3  uSunDir;
 uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
 uniform vec3  uSky;        // teinte et niveau du ciel
 uniform float uTorch;      // lampe du téléphone, 0 = éteinte
-uniform int   uKit;        // 0 forêt, 1 dunes
+uniform int   uKit;        // 0 forêt, 1 dunes, 2 nu (rien de prédéfini : tout vient de la fiche)
 uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
 uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
 uniform vec2  uCan;        // tranche du feuillage : bas, haut
@@ -2680,15 +3009,24 @@ vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
-/* ---- terrain et sentier */
-float pathX(float z){ return 3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.); }
+/* ---- relief et trajet, réglés par la fiche (mêmes formules dans src/main.js : à modifier des deux côtés).
+   Valeurs de la forêt d'origine : uRel (1, 1, 0, 0), uTraj (1, .85, .3, .5), uCreux (.10, 1.8, .4, 0). */
+uniform vec4  uRel;        // ondulation : amplitude (1 = forêt), fréquence (1 = forêt, longueur d'onde 150 m), pente le long de z, demi-largeur nivelée en travers du trajet
+uniform vec4  uTraj;       // trajet : sinuosité (1 = sentier de forêt, 0 = droit), demi-largeur, fondu du bord, irrégularité du bord
+uniform vec4  uCreux;      // creux du trajet : profondeur, bord haut, bord bas (distances au centre)
+float gAx;                   // écart au trajet du dernier point évalué par terrainH
+float pathX(float z){ return uTraj.x*(3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.)); }
+float ondul(vec2 p){ vec2 q=p*uRel.y;
+  return uRel.x*(1.5*sin(q.x*.041+.6+uSeed.z)*cos(q.y*.035+1.1)+.65*sin(q.x*.097+q.y*.071+2.)+.22*sin(q.x*.29-q.y*.21+uSeed.z*3.)); }
 float terrainH(vec2 p){
   if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
     float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
     return 3.2*(1.-abs(sin(a)))*(.62+.38*sin(p.y*.03+2.+uSeed.z))+.5*sin(p.x*.11+p.y*.08);
   }
-  float h=1.5*sin(p.x*.041+.6+uSeed.z)*cos(p.y*.035+1.1)+.65*sin(p.x*.097+p.y*.071+2.)+.22*sin(p.x*.29-p.y*.21+uSeed.z*3.);
-  h-=.10*smoothstep(1.8,.4,abs(p.x-pathX(p.y)));
+  float px=pathX(p.y); gAx=abs(p.x-px);
+  float h=ondul(vec2(uRel.w>0.?mix(p.x,px,smoothstep(uRel.w+5.,uRel.w,gAx)):p.x,p.y));   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe (un seul appel)
+  h+=uRel.z*p.y;
+  h-=uCreux.x*smoothstep(uCreux.y,uCreux.z,gAx);
   return h;
 }
 
@@ -2888,6 +3226,101 @@ float sdProps(vec3 p, out vec4 info){
   return d;
 }
 
+/* ---- semis : la fiche décrit un élément (jusqu'à 6 formes), le moteur le répète sur une grille, un élément par cellule.
+   Aucune famille d'objets n'est écrite ici : immeubles, réverbères, voitures, tombes sont des données.
+   Couche k : lignes SEM0+10k à SEM0+10k+9 de uShapes.
+   ligne 0 : (cellule x, cellule z, cos, sin de la rotation) (densité, groupes, fréquence des groupes, rangée le long du trajet)
+             (écart au trajet min, max, côté -1/0/1, orientation 0 aléatoire 1 face au trajet 2 fixe) (cap, cap aléatoire, penche, teinte)
+   ligne 1 : (jeu x, jeu z, échelle min, max) (hauteur min, max, nombre de formes, rangées) (centre de la boîte englobante, couleurs de palette)
+             (demi-tailles de la boîte englobante, suit la pente)
+   lignes 2 et 3 : palette, 8 couleurs.   lignes 4 à 9 : les formes, comme celles des objets, dans le repère de l'élément.
+   Le lanceur de rayons ne compile ce code que dans sa variante SEMIS ; le semeur (moteur v3) ne sait pas encore semer ces couches. */
+const int SEM0=72, SEML=10;
+uniform int   uSemN;       // nombre de couches de semis
+uniform vec4  uSemTop;     // hauteur au-dessus du sol au-delà de laquelle une couche n'a plus rien
+float gTol;                  // tolérance de la marche en cours : au loin, la marge des cellules s'élargit d'autant
+vec4 gInst;                  // élément touché : cap, échelle, étirement, aléa (écrit par objId)
+vec2 semMonde(vec2 g, float side, float t0, vec4 A, bool rg){   // repère de la grille -> monde
+  return rg?vec2(pathX(g.y)+side*(g.x+t0),g.y):g*mat2(A.z,A.w,-A.w,A.z);
+}
+float sdSemis(vec3 p, int k, out vec4 info, out vec4 inst){
+  int r0=SEM0+k*SEML;
+  vec4 A=texelFetch(uShapes,ivec2(0,r0),0), B=texelFetch(uShapes,ivec2(1,r0),0), T=texelFetch(uShapes,ivec2(2,r0),0);
+  info=vec4(0.); inst=vec4(0.);
+  bool rg=B.w>.5; float side=1.; vec2 g;
+  vec4 K=texelFetch(uShapes,ivec2(1,r0+1),0);
+  float marge=max(.08,1.5*gTol)+(uMode==1?50.:0.);          // jamais sous la tolérance de la marche : pas de faux impact sur une limite de cellule
+  if(rg){                                                    // rangée : la grille suit le trajet, les deux rives en miroir
+    float u=p.x-pathX(p.z); side=u<0.?-1.:1.;
+    if(T.z*side<-.5) return abs(u)+T.x+marge;                // rive exclue
+    g=vec2(abs(u)-T.x,p.z);
+    if(g.x<0.) return -g.x+marge;
+    float far=g.x-K.w*A.x; if(far>0.) return far+marge;
+  } else g=mat2(A.z,A.w,-A.w,A.z)*p.xz;
+  vec2 id=floor(g/A.xy), f=g-(id+.5)*A.xy;
+  float dOut=min(.5*A.x-abs(f.x),.5*A.y-abs(f.y))+marge;
+  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.)));
+  float dens=B.x;
+  if(B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*B.z+uSeed.xy+float(k)*17.)),B.y);
+  if(h.x>=dens) return dOut;
+  vec4 J=texelFetch(uShapes,ivec2(0,r0+1),0), D=texelFetch(uShapes,ivec2(3,r0),0);
+  vec2 o=(h.yz-.5)*2.*J.xy;
+  vec2 gc=(id+.5)*A.xy+o;
+  vec2 w=semMonde(gc,side,T.x,A,rg);
+  float dx=0.;
+  if(!rg){ dx=w.x-pathX(w.y); if(abs(dx)<T.x || abs(dx)>T.y || dx*T.z<0.) return dOut; }
+  if(cleared(w)) return dOut;
+  vec4 h2=h42(id*1.37+h.yz*91.+float(k)*3.1+side);
+  float yaw=D.x;                                             // cap dans le repère de la grille
+  if(T.w<.5) yaw=h2.z*6.2832;
+  else if(T.w<1.5){
+    if(rg) yaw=-1.5708;
+    else { float sg=dx<0.?-1.:1., z=w.y, sl=uTraj.x*(.1504*cos(z*.047+uSeed.z)+.1808*cos(z*.113+1.7+uSeed.z*2.)); yaw=atan(-sg,sg*sl)-atan(A.w,A.z); }
+  }
+  yaw+=(h2.w-.5)*D.y;
+  vec4 E=texelFetch(uShapes,ivec2(3,r0+1),0);
+  vec3 th=vec3(0.);
+  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+    th[i]=terrainH(i==0?w:semMonde(gc+(i==1?vec2(1.,0.):vec2(0.,1.)),side,T.x,A,rg));
+    if(E.w<.5) break;
+  }
+  vec3 lp=vec3(f.x-o.x,p.y-th.x,f.y-o.y);
+  float sh=1.;
+  if(E.w>.5){                                                // suit la pente : cisaillé selon le sol sous l'élément
+    vec2 sl=th.yz-th.x;
+    lp.y-=dot(sl,lp.xz); sh=inversesqrt(1.+dot(sl,sl));
+  }
+  float c=cos(yaw), sn=sin(yaw); lp.xz=vec2(c*lp.x-sn*lp.z,sn*lp.x+c*lp.z);
+  if(rg && side<0.) lp.x=-lp.x;                              // l'autre rive : on défait le miroir
+  if(D.z>0.){ vec2 pa=(fract(h2.zw*17.31)-.5)*2.*D.z; float c1=cos(pa.x), s1=sin(pa.x), c2=cos(pa.y), s2=sin(pa.y);
+    lp.xy=vec2(c1*lp.x+s1*lp.y,-s1*lp.x+c1*lp.y); lp.zy=vec2(c2*lp.z+s2*lp.y,-s2*lp.z+c2*lp.y); }
+  float s=mix(J.z,J.w,h2.x), sy=mix(K.x,K.y,h2.y);
+  lp/=s; lp.y/=sy;
+  float sc=s*min(1.,sy)*sh;
+  vec4 bc=texelFetch(uShapes,ivec2(2,r0+1),0);
+  float bb=sdBox(lp-bc.xyz,E.xyz);                           // boîte englobante : on ne détaille que de près
+  if(bb>.3) return min(bb*sc*.9,dOut);
+  float od=1e5, best=1e5, brow=0.; int cn=int(K.z);
+  for(int j=0;j<cn;j++){
+    int row=r0+4+j;
+    vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+    float dd=sdPrim(primLocal(lp,row),a.w,b.xyz)-e.y;
+    if(dd<best){ best=dd; brow=float(row); }
+    od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+  }
+  info=vec4(lp,brow+.9*h2.w);
+  inst=vec4(yaw,s,sy,h2.w);
+  return min(od*sc*.85,dOut);
+}
+vec3 formeCol(int row, float hv){                            // couleur d'une forme ; "palette" : une couleur par élément
+  vec4 cm=texelFetch(uShapes,ivec2(2,row),0);
+  if(cm.r>=0.) return cm.rgb;
+  int r0=SEM0+((row-SEM0)/SEML)*SEML;
+  float np=texelFetch(uShapes,ivec2(2,r0+1),0).w;
+  int i=int(min(floor(fract(hv*7.13)*np),np-1.));
+  return texelFetch(uShapes,ivec2(i&3,r0+2+(i>>2)),0).rgb;
+}
+
 /* ---- canopée : densité, transmittance, feuilles et branches discrètes */
 float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
   vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
@@ -2913,6 +3346,9 @@ float canopyDens(vec3 c){
   return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
 }
 float canopyT(vec3 ro, vec3 rd){
+#if NU
+  return 1.;
+#endif
   if(uKitP.z<=0. || uKit!=0) return 1.;
   float ry=abs(rd.y)<1e-4?1e-4:rd.y;
   float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
@@ -2975,6 +3411,15 @@ vec3 lointain(vec3 rd, vec3 c){
   return c;
 }
 vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+uniform vec4 uEau;           // eau à l'horizon (mer, baie, lac) sous les rayons qui ne touchent rien : couleur, présence
+vec3 eauLoin(vec3 rd){
+  vec2 w=rd.xz/max(-rd.y,.004);                              // vagues : la normale bouge, plus serrée vers l'horizon
+  vec3 n=normalize(vec3((vnoise(w*.9+uSeed.xy)-.5)*.12,1.,(vnoise(w*.9+uSeed.xy+7.)-.5)*.12));
+  vec3 rr=reflect(rd,n); rr.y=abs(rr.y);
+  float fr=.02+.98*pow(1.-max(dot(-rd,n),0.),5.);
+  vec3 c=mix(uEau.rgb*(uSun*.05+uSky*.35),min(skyCol(rr),vec3(40.)),fr);
+  return mix(c,fogCol(rd),.25*smoothstep(-.08,0.,rd.y));
+}
 
 /* ---- éclairage */
 vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
@@ -3074,6 +3519,12 @@ precision highp float; precision highp int; precision highp sampler2D;
 // Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
 // Les paramètres d'un objet (arbreA, percheB, blocGres) sont calculés en un seul endroit : le lanceur de rayons
 // s'en sert pour sa distance, le semeur pour poser ses grains au même endroit.
+#ifndef SEMIS
+#define SEMIS 0              // variantes fixes compilées par src/main.js (progMonde) : avec ou sans semis, avec ou sans arbres. Jamais de code généré par monde.
+#endif
+#ifndef NU
+#define NU 0                 // monde nu : ni arbres, ni rochers, ni canopée dans le code
+#endif
 uniform vec2  uRes;
 uniform vec3  uCamPos;
 uniform mat3  uCam;
@@ -3084,7 +3535,7 @@ uniform vec3  uSunDir;
 uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
 uniform vec3  uSky;        // teinte et niveau du ciel
 uniform float uTorch;      // lampe du téléphone, 0 = éteinte
-uniform int   uKit;        // 0 forêt, 1 dunes
+uniform int   uKit;        // 0 forêt, 1 dunes, 2 nu (rien de prédéfini : tout vient de la fiche)
 uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
 uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
 uniform vec2  uCan;        // tranche du feuillage : bas, haut
@@ -3119,15 +3570,24 @@ vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
-/* ---- terrain et sentier */
-float pathX(float z){ return 3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.); }
+/* ---- relief et trajet, réglés par la fiche (mêmes formules dans src/main.js : à modifier des deux côtés).
+   Valeurs de la forêt d'origine : uRel (1, 1, 0, 0), uTraj (1, .85, .3, .5), uCreux (.10, 1.8, .4, 0). */
+uniform vec4  uRel;        // ondulation : amplitude (1 = forêt), fréquence (1 = forêt, longueur d'onde 150 m), pente le long de z, demi-largeur nivelée en travers du trajet
+uniform vec4  uTraj;       // trajet : sinuosité (1 = sentier de forêt, 0 = droit), demi-largeur, fondu du bord, irrégularité du bord
+uniform vec4  uCreux;      // creux du trajet : profondeur, bord haut, bord bas (distances au centre)
+float gAx;                   // écart au trajet du dernier point évalué par terrainH
+float pathX(float z){ return uTraj.x*(3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.)); }
+float ondul(vec2 p){ vec2 q=p*uRel.y;
+  return uRel.x*(1.5*sin(q.x*.041+.6+uSeed.z)*cos(q.y*.035+1.1)+.65*sin(q.x*.097+q.y*.071+2.)+.22*sin(q.x*.29-q.y*.21+uSeed.z*3.)); }
 float terrainH(vec2 p){
   if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
     float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
     return 3.2*(1.-abs(sin(a)))*(.62+.38*sin(p.y*.03+2.+uSeed.z))+.5*sin(p.x*.11+p.y*.08);
   }
-  float h=1.5*sin(p.x*.041+.6+uSeed.z)*cos(p.y*.035+1.1)+.65*sin(p.x*.097+p.y*.071+2.)+.22*sin(p.x*.29-p.y*.21+uSeed.z*3.);
-  h-=.10*smoothstep(1.8,.4,abs(p.x-pathX(p.y)));
+  float px=pathX(p.y); gAx=abs(p.x-px);
+  float h=ondul(vec2(uRel.w>0.?mix(p.x,px,smoothstep(uRel.w+5.,uRel.w,gAx)):p.x,p.y));   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe (un seul appel)
+  h+=uRel.z*p.y;
+  h-=uCreux.x*smoothstep(uCreux.y,uCreux.z,gAx);
   return h;
 }
 
@@ -3327,6 +3787,101 @@ float sdProps(vec3 p, out vec4 info){
   return d;
 }
 
+/* ---- semis : la fiche décrit un élément (jusqu'à 6 formes), le moteur le répète sur une grille, un élément par cellule.
+   Aucune famille d'objets n'est écrite ici : immeubles, réverbères, voitures, tombes sont des données.
+   Couche k : lignes SEM0+10k à SEM0+10k+9 de uShapes.
+   ligne 0 : (cellule x, cellule z, cos, sin de la rotation) (densité, groupes, fréquence des groupes, rangée le long du trajet)
+             (écart au trajet min, max, côté -1/0/1, orientation 0 aléatoire 1 face au trajet 2 fixe) (cap, cap aléatoire, penche, teinte)
+   ligne 1 : (jeu x, jeu z, échelle min, max) (hauteur min, max, nombre de formes, rangées) (centre de la boîte englobante, couleurs de palette)
+             (demi-tailles de la boîte englobante, suit la pente)
+   lignes 2 et 3 : palette, 8 couleurs.   lignes 4 à 9 : les formes, comme celles des objets, dans le repère de l'élément.
+   Le lanceur de rayons ne compile ce code que dans sa variante SEMIS ; le semeur (moteur v3) ne sait pas encore semer ces couches. */
+const int SEM0=72, SEML=10;
+uniform int   uSemN;       // nombre de couches de semis
+uniform vec4  uSemTop;     // hauteur au-dessus du sol au-delà de laquelle une couche n'a plus rien
+float gTol;                  // tolérance de la marche en cours : au loin, la marge des cellules s'élargit d'autant
+vec4 gInst;                  // élément touché : cap, échelle, étirement, aléa (écrit par objId)
+vec2 semMonde(vec2 g, float side, float t0, vec4 A, bool rg){   // repère de la grille -> monde
+  return rg?vec2(pathX(g.y)+side*(g.x+t0),g.y):g*mat2(A.z,A.w,-A.w,A.z);
+}
+float sdSemis(vec3 p, int k, out vec4 info, out vec4 inst){
+  int r0=SEM0+k*SEML;
+  vec4 A=texelFetch(uShapes,ivec2(0,r0),0), B=texelFetch(uShapes,ivec2(1,r0),0), T=texelFetch(uShapes,ivec2(2,r0),0);
+  info=vec4(0.); inst=vec4(0.);
+  bool rg=B.w>.5; float side=1.; vec2 g;
+  vec4 K=texelFetch(uShapes,ivec2(1,r0+1),0);
+  float marge=max(.08,1.5*gTol)+(uMode==1?50.:0.);          // jamais sous la tolérance de la marche : pas de faux impact sur une limite de cellule
+  if(rg){                                                    // rangée : la grille suit le trajet, les deux rives en miroir
+    float u=p.x-pathX(p.z); side=u<0.?-1.:1.;
+    if(T.z*side<-.5) return abs(u)+T.x+marge;                // rive exclue
+    g=vec2(abs(u)-T.x,p.z);
+    if(g.x<0.) return -g.x+marge;
+    float far=g.x-K.w*A.x; if(far>0.) return far+marge;
+  } else g=mat2(A.z,A.w,-A.w,A.z)*p.xz;
+  vec2 id=floor(g/A.xy), f=g-(id+.5)*A.xy;
+  float dOut=min(.5*A.x-abs(f.x),.5*A.y-abs(f.y))+marge;
+  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.)));
+  float dens=B.x;
+  if(B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*B.z+uSeed.xy+float(k)*17.)),B.y);
+  if(h.x>=dens) return dOut;
+  vec4 J=texelFetch(uShapes,ivec2(0,r0+1),0), D=texelFetch(uShapes,ivec2(3,r0),0);
+  vec2 o=(h.yz-.5)*2.*J.xy;
+  vec2 gc=(id+.5)*A.xy+o;
+  vec2 w=semMonde(gc,side,T.x,A,rg);
+  float dx=0.;
+  if(!rg){ dx=w.x-pathX(w.y); if(abs(dx)<T.x || abs(dx)>T.y || dx*T.z<0.) return dOut; }
+  if(cleared(w)) return dOut;
+  vec4 h2=h42(id*1.37+h.yz*91.+float(k)*3.1+side);
+  float yaw=D.x;                                             // cap dans le repère de la grille
+  if(T.w<.5) yaw=h2.z*6.2832;
+  else if(T.w<1.5){
+    if(rg) yaw=-1.5708;
+    else { float sg=dx<0.?-1.:1., z=w.y, sl=uTraj.x*(.1504*cos(z*.047+uSeed.z)+.1808*cos(z*.113+1.7+uSeed.z*2.)); yaw=atan(-sg,sg*sl)-atan(A.w,A.z); }
+  }
+  yaw+=(h2.w-.5)*D.y;
+  vec4 E=texelFetch(uShapes,ivec2(3,r0+1),0);
+  vec3 th=vec3(0.);
+  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+    th[i]=terrainH(i==0?w:semMonde(gc+(i==1?vec2(1.,0.):vec2(0.,1.)),side,T.x,A,rg));
+    if(E.w<.5) break;
+  }
+  vec3 lp=vec3(f.x-o.x,p.y-th.x,f.y-o.y);
+  float sh=1.;
+  if(E.w>.5){                                                // suit la pente : cisaillé selon le sol sous l'élément
+    vec2 sl=th.yz-th.x;
+    lp.y-=dot(sl,lp.xz); sh=inversesqrt(1.+dot(sl,sl));
+  }
+  float c=cos(yaw), sn=sin(yaw); lp.xz=vec2(c*lp.x-sn*lp.z,sn*lp.x+c*lp.z);
+  if(rg && side<0.) lp.x=-lp.x;                              // l'autre rive : on défait le miroir
+  if(D.z>0.){ vec2 pa=(fract(h2.zw*17.31)-.5)*2.*D.z; float c1=cos(pa.x), s1=sin(pa.x), c2=cos(pa.y), s2=sin(pa.y);
+    lp.xy=vec2(c1*lp.x+s1*lp.y,-s1*lp.x+c1*lp.y); lp.zy=vec2(c2*lp.z+s2*lp.y,-s2*lp.z+c2*lp.y); }
+  float s=mix(J.z,J.w,h2.x), sy=mix(K.x,K.y,h2.y);
+  lp/=s; lp.y/=sy;
+  float sc=s*min(1.,sy)*sh;
+  vec4 bc=texelFetch(uShapes,ivec2(2,r0+1),0);
+  float bb=sdBox(lp-bc.xyz,E.xyz);                           // boîte englobante : on ne détaille que de près
+  if(bb>.3) return min(bb*sc*.9,dOut);
+  float od=1e5, best=1e5, brow=0.; int cn=int(K.z);
+  for(int j=0;j<cn;j++){
+    int row=r0+4+j;
+    vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+    float dd=sdPrim(primLocal(lp,row),a.w,b.xyz)-e.y;
+    if(dd<best){ best=dd; brow=float(row); }
+    od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+  }
+  info=vec4(lp,brow+.9*h2.w);
+  inst=vec4(yaw,s,sy,h2.w);
+  return min(od*sc*.85,dOut);
+}
+vec3 formeCol(int row, float hv){                            // couleur d'une forme ; "palette" : une couleur par élément
+  vec4 cm=texelFetch(uShapes,ivec2(2,row),0);
+  if(cm.r>=0.) return cm.rgb;
+  int r0=SEM0+((row-SEM0)/SEML)*SEML;
+  float np=texelFetch(uShapes,ivec2(2,r0+1),0).w;
+  int i=int(min(floor(fract(hv*7.13)*np),np-1.));
+  return texelFetch(uShapes,ivec2(i&3,r0+2+(i>>2)),0).rgb;
+}
+
 /* ---- canopée : densité, transmittance, feuilles et branches discrètes */
 float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
   vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
@@ -3352,6 +3907,9 @@ float canopyDens(vec3 c){
   return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
 }
 float canopyT(vec3 ro, vec3 rd){
+#if NU
+  return 1.;
+#endif
   if(uKitP.z<=0. || uKit!=0) return 1.;
   float ry=abs(rd.y)<1e-4?1e-4:rd.y;
   float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
@@ -3414,6 +3972,15 @@ vec3 lointain(vec3 rd, vec3 c){
   return c;
 }
 vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+uniform vec4 uEau;           // eau à l'horizon (mer, baie, lac) sous les rayons qui ne touchent rien : couleur, présence
+vec3 eauLoin(vec3 rd){
+  vec2 w=rd.xz/max(-rd.y,.004);                              // vagues : la normale bouge, plus serrée vers l'horizon
+  vec3 n=normalize(vec3((vnoise(w*.9+uSeed.xy)-.5)*.12,1.,(vnoise(w*.9+uSeed.xy+7.)-.5)*.12));
+  vec3 rr=reflect(rd,n); rr.y=abs(rr.y);
+  float fr=.02+.98*pow(1.-max(dot(-rd,n),0.),5.);
+  vec3 c=mix(uEau.rgb*(uSun*.05+uSky*.35),min(skyCol(rr),vec3(40.)),fr);
+  return mix(c,fogCol(rd),.25*smoothstep(-.08,0.,rd.y));
+}
 
 /* ---- éclairage */
 vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
@@ -3449,6 +4016,8 @@ vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
    Une recette s'évalue une fois par impact, dans cet ordre : couleur, nuance, taches sous le motif, motif,
    variation, grain, taches, relief, mousse, salissure. Disposition des texels : voir packRecette dans src/main.js. */
 uniform sampler2D uMats;
+uniform float uNuit;         // 0 le jour, 1 la nuit : part des fenêtres allumées qui éclairent
+vec3 gQo; float gYo; vec3 gFormCol;   // décalage des motifs propre à chaque élément ; passage de la coordonnée locale à la hauteur au-dessus de la base ; couleur de la forme touchée, pour une recette « couleur de la forme »
 uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
 uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
 uniform vec2  uSurfP;        // part de l'écorce a, arbres et perches
@@ -3469,17 +4038,31 @@ vec3 palette(int r, float h){
   return vec3(0.);
 }
 vec2 motifUV(vec3 q, vec3 n, bool sol){ if(sol || abs(n.y)>.7) return q.xz; return abs(n.x)>abs(n.z)?q.zy:q.xy; }
-float planches(vec2 uv, float e, vec4 P, out vec2 id){       // 1 sur la planche, 0 dans le joint
+float planches(vec2 uv, float e, vec4 P, out vec2 id){       // 1 sur la planche, 0 dans le joint ; P.w : planches couchées (bardage)
+  if(P.w>.5) uv=uv.yx;
   float u=uv.x*e, i=floor(u), L=max(P.y,.2);
   float v=uv.y/L+h21(vec2(i,7.)), j=floor(v);
   id=vec2(i,j);
   return smoothstep(0.,P.x,min(fract(u),1.-fract(u)))*smoothstep(0.,P.x/(e*L),min(fract(v),1.-fract(v)));
 }
-float paves(vec2 uv, float e, vec4 P, out vec2 id){          // 1 au sommet du pavé, 0 dans le joint
+float paves(vec2 uv, vec2 e, vec4 P, out vec2 id){           // 1 au sommet du pavé, 0 dans le joint ; e : échelle en largeur et en hauteur (briques)
   vec2 x=uv*e; x.x+=P.y*floor(x.y); id=floor(x);
   vec2 f=fract(x)-.5+(h22(id)-.5)*.08;
   float m=min(.5-abs(f.x),.5-abs(f.y));
   return smoothstep(0.,P.x,m)*(1.-P.w*dot(f,f));
+}
+float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 sur la vitre, 0 sur le mur ; uv : (le long de la façade, hauteur au-dessus de la base)
+  // P : largeur, hauteur, pas, étage ; Q : allège, cadre, rez-de-chaussée (0 = comme les étages), part allumée
+  float W=P.x, Hh=P.y, al=Q.x, y=uv.y, fl;
+  if(Q.z>0. && y<Q.z){ fl=-1.; W=P.z*.8; Hh=Q.z-.6; al=.3; }   // rez-de-chaussée : vitrine ou porte large
+  else { y-=Q.z; fl=floor(y/P.w); y-=fl*P.w; }
+  float u=uv.x/P.z+.5, uf=(fract(u)-.5)*P.z;
+  id=vec2(floor(u),fl);
+  float m=max(abs(uf)-.5*W,abs(y-al-.5*Hh)-.5*Hh);          // < 0 dans l'embrasure
+  float g=smoothstep(-Q.y+.012,-Q.y-.012,m);
+  if(W>.9) g*=smoothstep(.3*Q.y,.3*Q.y+.012,abs(uf));         // meneau
+  cadre=smoothstep(.012,-.012,m)-g;
+  return g;
 }
 float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
   vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
@@ -3494,17 +4077,18 @@ float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relie
     int ty=int(mo.x+.5); float mh=1.; vec2 id;
     if(ty==3) mh=fissH(r,q,sol);
     else if(ty==4) mh=planches(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
-    else if(ty==5) mh=paves(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
+    else if(ty==5) mh=paves(motifUV(q,n,sol),sol?rT(r,7).xz:rT(r,7).xy,rT(r,9),id);
+    else if(ty==6) for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){ vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; float fr; mh=1.-fenetres(uv,rT(r,9),rT(r,10),id,fr); }
     for(int k=0;k<4;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,q,hs,sol); }
     H+=mo.w*mh;
   }
   for(int k=0;k<2;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.){ vec4 b=rT(r,42+k*2); H+=a.w*rN(q,a.xyz,b.y,b.x>.5,sol); } }
   return H;
 }
-void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec){
+void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec, out float em){
   vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39);
-  bool sol=c0.w<.5;
-  alb=c0.rgb; tilt=vec3(0.); spec=nup.w;
+  bool sol=mod(c0.w,2.)<.5;
+  alb=c0.w>1.5?gFormCol:c0.rgb; tilt=vec3(0.); spec=nup.w; em=0.;
   vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
   if(nc.w>0.){ vec4 ns=rT(r,4); alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,rN(q,ns.xyz,nup.z,ns.w>.5,sol))); }
   for(int k=0;k<4;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
@@ -3536,10 +4120,32 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     alb=mix(alb,as>0.?alb*(1.-as):rT(r,8).rgb,(1.-h)*mo.y);
   } else if(ty==4 || ty==5){                                 // planches, pavés : éléments répétés et joints
     vec4 e=rT(r,7), P=rT(r,9); vec2 id;
-    float s=ty==4?planches(motifUV(q,n,sol),e.x,P,id):paves(motifUV(q,n,sol),e.x,P,id);
+    float s=ty==4?planches(motifUV(q,n,sol),e.x,P,id):paves(motifUV(q,n,sol),sol?e.xz:e.xy,P,id);
     if(rT(r,12).w>0.) alb=palette(r,h21(id+.5));
     alb*=1.-.5*P.z+P.z*h21(id+3.7);
     alb=mix(alb,rT(r,8).rgb,mo.y*(1.-smoothstep(.0,.6,s)));
+  } else if(ty==6){                                          // fenêtres : grille d'étages sur les faces verticales
+    for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){
+      vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; vec2 id; float fr;
+      vec4 Q=rT(r,10);
+      float g=fenetres(uv,rT(r,9),Q,id,fr)*mo.y;
+      float lit=step(h21(id+gQo.xz*.37+3.1),Q.w)*uNuit;
+      vec3 vit=mix(rT(r,8).rgb*(.6+.8*h21(id+gQo.xz)),rT(r,12).rgb*(.5+.5*h21(id*1.7+gQo.xz)),lit);
+      alb=mix(alb,rT(r,11).rgb,fr*mo.y); alb=mix(alb,vit,g);
+      spec=mix(spec,.6*(1.-lit),g); em=g*lit; mm=g;
+    }
+  } else if(ty==7){                                          // marquage au sol, mesuré depuis l'axe du trajet
+    for(int i=0;i<(ty==7?1:0);i++){
+    vec4 P=rT(r,9), Q=rT(r,10);                              // P : largeur du trait, tiret, intervalle, écart des lignes de bord ; Q : axe (0, 1 simple, 2 double), période des passages piétons
+    float dx=q.x-pathX(q.z), lw=.5*P.x, m=0.;
+    float dash=P.y>0.?step(fract(q.z/(P.y+P.z)),P.y/(P.y+P.z)):1.;
+    if(Q.x>1.5) m=smoothstep(lw+.01,lw-.01,abs(abs(dx)-lw*2.5));
+    else if(Q.x>.5) m=smoothstep(lw+.01,lw-.01,abs(dx))*dash;
+    if(P.w>0.) m=max(m,smoothstep(lw+.01,lw-.01,abs(abs(dx)-P.w)));
+    if(Q.y>0.) m=max(m,step(fract(q.z/Q.y)*Q.y,3.)*step(.5,fract(dx*1.6))*step(abs(dx),P.w>0.?P.w-.3:3.5));
+    m*=1.-.7*smoothstep(.45,.75,fbm(q.xz*vec2(1.2,.5)+7.));   // usure
+    alb=mix(alb,rT(r,8).rgb,m*mo.y); mm=m;
+    }
   }
   vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*rN(q,va.xyz,0.,true,sol);
   vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*rN(q,gr.xyz,0.,false,sol);
@@ -3575,11 +4181,23 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   if(!sol && rel.x>0.) alb*=mix(1.-rel.x,1.,smoothstep(0.,rel.y,hs));   // salissure : le pied s'assombrit
 }
 
-int matProp(vec3 p, vec3 n, vec4 info, out vec3 alb, out vec3 nn, out float spec, out float emis, out vec3 qr){   // rend une recette, ou -1
-  int row=int(info.w);
-  vec3 q=primLocal(p,row);
-  vec4 b=texelFetch(uShapes,ivec2(1,row),0), cm=texelFetch(uShapes,ivec2(2,row),0);
-  alb=cm.rgb; nn=n; spec=.05; emis=0.;
+int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out float spec, out float emis, out vec3 qr, out vec3 nl, out mat2 rot){   // rend une recette, ou -1
+  int row=int(info.w); float hv=fract(info.w)/.9;           // forme touchée, aléa de l'élément de semis
+  vec3 q=primLocal(sem?info.xyz:p,row);
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), cm=texelFetch(uShapes,ivec2(2,row),0);
+  { vec4 hd=vec4(0.);                                        // normale dans le repère de la forme : c'est elle qui oriente les motifs
+    for(int i=0;i<4;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
+    nl=normalize(hd.yzw-hd.x+1e-6); }
+  float an=abs(nl.y)<.9&&abs(n.y)<.9?atan(n.z,n.x)-atan(nl.z,nl.x):0.;
+  rot=mat2(cos(an),-sin(an),sin(an),cos(an));               // repère de la forme -> monde, pour le relief des recettes
+  alb=formeCol(row,hv); nn=n; spec=.05; emis=0.;
+  if(sem){                                                   // élément de semis : motifs en mètres, propres à l'élément, teinte variée
+    float te=texelFetch(uShapes,ivec2(3,SEM0+((row-SEM0)/SEML)*SEML),0).w;
+    alb*=max(vec3(0.),1.+te*(h33(vec3(hv*91.7,hv*37.3,5.1))-.5)*1.6);
+    q*=vec3(gInst.y,gInst.y*gInst.z,gInst.y);
+    gQo=vec3(hv*61.3,0.,hv*17.9); gYo=info.y*gInst.y*gInst.z-q.y;
+  } else { gQo=vec3(0.); gYo=p.y-terrainH(p.xz)-q.y; }
+  q+=gQo; gFormCol=alb;
   float m=cm.a;
   qr=q;
   if(m>15.5) return int(m-16.);                              // la forme nomme une recette de la fiche
@@ -3733,24 +4351,24 @@ void main(){
       if(dot(gn,rd)>0.) gn=-gn;
       // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
       vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
-      int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.);
+      int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
       if(id==0){                                             // sol, et trajet par-dessus
         r0=uSurf.x; hs=0.;
-        if(uSurf.y!=uSurf.x){ w=smoothstep(1.15,.55,abs(q.x-pathX(q.z))+.5*(fbm(q.xz*.8+3.)-.5)); r1=uSurf.y;
+        if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(q.x-pathX(q.z))+(uTraj.w>0.?uTraj.w*(fbm(q.xz*.8+3.)-.5):0.)); r1=uSurf.y;
           if(w>=1.) r0=r1; else if(w>0.) nr=2; }
       }
       else if(id==3) r0=uSurf.z;
-      else if(id==4){ vec3 qr; r0=matProp(q,gn,vec4(0.,0.,0.,floor(par*128.+.5)),alb,n,spec,emis,qr); q=qr; }
+      else if(id==4){ vec3 qr; r0=matProp(q,gn,vec4(0.,0.,0.,floor(par*128.+.5)),false,alb,n,spec,emis,qr,nr0,rot); q=qr; }
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
       if(r0>=0){
-        vec3 A=vec3(0.), T=vec3(0.); float SP=0.;
+        vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
         for(int k=0;k<2;k++){
           if(k>=nr) break;
-          vec3 a, tt; float sp; recette(k==0?r0:r1,q,gn,hs,rot,a,tt,sp);
+          vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,nr0,hs,rot,a,tt,sp,em);
           float wk=nr==1?1.:(k==0?1.-w:w);
-          A+=a*wk; T+=tt*wk; SP+=sp*wk;
+          A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
         }
-        alb=A; n=normalize(gn+T); spec=SP;
+        alb=A; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
       }
       col=lumiere(p,gn,n,alb,spec,rd)+alb*emis*8.;
       if(uVoir==1) col=vec3(ombreSoleil(p,gn));
@@ -3764,7 +4382,7 @@ void main(){
   if(uVoir==5){ float z=texture(uOmbre,gl_FragCoord.xy/uRes).r; col=vec3(z<1.?1.:0.); }   // la carte d'ombres elle-même
   outCol=vec4(melangeHistoire(col,uCamPos+rd*t,ip),t);
 }`;
-const FICHES = [{"version":0,"id":"grands-avaux-sentier","titre":"Sentier entre les grès, fin d'automne","inspiration":"Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux","graine":4821,"kit":"foret","ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-33,"hauteur":21},"brume":0.011},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]},{"version":0,"id":"grands-avaux-nuit","titre":"Le même sentier, de nuit, à la lampe du téléphone","inspiration":"Forêt des Grands Avaux, Champcueil, après la tombée du jour","graine":4821,"kit":"foret","ambiance":{"saison":"automne","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.012},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"histoire":{"pitch":"Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.","protagonistes":[{"id":"sam","role":"porteur de la caméra","trait":"prudent, se parle pour se rassurer"}],"temps":[{"id":"bruit","quand":"après quelques dizaines de mètres ou si la voix parle d'un bruit","ce_qui_se_passe":"un craquement sur la gauche, Sam se fige","scene":{"brume":0.03}},{"id":"panne","quand":"plus tard, si Sam s'éloigne du sentier","ce_qui_se_passe":"la lampe faiblit puis s'éteint","scene":{"lampe":false}}]}},{"version":0,"id":"sous-bois-voile","titre":"Sous-bois d'été, ciel voilé, brume épaisse","inspiration":"Futaie dense par temps laiteux, sans ombres nettes","graine":7313,"kit":"foret","foret":{"densite":0.85,"rochers":0.5,"feuillage":1.3},"ambiance":{"saison":"ete","meteo":"voile","soleil":{"azimut":40,"hauteur":34},"brume":0.028},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"dunes-soir","titre":"Dunes en fin de journée","inspiration":"Erg saharien, soleil rasant, rides de vent sur le sable","graine":2207,"kit":"dunes","ambiance":{"soleil":{"azimut":-60,"hauteur":11},"brume":0.0025},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"maison-lapin","titre":"Une maison dans les bois, un lapin devant","inspiration":"Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur","graine":3170,"kit":"foret","foret":{"densite":0.7,"rochers":0.6,"feuillage":1},"ambiance":{"saison":"automne","soleil":{"azimut":-33,"hauteur":24},"brume":0.009},"objets":[{"id":"maison","nom":"petite maison en bois","devant":14,"cote":5.5,"degage":4.5,"formes":[{"f":"boite","p":[0,1.15,0],"taille":[4,2.6,3],"couleur":"#8a765f","matiere":"bois"},{"f":"toit","p":[0,2.95,0],"taille":[4.5,1.3,3.7],"couleur":"#4a4440","matiere":"tuile"},{"f":"boite","p":[1.2,3.4,0.4],"taille":[0.4,1,0.4],"couleur":"#8b4a38","matiere":"pierre"},{"f":"boite","p":[-0.5,0.98,1.51],"taille":[0.9,1.95,0.04],"couleur":"#3c2f25","matiere":"bois"},{"f":"boite","p":[1.05,1.35,1.51],"taille":[0.8,0.7,0.04],"couleur":"#2a3038","matiere":"verre"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.86,0.05,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.05,0.76,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[-0.5,0.06,1.8],"taille":[1.2,0.12,0.6],"couleur":"#7d7a74","matiere":"pierre"}]},{"id":"lapin","nom":"lapin de garenne assis","devant":10.5,"cote":2.2,"cap":70,"formes":[{"f":"boule","p":[0,0.11,0],"taille":[0.18,0.22,0.3],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.09,-0.09],"taille":[0.2,0.2,0.2],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.21,0.13],"taille":[0.11,0.12,0.13],"couleur":"#8f7a64","matiere":"pelage","lisse":0.04},{"f":"capsule","p":[0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,6],"couleur":"#7d6955","matiere":"pelage"},{"f":"capsule","p":[-0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,-6],"couleur":"#7d6955","matiere":"pelage"},{"f":"boule","p":[0,0.1,-0.19],"taille":[0.07,0.07,0.07],"couleur":"#e6e1d8","matiere":"pelage"}]}],"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}}];                      // fiches de lieu embarquées (scenes/*.json)
+const FICHES = [{"version":0,"id":"grands-avaux-sentier","titre":"Sentier entre les grès, fin d'automne","inspiration":"Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux","graine":4821,"kit":"foret","ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-33,"hauteur":21},"brume":0.011},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]},{"version":0,"id":"grands-avaux-nuit","titre":"Le même sentier, de nuit, à la lampe du téléphone","inspiration":"Forêt des Grands Avaux, Champcueil, après la tombée du jour","graine":4821,"kit":"foret","ambiance":{"saison":"automne","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.012},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"histoire":{"pitch":"Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.","protagonistes":[{"id":"sam","role":"porteur de la caméra","trait":"prudent, se parle pour se rassurer"}],"temps":[{"id":"bruit","quand":"après quelques dizaines de mètres ou si la voix parle d'un bruit","ce_qui_se_passe":"un craquement sur la gauche, Sam se fige","scene":{"brume":0.03}},{"id":"panne","quand":"plus tard, si Sam s'éloigne du sentier","ce_qui_se_passe":"la lampe faiblit puis s'éteint","scene":{"lampe":false}}]}},{"version":0,"id":"sous-bois-voile","titre":"Sous-bois d'été, ciel voilé, brume épaisse","inspiration":"Futaie dense par temps laiteux, sans ombres nettes","graine":7313,"kit":"foret","foret":{"densite":0.85,"rochers":0.5,"feuillage":1.3},"ambiance":{"saison":"ete","meteo":"voile","soleil":{"azimut":40,"hauteur":34},"brume":0.028},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"dunes-soir","titre":"Dunes en fin de journée","inspiration":"Erg saharien, soleil rasant, rides de vent sur le sable","graine":2207,"kit":"dunes","ambiance":{"soleil":{"azimut":-60,"hauteur":11},"brume":0.0025},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"maison-lapin","titre":"Une maison dans les bois, un lapin devant","inspiration":"Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur","graine":3170,"kit":"foret","foret":{"densite":0.7,"rochers":0.6,"feuillage":1},"ambiance":{"saison":"automne","soleil":{"azimut":-33,"hauteur":24},"brume":0.009},"objets":[{"id":"maison","nom":"petite maison en bois","devant":14,"cote":5.5,"degage":4.5,"formes":[{"f":"boite","p":[0,1.15,0],"taille":[4,2.6,3],"couleur":"#8a765f","matiere":"bois"},{"f":"toit","p":[0,2.95,0],"taille":[4.5,1.3,3.7],"couleur":"#4a4440","matiere":"tuile"},{"f":"boite","p":[1.2,3.4,0.4],"taille":[0.4,1,0.4],"couleur":"#8b4a38","matiere":"pierre"},{"f":"boite","p":[-0.5,0.98,1.51],"taille":[0.9,1.95,0.04],"couleur":"#3c2f25","matiere":"bois"},{"f":"boite","p":[1.05,1.35,1.51],"taille":[0.8,0.7,0.04],"couleur":"#2a3038","matiere":"verre"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.86,0.05,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.05,0.76,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[-0.5,0.06,1.8],"taille":[1.2,0.12,0.6],"couleur":"#7d7a74","matiere":"pierre"}]},{"id":"lapin","nom":"lapin de garenne assis","devant":10.5,"cote":2.2,"cap":70,"formes":[{"f":"boule","p":[0,0.11,0],"taille":[0.18,0.22,0.3],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.09,-0.09],"taille":[0.2,0.2,0.2],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.21,0.13],"taille":[0.11,0.12,0.13],"couleur":"#8f7a64","matiere":"pelage","lisse":0.04},{"f":"capsule","p":[0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,6],"couleur":"#7d6955","matiere":"pelage"},{"f":"capsule","p":[-0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,-6],"couleur":"#7d6955","matiere":"pelage"},{"f":"boule","p":[0,0.1,-0.19],"taille":[0.07,0.07,0.07],"couleur":"#e6e1d8","matiere":"pelage"}]}],"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"essai-san-francisco","titre":"Rue en pente, San Francisco, fin d'après-midi","inspiration":"Une rue raide de Russian Hill qui descend vers la baie, bordée de maisons victoriennes colorées et mitoyennes","graine":1906,"kit":"nu","relief":{"amplitude":2.5,"echelle":260,"pente":-0.28,"niveler":true},"trajet":{"sinuosite":0,"largeur":9,"creux":0.16,"bord":"net"},"matieres":{"victorienne":{"base":"facade","couleur":"forme","motif":{"type":"fenetres","largeur":0.95,"hauteur":1.9,"pas":2.1,"etage":3.3,"allege":0.75,"cadre":0.11,"rdc":2.9,"allumees":0.3,"couleur":"#1d2328","cadre_couleur":"#eee9dc","lumiere":"#ffcf8a","opacite":1},"taches":[{"couleur":"#000000","force":0.2,"echelle":[0.5,9,0.5],"seuils":[0.4,0.75]}],"salissure":{"force":0.3,"hauteur":0.6}},"chaussee-sf":{"base":"chaussee","couleur":"#55524e","motif":{"type":"marquage","axe":"double","largeur":0.12,"couleur":"#c7a83c","bords":4.2}}},"surfaces":{"sol":"dalles","trajet":"chaussee-sf"},"ambiance":{"saison":"ete","meteo":"clair","soleil":{"azimut":-115,"hauteur":13},"brume":0.008},"lointain":{"hauteur":3,"decoupe":0.25,"neige":0,"couleur":"#7f8c86","couleur_bas":"#5d6b5e","eau":"#2f4b57"},"semis":[{"id":"maisons","nom":"maisons victoriennes mitoyennes","cellule":[6.6,12],"trajet":{"rangee":true,"min":6,"cote":"deux"},"densite":1,"hauteur":[0.85,1.3],"teinte":0.12,"palette":["#d8bf72","#94b2c6","#c4826f","#e6dfcc","#8ea585","#a98fb8"],"formes":[{"f":"boite","p":[0,4.6,-0.65],"taille":[6.4,9.2,10.5],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[1.1,5.7,5],"taille":[2.4,5.6,1],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[0,9.45,-0.4],"taille":[6.5,0.5,11],"couleur":"#ebe6da","matiere":"mat"},{"f":"boite","p":[-1.5,1.15,4.66],"taille":[2.6,2.3,0.1],"couleur":"#4a4038","matiere":"planches"},{"f":"boite","p":[1.7,0.45,5.25],"taille":[1.6,0.9,1.2],"couleur":"#8c877c","matiere":"beton"}]},{"id":"voitures","nom":"voitures garées le long du trottoir","cellule":[5.8,2.6],"trajet":{"rangee":true,"min":2.15},"densite":0.7,"pose":"pente","tourne":3,"teinte":0.1,"palette":["#9a9fa5","#c8c8c2","#e3e3df","#7a2a26","#3b5274","#8a8676","#2e3136"],"formes":[{"f":"boite","p":[0,0.68,0],"taille":[4.4,0.78,1.78],"couleur":"palette","matiere":"metal","arrondi":0.12},{"f":"boite","p":[-0.25,1.35,0],"taille":[2.3,0.62,1.58],"couleur":"#1b1e22","matiere":"verre","arrondi":0.14},{"f":"cylindre","p":[1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"},{"f":"cylindre","p":[-1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"}]},{"id":"reverberes","nom":"réverbères au bord du trottoir","cellule":[21,3.8],"trajet":{"rangee":true,"min":3.1},"densite":1,"formes":[{"f":"cylindre","p":[0,3.6,0.1],"taille":[0.16,7.2,0.16],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,7.05,0.85],"taille":[0.1,0.1,1.5],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,6.95,1.55],"taille":[0.3,0.16,0.45],"couleur":"#fff1d0","matiere":"lumineux"}]}],"histoire":{"pitch":"Sam descend la rue vers la baie en cherchant le numéro d'une maison bleue.","temps":[]}},{"version":0,"id":"essai-village-nuit","titre":"Rue de village, la nuit","inspiration":"La grand-rue pavée d'un village français, tard, quelques fenêtres encore allumées","graine":5120,"kit":"nu","relief":{"amplitude":1.2,"echelle":160,"pente":0.04},"trajet":{"sinuosite":0.35,"largeur":5.5,"creux":0.1,"bord":"net"},"surfaces":{"sol":"dalles","trajet":"paves"},"matieres":{"maison":{"base":"crepi","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":2.3,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.3,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}},"volets":{"base":"maison","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":6,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.45,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}}},"ambiance":{"saison":"hiver","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.016},"lointain":{"hauteur":4,"decoupe":0.3,"couleur":"#2a2d2a","couleur_bas":"#1d211c"},"semis":[{"id":"maisons","nom":"maisons de village mitoyennes","cellule":[7.5,9],"trajet":{"rangee":true,"min":3.9,"cote":"deux"},"densite":0.92,"hauteur":[0.85,1.25],"teinte":0.1,"palette":["#c9bba3","#b9ad9a","#d4c6aa","#a8a090","#c4ae8c","#bdb6a6"],"formes":[{"f":"boite","p":[0,2.9,-0.2],"taille":[7.3,5.8,8.2],"couleur":"palette","matiere":"maison"},{"f":"toit","p":[0,6.6,-0.2],"taille":[7.34,1.6,8.7],"couleur":"#5f4034","matiere":"tuile"},{"f":"boite","p":[-1.15,1.05,3.92],"taille":[1.1,2.1,0.08],"couleur":"#3b2e24","matiere":"planches"},{"f":"boite","p":[2.3,1.6,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[-2.3,4.4,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[2.4,7,-1.5],"taille":[0.55,1.4,0.55],"couleur":"#7a4a3a","matiere":"brique"}]},{"id":"lampadaires","nom":"lanternes murales","cellule":[16,2],"trajet":{"rangee":true,"min":2.15,"cote":"gauche"},"densite":1,"formes":[{"f":"cylindre","p":[0,2,0],"taille":[0.1,4,0.1],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.95,0.3],"taille":[0.06,0.06,0.6],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.75,0.6],"taille":[0.24,0.32,0.24],"couleur":"#ffcf8a","matiere":"lumineux"}]},{"id":"bornes","nom":"bornes de pierre au bord du trottoir","cellule":[4.5,1.5],"trajet":{"rangee":true,"min":2.35},"densite":0.5,"teinte":0.15,"formes":[{"f":"cylindre","p":[0,0.35,0],"taille":[0.3,0.7,0.3],"couleur":"#8a857a","matiere":"pierre","arrondi":0.04}]}],"objets":[{"id":"eglise","nom":"clocher au bout de la rue","devant":46,"cote":0,"degage":6,"formes":[{"f":"boite","p":[0,7,0],"taille":[4.5,14,4.5],"couleur":"#a39a88","matiere":"pierre"},{"f":"cone","p":[0,16.5,0],"taille":[5.2,5,5.2],"couleur":"#3a3d42","matiere":"tuile"},{"f":"boite","p":[0,11.5,2.26],"taille":[1,2,0.05],"couleur":"#15171a","matiere":"mat"},{"f":"boule","p":[0,8,2.27],"taille":[1.1,1.1,0.06],"couleur":"#e8dcc0","matiere":"lumineux"}]}]},{"version":0,"id":"essai-cimetiere","titre":"Cimetière de campagne, au crépuscule","inspiration":"Un cimetière de village sur un coteau, allée de gravier, cyprès, mur de pierre, brume du soir","graine":731,"kit":"nu","relief":{"amplitude":1.4,"echelle":110,"pente":0.05},"trajet":{"sinuosite":0.15,"largeur":2.6,"creux":0.04,"bord":"net"},"surfaces":{"sol":"herbe","trajet":"gravier"},"matieres":{"granit":{"base":"beton","couleur":"forme","grain":{"echelle":160,"force":0.4},"brillance":0.2,"taches":[{"couleur":"#3b4630","force":0.5,"echelle":[3,1,3],"seuils":[0.6,0.8],"fbm":true,"hauteur":[0.6,0],"biais":0.3}]},"moellons":{"base":"brique","couleur":"#8b8577","motif":{"type":"paves","echelle":[2.2,4,2.2],"joint":0.12,"decalage_rangs":0.5,"eclat":0.6,"bombe":0.8,"couleur":"#4d4a42"},"mousse":{"couleur":"#3e4a2a","force":0.7,"echelle":1.5,"seuils":[0.5,0.7],"fbm":true,"dessus":[0.3,0.8]}}},"ambiance":{"saison":"automne","meteo":"voile","soleil":{"azimut":-80,"hauteur":4},"brume":0.03},"lointain":{"hauteur":3,"decoupe":0.2,"couleur":"#4a4f4a","couleur_bas":"#3a4236"},"semis":[{"id":"tombes","nom":"tombes en rangs serrés","cellule":[2.3,3],"rotation":0,"trajet":{"min":2.6,"max":13},"densite":0.85,"oriente":"fixe","cap":180,"tourne":5,"penche":3,"teinte":0.35,"desordre":0.12,"groupes":0.3,"groupes_echelle":25,"palette":["#8e8b84","#6f6c66","#a39f95","#4d4c4a","#7d766a"],"formes":[{"f":"boite","p":[0,0.5,-1],"taille":[0.8,1,0.16],"couleur":"palette","matiere":"granit","arrondi":0.03},{"f":"boite","p":[0,0.13,0],"taille":[0.95,0.26,1.9],"couleur":"palette","matiere":"granit"},{"f":"boite","p":[0,1.2,-1],"taille":[0.1,0.5,0.08],"couleur":"#3f3d3a","matiere":"metal"},{"f":"boite","p":[0,1.3,-1],"taille":[0.34,0.08,0.08],"couleur":"#3f3d3a","matiere":"metal"}]},{"id":"cypres","nom":"cyprès sombres","cellule":[7,7],"rotation":20,"trajet":{"min":4},"densite":0.25,"groupes":0.7,"groupes_echelle":30,"hauteur":[0.8,1.4],"teinte":0.2,"penche":2,"formes":[{"f":"cylindre","p":[0,0.6,0],"taille":[0.3,1.2,0.3],"couleur":"#3a2e24","matiere":"bois"},{"f":"capsule","p":[0,3.4,0],"taille":[1.7,4.2,1.7],"couleur":"#142016","matiere":"tissu"},{"f":"cone","p":[0,7.2,0],"taille":[1.5,3.2,1.5],"couleur":"#142016","matiere":"tissu"}]},{"id":"mur","nom":"mur d'enceinte en pierre sèche","cellule":[5,1.5],"trajet":{"rangee":true,"min":14,"cote":"deux"},"densite":1,"teinte":0.1,"formes":[{"f":"boite","p":[0,0.8,0],"taille":[4.84,1.6,0.6],"couleur":"#8b8577","matiere":"moellons"}]}]}];                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
 const canvas = $("view");
@@ -3773,18 +4391,52 @@ function fail(msg){ const e=$("err"); e.style.display="flex"; e.textContent=msg;
 
 /* ------------------------------------------------------------------ WebGL */
 const gl = canvas.getContext("webgl2",{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:"high-performance"});
+canvas.addEventListener("webglcontextlost",e=>{ e.preventDefault(); const el=$("err"); el.style.display="flex";
+  el.textContent="Le moteur à rayons est trop lourd pour la carte graphique de cette machine : elle a abandonné.\n\nRecharge la page : elle démarrera sur le moteur v3, qui n'en a pas besoin."; });
 if(!gl) fail("Ce navigateur ne propose pas WebGL2, nécessaire pour le rendu.\nEssaie avec une version récente de Chrome, Safari ou Firefox.");
 if(!gl.getExtension("EXT_color_buffer_float") && !gl.getExtension("EXT_color_buffer_half_float"))
   fail("Ce GPU ne sait pas dessiner dans une texture flottante, nécessaire pour accumuler la lumière.");
 
 function sh(type,src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) fail("Erreur de compilation du shader :\n"+gl.getShaderInfoLog(s)); return s; }
-function prog(fs,vs=VS){ const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);
-  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) fail("Erreur de liaison du shader :\n"+gl.getProgramInfoLog(p));
-  const u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+function lancer(fs,vs=VS){ const p=gl.createProgram(), v=gl.createShader(gl.VERTEX_SHADER), f=gl.createShader(gl.FRAGMENT_SHADER);   // compile sans attendre le résultat
+  gl.shaderSource(v,vs); gl.compileShader(v); gl.shaderSource(f,fs); gl.compileShader(f);
+  gl.attachShader(p,v); gl.attachShader(p,f); gl.linkProgram(p); return {p,v,f}; }
+function finir(x){
+  if(!gl.getProgramParameter(x.p,gl.LINK_STATUS)){
+    for(const s of [x.v,x.f]) if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) fail("Erreur de compilation du shader :\n"+gl.getShaderInfoLog(s));
+    fail("Erreur de liaison du shader :\n"+gl.getProgramInfoLog(x.p)); }
+  const p=x.p, u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
   for(let i=0;i<n;i++){ const a=gl.getActiveUniform(p,i); u[a.name.replace("[0]","")]=gl.getUniformLocation(p,a.name); }
   return {p,u}; }
-const P_PT=prog(FS_PT), P_DOWN=prog(FS_DOWN), P_BLUR=prog(FS_BLUR), P_CAM=prog(FS_CAM);
+const prog=(fs,vs=VS)=>finir(lancer(fs,vs));
+/* Variantes fixes du même shader, choisies par #define. En rendu logiciel, le code présent coûte à chaque pas de rayon même
+   quand il ne s'exécute pas : la forêt garde un programme sans semis, un monde nu un programme sans arbres. Chaque variante se
+   compile une fois (en tâche de fond si le navigateur le permet), à la première fiche qui la demande : jamais de code généré par monde.
+   Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis. */
+const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+(v>>1)+"\n"):FS_PT;
+const P_DOWN=prog(FS_DOWN), P_BLUR=prog(FS_BLUR), P_CAM=prog(FS_CAM);
+const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
+/* Le shader du lanceur de rayons est très gros. Sur certains ordinateurs (Chrome sous Windows) sa compilation échoue et emporte
+   tout le contexte WebGL. On le compile donc sous surveillance : une marque est posée avant, retirée après. Si la page meurt
+   entre les deux, le chargement suivant le sait (PT_KO) et ne réessaie pas : il démarre sur le moteur v3, qui n'en a pas besoin.
+   Sur ordinateur, on ne le compile qu'à la demande. balade.reessayerRayons() efface la marque. */
+const bureau=!matchMedia("(pointer:coarse)").matches && !CFG.mobile;
+let PT_KO=false; try{ PT_KO=localStorage.getItem("bodycam-rayons")==="essai"; }catch(_){}
+const progs=[null,null,null,null], lances=[];
+const varCourante=()=>(S.semN?1:0)+(S.kit===2?2:0);
+const ptDispo=()=>compilerPT(varCourante());                    // le lanceur de rayons peut-il dessiner le monde courant ? (le compile au besoin)
+function compilerPT(v){
+  if(progs[v]) return true; if(PT_KO) return false;
+  try{ localStorage.setItem("bodycam-rayons","essai"); }catch(_){}
+  try{ progs[v]=finir(lances[v]||lancer(variante(v))); lances[v]=null; }
+  catch(e){ PT_KO=true; const el=$("err"); if(!gl.isContextLost()){ el.style.display="none"; el.textContent=""; } return false; }
+  try{ localStorage.removeItem("bodycam-rayons"); }catch(_){}
+  return true;
+}
+function progMonde(){ if(!ptDispo()) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
+if(!bureau && !PT_KO) compilerPT(0);                            // téléphone : compilé d'emblée, comme avant
+if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
 gl.bindVertexArray(gl.createVertexArray());
 
 function target(w,h,ifmt,filter){
@@ -3802,7 +4454,8 @@ function draw(){ gl.drawArrays(gl.TRIANGLES,0,3); }
 function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t); gl.uniform1i(loc,unit); }
 
 /* ------------------------------------------------------------------ scène : ce que la fiche de lieu pilote */
-const S={ can:[7,19], houp:[0,1.5,2.6,1], loin:[0,3,2,0], loinCol:[.2,.2,.21], loinBas:[.05,.07,.05], surf:[0,1,2,0], surfT:[3,4,5,6], surfP:[.45,.5], objN:0, kit:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
+const S={ can:[7,19], houp:[0,1.5,2.6,1], loin:[0,3,2,0], loinCol:[.2,.2,.21], loinBas:[.05,.07,.05], surf:[0,1,2,0], surfT:[3,4,5,6], surfP:[.45,.5], objN:0, kit:0,
+  rel:[1,1,0,0], traj:[1,.85,.3,.5], creux:[.10,1.8,.4,0], terK:[.88,0], yTop:23, pente:.22, semN:0, semTop:[0,0,0,0], objTop:0, solAlb:[.24,.15,.07], lum:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
 let fiche=null, ficheIdx=0, seedN=4821, seed=[0,0,0], sceneDirty=true;
 function setSeed(n){ seedN=n; seed=[(n*12.9898)%89,(n*78.233)%83,(n*.618034)%6.2832]; }
 function applyAmbiance(a){
@@ -3816,35 +4469,60 @@ function applyAmbiance(a){
     S.sun=[I,I*(.62+.33*k),I*(.30+.55*k)]; S.sky=[1,1,1];
     if(a.meteo==="voile"){ S.sun=S.sun.map(v=>v*.22); S.sky=[.92,.86,.78]; }
   }
+  S.lum=S.nuit?1:so.hauteur<8?.35*(8-Math.max(0,so.hauteur))/8:0;   // fenêtres allumées : la nuit, un peu au crépuscule
   S.torch=(a.lampe!==undefined?a.lampe:S.nuit)?26:0;
   S.fog=a.brume!==undefined?a.brume:.011;
   if(S.kit===0) S.kitP[3]=a.saison==="ete"?0:1;
   sceneDirty=true;
+  if(fiche) v3Fiche();                                          // une lampe allumée en cours d'histoire : le v3 laisse la place
+}
+/* Kit : "foret" et "dunes" ont encore leurs arbres, rochers et canopée en dur ; "nu" n'a rien de prédéfini.
+   Une fiche sans kit qui fournit ses semis est un monde nu. */
+const kitDe=f=>f.kit==="dunes"?1:f.kit==="nu"||(f.kit===undefined&&Array.isArray(f.semis)&&f.semis.length)?2:0;
+/* Relief et trajet : la fiche règle les formules de terrainH et pathX. Sans réglage, la forêt d'origine à l'identique. */
+function reglerRelief(f){
+  S.rel=[1,1,0,0]; S.traj=[1,.85,.3,.5]; S.creux=[.10,1.8,.4,0]; S.terK=[.88,0]; S.pente=.22;
+  if(S.kit===1) return;                                          // dunes : relief encore en dur
+  const re=isObj(f.relief)?f.relief:null, tr=isObj(f.trajet)?f.trajet:null;
+  if(!re&&!tr&&S.kit===0) return;
+  const amp=clampN(re&&re.amplitude,0,12,S.kit===2?.8:1.5), ech=clampN(re&&re.echelle,20,600,150), pente=clampN(re&&re.pente,-.35,.35,0);
+  const larg=clampN(tr&&tr.largeur,.6,30,1.7), hw=larg/2, net=!!(tr&&tr.bord==="net"), creux=clampN(tr&&tr.creux,0,.4,.10);
+  const niv=re&&re.niveler!==undefined?!!re.niveler:S.kit===2&&larg>=3;
+  S.rel=[amp/1.5,150/ech,pente,niv?hw+2:0];
+  S.traj=[clampN(tr&&tr.sinuosite,0,2,1),hw,net?.03:.3,net?0:.5];
+  S.creux=[creux,hw+(net?.18:.95),net?hw:Math.max(0,hw-.45),0];
+  const g=S.rel[0]*S.rel[1]*.22+Math.abs(pente); S.pente=g;     // pente la plus forte du relief, en gros
+  S.terK=[.88/Math.sqrt(1+g*g),0];
+  const cg=1.5*creux/Math.max(.05,S.creux[1]-S.creux[2]);       // bord de trottoir : pas réduit seulement là
+  if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
   fiche=f; setSeed(f.graine||4821);
-  S.kit=f.kit==="dunes"?1:0;
+  S.kit=kitDe(f);
   const fo=f.foret||{};
-  S.kitP=S.kit===1 ? [-1,(f.dunes&&f.dunes.rochers)||0,0,1]
+  S.kitP=S.kit===1 ? [-1,(f.dunes&&f.dunes.rochers)||0,0,1] : S.kit===2 ? [-1,0,0,1]
                    : [fo.densite!==undefined?(.2+.6*fo.densite)*Math.min(1,fo.densite*5):.62, fo.rochers!==undefined?fo.rochers:1, fo.feuillage!==undefined?fo.feuillage:1, 1];
+  reglerRelief(f);
   const cone=fo.houppier==="cone";                               // conifères : un cône de feuillage par arbre au lieu de la voûte commune
   S.can=cone?[clampN(fo.houppier_bas,.3,8,1.6),19]:[7,19];
   S.houp=[cone?1:0,S.can[0],clampN(fo.houppier_rayon,.8,3.2,3),clampN(fo.perches,0,1,cone?.25:1)];
   const lo=isObj(f.lointain)?f.lointain:null, lh=lo?clampN(lo.hauteur,0,40,0):0;   // horizon : montagnes ou collines
   S.loin=[Math.tan(lh*Math.PI/180),.7+2.3*clampN(lo&&lo.decoupe,0,1,.5),lo&&lo.neige>0?1-clampN(lo.neige,0,1,0):2,lh>0?1:0];
   S.loinCol=couleur(lo&&lo.couleur||"#7b7a80"); S.loinBas=couleur(lo&&lo.couleur_bas||"#3d4a3a");
+  S.eau=lo&&lo.eau?[...couleur(typeof lo.eau==="string"?lo.eau:"#2c4652"),1]:[0,0,0,0];   // mer, baie ou lac sous l'horizon
   S.eye=(f.camera&&f.camera.hauteur)||1.36;
   buildMats(f); buildShapes(f);
   applyAmbiance(f.ambiance||{});
   if(f.ambiance&&f.ambiance.saison==="hiver") S.kitP[2]*=.15;
-  cam.z=0; cam.x=S.kit===0?pathX(0):0; cam.yaw=S.kit===0?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; queue.length=0; tempsFaits.length=0;
+  cam.z=0; cam.x=S.kit!==1?pathX(0):0; cam.yaw=S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; queue.length=0; tempsFaits.length=0;
   cacheObj.clear(); (f.objets||[]).forEach(o=>{ if(o&&o.visible===false) cacheObj.add(o.id); }); buildShapes(f);
+  v3Fiche();
 }
 
 /* Objets : la fiche les décrit en formes de base, on les range dans une texture de données lue par le shader. */
 const FORMES={boite:0,boule:1,cylindre:2,cone:3,capsule:4,toit:5};
 const MATIERES={mat:0,bois:1,pierre:2,metal:3,verre:4,pelage:5,tissu:5,tuile:6,lumineux:7};
-const SH_ROWS=72, shapesData=new Float32Array(4*4*SH_ROWS), cacheObj=new Set();
+const SEM0=72, SEM_L=10, SH_ROWS=SEM0+4*SEM_L, shapesData=new Float32Array(4*4*SH_ROWS), cacheObj=new Set();
 const shapesT=gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,4,SH_ROWS);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
@@ -3855,13 +4533,13 @@ function couleur(c){                                           // "#rrggbb" ou [
   return v.map(x=>Math.pow(x,2.2));
 }
 function buildShapes(f){
-  shapesData.fill(0); S.objN=0; let row=8;
+  shapesData.fill(0); S.objN=0; S.objTop=0; let row=8;
   for(const o of (Array.isArray(f.objets)?f.objets:[]).slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
     if(!formes.length || row+formes.length>SH_ROWS) continue;
     const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), ech=clampN(o.echelle,.1,5,1);
     let x,z,yaw;
-    if(S.kit===0){ z=dv; x=pathX(z)+ct; yaw=Math.atan2(pathX(z-4)-x,-4); }          // par défaut, la face avant regarde celui qui arrive
+    if(S.kit!==1){ z=dv; x=pathX(z)+ct; yaw=Math.atan2(pathX(z-4)-x,-4); }          // par défaut, la face avant regarde celui qui arrive
     else { const a=1.15; x=Math.sin(a)*dv+Math.cos(a)*ct; z=Math.cos(a)*dv-Math.sin(a)*ct; yaw=a+Math.PI; }
     if(o.cap!==undefined) yaw+=clampN(o.cap,-360,360,0)*Math.PI/180;
     const y=terrainH(x,z), c=Math.cos(yaw), sn=Math.sin(yaw), i=S.objN; let rad=.1;
@@ -3869,6 +4547,7 @@ function buildShapes(f){
       const p=(Array.isArray(fo.p)?fo.p:[0,0,0]).map(v=>clampN(v,-30,30,0)*ech);
       const t=(Array.isArray(fo.taille)?fo.taille:[1,1,1]).map(v=>clampN(v,.01,40,1)*ech*.5);
       const pe=Array.isArray(fo.penche)?fo.penche:[0,0], col=couleur(fo.couleur), r=(row+k)*16;
+      ancrer(fo.f,p,t,pe,2);
       shapesData.set([x+c*p[0]+sn*p[2], y+p[1], z-sn*p[0]+c*p[2], FORMES[fo.f],
                       t[0],t[1],t[2], yaw+clampN(fo.cap,-360,360,0)*Math.PI/180,
                       col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
@@ -3877,21 +4556,95 @@ function buildShapes(f){
     });
     shapesData.set([x,y,z,rad, row,formes.length, clampN(o.degage,0,12,0), (o.visible===false||cacheObj.has(o.id))?0:1], i*16);
     row+=formes.length; S.objN++;
+    S.objTop=Math.max(S.objTop,y+rad-S.rel[2]*z);
   }
+  packSemis(f);
+  const terr=2.4*S.rel[0]+1;                                     // au-dessus : plus rien, le rayon qui monte s'arrête
+  S.yTop=Math.max(S.kit===0?23:5,terr+Math.max(S.objTop,...S.semTop));
   gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,4,SH_ROWS,gl.RGBA,gl.FLOAT,shapesData);
   sceneDirty=true;
 }
+/* Une boîte posée au sol descend sous terre : sur une pente, sa base ne flotte pas (fondation, soubassement). */
+function ancrer(f,p,t,pe,prof){
+  if(f!=="boite"||pe[0]||pe[1]) return;
+  const bas=p[1]-t[1], haut=p[1]+t[1];
+  if(bas>.05||bas<-prof) return;
+  t[1]=(haut+prof)/2; p[1]=(haut-prof)/2;
+}
+/* Semis : la fiche décrit un élément en formes (comme un objet), le moteur le répète sur une grille, un élément par cellule.
+   Disposition dans uShapes : voir sdSemis dans monde.glsl. Le moteur borne la taille de l'élément pour qu'il reste dans sa cellule. */
+const ORIENTS={aleatoire:0,trajet:1,fixe:2};
+function packSemis(f){
+  S.semN=0; S.semTop=[0,0,0,0];
+  const L=(Array.isArray(f.semis)?f.semis:[]).filter(isObj).slice(0,4), M=.08, hw=S.traj[1];
+  for(const c of L){
+    const formes=(Array.isArray(c.formes)?c.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,6);
+    const dens=clampN(c.densite,0,1,.6);
+    if(!formes.length||dens<=0) continue;
+    const k=S.semN, r0=SEM0+k*SEM_L, tr=isObj(c.trajet)?c.trajet:{}, rg=tr.rangee===true;
+    const cel=Array.isArray(c.cellule)?c.cellule:[c.cellule,c.cellule];
+    const c0=clampN(cel[0],1.5,30,6), c1=clampN(cel[1]!==undefined?cel[1]:cel[0],1.5,30,c0);
+    const C=rg?[c1,c0]:[c0,c1];                                  // rangée : [le long du trajet, en profondeur] ; grille libre : [x, z]
+    const rot=clampN(c.rotation,-180,180,0)*Math.PI/180;
+    const tmin=clampN(tr.min,0,200,hw+1), tmax=Math.max(tmin+.1,clampN(tr.max,0,400,rg?tmin+C[0]:400));
+    const cote=tr.cote==="gauche"?-1:tr.cote==="droite"?1:0;
+    const ori=ORIENTS[c.oriente]!==undefined?ORIENTS[c.oriente]:rg?1:0;
+    const cap=clampN(c.cap,-360,360,0)*Math.PI/180, tourne=clampN(c.tourne,0,360,0)*Math.PI/180, pen=clampN(c.penche,0,25,0)*Math.PI/180;
+    const pal=(Array.isArray(c.palette)?c.palette:[]).slice(0,8).map(couleur);
+    // formes dans le repère de l'élément, et leur boîte englobante
+    const mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
+    formes.forEach((fo,j)=>{
+      const p=(Array.isArray(fo.p)?fo.p:[0,0,0]).map(v=>clampN(v,-15,15,0));
+      const t=(Array.isArray(fo.taille)?fo.taille:[1,1,1]).map(v=>clampN(v,.01,30,1)*.5);
+      const pe=Array.isArray(fo.penche)?fo.penche:[0,0], fc=clampN(fo.cap,-360,360,0)*Math.PI/180, ar=clampN(fo.arrondi,0,.3,0);
+      ancrer(fo.f,p,t,pe,3);
+      const ca=Math.abs(Math.cos(fc)), sa=Math.abs(Math.sin(fc));
+      let e=[t[0]*ca+t[2]*sa,fo.f==="capsule"?t[1]+t[0]:t[1],t[0]*sa+t[2]*ca];
+      if(pe[0]||pe[1]){ const R=Math.hypot(...t)+(fo.f==="capsule"?t[0]:0); e=[R,R,R]; }
+      for(let i=0;i<3;i++){ mn[i]=Math.min(mn[i],p[i]-e[i]-ar); mx[i]=Math.max(mx[i],p[i]+e[i]+ar); }
+      const col=fo.couleur==="palette"&&pal.length?[-1,-1,-1]:couleur(fo.couleur);
+      shapesData.set([p[0],p[1],p[2],FORMES[fo.f], t[0],t[1],t[2],fc,
+                      col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
+                      clampN(fo.lisse,0,.5,0), ar, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], (r0+4+j)*16);
+    });
+    // emprise dans les axes de la grille : selon l'orientation, l'élément peut tourner dans sa cellule
+    const ex=Math.max(Math.abs(mn[0]),Math.abs(mx[0])), ez=Math.max(Math.abs(mn[2]),Math.abs(mx[2])), top=mx[1];
+    const droit=a=>Math.abs(Math.sin(2*a))<1e-3;                  // multiple de 90°
+    let gx, gz;
+    if(ori===1&&(rg||(S.traj[0]===0&&droit(rot)))){ gx=ez; gz=ex; }
+    else if(ori===2&&droit(cap)){ const sw=Math.abs(Math.sin(cap))>.5; gx=sw?ez:ex; gz=sw?ex:ez; }
+    else if(ori===2){ const ca=Math.abs(Math.cos(cap)), sa=Math.abs(Math.sin(cap)); gx=ex*ca+ez*sa; gz=ex*sa+ez*ca; }
+    else gx=gz=Math.hypot(ex,ez);
+    if(tourne>0&&ori!==0){ const st=Math.sin(Math.min(tourne/2,Math.PI/2)); [gx,gz]=[gx+gz*st,gz+gx*st]; }
+    const sy=Array.isArray(c.hauteur)?[clampN(c.hauteur[0],.3,3,1),clampN(c.hauteur[1],.3,3,1)]:[1,1];
+    if(sy[1]<sy[0]) sy.reverse();
+    gx+=top*sy[1]*Math.sin(pen); gz+=top*sy[1]*Math.sin(pen);
+    let sc=Array.isArray(c.echelle)?[clampN(c.echelle[0],.2,4,1),clampN(c.echelle[1],.2,4,1)]:[1,1];
+    if(sc[1]<sc[0]) sc.reverse();
+    const ax=C[0]/2-M, az=C[1]/2-M, fit=Math.min(ax/Math.max(gx,1e-3),az/Math.max(gz,1e-3));
+    if(sc[1]>fit){ const q=fit/sc[1]; sc=[sc[0]*q,sc[1]*q]; }       // l'élément doit rester dans sa cellule
+    const des=clampN(c.desordre,0,1,1);
+    const nR=rg?Math.max(1,Math.floor((tmax-tmin)/C[0]+1e-6)):0;
+    const o=r0*16, gr=clampN(c.groupes,0,1,0), ge=clampN(c.groupes_echelle,5,400,40);
+    shapesData.set([C[0],C[1],Math.cos(rot),Math.sin(rot), dens,gr,C[0]/ge,rg?1:0, tmin,tmax,cote,ori, cap,tourne,pen,clampN(c.teinte,0,1,0)],o);
+    shapesData.set([Math.max(0,ax-gx*sc[1])*des,Math.max(0,az-gz*sc[1])*des,sc[0],sc[1], sy[0],sy[1],formes.length,nR,
+                    (mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2,pal.length, (mx[0]-mn[0])/2,(mx[1]-mn[1])/2,(mx[2]-mn[2])/2,c.pose==="pente"?1:0],o+16);
+    pal.forEach((cl,i)=>shapesData.set([cl[0],cl[1],cl[2],1],o+32+i*4));
+    S.semTop[k]=top*sc[1]*sy[1]+S.pente*Math.hypot(C[0],C[1])/2+.3;
+    S.semN++;
+  }
+}
 
 /* Matières : des recettes, pas du code. La bibliothèque (src/matieres.json) et la fiche (champ "matieres") les décrivent ;
-   on les range dans une texture de données lue par pathtrace.frag (fonction recette), une ligne par recette.
+   on les range dans une texture de données lue par recette.glsl (fonction recette), une ligne par recette.
    Texels d'une ligne : 0 couleur, espace | 1 variation | 2 grain | 3-5 nuance et brillance | 6-11 motif | 12-16 palette
    | 17-32 quatre taches | 33-38 mousse | 39-40 salissure et relief | 41-44 deux bosses. */
-const MAT_LIB={"recettes":{"litiere":{"nom":"litière de feuilles mortes, mousse par plaques","espace":"sol","couleur":"#8d6f4c","motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":1,"taille":1,"opacite":1},"taches":[{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11}],"grain":{"echelle":60,"force":0.4},"mousse":{"couleur":"#3a4927","force":1,"echelle":0.42,"seuils":[0.6,0.72],"fbm":true,"decalage":20,"grain":{"echelle":45,"force":0.8},"adoucit":0.6},"relief":{"inclinaison":0.12,"grain":{"echelle":30,"force":0.25}},"brillance":0.22},"sentier-sable":{"nom":"sable tassé du sentier, feuilles éparses","espace":"sol","couleur":"#b4a997","variation":{"echelle":3,"force":0.3784},"taches":[{"couleur":"#000000","force":0.38,"echelle":0.6,"seuils":[0.45,0.75],"fbm":true,"decalage":5,"sous_motif":true},{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11,"sur_motif":true}],"motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":0.1,"couverture_bruit":0.35,"taille":0.32,"opacite":0.92},"grain":{"echelle":90,"force":0.2},"relief":{"inclinaison":0.1,"grain":{"echelle":30,"force":0.25}},"brillance":0.04},"gres":{"nom":"grès de Fontainebleau, lichen, mousse côté humide","espace":"volume","couleur":"#a09d96","variation":{"echelle":1.1,"force":0.6},"nuance":{"couleur":"#aca08d","force":0.35,"echelle":4.3,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":60,"force":0.3},"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31}],"mousse":{"couleur":"#4c6530","force":0.9,"echelle":0.8,"seuils":[0.38,0.6],"fbm":true,"decalage":3,"dessus":[0.25,0.8],"pente_bruit":0.7,"pente_echelle":4.3,"pente_decalage":5,"cote":[0.3,0.9],"cote_force":0.8,"adoucit":0.5,"grain":{"echelle":50,"force":0.9}},"salissure":{"force":0.5,"hauteur":0.45},"relief":{"bosses":[{"echelle":4.3,"fbm":true,"decalage":5,"force":0.018},{"echelle":18,"force":0.0075}]},"brillance":0.04},"sable-dunes":{"nom":"sable de dune, rides de vent","espace":"sol","couleur":"#c6ac8a","variation":{"echelle":2,"force":0.2083},"grain":{"echelle":160,"force":0.14},"motif":{"type":"rides","echelle":26,"deformation":6,"masque":{"echelle":0.25,"seuils":[0.25,0.6]},"couleur":"#bda07d","opacite":0.3,"inclinaison":0.22},"relief":{"grain":{"echelle":120,"force":0.12}},"brillance":0.1},"ecorce-chene":{"nom":"écorce de chêne, fissures profondes","espace":"volume","couleur":"#726c65","motif":{"type":"fissures","echelle":[26,2.6,26],"seuils":[0.7,0.97],"profondeur":0.9,"couleur":"#34312d","fines":{"echelle":[60,7,60],"decalage":4,"seuils":[0.8,0.97],"profondeur":0.25}},"grain":{"echelle":[6,1,6],"force":0.5},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-pin":{"nom":"écorce de pin sylvestre, plaques, haut du tronc orangé","espace":"volume","couleur":"#786c65","nuance":{"couleur":"#947865","force":1,"echelle":[9,2,9],"seuils":[0,1],"decalage":0},"taches":[{"couleur":"#ba885a","force":1,"echelle":0,"seuils":[0,1],"biais":1,"hauteur":[5,8.5],"sous_motif":true}],"motif":{"type":"fissures","echelle":[14,3,14],"decalage":2,"seuils":[0.78,0.96],"profondeur":1,"assombrit":0.8},"grain":{"echelle":50,"force":0.4},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-bouleau":{"nom":"écorce de bouleau, lenticelles, pied noirci","espace":"volume","couleur":"#d0cdc6","grain":{"echelle":[20,3,20],"force":0.3},"taches":[{"couleur":"#5a5551","force":0.7,"echelle":[12,55,12],"seuils":[0.72,0.8],"creux":0.2},{"couleur":"#383534","force":1,"echelle":[7,1.4,7],"decalage":2,"seuils":[0.6,0.7],"biais":0.35,"hauteur":[1.4,0],"creux":0.8}],"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.004},"brillance":0.06},"ecorce-chataignier":{"nom":"écorce de châtaignier, fibres verticales","espace":"volume","couleur":"#6f6a61","nuance":{"couleur":"#5a6541","force":0.5,"echelle":[4,0.7,4],"seuils":[0.4,0.7],"decalage":5},"grain":{"echelle":[30,2,30],"force":0.8},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"bosses":[{"echelle":[30,2,30],"force":0.012}]},"brillance":0.06},"gres-patine":{"nom":"grès patiné par le sable, sans mousse","base":"gres","mousse":null,"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31},{"couleur":"#baa488","force":0.5,"echelle":0,"seuils":[-1,0]}]},"planches":{"nom":"planches de bois grisé, joints sombres","espace":"volume","couleur":"#8a7a66","motif":{"type":"planches","echelle":7,"joint":0.08,"longueur":2.4,"eclat":0.5,"couleur":"#2a231c","opacite":1},"grain":{"echelle":[40,4,40],"force":0.35},"salissure":{"force":0.35,"hauteur":0.6},"relief":{"motif":0.006},"brillance":0.05},"paves":{"nom":"pavés de grès, joints terreux","espace":"sol","couleur":"#8d8577","motif":{"type":"paves","echelle":6,"joint":0.1,"decalage_rangs":0.5,"eclat":0.45,"bombe":0.6,"couleur":"#3a342c","opacite":1},"variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":70,"force":0.25},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.4,"seuils":[0.45,0.75],"fbm":true,"decalage":7}],"mousse":{"couleur":"#3b4c2b","force":0.7,"echelle":0.5,"seuils":[0.55,0.75],"fbm":true,"decalage":13},"relief":{"motif":0.01,"grain":{"echelle":40,"force":0.08}},"brillance":0.12},"crepi":{"nom":"crépi de façade, salissures en pied","espace":"volume","couleur":"#c9bba3","variation":{"echelle":0.7,"force":0.25},"grain":{"echelle":90,"force":0.3},"taches":[{"couleur":"#6d6458","force":0.4,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.45,"hauteur":0.8},"relief":{"bosses":[{"echelle":60,"force":0.002}]},"brillance":0.03},"herbe":{"nom":"herbe rase de prairie, plaques plus sèches","espace":"sol","couleur":"#6f8442","variation":{"echelle":0.35,"force":0.5},"nuance":{"couleur":"#9a9455","force":0.6,"echelle":0.9,"seuils":[0.45,0.7],"fbm":true,"decalage":5},"motif":{"type":"fissures","echelle":[55,1,7],"seuils":[0.55,0.95],"profondeur":0.8,"assombrit":0.45},"grain":{"echelle":140,"force":0.5},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.25,"seuils":[0.45,0.75],"fbm":true,"decalage":3},{"couleur":"#7a6a4a","force":0.6,"echelle":3,"seuils":[0.72,0.8]}],"relief":{"motif":0.004,"grain":{"echelle":50,"force":0.3}},"brillance":0.06},"neige":{"nom":"neige tassée, ombres bleutées","espace":"sol","couleur":"#e9edf2","variation":{"echelle":0.4,"force":0.12},"nuance":{"couleur":"#cfd9e6","force":0.5,"echelle":1.2,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":180,"force":0.08},"relief":{"bosses":[{"echelle":1.5,"fbm":true,"force":0.02}],"grain":{"echelle":90,"force":0.06}},"brillance":0.3}},"surfaces":{"foret":{"sol":"litiere","trajet":"sentier-sable","rochers":"gres","arbres":{"a":"ecorce-pin","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau","b":"ecorce-chataignier","part":0.5}},"dunes":{"sol":"sable-dunes","trajet":"sable-dunes","rochers":"gres-patine"}}};
+const MAT_LIB={"recettes":{"litiere":{"nom":"litière de feuilles mortes, mousse par plaques","espace":"sol","couleur":"#8d6f4c","motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":1,"taille":1,"opacite":1},"taches":[{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11}],"grain":{"echelle":60,"force":0.4},"mousse":{"couleur":"#3a4927","force":1,"echelle":0.42,"seuils":[0.6,0.72],"fbm":true,"decalage":20,"grain":{"echelle":45,"force":0.8},"adoucit":0.6},"relief":{"inclinaison":0.12,"grain":{"echelle":30,"force":0.25}},"brillance":0.22},"sentier-sable":{"nom":"sable tassé du sentier, feuilles éparses","espace":"sol","couleur":"#b4a997","variation":{"echelle":3,"force":0.3784},"taches":[{"couleur":"#000000","force":0.38,"echelle":0.6,"seuils":[0.45,0.75],"fbm":true,"decalage":5,"sous_motif":true},{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11,"sur_motif":true}],"motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":0.1,"couverture_bruit":0.35,"taille":0.32,"opacite":0.92},"grain":{"echelle":90,"force":0.2},"relief":{"inclinaison":0.1,"grain":{"echelle":30,"force":0.25}},"brillance":0.04},"gres":{"nom":"grès de Fontainebleau, lichen, mousse côté humide","espace":"volume","couleur":"#a09d96","variation":{"echelle":1.1,"force":0.6},"nuance":{"couleur":"#aca08d","force":0.35,"echelle":4.3,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":60,"force":0.3},"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31}],"mousse":{"couleur":"#4c6530","force":0.9,"echelle":0.8,"seuils":[0.38,0.6],"fbm":true,"decalage":3,"dessus":[0.25,0.8],"pente_bruit":0.7,"pente_echelle":4.3,"pente_decalage":5,"cote":[0.3,0.9],"cote_force":0.8,"adoucit":0.5,"grain":{"echelle":50,"force":0.9}},"salissure":{"force":0.5,"hauteur":0.45},"relief":{"bosses":[{"echelle":4.3,"fbm":true,"decalage":5,"force":0.018},{"echelle":18,"force":0.0075}]},"brillance":0.04},"sable-dunes":{"nom":"sable de dune, rides de vent","espace":"sol","couleur":"#c6ac8a","variation":{"echelle":2,"force":0.2083},"grain":{"echelle":160,"force":0.14},"motif":{"type":"rides","echelle":26,"deformation":6,"masque":{"echelle":0.25,"seuils":[0.25,0.6]},"couleur":"#bda07d","opacite":0.3,"inclinaison":0.22},"relief":{"grain":{"echelle":120,"force":0.12}},"brillance":0.1},"ecorce-chene":{"nom":"écorce de chêne, fissures profondes","espace":"volume","couleur":"#726c65","motif":{"type":"fissures","echelle":[26,2.6,26],"seuils":[0.7,0.97],"profondeur":0.9,"couleur":"#34312d","fines":{"echelle":[60,7,60],"decalage":4,"seuils":[0.8,0.97],"profondeur":0.25}},"grain":{"echelle":[6,1,6],"force":0.5},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-pin":{"nom":"écorce de pin sylvestre, plaques, haut du tronc orangé","espace":"volume","couleur":"#786c65","nuance":{"couleur":"#947865","force":1,"echelle":[9,2,9],"seuils":[0,1],"decalage":0},"taches":[{"couleur":"#ba885a","force":1,"echelle":0,"seuils":[0,1],"biais":1,"hauteur":[5,8.5],"sous_motif":true}],"motif":{"type":"fissures","echelle":[14,3,14],"decalage":2,"seuils":[0.78,0.96],"profondeur":1,"assombrit":0.8},"grain":{"echelle":50,"force":0.4},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-bouleau":{"nom":"écorce de bouleau, lenticelles, pied noirci","espace":"volume","couleur":"#d0cdc6","grain":{"echelle":[20,3,20],"force":0.3},"taches":[{"couleur":"#5a5551","force":0.7,"echelle":[12,55,12],"seuils":[0.72,0.8],"creux":0.2},{"couleur":"#383534","force":1,"echelle":[7,1.4,7],"decalage":2,"seuils":[0.6,0.7],"biais":0.35,"hauteur":[1.4,0],"creux":0.8}],"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.004},"brillance":0.06},"ecorce-chataignier":{"nom":"écorce de châtaignier, fibres verticales","espace":"volume","couleur":"#6f6a61","nuance":{"couleur":"#5a6541","force":0.5,"echelle":[4,0.7,4],"seuils":[0.4,0.7],"decalage":5},"grain":{"echelle":[30,2,30],"force":0.8},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"bosses":[{"echelle":[30,2,30],"force":0.012}]},"brillance":0.06},"gres-patine":{"nom":"grès patiné par le sable, sans mousse","base":"gres","mousse":null,"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31},{"couleur":"#baa488","force":0.5,"echelle":0,"seuils":[-1,0]}]},"planches":{"nom":"planches de bois grisé, joints sombres","espace":"volume","couleur":"#8a7a66","motif":{"type":"planches","echelle":7,"joint":0.08,"longueur":2.4,"eclat":0.5,"couleur":"#2a231c","opacite":1},"grain":{"echelle":[40,4,40],"force":0.35},"salissure":{"force":0.35,"hauteur":0.6},"relief":{"motif":0.006},"brillance":0.05},"paves":{"nom":"pavés de grès, joints terreux","espace":"sol","couleur":"#8d8577","motif":{"type":"paves","echelle":6,"joint":0.1,"decalage_rangs":0.5,"eclat":0.45,"bombe":0.6,"couleur":"#3a342c","opacite":1},"variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":70,"force":0.25},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.4,"seuils":[0.45,0.75],"fbm":true,"decalage":7}],"mousse":{"couleur":"#3b4c2b","force":0.7,"echelle":0.5,"seuils":[0.55,0.75],"fbm":true,"decalage":13},"relief":{"motif":0.01,"grain":{"echelle":40,"force":0.08}},"brillance":0.12},"crepi":{"nom":"crépi de façade, salissures en pied","espace":"volume","couleur":"#c9bba3","variation":{"echelle":0.7,"force":0.25},"grain":{"echelle":90,"force":0.3},"taches":[{"couleur":"#6d6458","force":0.4,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.45,"hauteur":0.8},"relief":{"bosses":[{"echelle":60,"force":0.002}]},"brillance":0.03},"herbe":{"nom":"herbe rase de prairie, plaques plus sèches","espace":"sol","couleur":"#6f8442","variation":{"echelle":0.35,"force":0.5},"nuance":{"couleur":"#9a9455","force":0.6,"echelle":0.9,"seuils":[0.45,0.7],"fbm":true,"decalage":5},"motif":{"type":"fissures","echelle":[55,1,7],"seuils":[0.55,0.95],"profondeur":0.8,"assombrit":0.45},"grain":{"echelle":140,"force":0.5},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.25,"seuils":[0.45,0.75],"fbm":true,"decalage":3},{"couleur":"#7a6a4a","force":0.6,"echelle":3,"seuils":[0.72,0.8]}],"relief":{"motif":0.004,"grain":{"echelle":50,"force":0.3}},"brillance":0.06},"neige":{"nom":"neige tassée, ombres bleutées","espace":"sol","couleur":"#e9edf2","variation":{"echelle":0.4,"force":0.12},"nuance":{"couleur":"#cfd9e6","force":0.5,"echelle":1.2,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":180,"force":0.08},"relief":{"bosses":[{"echelle":1.5,"fbm":true,"force":0.02}],"grain":{"echelle":90,"force":0.06}},"brillance":0.3},"asphalte":{"nom":"asphalte usé, rapiéçages et fissures","espace":"sol","couleur":"#4b4b4c","variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":150,"force":0.45},"motif":{"type":"fissures","echelle":[1.4,1,1.4],"seuils":[0.92,0.99],"profondeur":1,"couleur":"#252524"},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.35,"seuils":[0.5,0.75],"fbm":true},{"couleur":"#5d5c58","force":0.5,"echelle":[0.25,1,0.08],"seuils":[0.62,0.7],"decalage":4}],"relief":{"motif":0.004,"grain":{"echelle":60,"force":0.06}},"brillance":0.15},"chaussee":{"nom":"chaussée marquée : axe en tirets, lignes de rive","base":"asphalte","motif":{"type":"marquage","largeur":0.14,"tiret":3,"intervalle":4.5,"axe":"simple","bords":0,"couleur":"#c9c4b4","opacite":0.9}},"dalles":{"nom":"trottoir en dalles de béton","espace":"sol","couleur":"#8d8a83","motif":{"type":"paves","echelle":0.7,"joint":0.04,"decalage_rangs":0,"eclat":0.25,"bombe":0,"couleur":"#4e4c47","opacite":0.8},"variation":{"echelle":0.4,"force":0.25},"grain":{"echelle":120,"force":0.3},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.6,"seuils":[0.5,0.78],"fbm":true,"decalage":2}],"relief":{"motif":0.003,"grain":{"echelle":50,"force":0.05}},"brillance":0.08},"beton":{"nom":"béton brut, coulures","espace":"volume","couleur":"#9a968d","variation":{"echelle":0.6,"force":0.3},"grain":{"echelle":110,"force":0.3},"taches":[{"couleur":"#4a4740","force":0.45,"echelle":[2,0.35,2],"seuils":[0.55,0.8],"fbm":true,"decalage":5}],"salissure":{"force":0.4,"hauteur":0.6},"brillance":0.05},"brique":{"nom":"brique rouge, joints clairs","espace":"volume","couleur":"#8a4a36","motif":{"type":"paves","echelle":[4.4,13,4.4],"joint":0.08,"decalage_rangs":0.5,"eclat":0.35,"bombe":0,"couleur":"#a39b8c","opacite":1},"grain":{"echelle":90,"force":0.3},"salissure":{"force":0.4,"hauteur":0.8},"relief":{"motif":0.003},"brillance":0.04},"bardage":{"nom":"bardage de planches couchées, peinture","espace":"volume","couleur":"#c8c0ad","motif":{"type":"planches","couchees":true,"echelle":6,"joint":0.12,"longueur":20,"eclat":0.12,"couleur":"#5f5a50","opacite":0.8},"variation":{"echelle":0.6,"force":0.15},"grain":{"echelle":70,"force":0.15},"salissure":{"force":0.35,"hauteur":0.5},"relief":{"motif":0.004},"brillance":0.06},"facade":{"nom":"façade enduite percée de fenêtres sur tous les étages","espace":"volume","couleur":"#c4b8a2","variation":{"echelle":0.6,"force":0.2},"grain":{"echelle":90,"force":0.25},"motif":{"type":"fenetres","largeur":1,"hauteur":1.5,"pas":2.6,"etage":3,"allege":0.9,"cadre":0.08,"rdc":0,"allumees":0.4,"couleur":"#20262c","cadre_couleur":"#e2ddd2","lumiere":"#ffc27a","opacite":1},"taches":[{"couleur":"#5e564b","force":0.35,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.35,"hauteur":0.8},"relief":{"motif":0.03},"brillance":0.04},"terre":{"nom":"terre battue, cailloux","espace":"sol","couleur":"#7a654c","variation":{"echelle":0.4,"force":0.35},"grain":{"echelle":160,"force":0.55},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.5,"seuils":[0.45,0.75],"fbm":true},{"couleur":"#a39780","force":0.5,"echelle":11,"seuils":[0.74,0.8]}],"relief":{"grain":{"echelle":40,"force":0.12}},"brillance":0.04},"gravier":{"nom":"gravier clair d'allée","espace":"sol","couleur":"#a59d8c","variation":{"echelle":0.5,"force":0.2},"grain":{"echelle":260,"force":0.8},"taches":[{"couleur":"#5e574a","force":0.45,"echelle":30,"seuils":[0.6,0.75]}],"relief":{"grain":{"echelle":120,"force":0.25}},"brillance":0.05}},"surfaces":{"foret":{"sol":"litiere","trajet":"sentier-sable","rochers":"gres","arbres":{"a":"ecorce-pin","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau","b":"ecorce-chataignier","part":0.5}},"dunes":{"sol":"sable-dunes","trajet":"sable-dunes","rochers":"gres-patine"},"nu":{"sol":"herbe","trajet":"asphalte","rochers":"gres"}}};
 const RT_W=48, RT_MAX=24, matData=new Float32Array(RT_W*RT_MAX*4);
 const matT=gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D,matT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,RT_W,RT_MAX);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
-const MOTIFS={aucun:0,feuilles:1,rides:2,fissures:3,planches:4,paves:5};
+const MOTIFS={aucun:0,feuilles:1,rides:2,fissures:3,planches:4,paves:5,fenetres:6,marquage:7};
 const matIdx=new Map();                                         // nom de recette -> ligne de la texture
 const isObj=v=>v&&typeof v==="object"&&!Array.isArray(v);
 function recettesDe(f){ return Object.assign({},MAT_LIB.recettes,isObj(f.matieres)?f.matieres:{}); }
@@ -3910,7 +4663,7 @@ function packRecette(r,row){
   const ech=(v,d)=>Array.isArray(v)?[0,1,2].map(i=>N(v[i],0,300,d)):(v=N(v,0,300,d),[v,v,v]);
   const seuils=(v,a,b)=>{ let s=Array.isArray(v)?[N(v[0],-2,3,a),N(v[1],-2,3,b)]:[a,b]; if(Math.abs(s[1]-s[0])<1e-3) s[1]=s[0]+1e-3; return s; };
   const opt=v=>Array.isArray(v)?seuils(v,0,1):[0,0];            // seuils facultatifs : absents = désactivés
-  put(0,[...couleur(r.couleur),r.espace==="volume"?1:0]);
+  put(0,[...couleur(r.couleur),(r.espace==="volume"?1:0)+(r.couleur==="forme"?2:0)]);   // "forme" : la couleur de la forme qui porte la recette
   const va=Ob(r.variation), gr=Ob(r.grain), nu=Ob(r.nuance), mo=Ob(r.motif), re=Ob(r.relief), sa=Ob(r.salissure);
   put(1,[...ech(va.echelle,1),N(va.force,0,1.5,0)]);
   put(2,[...ech(gr.echelle,1),N(gr.force,0,1.5,0)]);
@@ -3918,7 +4671,7 @@ function packRecette(r,row){
   const ns=seuils(nu.seuils,.4,.7); put(5,[ns[0],ns[1],N(nu.decalage,-100,100,5),N(r.brillance,0,1,.05)]);
   const ty=MOTIFS[mo.type]||0;
   put(6,[ty,N(mo.opacite,0,1,1),N(mo.inclinaison,0,1,.5),N(re.motif,0,.05,0)]);
-  put(7,[...ech(mo.echelle,ty===1?15:ty===2?26:ty===4?7:ty===5?5:[20,3,20]),N(mo.decalage,-100,100,0)]);
+  put(7,[...ech(mo.echelle,ty===1?15:ty===2?26:ty===4?7:ty===5?5:ty>=6?1:[20,3,20]),N(mo.decalage,-100,100,0)]);
   if(mo.couleur!==undefined) put(8,[...couleur(mo.couleur),0]);
   if(ty===1){ put(9,[N(mo.deformation,0,.5,.12),N(mo.eclat,0,1.5,.5),N(mo.bord,0,1,.55),N(mo.recouvre,0,1,.8)]);
     put(10,[N(mo.couverture,0,1,1),N(mo.couverture_bruit,0,1,0),N(mo.taille,.05,1,1),0]); }
@@ -3927,7 +4680,14 @@ function packRecette(r,row){
   if(ty===3){ const s=seuils(mo.seuils,.7,.97), fi=Ob(mo.fines), s2=seuils(fi.seuils,.8,.97);
     put(9,[s[0],s[1],N(mo.profondeur,0,1,.9),N(mo.assombrit,0,1,0)]);
     put(10,[s2[0],s2[1],mo.fines?N(fi.profondeur,0,1,.25):0,0]); put(11,[...ech(fi.echelle,[60,7,60]),N(fi.decalage,-100,100,4)]); }
-  if(ty===4) put(9,[N(mo.joint,.005,.45,.08),N(mo.longueur,.2,20,2.4),N(mo.eclat,0,1.5,.5),0]);
+  if(ty===4) put(9,[N(mo.joint,.005,.45,.08),N(mo.longueur,.2,20,2.4),N(mo.eclat,0,1.5,.5),mo.couchees?1:0]);
+  if(ty===6){ const pas=N(mo.pas,.6,12,2.6), et=N(mo.etage,2,6,3), la=Math.min(N(mo.largeur,.2,10,1),pas-.15), ha=Math.min(N(mo.hauteur,.2,5,1.5),et-.2);
+    put(9,[la,ha,pas,et]); put(10,[Math.min(N(mo.allege,0,3,.9),et-ha),N(mo.cadre,0,.4,.08),N(mo.rdc,0,8,0),N(mo.allumees,0,1,.4)]);
+    put(11,[...couleur(mo.cadre_couleur||"#d8d4ca"),0]); put(12,[...couleur(mo.lumiere||"#ffc27a"),0]);
+    if(mo.couleur===undefined) put(8,[...couleur("#20262c"),0]); }
+  if(ty===7){ put(9,[N(mo.largeur,.05,.6,.14),N(mo.tiret,0,20,3),N(mo.intervalle,0,30,4.5),N(mo.bords,0,15,0)]);
+    put(10,[{aucun:0,simple:1,double:2}[mo.axe]!==undefined?{aucun:0,simple:1,double:2}[mo.axe]:1,N(mo.passages,0,500,0),0,0]);
+    if(mo.couleur===undefined) put(8,[...couleur("#c9c4b4"),0]); }
   if(ty===5) put(9,[N(mo.joint,.005,.45,.1),N(mo.decalage_rangs,0,1,.5),N(mo.eclat,0,1.5,.45),N(mo.bombe,0,2,.6)]);
   const pal=(Array.isArray(mo.palette)?mo.palette:[]).filter(isObj).slice(0,5);
   if(pal.length){ const tot=pal.reduce((s,p)=>s+N(p.part,0,1,.2),0)||1; let acc=0;
@@ -3951,7 +4711,7 @@ function packRecette(r,row){
 }
 /* Chaque surface pointe vers une recette. Les kits fixent les surfaces par défaut ; la fiche peut les remplacer (champ "surfaces"). */
 function buildMats(f){
-  const lib=recettesDe(f), kit=f.kit==="dunes"?"dunes":"foret", sf=Object.assign({},MAT_LIB.surfaces[kit]);
+  const lib=recettesDe(f), kit=["foret","dunes","nu"][kitDe(f)], sf=Object.assign({},MAT_LIB.surfaces[kit]);
   const fs=isObj(f.surfaces)?f.surfaces:{};
   for(const k of ["sol","trajet","rochers"]) if(typeof fs[k]==="string"&&resoudre(fs[k],lib)) sf[k]=fs[k];
   for(const k of ["arbres","perches"]) if(isObj(fs[k])) sf[k]=Object.assign({},sf[k]||{},fs[k]);
@@ -3963,8 +4723,10 @@ function buildMats(f){
   S.surf=[ok(sf.sol,d.sol),ok(sf.trajet,d.trajet),ok(sf.rochers,d.rochers),0];
   S.surfT=[ok(ar.a,"ecorce-pin"),ok(ar.b,"ecorce-chene"),ok(pe.a,"ecorce-bouleau"),ok(pe.b,"ecorce-chataignier")];
   S.surfP=[clampN(ar.part,0,1,.45),clampN(pe.part,0,1,.5)];
-  for(const o of Array.isArray(f.objets)?f.objets:[]) for(const fo of (o&&Array.isArray(o.formes))?o.formes:[])   // formes qui nomment une recette
+  for(const o of [...(Array.isArray(f.objets)?f.objets:[]),...(Array.isArray(f.semis)?f.semis:[])]) for(const fo of (o&&Array.isArray(o.formes))?o.formes:[])   // formes qui nomment une recette
     if(fo&&typeof fo.matiere==="string"&&isObj(lib[fo.matiere])) use(fo.matiere);
+  const rs=resoudre(sf.sol,lib)||resoudre(d.sol,lib);            // couleur du sol vue par la lumière indirecte
+  S.solAlb=kitDe(f)===0?[.24,.15,.07]:couleur(rs&&rs.couleur||"#555555").map(v=>v*.9);
   gl.bindTexture(gl.TEXTURE_2D,matT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,RT_W,RT_MAX,gl.RGBA,gl.FLOAT,matData);
   sceneDirty=true;
 }
@@ -3976,13 +4738,17 @@ function validerRecettes(m){                                    // la fiche ne g
 
 /* Mêmes formules que dans pathtrace.frag : à modifier des deux côtés. */
 const sstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
-const pathX=z=>3.2*Math.sin(z*.047+seed[2])+1.6*Math.sin(z*.113+1.7+seed[2]*2);
+const pathX=z=>S.traj[0]*(3.2*Math.sin(z*.047+seed[2])+1.6*Math.sin(z*.113+1.7+seed[2]*2));
 const pathYaw=z=>Math.atan2(pathX(z+3)-pathX(z-3),6);
+function ondul(x,z){ const qx=x*S.rel[1], qz=z*S.rel[1];
+  return S.rel[0]*(1.5*Math.sin(qx*.041+.6+seed[2])*Math.cos(qz*.035+1.1)+.65*Math.sin(qx*.097+qz*.071+2)+.22*Math.sin(qx*.29-qz*.21+seed[2]*3)); }
 function terrainH(x,z){
   if(S.kit===1){ const a=x*.045+.9*Math.sin(z*.021+seed[2])+.5*Math.sin(z*.05+1.3);
     return 3.2*(1-Math.abs(Math.sin(a)))*(.62+.38*Math.sin(z*.03+2+seed[2]))+.5*Math.sin(x*.11+z*.08); }
-  const h=1.5*Math.sin(x*.041+.6+seed[2])*Math.cos(z*.035+1.1)+.65*Math.sin(x*.097+z*.071+2)+.22*Math.sin(x*.29-z*.21+seed[2]*3);
-  return h-.10*sstep(1.8,.4,Math.abs(x-pathX(z)));
+  const px=pathX(z), ax=Math.abs(x-px);
+  let h=ondul(S.rel[3]>0?x+(px-x)*sstep(S.rel[3]+5,S.rel[3],ax):x,z);   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe
+  h+=S.rel[2]*z;
+  return h-S.creux[0]*sstep(S.creux[1],S.creux[2],ax);
 }
 
 /* ------------------------------------------------------------------ porteur de la caméra */
@@ -4003,7 +4769,7 @@ function samePose(a,b){ if(!a||!b) return false;
   return true; }
 
 function common(w,h,p){
-  const u=P_PT.u; gl.useProgram(P_PT.p);
+  const P=progMonde(), u=P.u; gl.useProgram(P.p);
   gl.uniform2f(u.uRes,w,h); gl.uniform1f(u.uTick,(tick++)%60000);
   gl.uniform3fv(u.uCamPos,p.pos); gl.uniformMatrix3fv(u.uCam,false,p.mat);
   gl.uniform1f(u.uFish,1.09/(.5*Math.max(1,w/h)));            // 125° sur le grand côté
@@ -4011,13 +4777,16 @@ function common(w,h,p){
   gl.uniform3fv(u.uSun,S.sun); gl.uniform3fv(u.uSky,S.sky); gl.uniform1f(u.uTorch,S.torch);
   bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
   gl.uniform2fv(u.uCan,S.can); gl.uniform4fv(u.uHoup,S.houp);
-  gl.uniform4fv(u.uLoin,S.loin); gl.uniform3fv(u.uLoinCol,S.loinCol); gl.uniform3fv(u.uLoinBas,S.loinBas);
+  gl.uniform4fv(u.uLoin,S.loin); gl.uniform4fv(u.uEau,S.eau||[0,0,0,0]); gl.uniform3fv(u.uLoinCol,S.loinCol); gl.uniform3fv(u.uLoinBas,S.loinBas);
   bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP);
   gl.uniform1i(u.uKit,S.kit); gl.uniform4fv(u.uKitP,S.kitP); gl.uniform1i(u.uMode,0);
+  gl.uniform4fv(u.uRel,S.rel); gl.uniform4fv(u.uTraj,S.traj); gl.uniform4fv(u.uCreux,S.creux); gl.uniform2fv(u.uTerK,S.terK); gl.uniform1f(u.uYTop,S.yTop);
+  gl.uniform1i(u.uSemN,S.semN); gl.uniform4fv(u.uSemTop,S.semTop); gl.uniform3fv(u.uSolAlb,S.solAlb); gl.uniform1f(u.uNuit,S.lum);
   return u;
 }
 const pb=new Float32Array(16);
 function probe(x,y,z){                                         // distance au décor, lue sur le GPU
+  if(!progs[varCourante()]) return [9,9,9];                    // lanceur de rayons pas compilé (ordinateur en v3) : pas de collision pour l'instant
   const u=common(4,1,lastPose||pose()); gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
   gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev);
   gl.bindFramebuffer(gl.FRAMEBUFFER,probeT.f); gl.viewport(0,0,4,1); draw();
@@ -4040,12 +4809,12 @@ let idle=0, stuck=0;
 const sonde={t:-1e9,d:9,dx:9,dz:9,loin:true};
 let patience=10;                                               // secondes d'immobilité avant qu'elle reparte d'elle-même, en histoire
 function pasHistoire(){                                        // quatre mètres le long du sentier, puis elle s'arrête : le rythme laisse la place au joueur
-  const want=S.kit===0?pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0):cam.yaw;
+  const want=S.kit!==1?pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0):cam.yaw;
   let d=want-cam.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
   queue.push({type:"tourner",rest:d},{type:"marcher",rest:4});
 }
 function flaner(){                                            // sans consigne, il se promène : c'est le récit par défaut
-  const want=S.kit===0 ? pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0)+(Math.random()-.5)*.5
+  const want=S.kit!==1 ? pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0)+(Math.random()-.5)*.5
                        : cam.yaw+(Math.random()-.5)*1.2;
   let d=want-cam.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
   queue.push({type:"tourner",rest:d},{type:"marcher",rest:6+Math.random()*9},{type:"attendre",rest:1.5+Math.random()*3});
@@ -4399,13 +5168,21 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   gl.uniform4fv(u.uLoin||null,S.loin); gl.uniform3fv(u.uLoinCol||null,S.loinCol); gl.uniform3fv(u.uLoinBas||null,S.loinBas);
   if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
   if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP); }
+  gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
+  gl.uniform1i(u.uSemN||null,0); gl.uniform1f(u.uNuit||null,S.lum);              // le semeur ne sème pas encore les couches de semis
 }
 const px3=new Float32Array(4);
-function v3Sync(){ gl.bindFramebuffer(gl.FRAMEBUFFER,dummy.f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3); }
+/* Attendre la fin du calcul graphique d'UNE cible : sur une puce à tuiles (Mali), lire un pixel ne force que la cible lue.
+   Lire une autre cible (comme le faisait la première version) ne mesure rien : le vrai travail se cachait jusqu'à l'affichage. */
+const u8s=new Uint8Array(4);
+function v3Sync(t){
+  if(t===null){ gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,u8s); return; }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,(t||dummy).f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3);
+}
 function v3Image(p){
   v3Init(); v3Cibles();
   const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
-  const chrono=nom=>{ if(!V3.detail) return; v3Sync(); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
+  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
   const rnd=Math.random;
   const jit=bouge?[0,0]:[rnd()-.5,rnd()-.5];                   // décalage sous-pixel, seulement à l'arrêt
   // soleil de cette image : tiré dans le disque solaire (pénombre par accumulation)
@@ -4433,7 +5210,7 @@ function v3Image(p){
   gl.uniform1i(u.uTrait,0);
   if(ps.total>0) gl.drawArrays(gl.POINTS,0,ps.total);
   if(ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
-  chrono("ombre");
+  chrono("ombre");                                            // carte de profondeur : illisible, son coût retombe sur la passe qui la consulte
   // (2) tampon G : le sol, puis les grains
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
@@ -4452,7 +5229,7 @@ function v3Image(p){
     gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
   if(pc.total>0) gl.drawArrays(gl.POINTS,0,pc.total);
   gl.disable(gl.DEPTH_TEST);
-  chrono("tamponG");
+  chrono("tamponG",g);
   // (3) matière, lumière, ciel, accumulation
   const dst=V3.hist===V3.A?V3.B:V3.A;
   u=G.ombrage.u; gl.useProgram(G.ombrage.p); v3Monde(u,W,H,p);
@@ -4465,7 +5242,7 @@ function v3Image(p){
   gl.uniform1f(u.uAlpha,alpha); gl.uniform1i(u.uReproj,bouge?1:0);
   if(V3.hist){ gl.uniform3fv(u.uPrevPos,V3.histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,V3.histPose.mat); }
   gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,W,H); draw();
-  chrono("ombrage");
+  chrono("ombrage",dst);
   v3Sync();                                                   // force la fin du calcul : le temps mesuré est le vrai temps GPU
   V3.ms=performance.now()-t0; V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; V3.nImg++;
   V3.hist=dst; V3.histPose=p; V3.n++;
@@ -4485,21 +5262,47 @@ function qualite(full){                                        // bascule mobile
   $("qualite").textContent="Qualité : "+(full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(!!full));
 }
 function v3Basculer(on){
+  if(!on&&PT_KO&&!v3Refus()){ say("Le moteur à rayons ne se compile pas sur cette machine : on reste sur le v3.",true); return; }
+  if(on&&v3Refus()) on=false;                                  // fiche que le semeur ne sait pas rendre : on reste sur le lanceur de rayons
   if(on&&V2.on) v2Basculer(false);
-  V3.on=on; $("v3").setAttribute("aria-pressed",String(on)); $("v3").textContent=on?"Moteur v3 · oui":"Moteur v3";
+  V3.on=on; V3.repli=false; v3Bouton();
   if(on){ v3Init(); V3.hist=null; V3.n=0; } else { hist=null; v3Libere(false); }
+}
+/* Ce que le semeur ne sait pas encore rendre (liste tenue dans docs/moteur-v3.md). Rend la raison, ou "" si la fiche est rendue. */
+function v3Refus(){
+  if(S.semN>0) return "semis";
+  if(S.kit===1) return "dunes";
+  if(S.kit===2) return "monde nu";
+  const eg=(a,b)=>a.every((v,i)=>Math.abs(v-b[i])<1e-6);
+  if(!eg(S.rel,[1,1,0,0])||!eg(S.traj,[1,.85,.3,.5])||!eg(S.creux,[.10,1.8,.4,0])) return "relief ou trajet réglé";
+  if(S.nuit||S.torch>0) return "nuit, lampe";
+  if(S.houp[0]>.5) return "conifères en cône";
+  if(S.eau&&S.eau[3]>0) return "eau à l'horizon";
+  return "";
+}
+function v3Bouton(){
+  const b=$("v3"); if(!b) return;
+  const r=v3Refus();
+  b.disabled=!!r; b.setAttribute("aria-pressed",String(V3.on));
+  b.textContent=r?"Moteur v3 · pas ici":V3.on?"Moteur v3 · oui":"Moteur v3";
+  b.title=r?"Le moteur v3 ne sait pas encore rendre ce lieu ("+r+")":"Essai : semer des grains au lieu de lancer des rayons";
+}
+function v3Fiche(){                                            // après chaque changement de fiche : repli sur le lanceur de rayons, et retour au v3 sur une fiche qu'il sait rendre
+  if(V3.on&&v3Refus()){ v3Basculer(false); V3.repli=true; }
+  else if(V3.repli&&!v3Refus()) v3Basculer(true);
+  v3Bouton();
 }
 const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const normz=a=>{ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; };
 
 /* ------------------------------------------------------------------ boucle */
-let lastT=0, vide=null, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
+let ptDit=false, lastT=0, vide=null, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
-  const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=k=>{ if(!pf) return; v3Sync(); const t=performance.now(); pf[k]=t-pt; pt=t; };
+  const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=(k,cible)=>{ if(!pf) return; if(cible!==undefined) v3Sync(cible); const t=performance.now(); pf[k]=t-pt; pt=t; };
   simulate(dt); etape("sim");
   walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
   const p=pose(); lastPose=p;
@@ -4507,16 +5310,17 @@ function frame(now){
   if(V2.on&&!v2pret){ if(sceneDirty) v2Vider(); v2Tourner(V2.budget); }
   if(v2pret) v2Frame(p,dt);
   else if(V3.on) v3Frame(p,dt);
+  else if(!ptDispo()){ if(!ptDit){ ptDit=true; say("Ce lieu demande le moteur à rayons, qui ne se compile pas sur cette machine."); } }
   else if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
   else if(n<MAXS){
     const t0=performance.now(); let done=false;
     do{ done=staticRows(p); } while(!done && performance.now()-t0<20);
     if(done && (n<14||n%4===0)) postFX(hist);
   }
-  etape("rendu");
+  etape("rendu",v2pret?V2.out||hist:V3.on?V3.hist||hist:hist);
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
-  display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist,(now-startT)/1000);
-  etape("aff"); hud(now);
+  display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
+  etape("aff",null); hud(now);
   if(pf&&walking) prof.push(pf);
 }
 let lastHud=0;
@@ -4594,7 +5398,7 @@ function perception(){
   const ahead=[1.5,3,5].map(d=>{ const x=cam.x+Math.sin(cam.yaw)*d, z=cam.z+Math.cos(cam.yaw)*d; return probe(x,terrainH(x,z)+.75,z)[0]; });
   return { lieu:fiche.titre, inspiration:fiche.inspiration, kit:fiche.kit,
     position:{x:+cam.x.toFixed(1),z:+cam.z.toFixed(1)}, cap_degres:Math.round(((cam.yaw*180/Math.PI)%360+360)%360),
-    sur_le_sentier:S.kit===0?Math.abs(cam.x-pathX(cam.z))<1.3:null,
+    sur_le_sentier:S.kit!==1?Math.abs(cam.x-pathX(cam.z))<1.3:null,
     obstacle_devant_m:ahead[0]<.5?1.5:ahead[1]<.5?3:ahead[2]<.5?5:null,
     lumiere:S.nuit?"nuit":"jour", lampe:S.torch>0, brume:S.fog };
 }
@@ -4670,8 +5474,34 @@ La voix dit : ${JSON.stringify(texte)}`;
 /* ------------------------------------------------------------------ décrire un monde
    Le joueur décrit un lieu, à la voix ou au clavier. Claude écrit une fiche de lieu ; le moteur la borne et la fabrique.
    Sans Claude, quelques mots-clés suffisent à composer une fiche. */
+const HEX=/^#[0-9a-f]{6}$/i, NOM=/^[a-z0-9_-]{1,30}$/;
+function validerForme(x){                                     // une forme d'objet ou d'élément de semis, bornée
+  const num3=(v,d)=>Array.isArray(v)?[0,1,2].map(i=>clampN(v[i],-40,40,d)):[d,d,d];
+  return {f:x.f,p:num3(x.p,0),taille:num3(x.taille,1),cap:clampN(x.cap,-360,360,0),
+    penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
+    couleur:x.couleur==="palette"||(typeof x.couleur==="string"&&HEX.test(x.couleur))?x.couleur:"#777777",
+    matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&NOM.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)};
+}
+function validerSemis(L){                                     // couches de semis : 4 au plus, 6 formes par élément, tout borné
+  return (Array.isArray(L)?L:[]).filter(isObj).slice(0,4).map((c,i)=>{
+    const formes=(Array.isArray(c.formes)?c.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,6).map(validerForme);
+    if(!formes.length) return null;
+    const tr=isObj(c.trajet)?c.trajet:{}, cel=Array.isArray(c.cellule)?c.cellule:[c.cellule,c.cellule], pair=(v,a,b,d)=>Array.isArray(v)?[clampN(v[0],a,b,d),clampN(v[1],a,b,d)]:[d,d];
+    const o={ id:String(c.id||"semis"+i).slice(0,30), nom:String(c.nom||"").slice(0,60),
+      cellule:[clampN(cel[0],1.5,30,6),clampN(cel[1]!==undefined?cel[1]:cel[0],1.5,30,6)], rotation:clampN(c.rotation,-180,180,0),
+      densite:clampN(c.densite,0,1,.6), groupes:clampN(c.groupes,0,1,0), groupes_echelle:clampN(c.groupes_echelle,5,400,40),
+      trajet:{ rangee:tr.rangee===true, cote:["gauche","droite"].includes(tr.cote)?tr.cote:"deux" },
+      oriente:ORIENTS[c.oriente]!==undefined?c.oriente:undefined, cap:clampN(c.cap,-360,360,0), tourne:clampN(c.tourne,0,360,0),
+      echelle:pair(c.echelle,.2,4,1), hauteur:pair(c.hauteur,.3,3,1), penche:clampN(c.penche,0,25,0), teinte:clampN(c.teinte,0,1,0), desordre:clampN(c.desordre,0,1,1),
+      pose:c.pose==="pente"?"pente":undefined, formes };
+    if(tr.min!==undefined) o.trajet.min=clampN(tr.min,0,200,0);
+    if(tr.max!==undefined) o.trajet.max=clampN(tr.max,0,400,400);
+    const pal=(Array.isArray(c.palette)?c.palette:[]).filter(x=>typeof x==="string"&&HEX.test(x)).slice(0,8); if(pal.length) o.palette=pal;
+    return o;
+  }).filter(Boolean);
+}
 function validerFiche(f){                                     // ne garde que ce que le moteur sait lire, dans ses plages
-  const kit=f.kit==="dunes"?"dunes":"foret", a=f.ambiance||{}, so=a.soleil||{};
+  const kit=f.kit==="dunes"?"dunes":f.kit==="foret"?"foret":f.kit==="nu"||Array.isArray(f.semis)?"nu":"foret", a=f.ambiance||{}, so=a.soleil||{};
   const out={ version:0, id:"monde-"+Date.now(), titre:String(f.titre||"Monde sans nom").slice(0,80), inspiration:String(f.inspiration||"").slice(0,200),
     graine:Math.round(clampN(f.graine,1,99999,1000+Math.floor(Math.random()*9000))), kit,
     ambiance:{ saison:["ete","automne","hiver"].includes(a.saison)?a.saison:"automne", meteo:a.meteo==="voile"?"voile":"clair",
@@ -4682,19 +5512,24 @@ function validerFiche(f){                                     // ne garde que ce
   if(kit==="foret"){ const fo=f.foret||{}; out.foret={densite:clampN(fo.densite,0,1,.7),rochers:clampN(fo.rochers,0,1.5,1),feuillage:clampN(fo.feuillage,0,1.5,1)};
     if(fo.houppier==="cone"){ out.foret.houppier="cone"; out.foret.houppier_bas=clampN(fo.houppier_bas,.3,8,1.6); out.foret.houppier_rayon=clampN(fo.houppier_rayon,.8,3.2,2.5); }
     if(fo.perches!==undefined) out.foret.perches=clampN(fo.perches,0,1,1); }
-  else out.dunes={rochers:clampN(f.dunes&&f.dunes.rochers,0,1.5,0)};
-  const num3=(v,d)=>Array.isArray(v)?[0,1,2].map(i=>clampN(v[i],-40,40,d)):[d,d,d];
+  else if(kit==="dunes") out.dunes={rochers:clampN(f.dunes&&f.dunes.rochers,0,1.5,0)};
+  if(kit!=="dunes"){                                          // relief et trajet réglables (forêt et monde nu)
+    const re=isObj(f.relief)?f.relief:null, tr=isObj(f.trajet)?f.trajet:null;
+    if(re){ out.relief={amplitude:clampN(re.amplitude,0,12,kit==="nu"?.8:1.5),echelle:clampN(re.echelle,20,600,150),pente:clampN(re.pente,-.35,.35,0)};
+      if(typeof re.niveler==="boolean") out.relief.niveler=re.niveler; }
+    if(tr) out.trajet={sinuosite:clampN(tr.sinuosite,0,2,1),largeur:clampN(tr.largeur,.6,30,1.7),creux:clampN(tr.creux,0,.4,.1),bord:tr.bord==="net"?"net":"irregulier"};
+  }
+  const sem=validerSemis(f.semis); if(sem.length) out.semis=sem;
   const obj=(Array.isArray(f.objets)?f.objets:[]).slice(0,8).map((o,i)=>o&&Array.isArray(o.formes)?{
     id:String(o.id||"objet"+i).slice(0,30), nom:String(o.nom||"").slice(0,60), devant:clampN(o.devant,2,90,12), cote:clampN(o.cote,-20,20,3),
     cap:o.cap===undefined?undefined:clampN(o.cap,-360,360,0), echelle:clampN(o.echelle,.1,5,1), degage:clampN(o.degage,0,12,0), visible:o.visible!==false,
-    formes:o.formes.filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24).map(x=>({f:x.f,p:num3(x.p,0),taille:num3(x.taille,1),cap:clampN(x.cap,-360,360,0),
-      penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
-      couleur:x.couleur, matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&/^[a-z0-9_-]{1,30}$/.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)}))}:null).filter(o=>o&&o.formes.length);
+    formes:o.formes.filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24).map(validerForme)}:null).filter(o=>o&&o.formes.length);
   if(obj.length) out.objets=obj;
   if(isObj(f.lointain)&&clampN(f.lointain.hauteur,0,40,0)>0){ const l=f.lointain; out.lointain={hauteur:clampN(l.hauteur,0,40,0),decoupe:clampN(l.decoupe,0,1,.5),neige:clampN(l.neige,0,1,0)};
-    for(const k of ["couleur","couleur_bas"]) if(typeof l[k]==="string"&&/^#[0-9a-f]{6}$/i.test(l[k])) out.lointain[k]=l[k]; }
+    for(const k of ["couleur","couleur_bas"]) if(typeof l[k]==="string"&&HEX.test(l[k])) out.lointain[k]=l[k];
+    if(l.eau===true||(typeof l.eau==="string"&&HEX.test(l.eau))) out.lointain.eau=l.eau; }
   const mats=validerRecettes(f.matieres); if(mats) out.matieres=mats;
-  if(isObj(f.surfaces)){ const s={}, fs=f.surfaces, nom=v=>typeof v==="string"?v.slice(0,30):undefined;
+  if(isObj(f.surfaces)){ const s={}, fs=f.surfaces, nom=v=>typeof v==="string"&&NOM.test(v)?v:undefined;
     for(const k of ["sol","trajet","rochers"]) if(nom(fs[k])) s[k]=nom(fs[k]);
     for(const k of ["arbres","perches"]) if(isObj(fs[k])) s[k]={a:nom(fs[k].a),b:nom(fs[k].b),part:clampN(fs[k].part,0,1,.5)};
     out.surfaces=s; }
@@ -4704,8 +5539,33 @@ function validerFiche(f){                                     // ne garde que ce
       ce_qui_se_passe:String(t.ce_qui_se_passe||"").slice(0,200),scene:t.scene&&typeof t.scene==="object"?t.scene:undefined})) };
   return out;
 }
+/* Secours sans IA pour les lieux bâtis : quelques éléments de semis génériques, que le lexique assemble.
+   Ce ne sont pas des objets en dur du moteur : ce sont des données de fiche, comme Claude en écrirait. */
+const LEX={
+  facade:{ base:"facade", couleur:"forme" },
+  maison:(larg,haut,toit)=>({ id:"maisons", nom:"maisons alignées le long de la rue", cellule:[larg,10], trajet:{rangee:true}, densite:.95, hauteur:[.85,1.2], teinte:.12,
+    palette:["#c9bba3","#b9ad9a","#d2c4a8","#a9a08e","#c7b08f"],
+    formes:[ {f:"boite",p:[0,haut/2,-.4],taille:[larg-.3,haut,8.6],couleur:"palette",matiere:"lex-facade"},
+             ...(toit?[{f:"toit",p:[0,haut+.8,-.4],taille:[larg-.1,1.6,9.2],couleur:"#6e4a3a",matiere:"tuile"}]:[{f:"boite",p:[0,haut+.25,-.3],taille:[larg-.2,.5,9],couleur:"#d8d3c8",matiere:"mat"}]),
+             {f:"boite",p:[-1,1.05,3.87],taille:[1.1,2.1,.08],couleur:"#4a3a2c",matiere:"planches"} ] }),
+  lampadaire:{ id:"lampadaires", nom:"lampadaires", cellule:[18,3], trajet:{rangee:true}, densite:1,
+    formes:[ {f:"cylindre",p:[0,2.4,-.6],taille:[.12,4.8,.12],couleur:"#2c2e30",matiere:"metal"},
+             {f:"boite",p:[0,4.75,-.1],taille:[.08,.08,1.1],couleur:"#2c2e30",matiere:"metal"},
+             {f:"boule",p:[0,4.6,.45],taille:[.35,.3,.35],couleur:"#ffd9a0",matiere:"lumineux"} ] },
+  voiture:{ id:"voitures", nom:"voitures garées", cellule:[5.6,2.6], trajet:{rangee:true}, densite:.6, pose:"pente", tourne:4, teinte:.1,
+    palette:["#2b2e33","#8b9096","#d9d9d4","#5a2424","#2f3d52"],
+    formes:[ {f:"boite",p:[0,.68,0],taille:[4.3,.75,1.75],couleur:"palette",matiere:"metal",arrondi:.12},
+             {f:"boite",p:[-.25,1.32,0],taille:[2.2,.6,1.55],couleur:"#1b1e22",matiere:"verre",arrondi:.14},
+             {f:"cylindre",p:[1.35,.33,0],taille:[.66,1.8,.66],penche:[90,0],couleur:"#151515"},
+             {f:"cylindre",p:[-1.35,.33,0],taille:[.66,1.8,.66],penche:[90,0],couleur:"#151515"} ] },
+  tombe:{ id:"tombes", nom:"tombes en rangs", cellule:[2.4,3.2], rotation:0, trajet:{min:2.5}, densite:.85, oriente:"fixe", cap:180, tourne:6, penche:4, teinte:.2, desordre:.15,
+    formes:[ {f:"boite",p:[0,.45,-.9],taille:[.75,.9,.16],couleur:"#8e8b84",matiere:"beton",arrondi:.03},
+             {f:"boite",p:[0,.12,.1],taille:[.9,.24,1.9],couleur:"#77746d",matiere:"beton"} ] },
+};
 function mondeLexique(texte){                                 // secours sans IA
   const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const bati=/\bville|\brue|avenue|boulevard|quartier|immeuble|centre-ville|san francisco|new york|\bvillage|hameau|bourg|cimetiere/.test(t);
+  if(bati) return mondeBati(texte,t);
   const f={ titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:/desert|dune|sable|sahara|erg|plage/.test(t)?"dunes":"foret",
     ambiance:{soleil:{azimut:-33,hauteur:21}}, foret:{}, dunes:{} };
   const a=f.ambiance;
@@ -4722,34 +5582,67 @@ function mondeLexique(texte){                                 // secours sans IA
   if(/dense|epais|touffu|jungle|sombre/.test(t)){ f.foret.densite=.95; f.foret.feuillage=1.3; }
   else if(/clairsem|clairiere|ouvert|lande/.test(t)){ f.foret.densite=.3; f.foret.feuillage=.6; }
   if(/sans rocher/.test(t)){ f.foret.rochers=0; } else if(/rocher|roche|pierre|gres|chaos|caillou/.test(t)){ f.foret.rochers=1.4; f.dunes.rochers=1; }
-  f.note="Sans Claude, je ne lis que des mots-clés : désert, nuit, matin, soir, brume, saison, dense, rochers. Les objets demandent Claude.";
+  f.note="Sans Claude, je ne lis que des mots-clés : désert, nuit, matin, soir, brume, saison, dense, rochers, ville, rue, village, cimetière. Les objets demandent Claude.";
+  return f;
+}
+function mondeBati(texte,t){                                  // ville, rue, village, cimetière : un monde nu composé de semis
+  const nuit=/nuit|minuit|nocturne|obscur/.test(t), soir=/soir|couch|crepuscule|apres-midi/.test(t);
+  const f={ titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:"nu",
+    ambiance:{ saison:/hiver|neige/.test(t)?"hiver":"ete", meteo:/gris|couvert|pluie|brume|brouillard/.test(t)?"voile":"clair",
+      soleil:nuit?{azimut:120,hauteur:-10}:soir?{azimut:-110,hauteur:9}:{azimut:-40,hauteur:30}, brume:/brouillard|brume/.test(t)?.03:.008 },
+    matieres:{ "lex-facade":LEX.facade }, semis:[] };
+  const pente=/colline|pente|san francisco|montee|butte/.test(t);
+  if(/cimetiere/.test(t)){
+    Object.assign(f,{ relief:{amplitude:1,echelle:120}, trajet:{sinuosite:.2,largeur:2.4,creux:.05,bord:"net"}, surfaces:{sol:"herbe",trajet:"gravier"} });
+    f.semis.push(LEX.tombe); f.lointain={hauteur:4,decoupe:.3};
+  } else if(/village|hameau|bourg/.test(t)){
+    Object.assign(f,{ relief:{amplitude:1.2,echelle:180,pente:pente?.08:.02}, trajet:{sinuosite:.35,largeur:5,creux:.08,bord:"net"}, surfaces:{sol:"dalles",trajet:"paves"} });
+    const m=LEX.maison(7,5.5,true); m.trajet={rangee:true,min:4}; m.formes[0].p[1]=2.75; f.semis.push(m);
+    f.semis.push(Object.assign({},LEX.lampadaire,{trajet:{rangee:true,min:1.6}})); f.lointain={hauteur:4,decoupe:.25};
+  } else {
+    Object.assign(f,{ relief:{amplitude:pente?2.5:.4,echelle:250,pente:pente?-.22:0,niveler:true}, trajet:{sinuosite:0,largeur:9,creux:.15,bord:"net"}, surfaces:{sol:"dalles",trajet:"chaussee"} });
+    const m=LEX.maison(8,12,false); m.trajet={rangee:true,min:7}; m.hauteur=[.8,1.6]; f.semis.push(m);
+    f.semis.push(Object.assign({},LEX.voiture,{trajet:{rangee:true,min:2.2}}));
+    f.semis.push(Object.assign({},LEX.lampadaire,{trajet:{rangee:true,min:3.4}}));
+    f.lointain={hauteur:pente?4:2,decoupe:.3,eau:/baie|mer|port|san francisco/.test(t)};
+  }
+  if(nuit) f.ambiance.lampe=true;
+  f.note="Sans Claude, je compose ce lieu avec quelques éléments génériques : rue, maisons, voitures, lampadaires, tombes.";
   return f;
 }
 async function creerMonde(texte){
   say("Je fabrique ce monde…");
   let f=null;
   if(sampler){
-    const consigne=`Tu écris la fiche de lieu d'un moteur de rendu qui filme un monde généré par code, en vue caméra-piéton. Le joueur décrit le monde qu'il veut. Tu ne décris jamais de géométrie : tu choisis un kit, tu le règles, tu poses l'ambiance.
+    const consigne=`Tu écris la fiche de lieu d'un moteur de rendu qui filme un monde généré par code, en vue caméra-piéton (téléphone fatigué, crédibilité avant beauté). Le joueur décrit le lieu qu'il veut. Le moteur ne connaît aucun type de lieu : tu COMPOSES le lieu avec un vocabulaire générique (relief, trajet, sols, semis d'éléments répétés, objets uniques, horizon, lumière).
 Réponds uniquement par un objet JSON :
-{"titre": "court, évocateur", "inspiration": "le lieu de référence en une phrase", "graine": entier de 1 à 99999,
- "kit": "foret" ou "dunes",
- "foret": {"densite": 0..1, "rochers": 0..1.5, "feuillage": 0..1.5, "houppier": "voute"|"cone", "perches": 0..1},
- "dunes": {"rochers": 0..1.5},
+{"titre": "court", "inspiration": "le lieu de référence en une phrase", "graine": 1..99999,
+ "kit": "nu" (tout vient de la fiche ; à choisir pour tout ce qui n'est pas une forêt tempérée ou un désert) | "foret" (pins, chênes, grès, canopée en dur) | "dunes",
+ "foret": {"densite": 0..1, "rochers": 0..1.5, "feuillage": 0..1.5, "houppier": "voute"|"cone", "perches": 0..1}, "dunes": {"rochers": 0..1.5},
+ "relief": {"amplitude": 0..12 m (0 plat, 1 forêt, 3 à 6 collines), "echelle": 20..600 m (longueur d'onde), "pente": -0.35..0.35 (le long du trajet ; 0.28 = rue de San Francisco), "niveler": true (le trajet reste de niveau en travers)},
+ "trajet": {"sinuosite": 0..2 (0 rue droite, 1 sentier), "largeur": 0.6..30 m, "creux": 0..0.4 m (0.15 = trottoir), "bord": "net"|"irregulier"},
+ "surfaces": {"sol": "recette", "trajet": "recette"},
+ "matieres": {"nom": {"base": "recette existante", "couleur": "#rrggbb" ou "forme", ...}},
+ "semis": [ ... jusqu'à 4 couches ... ],
+ "objets": [{"id", "nom", "devant": 2..90, "cote": -20..20, "cap", "degage": 0..12, "visible": true, "formes": [ ... 24 au plus ... ]}],
+ "lointain": {"hauteur": 0..40 degrés, "decoupe": 0..1, "neige": 0..1, "couleur", "couleur_bas", "eau": "#rrggbb" (mer, baie ou lac sous l'horizon)},
  "ambiance": {"saison": "ete"|"automne"|"hiver", "meteo": "clair"|"voile", "soleil": {"azimut": -180..180, "hauteur": -10..70}, "lampe": true|false, "brume": 0..0.06},
- "objets": [{"id": "mot", "nom": "ce que c'est", "devant": 2..90, "cote": -20..20, "degage": 0..12, "visible": true,
-   "formes": [{"f": "boite"|"boule"|"cylindre"|"cone"|"capsule"|"toit", "p": [x, y, z], "taille": [largeur, hauteur, profondeur], "cap": degrés, "penche": [avant, côté], "couleur": "#rrggbb", "matiere": "mat"|"bois"|"pierre"|"metal"|"verre"|"pelage"|"tissu"|"tuile"|"lumineux", "lisse": 0..0.5, "arrondi": 0..0.3}]}],
- "histoire": {"pitch": "facultatif : ce qui arrive au porteur de la caméra, deux phrases", "temps": [{"id": "mot", "quand": "condition", "ce_qui_se_passe": "…", "scene": {"brume": 0..0.06, "lampe": true|false, "soleil": {"azimut": 0, "hauteur": 0}}}]},
- "lointain": {"hauteur": 0..40, "decoupe": 0..1, "neige": 0..1, "couleur": "#rrggbb", "couleur_bas": "#rrggbb"},
- "matieres": {"nom": {"base": "recette existante", "couleur": "#rrggbb", ...}}, "surfaces": {"sol": "nom", "trajet": "nom", "rochers": "nom"},
+ "histoire": {"pitch": "deux phrases", "temps": [{"id", "quand", "ce_qui_se_passe", "scene": {"brume", "lampe", "soleil", "montrer": ["id"], "cacher": ["id"]}}]},
  "note": "une phrase, seulement si une partie de la demande ne peut pas être montrée"}
-Repères : une hauteur de soleil négative donne la nuit, et la lampe du téléphone s'allume. Soleil rasant entre 4 et 15. Brume : 0.003 air sec, 0.011 matin, 0.03 épais. La forêt est tempérée (pins, chênes, bouleaux, blocs de grès, sentier de sable). Les dunes sont un désert de sable.
-Objets : rien n'est prédéfini, tu construis tout ce que la demande contient (bâtiments, animaux, véhicules, mobilier, personnages, ruines…) en assemblant des formes. Huit objets au plus, 24 formes par objet, 64 formes en tout : va à l'essentiel de la silhouette, c'est filmé de loin par une mauvaise caméra.
-Repère d'un objet : mètres réels, y = 0 au sol, x vers la droite, +z = sa face avant, tournée vers celui qui arrive. "p" est le centre de la forme, "taille" ses dimensions entières (boule : diamètres ; cylindre, cône, capsule : [diamètre, hauteur, diamètre], debout ; toit : [longueur du faîtage, hauteur, largeur], à poser au-dessus des murs). "penche" incline une forme en degrés. "lisse" fond la forme dans les voisines (corps d'animal : 0.03 à 0.08). "lumineux" éclaire (fenêtre allumée, feu, écran). Portes et fenêtres : boîtes minces posées 2 cm devant le mur.
-Placement : "devant" est la distance le long du trajet depuis le départ, "cote" l'écart latéral (négatif à gauche ; moins de 1,5 = sur le sentier). Un bâtiment se pose 10 à 20 m devant, à 5 m de côté ou plus, avec "degage" égal à sa demi-largeur plus 2 pour écarter les arbres. Les temps de l'histoire peuvent faire apparaître ou disparaître des objets : "scene": {"montrer": ["id"], "cacher": ["id"]}, avec "visible": false au départ.
-Arbres : "houppier": "voute" donne des feuillus et des pins au feuillage haut et commun (forêt de plaine) ; "cone" donne des conifères au feuillage en cône jusqu'en bas, vert sombre toute l'année (sapins, épicéas : montagne, nord, forêt noire), avec "feuillage" autour de 1. "perches" règle la part de jeunes troncs fins (0 = aucun).
-Lointain (facultatif) : ce qu'on voit à l'horizon, au-dessus des arbres. "hauteur" est l'angle des plus hauts sommets en degrés (collines 3 à 6, montagne 8 à 15, haute montagne vue de la vallée 18 à 30), "decoupe" la finesse des crêtes (collines rondes 0.2, aiguilles 0.9), "neige" la part enneigée du massif (0 aucune, 0.5 la moitié haute), "couleur" la roche, "couleur_bas" les contreforts (forêt sombre, lande, roche). Pour qu'on le voie, garde la forêt clairsemée ("densite" et "feuillage" bas). Sols prêts pour la montagne : "herbe", "neige".
-Matières (facultatif) : chaque surface pointe vers une recette. Recettes prêtes : ${Object.keys(MAT_LIB.recettes).join(", ")}. Pour en faire une, pars d'une "base" et change ce qui diffère : "couleur", "nuance" {couleur, force}, "taches" [{couleur, force, echelle, seuils}], "mousse" {force} (0 = aucune), "salissure" {force, hauteur}, "brillance", "motif" {type: feuilles|rides|fissures|planches|paves, echelle, couleur}. Une forme d'objet peut nommer une recette dans "matiere" (ex. "planches", "paves", "crepi"). Garde la crédibilité : des couleurs ternes et sales plutôt que franches.
-Pour le décor il n'existe que les kits forêt et dunes : si la demande veut un autre sol ou un autre paysage (ville, mer, intérieur), choisis l'ambiance la plus proche, construis le reste en objets, garde l'idée dans "inspiration" et "histoire", et dis-le franchement dans "note".
+FORMES (objets et semis) : {"f": "boite"|"boule"|"cylindre"|"cone"|"capsule"|"toit", "p": [x, y, z] centre en mètres, "taille": [largeur, hauteur, profondeur] (cylindre, cône, capsule : [diamètre, hauteur, diamètre], debout ; toit : [longueur du faîtage, hauteur, largeur]), "cap": degrés, "penche": [autour de x, autour de z] (roue : [90, 0]), "couleur": "#rrggbb" ou "palette", "matiere": "mat"|"bois"|"pierre"|"metal"|"verre"|"tissu"|"tuile"|"lumineux" ou un nom de recette, "lisse": 0..0.5, "arrondi": 0..0.3}. Repère : y = 0 au sol (une boîte posée au sol descend d'elle-même sous terre sur une pente), +z = face avant. Portes, fenêtres isolées : boîtes minces 2 cm devant le mur.
+SEMIS : une couche répète un ÉLÉMENT (6 formes au plus) sur une grille, un élément par cellule ; c'est ainsi qu'on fait une rue d'immeubles, des voitures garées, des réverbères, des tombes, des arbres, des buissons, des poteaux.
+ {"id", "nom", "cellule": [a, b] en mètres (1.5..30), "densite": 0..1, "groupes": 0..1 (regroupe en îlots), "groupes_echelle": m,
+  "trajet": {"rangee": true, "min": m, "max": m, "cote": "deux"|"gauche"|"droite"}, "rotation": degrés (grille libre),
+  "oriente": "trajet"|"aleatoire"|"fixe", "cap": degrés, "tourne": degrés d'aléa, "echelle": [min, max], "hauteur": [min, max] (étire en hauteur), "penche": 0..25, "teinte": 0..1, "desordre": 0..1, "pose": "pente" (l'élément suit le sol : voitures),
+  "palette": ["#rrggbb", ... 8 au plus] (chaque élément tire une couleur ; une forme y puise avec "couleur": "palette"), "formes": [ ... ]}
+ Rangée ("rangee": true) : la grille suit le trajet ; "cellule" = [longueur le long du trajet, profondeur] ; la rangée commence à "min" mètres de l'axe et l'élément fait face au trajet : son +z regarde le trajet, son x court le long du trajet, son centre est au milieu de la cellule. Pour des immeubles mitoyens : longueur de cellule = largeur de façade, le moteur laisse 16 cm entre deux. Sans "rangee" : grille libre (forêt, buissons, tombes), "min"/"max" = écart permis à l'axe (par défaut, hors du trajet).
+ L'élément doit tenir dans sa cellule (marge 8 cm) : sinon le moteur le réduit. Mets-le donc à l'échelle de la cellule.
+SOLS ET MATIÈRES : recettes prêtes : ${Object.keys(MAT_LIB.recettes).join(", ")}. "chaussee" = asphalte avec axe en tirets ; "facade" = enduit percé de fenêtres sur tous les étages. Une recette se dérive avec "base" et change ce qui diffère : "couleur" ("forme" = prend la couleur de la forme, utile avec une palette), "nuance", "taches", "mousse" {force}, "salissure" {force, hauteur}, "brillance", "motif" :
+ {"type": "fenetres", "largeur", "hauteur", "pas" (entre deux fenêtres), "etage", "allege", "cadre", "rdc" (hauteur d'un rez-de-chaussée à vitrines, 0 = aucun), "allumees": 0..1 (la nuit), "couleur" (vitre), "cadre_couleur", "lumiere"},
+ {"type": "marquage", "axe": "simple"|"double"|"aucun", "largeur", "tiret", "intervalle", "bords" (écart des lignes de rive), "passages" (période des passages piétons, m), "couleur"},
+ {"type": "planches", "couchees": true (bardage)}, {"type": "paves", "echelle": [x, y, z] (briques : [4.4, 13, 4.4])}, "feuilles", "rides", "fissures".
+COMPOSER : une ville = relief + rue droite large ("largeur" 8 à 12, "creux" 0.15, "bord" "net", sol "dalles" pour les trottoirs, trajet "chaussee") + une rangée d'immeubles mitoyens face à la rue (façades en recette "fenetres", palette de couleurs) + une rangée de mobilier (réverbères, arbres d'alignement) + une rangée de voitures garées le long du trottoir + "lointain". Un village = rue étroite un peu sinueuse, maisons basses à toits, pavés. Un cimetière = grille libre de tombes, allée de gravier. Une forêt d'une autre essence = kit nu + semis d'arbres (tronc cylindre, houppier boule ou cône). Vise juste les mesures réelles (étage 3 m, voiture 4.4 × 1.8 m, réverbère 5 à 8 m).
+Repères : soleil négatif = nuit (lampe du téléphone allumée), rasant entre 4 et 15 ; brume 0.003 air sec, 0.011 matin, 0.03 épais. "lumineux" éclaire faiblement (fenêtre, lanterne) ; il n'existe pas encore de vraie source de lumière ponctuelle. Couleurs ternes et salies plutôt que franches.
 Le joueur dit : ${JSON.stringify(texte)}`;
     try{ f=await sampler.json(consigne,{modelTier:"default",cache:false}); }
     catch(e){ if(e&&e.code==="not_granted") sampler=null; }
@@ -4875,7 +5768,14 @@ async function mesurerV3(f,wait,med){
   out.textContent="Marche mesurée. Détail des passes à l'arrêt…";
   const det=V3.detail; V3.detail=true; V3.passes={}; V3.n=0; V3.max=Math.max(V3.max,1);
   const k0=V3.nImg; while(V3.nImg<k0+12) { V3.n=0; await wait(60); }
-  const pa=Object.assign({},V3.passes); V3.detail=det; hold=false;
+  const pa=Object.assign({},V3.passes);
+  const g0=V3.grains, essais=[];                              // le coût réel d'une image selon le budget de grains
+  for(const g of [150000,300000,700000,1500000]){
+    out.textContent="Coût réel avec "+Math.round(g/1000)+" k grains…";
+    V3.grains=g; V3.passes={}; const k1=V3.nImg, t9=performance.now(); while(V3.nImg<k1+10 && performance.now()-t9<6000){ V3.n=0; await wait(40); }
+    essais.push(Math.round(g/1000)+" k : "+fx((V3.passes.tamponG||0)+(V3.passes.ombrage||0),0)+" ms");
+  }
+  V3.grains=g0; V3.n=0; V3.detail=det; hold=false;
   const ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
   const ips=f.length>1?(f.length-1)/((f[f.length-1].t-f[0].t)/1000):null;   // horloge réelle : dt est plafonné à 100 ms dans la boucle
   const dbg=gl.getExtension("WEBGL_debug_renderer_info"), gpu=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"inconnu";
@@ -4888,7 +5788,6 @@ async function mesurerV3(f,wait,med){
     "",
     "EN MARCHE ("+f.length+" images)",
     "Images/seconde   "+(ips?fx(ips):"non mesuré"),
-    "Calcul par image "+fx(ms,1)+" ms",
     "Résolution       "+W+" × "+H,
     "",
     "BUDGET DE GRAINS",
@@ -4896,10 +5795,12 @@ async function mesurerV3(f,wait,med){
     "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.sm.w+" × "+V3.sm.h,
     "Sol              "+V3.sol.anneaux*V3.sol.secteurs*2+" triangles",
     "",
-    "PAR PASSE (à l'arrêt, synchronisé)",
-    "Carte d'ombres   "+fx(pa.ombre,1)+" ms",
-    "Tampon G         "+fx(pa.tamponG,1)+" ms",
-    "Matière, lumière "+fx(pa.ombrage,1)+" ms",
+    "PAR PASSE (à l'arrêt, attente réelle de la puce)",
+    "Semis des grains "+fx(pa.tamponG,1)+" ms",
+    "Ombres, matière, lumière "+fx(pa.ombrage,1)+" ms",
+    "",
+    "COÛT RÉEL D'UNE IMAGE SELON LE BUDGET",
+    essais.join(" · "),
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
@@ -4919,7 +5820,7 @@ function objetsPercus(){                                      // distance, direc
   for(const o of (Array.isArray(fiche.objets)?fiche.objets:[]).slice(0,8)){
     if(!o||!o.id) continue;
     const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), a=1.15;           // même placement que buildShapes
-    const x=S.kit===0?pathX(dv)+ct:Math.sin(a)*dv+Math.cos(a)*ct, z=S.kit===0?dv:Math.cos(a)*dv-Math.sin(a)*ct;
+    const x=S.kit!==1?pathX(dv)+ct:Math.sin(a)*dv+Math.cos(a)*ct, z=S.kit!==1?dv:Math.cos(a)*dv-Math.sin(a)*ct;
     const dx=x-cam.x, dz=z-cam.z, m=Math.hypot(dx,dz), dir=Math.atan2(dx,dz);
     const visible=!(o.visible===false||cacheObj.has(o.id)), lum=(o.formes||[]).some(f=>f&&f.matiere==="lumineux");
     const portee=lum?90:S.nuit?(S.torch>0?12:4):30;
@@ -4928,7 +5829,7 @@ function objetsPercus(){                                      // distance, direc
   return out;
 }
 const PATIENCE_APRES_TEMPS=45;                                 // secondes d'attente après un temps de la trame, si le joueur ne dit rien
-function percevoirMeneur(){ const p=perception(), x0=S.kit===0?pathX(0):0;
+function percevoirMeneur(){ const p=perception(), x0=S.kit!==1?pathX(0):0;
   p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z).toFixed(1); p.objets=objetsPercus(); return p; }
 function executer(o){                                         // les ordres du meneur, traduits pour le moteur
   if(o.type==="pensee") say(o.texte);
@@ -5018,6 +5919,7 @@ $("fin-quitter").onclick=()=>quitterHistoire(false);
 
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
+  reessayerRayons(){ try{ localStorage.removeItem("bodycam-rayons"); }catch(_){} location.reload(); },
   fiches:()=>FICHES.map(f=>f.id),
   lieu(i){ ficheIdx=((i%FICHES.length)+FICHES.length)%FICHES.length; applyFiche(FICHES[ficheIdx]); },
   fiche(f){ applyFiche(f); },
@@ -5033,6 +5935,7 @@ window.balade={
   partie:()=>meneur?meneur.partie():null,
   trace:()=>meneur?meneur.trace():null,
   histoire:()=>({ temps_passes:tempsFaits.slice(), echanges:echanges.slice() }),
+  sol:(x,z)=>({ hauteur:terrainH(x,z), trajet:pathX(z) }),     // relief et trajet tels que le moteur les calcule
   etat:()=>({ fiche:fiche.id, graine:seedN, x:cam.x, z:cam.z, yaw:cam.yaw, pitch:cam.pitch, passes:n, file:queue.length }),
 };
 
@@ -5041,14 +5944,15 @@ if(CFG.nohud) document.querySelectorAll(".hud").forEach(e=>e.style.display="none
 if(typeof CFG.scene==="number") ficheIdx=CFG.scene;
 applyFiche(typeof CFG.scene==="object"&&CFG.scene?CFG.scene:FICHES[ficheIdx]);
 if(CFG.histoire) jouerHistoire(CFG.histoire===true?undefined:CFG.histoire);   // la page démarre sur l'histoire
-if(CFG.seed){ setSeed(CFG.seed); cam.x=S.kit===0?pathX(0):0; }
-if(CFG.z!==undefined){ cam.z=CFG.z; if(S.kit===0){ cam.x=pathX(cam.z); cam.yaw=pathYaw(cam.z); } }
+if(CFG.seed){ setSeed(CFG.seed); cam.x=S.kit!==1?pathX(0):0; }
+if(CFG.z!==undefined){ cam.z=CFG.z; if(S.kit!==1){ cam.x=pathX(cam.z); cam.yaw=pathYaw(cam.z); } }
 if(CFG.yaw!==undefined) cam.yaw+=CFG.yaw;
 if(CFG.pitch!==undefined) cam.pitch=CFG.pitch;
 if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
 if(V2.on){ v2Basculer(true); window.__v2=V2; }                // accès de test (tools/v2essai.mjs)
 $("v2").onclick=()=>v2Basculer(!V2.on);
+if((bureau||PT_KO)&&!V3.on&&CFG.v3!==false&&!v3Refus()) V3.on=true;   // ordinateur : le moteur v3 d'emblée
 if(V3.on){ v3Basculer(true); window.__v3=V3; window.__v3lire=(x,y)=>{ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,V3.hist.f); gl.readPixels(x,y,1,1,gl.RGBA,gl.FLOAT,b); return Array.from(b); }; }               // accès de test (tools/v3essai.mjs)
 $("qualite").onclick=()=>qualite(!QUAL.full); $("qualite").textContent="Qualité : "+(QUAL.full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(QUAL.full));
 $("v3").onclick=()=>v3Basculer(!V3.on);
