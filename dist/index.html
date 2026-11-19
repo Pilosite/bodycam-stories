@@ -5722,6 +5722,9 @@ function resize(){
   const maxPx=CFG.maxPx||(QUAL.full?2000000:V3.on?115000:coarse?250000:440000);   // v3 en mobile : la résolution que le moteur à rayons tenait en marche   // mode complet : jusqu'à la pleine résolution de l'écran
   const s=Math.min(1,Math.sqrt(maxPx/(cw*ch)));
   W=CFG.w||Math.max(2,Math.round(cw*s)); H=CFG.h||Math.max(2,Math.round(ch*s));
+  // Mobile en v3 : le capteur simulé coûte par pixel d'écran (17 ms mesurés à 432 × 781 sur Mali-G77). On le calcule à peine
+  // plus fin que l'image interne et le navigateur agrandit : c'est aussi ce que fait un téléphone qui filme en basse définition.
+  if(!QUAL.full&&V3.on&&!CFG.ecranPlein){ const k=CFG.ecranK||1.25; canvas.width=Math.min(cw,Math.round(W*k)); canvas.height=Math.min(ch,Math.round(H*k)); }
   pairs.forEach(p=>{ if(p){ freeT(p.a); freeT(p.b); } }); pairs=[]; freeT(bl1); freeT(bl2);
   const bs=128/Math.max(W,H);
   bl1=target(Math.max(8,Math.round(W*bs)),Math.max(8,Math.round(H*bs)),gl.RGBA16F,gl.LINEAR);
@@ -6225,7 +6228,8 @@ function v3Frame(p,dt){
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
   v3Image(p); frames++;
   if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,cuits:V3.tap.cuits,t:performance.now()});
-  postFX(V3.hist);
+  // Halo et exposition : 28 ms mesurés sur Mali-G77 pour trois petites passes. En mobile, une image sur quatre suffit (ils varient lentement).
+  if(QUAL.full||CFG.haloToujours||V3.nImg%4===0||!bl1.fait){ postFX(V3.hist); bl1.fait=true; }
 }
 function qualite(full){                                        // bascule mobile / complète : tout se réalloue à la nouvelle taille
   QUAL.full=!!full; try{ localStorage.setItem("bodycam-qualite",full?"1":"0"); }catch(_){}
