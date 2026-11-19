@@ -93,6 +93,12 @@ Une recette s'évalue toujours dans le même ordre. Tous les champs sont faculta
 
 Le moteur borne chaque valeur avant usage. Limites : 24 recettes par lieu, 12 recettes dans une fiche.
 
+## Lointain : l'horizon
+
+`lointain` décrit ce qu'on voit au-dessus des arbres : une chaîne de montagnes ou des collines, calculée par direction du regard et non tracée (coût négligeable). `hauteur` est l'angle des plus hauts sommets en degrés (collines 3 à 6, montagne 8 à 15, haute montagne vue de la vallée 18 à 30), `decoupe` la finesse des crêtes (0 à 1), `neige` la part enneigée (0 à 1), `couleur` la roche, `couleur_bas` les contreforts. Exemple : `essais/chalet-mont-blanc.json`.
+
+Limite : c'est un décor de fond. On ne peut pas y marcher, et le terrain proche reste celui du kit. Les sols `herbe` et `neige` existent en recettes.
+
 ## Décrire un monde
 
 Le bouton « Décrire un monde » fige l'image et ouvre le micro quand la page y a droit, sinon le clavier. La description part à Claude avec ce format et ses plages ; la réponse passe par `validerFiche` dans `src/main.js`, qui borne chaque valeur et jette les champs inconnus, puis le lieu est chargé et ajouté à « Lieu suivant ». Les six derniers mondes décrits sont gardés dans le navigateur.

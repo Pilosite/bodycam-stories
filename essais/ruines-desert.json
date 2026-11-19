@@ -1,0 +1,34 @@
+{ "version": 0, "id": "essai-ruines-desert", "titre": "Ruines d'un fort dans les dunes, au couchant", "inspiration": "Un fort caravanier effondré, à moitié pris par le sable",
+  "graine": 880, "kit": "dunes", "dunes": { "rochers": 0.7 },
+  "matieres": { "pise": { "base": "crepi", "couleur": "#b98f62", "variation": { "echelle": 0.5, "force": 0.4 },
+      "taches": [ { "couleur": "#6e4f33", "force": 0.5, "echelle": [1.2, 0.3, 1.2], "seuils": [0.5, 0.8], "fbm": true } ],
+      "salissure": { "force": 0.3, "hauteur": 1.2 }, "relief": { "bosses": [ { "echelle": 5, "fbm": true, "force": 0.02 } ] } } },
+  "ambiance": { "soleil": { "azimut": -70, "hauteur": 7 }, "brume": 0.004 },
+  "objets": [
+    { "id": "tour", "nom": "tour d'angle éventrée", "devant": 16, "cote": -4, "formes": [
+      { "f": "cylindre", "p": [0, 3.2, 0], "taille": [4.2, 6.4, 4.2], "couleur": "#b98f62", "matiere": "pise" },
+      { "f": "cylindre", "p": [0.3, 7.0, -0.2], "taille": [3.6, 1.4, 3.6], "penche": [6, -8], "couleur": "#b08658", "matiere": "pise" },
+      { "f": "boite", "p": [1.0, 7.9, 0.9], "taille": [0.8, 0.9, 0.7], "couleur": "#b08658", "matiere": "pise" },
+      { "f": "boite", "p": [-1.2, 7.8, -0.4], "taille": [0.7, 0.7, 0.8], "couleur": "#b08658", "matiere": "pise" },
+      { "f": "boite", "p": [0, 1.2, 2.05], "taille": [1.1, 2.4, 0.3], "couleur": "#1a1410", "matiere": "mat" } ] },
+    { "id": "mur", "nom": "mur d'enceinte écroulé", "devant": 17, "cote": 3.5, "cap": 12, "formes": [
+      { "f": "boite", "p": [0, 1.8, 0], "taille": [7, 3.6, 0.9], "couleur": "#b98f62", "matiere": "pise" },
+      { "f": "boite", "p": [4.6, 1.0, 0.1], "taille": [2.6, 2.0, 0.9], "penche": [0, 9], "couleur": "#b08658", "matiere": "pise" },
+      { "f": "boite", "p": [-2.4, 4.0, 0], "taille": [1.0, 0.9, 0.9], "couleur": "#b98f62", "matiere": "pise" },
+      { "f": "boite", "p": [-0.6, 4.0, 0], "taille": [1.0, 0.9, 0.9], "couleur": "#b98f62", "matiere": "pise" },
+      { "f": "boule", "p": [6.4, 0.25, 0.8], "taille": [1.6, 0.9, 1.3], "couleur": "#a67e55", "matiere": "pise", "lisse": 0.3 },
+      { "f": "boule", "p": [5.2, 0.2, 1.4], "taille": [1.0, 0.6, 0.9], "couleur": "#a67e55", "matiere": "pise", "lisse": 0.3 } ] },
+    { "id": "arche", "nom": "porte en arche encore debout", "devant": 11, "cote": 0.3, "formes": [
+      { "f": "boite", "p": [-1.5, 1.7, 0], "taille": [0.9, 3.4, 1.0], "couleur": "#b98f62", "matiere": "pise" },
+      { "f": "boite", "p": [1.5, 1.7, 0], "taille": [0.9, 3.4, 1.0], "penche": [0, -3], "couleur": "#b98f62", "matiere": "pise" },
+      { "f": "boite", "p": [0, 3.8, 0], "taille": [3.9, 0.8, 1.0], "couleur": "#b08658", "matiere": "pise" },
+      { "f": "boite", "p": [0, 3.25, 0], "taille": [2.1, 0.3, 0.2], "couleur": "#4a3524", "matiere": "bois" } ] },
+    { "id": "jarre", "nom": "jarre renversée", "devant": 7, "cote": 1.6, "formes": [
+      { "f": "boule", "p": [0, 0.3, 0], "taille": [0.6, 0.6, 0.9], "couleur": "#9c5a3a", "matiere": "mat" },
+      { "f": "cylindre", "p": [0, 0.3, 0.5], "taille": [0.3, 0.2, 0.3], "penche": [90, 0], "couleur": "#8a4e33", "matiere": "mat" } ] },
+    { "id": "palmier", "nom": "palmier mort", "devant": 9, "cote": -3.2, "formes": [
+      { "f": "capsule", "p": [0, 2.4, 0], "taille": [0.28, 4.6, 0.28], "penche": [0, 7], "couleur": "#6d5a47", "matiere": "ecorce-chataignier" },
+      { "f": "capsule", "p": [-0.8, 4.6, 0], "taille": [0.08, 1.6, 0.08], "penche": [0, 70], "couleur": "#7d6a45", "matiere": "mat" },
+      { "f": "capsule", "p": [0.3, 4.7, 0.6], "taille": [0.08, 1.5, 0.08], "penche": [60, -20], "couleur": "#7d6a45", "matiere": "mat" },
+      { "f": "capsule", "p": [0.2, 4.6, -0.6], "taille": [0.08, 1.4, 0.08], "penche": [-65, -10], "couleur": "#7d6a45", "matiere": "mat" } ] }
+  ] }

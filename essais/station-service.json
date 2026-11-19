@@ -1,0 +1,45 @@
+{ "version": 0, "id": "essai-station", "titre": "Station-service abandonnée, lisière de forêt", "inspiration": "Une vieille station au bord d'une route forestière, temps gris",
+  "graine": 2741, "kit": "foret", "foret": { "densite": 0.55, "rochers": 0.2, "feuillage": 0.8 },
+  "matieres": {
+    "asphalte": { "espace": "sol", "couleur": "#4a4a4c", "variation": { "echelle": 0.6, "force": 0.35 }, "grain": { "echelle": 140, "force": 0.5 },
+      "motif": { "type": "fissures", "echelle": [1.6, 1, 1.6], "seuils": [0.9, 0.99], "profondeur": 1, "couleur": "#1d1d1c" },
+      "taches": [ { "couleur": "#000000", "force": 0.35, "echelle": 0.5, "seuils": [0.5, 0.75], "fbm": true },
+                  { "couleur": "#72533b", "force": 0.7, "echelle": 9, "seuils": [0.72, 0.78] } ],
+      "mousse": { "couleur": "#3a4927", "force": 0.8, "echelle": 0.9, "seuils": [0.62, 0.72], "fbm": true },
+      "relief": { "motif": 0.008, "grain": { "echelle": 60, "force": 0.1 } }, "brillance": 0.18 },
+    "tole": { "espace": "volume", "couleur": "#b9b4a8", "variation": { "echelle": 0.8, "force": 0.3 },
+      "taches": [ { "couleur": "#7a4326", "force": 0.85, "echelle": [3, 0.6, 3], "seuils": [0.55, 0.75], "fbm": true, "biais": 0.2, "hauteur": [3, 0] } ],
+      "salissure": { "force": 0.3, "hauteur": 0.5 }, "brillance": 0.25 } },
+  "surfaces": { "trajet": "asphalte" },
+  "ambiance": { "saison": "automne", "meteo": "voile", "soleil": { "azimut": -20, "hauteur": 30 }, "brume": 0.014 },
+  "objets": [
+    { "id": "auvent", "nom": "auvent des pompes", "devant": 13, "cote": 4.5, "degage": 7, "formes": [
+      { "f": "boite", "p": [0, 4.2, 0], "taille": [8, 0.45, 5], "couleur": "#b9b4a8", "matiere": "tole" },
+      { "f": "boite", "p": [0, 4.2, 2.51], "taille": [8, 0.5, 0.04], "couleur": "#9c2f26", "matiere": "tole" },
+      { "f": "cylindre", "p": [-3.2, 2.0, 0], "taille": [0.25, 4.0, 0.25], "couleur": "#b9b4a8", "matiere": "tole" },
+      { "f": "cylindre", "p": [3.2, 2.0, 0], "taille": [0.25, 4.0, 0.25], "couleur": "#b9b4a8", "matiere": "tole" },
+      { "f": "boite", "p": [0, 0.08, 0], "taille": [7, 0.16, 1.4], "couleur": "#8e8a82", "matiere": "pierre" },
+      { "f": "boite", "p": [-1.4, 0.95, 0], "taille": [0.6, 1.6, 0.45], "couleur": "#a8362b", "matiere": "tole", "arrondi": 0.04 },
+      { "f": "boite", "p": [-1.4, 1.35, 0.23], "taille": [0.4, 0.3, 0.02], "couleur": "#1a1d22", "matiere": "verre" },
+      { "f": "boite", "p": [1.4, 0.95, 0], "taille": [0.6, 1.6, 0.45], "couleur": "#a8362b", "matiere": "tole", "arrondi": 0.04 },
+      { "f": "boite", "p": [1.4, 1.35, 0.23], "taille": [0.4, 0.3, 0.02], "couleur": "#1a1d22", "matiere": "verre" } ] },
+    { "id": "boutique", "nom": "boutique vitrée, fermée", "devant": 15, "cote": 11, "degage": 5, "formes": [
+      { "f": "boite", "p": [0, 1.6, 0], "taille": [7, 3.2, 4.5], "couleur": "#cfc8b8", "matiere": "crepi" },
+      { "f": "boite", "p": [0, 3.3, 0], "taille": [7.4, 0.25, 4.9], "couleur": "#8c8779", "matiere": "tole" },
+      { "f": "boite", "p": [-1.2, 1.6, 2.26], "taille": [3.6, 1.9, 0.04], "couleur": "#20262b", "matiere": "verre" },
+      { "f": "boite", "p": [2.3, 1.05, 2.26], "taille": [1.0, 2.1, 0.05], "couleur": "#39424a", "matiere": "verre" },
+      { "f": "boite", "p": [0, 2.85, 2.28], "taille": [5, 0.5, 0.05], "couleur": "#9c2f26", "matiere": "tole" } ] },
+    { "id": "voiture", "nom": "break abandonné, pneus à plat", "devant": 9, "cote": 3.4, "cap": 75, "formes": [
+      { "f": "boite", "p": [0, 0.62, 0], "taille": [1.7, 0.6, 4.3], "couleur": "#5e7480", "matiere": "tole", "arrondi": 0.12 },
+      { "f": "boite", "p": [0, 1.15, -0.3], "taille": [1.5, 0.55, 2.4], "couleur": "#536873", "matiere": "tole", "arrondi": 0.15 },
+      { "f": "boite", "p": [0, 1.17, 0.92], "taille": [1.36, 0.42, 0.04], "penche": [-28, 0], "couleur": "#1b2126", "matiere": "verre" },
+      { "f": "boite", "p": [0.76, 1.17, -0.3], "taille": [0.03, 0.4, 2.0], "couleur": "#1b2126", "matiere": "verre" },
+      { "f": "boule", "p": [0.8, 0.3, 1.35], "taille": [0.25, 0.6, 0.6], "couleur": "#151515", "matiere": "mat" },
+      { "f": "boule", "p": [-0.8, 0.3, 1.35], "taille": [0.25, 0.6, 0.6], "couleur": "#151515", "matiere": "mat" },
+      { "f": "boule", "p": [0.8, 0.3, -1.35], "taille": [0.25, 0.6, 0.6], "couleur": "#151515", "matiere": "mat" },
+      { "f": "boule", "p": [-0.8, 0.3, -1.35], "taille": [0.25, 0.6, 0.6], "couleur": "#151515", "matiere": "mat" } ] },
+    { "id": "totem", "nom": "totem de prix, chiffres tombés", "devant": 6, "cote": -2.8, "formes": [
+      { "f": "cylindre", "p": [0, 2.5, 0], "taille": [0.2, 5, 0.2], "couleur": "#8c8779", "matiere": "tole" },
+      { "f": "boite", "p": [0, 4.6, 0], "taille": [1.6, 1.8, 0.25], "penche": [0, 4], "couleur": "#d8d2c2", "matiere": "tole" },
+      { "f": "boite", "p": [0, 5.1, 0.13], "taille": [1.4, 0.5, 0.02], "couleur": "#9c2f26", "matiere": "mat" } ] }
+  ] }

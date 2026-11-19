@@ -399,6 +399,36 @@ vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
   return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
 }
+/* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
+   Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
+uniform vec4 uLoin;          // hauteur du massif (tangente de l'angle), découpe des crêtes, altitude de la neige (0 à 1, au-delà : aucune), présence
+uniform vec3 uLoinCol;       // roche
+uniform vec3 uLoinBas;       // contreforts
+float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
+  vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
+  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  return s;
+}
+vec3 lointain(vec3 rd, vec3 c){
+  float az=atan(rd.x,rd.z), el=rd.y/max(length(rd.xz),1e-4);
+  if(el>uLoin.x*1.25) return c;
+  vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
+  float sa=atan(uSunDir.x,uSunDir.z);
+  for(int k=0;k<2;k++){
+    float fk=float(k), H=uLoin.x*(k==0?1.:.34);
+    float cr=H*(.42+1.15*loinCrete(az,fk));
+    float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
+    float lit=clamp(.45+.9*d*sin(sa-az)+.35*cos(sa-az),.03,1.);
+    float alt=el/max(uLoin.x,1e-4);
+    float plis=.6*vnoise(vec2(az*uLoin.y*9.+alt*7.+fk*9.,alt*9.-az*5.))+.4*vnoise(vec2(az*uLoin.y*30.-alt*16.,alt*26.+fk*3.));                            // couloirs et arêtes dans la face
+    vec3 alb=k==0?uLoinCol*(.7+.6*plis):uLoinBas*(.75+.5*plis);
+    if(k==0) alb=mix(alb,vec3(.86,.88,.92),smoothstep(uLoin.z-.05,uLoin.z+.05,alt+.5*(plis-.5)+.25*(cr/H-.7)));   // la neige tient sur les hauts, la roche perce dans les faces
+    vec3 col=alb*(uSun*lit*(.30+.15*plis)+vec3(.42,.52,.72)*uSky*.42);
+    col=mix(col,air,(k==0?.30:.14)*(1.-.5*smoothstep(0.,.8,alt)));   // le voile de l'air s'accroche au pied, les sommets en sortent
+    c=mix(c,col,smoothstep(cr+.004,cr-.004,el));
+  }
+  return c;
+}
 vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
 
 /* ---- matières : une recette par surface, lue dans une texture de données.
@@ -638,6 +668,7 @@ vec3 render(vec3 ro, vec3 rd){
   } else if(tS<0.){
     gT=1e4;
     vec3 c=rd.y>0.?skyCol(rd):fogCol(rd);
+    if(uLoin.w>0. && rd.y>-.02) c=lointain(rd,c);
     if(uTorch>0.) c+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.07;
     return c;
   } else {

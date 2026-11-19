@@ -48,7 +48,7 @@ function draw(){ gl.drawArrays(gl.TRIANGLES,0,3); }
 function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t); gl.uniform1i(loc,unit); }
 
 /* ------------------------------------------------------------------ scène : ce que la fiche de lieu pilote */
-const S={ surf:[0,1,2,0], surfT:[3,4,5,6], surfP:[.45,.5], objN:0, kit:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
+const S={ loin:[0,3,2,0], loinCol:[.2,.2,.21], loinBas:[.05,.07,.05], surf:[0,1,2,0], surfT:[3,4,5,6], surfP:[.45,.5], objN:0, kit:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
 let fiche=null, ficheIdx=0, seedN=4821, seed=[0,0,0], sceneDirty=true;
 function setSeed(n){ seedN=n; seed=[(n*12.9898)%89,(n*78.233)%83,(n*.618034)%6.2832]; }
 function applyAmbiance(a){
@@ -72,7 +72,10 @@ function applyFiche(f){
   S.kit=f.kit==="dunes"?1:0;
   const fo=f.foret||{};
   S.kitP=S.kit===1 ? [-1,(f.dunes&&f.dunes.rochers)||0,0,1]
-                   : [fo.densite!==undefined?.2+.6*fo.densite:.62, fo.rochers!==undefined?fo.rochers:1, fo.feuillage!==undefined?fo.feuillage:1, 1];
+                   : [fo.densite!==undefined?(.2+.6*fo.densite)*Math.min(1,fo.densite*5):.62, fo.rochers!==undefined?fo.rochers:1, fo.feuillage!==undefined?fo.feuillage:1, 1];
+  const lo=isObj(f.lointain)?f.lointain:null, lh=lo?clampN(lo.hauteur,0,40,0):0;   // horizon : montagnes ou collines
+  S.loin=[Math.tan(lh*Math.PI/180),.7+2.3*clampN(lo&&lo.decoupe,0,1,.5),lo&&lo.neige>0?1-clampN(lo.neige,0,1,0):2,lh>0?1:0];
+  S.loinCol=couleur(lo&&lo.couleur||"#7b7a80"); S.loinBas=couleur(lo&&lo.couleur_bas||"#3d4a3a");
   S.eye=(f.camera&&f.camera.hauteur)||1.36;
   buildMats(f); buildShapes(f);
   applyAmbiance(f.ambiance||{});
@@ -250,6 +253,7 @@ function common(w,h,p){
   gl.uniform1f(u.uFog,S.fog); gl.uniform3fv(u.uSeed,seed); gl.uniform3fv(u.uSunDir,S.sunDir);
   gl.uniform3fv(u.uSun,S.sun); gl.uniform3fv(u.uSky,S.sky); gl.uniform1f(u.uTorch,S.torch);
   bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
+  gl.uniform4fv(u.uLoin,S.loin); gl.uniform3fv(u.uLoinCol,S.loinCol); gl.uniform3fv(u.uLoinBas,S.loinBas);
   bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP);
   gl.uniform1i(u.uKit,S.kit); gl.uniform4fv(u.uKitP,S.kitP); gl.uniform1i(u.uMode,0);
   return u;
@@ -567,6 +571,8 @@ function validerFiche(f){                                     // ne garde que ce
       penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
       couleur:x.couleur, matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&/^[a-z0-9_-]{1,30}$/.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)}))}:null).filter(o=>o&&o.formes.length);
   if(obj.length) out.objets=obj;
+  if(isObj(f.lointain)&&clampN(f.lointain.hauteur,0,40,0)>0){ const l=f.lointain; out.lointain={hauteur:clampN(l.hauteur,0,40,0),decoupe:clampN(l.decoupe,0,1,.5),neige:clampN(l.neige,0,1,0)};
+    for(const k of ["couleur","couleur_bas"]) if(typeof l[k]==="string"&&/^#[0-9a-f]{6}$/i.test(l[k])) out.lointain[k]=l[k]; }
   const mats=validerRecettes(f.matieres); if(mats) out.matieres=mats;
   if(isObj(f.surfaces)){ const s={}, fs=f.surfaces, nom=v=>typeof v==="string"?v.slice(0,30):undefined;
     for(const k of ["sol","trajet","rochers"]) if(nom(fs[k])) s[k]=nom(fs[k]);
@@ -590,6 +596,8 @@ function mondeLexique(texte){                                 // secours sans IA
   if(/brouillard|brume/.test(t)) a.brume=.035; else if(f.kit==="dunes") a.brume=.003;
   if(/hiver|neige|gel/.test(t)) a.saison="hiver"; else if(/ete|printemps|vert/.test(t)) a.saison="ete";
   if(/gris|couvert|voile|nuage|pluie/.test(t)) a.meteo="voile";
+  if(/montagne|mont |alpe|sommet|pic |massif|glacier|pyrenee/.test(t)){ f.lointain={hauteur:20,decoupe:.7,neige:.5}; f.foret.densite=.25; f.foret.feuillage=.3; f.surfaces={sol:/neige|hiver/.test(t)?"neige":"herbe"}; }
+  else if(/colline|vallon/.test(t)) f.lointain={hauteur:5,decoupe:.2,neige:0};
   if(/dense|epais|touffu|jungle|sombre/.test(t)){ f.foret.densite=.95; f.foret.feuillage=1.3; }
   else if(/clairsem|clairiere|ouvert|lande/.test(t)){ f.foret.densite=.3; f.foret.feuillage=.6; }
   if(/sans rocher/.test(t)){ f.foret.rochers=0; } else if(/rocher|roche|pierre|gres|chaos|caillou/.test(t)){ f.foret.rochers=1.4; f.dunes.rochers=1; }
@@ -610,12 +618,14 @@ Réponds uniquement par un objet JSON :
  "objets": [{"id": "mot", "nom": "ce que c'est", "devant": 2..90, "cote": -20..20, "degage": 0..12, "visible": true,
    "formes": [{"f": "boite"|"boule"|"cylindre"|"cone"|"capsule"|"toit", "p": [x, y, z], "taille": [largeur, hauteur, profondeur], "cap": degrés, "penche": [avant, côté], "couleur": "#rrggbb", "matiere": "mat"|"bois"|"pierre"|"metal"|"verre"|"pelage"|"tissu"|"tuile"|"lumineux", "lisse": 0..0.5, "arrondi": 0..0.3}]}],
  "histoire": {"pitch": "facultatif : ce qui arrive au porteur de la caméra, deux phrases", "temps": [{"id": "mot", "quand": "condition", "ce_qui_se_passe": "…", "scene": {"brume": 0..0.06, "lampe": true|false, "soleil": {"azimut": 0, "hauteur": 0}}}]},
+ "lointain": {"hauteur": 0..40, "decoupe": 0..1, "neige": 0..1, "couleur": "#rrggbb", "couleur_bas": "#rrggbb"},
  "matieres": {"nom": {"base": "recette existante", "couleur": "#rrggbb", ...}}, "surfaces": {"sol": "nom", "trajet": "nom", "rochers": "nom"},
  "note": "une phrase, seulement si une partie de la demande ne peut pas être montrée"}
 Repères : une hauteur de soleil négative donne la nuit, et la lampe du téléphone s'allume. Soleil rasant entre 4 et 15. Brume : 0.003 air sec, 0.011 matin, 0.03 épais. La forêt est tempérée (pins, chênes, bouleaux, blocs de grès, sentier de sable). Les dunes sont un désert de sable.
 Objets : rien n'est prédéfini, tu construis tout ce que la demande contient (bâtiments, animaux, véhicules, mobilier, personnages, ruines…) en assemblant des formes. Huit objets au plus, 24 formes par objet, 64 formes en tout : va à l'essentiel de la silhouette, c'est filmé de loin par une mauvaise caméra.
 Repère d'un objet : mètres réels, y = 0 au sol, x vers la droite, +z = sa face avant, tournée vers celui qui arrive. "p" est le centre de la forme, "taille" ses dimensions entières (boule : diamètres ; cylindre, cône, capsule : [diamètre, hauteur, diamètre], debout ; toit : [longueur du faîtage, hauteur, largeur], à poser au-dessus des murs). "penche" incline une forme en degrés. "lisse" fond la forme dans les voisines (corps d'animal : 0.03 à 0.08). "lumineux" éclaire (fenêtre allumée, feu, écran). Portes et fenêtres : boîtes minces posées 2 cm devant le mur.
 Placement : "devant" est la distance le long du trajet depuis le départ, "cote" l'écart latéral (négatif à gauche ; moins de 1,5 = sur le sentier). Un bâtiment se pose 10 à 20 m devant, à 5 m de côté ou plus, avec "degage" égal à sa demi-largeur plus 2 pour écarter les arbres. Les temps de l'histoire peuvent faire apparaître ou disparaître des objets : "scene": {"montrer": ["id"], "cacher": ["id"]}, avec "visible": false au départ.
+Lointain (facultatif) : ce qu'on voit à l'horizon, au-dessus des arbres. "hauteur" est l'angle des plus hauts sommets en degrés (collines 3 à 6, montagne 8 à 15, haute montagne vue de la vallée 18 à 30), "decoupe" la finesse des crêtes (collines rondes 0.2, aiguilles 0.9), "neige" la part enneigée du massif (0 aucune, 0.5 la moitié haute), "couleur" la roche, "couleur_bas" les contreforts (forêt sombre, lande, roche). Pour qu'on le voie, garde la forêt clairsemée ("densite" et "feuillage" bas). Sols prêts pour la montagne : "herbe", "neige".
 Matières (facultatif) : chaque surface pointe vers une recette. Recettes prêtes : ${Object.keys(MAT_LIB.recettes).join(", ")}. Pour en faire une, pars d'une "base" et change ce qui diffère : "couleur", "nuance" {couleur, force}, "taches" [{couleur, force, echelle, seuils}], "mousse" {force} (0 = aucune), "salissure" {force, hauteur}, "brillance", "motif" {type: feuilles|rides|fissures|planches|paves, echelle, couleur}. Une forme d'objet peut nommer une recette dans "matiere" (ex. "planches", "paves", "crepi"). Garde la crédibilité : des couleurs ternes et sales plutôt que franches.
 Pour le décor il n'existe que les kits forêt et dunes : si la demande veut un autre sol ou un autre paysage (ville, mer, intérieur), choisis l'ambiance la plus proche, construis le reste en objets, garde l'idée dans "inspiration" et "histoire", et dis-le franchement dans "note".
 Le joueur dit : ${JSON.stringify(texte)}`;
