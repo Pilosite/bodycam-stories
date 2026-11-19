@@ -1005,10 +1005,14 @@ function creerMeneur(o) {
       const s = secours(texte), g = secoursGeste(texte), retif = R.CARACTERE === 'retif';
       v.attitude = 'hesite';
       const gestes = validerActions(s.actions).map(a => retif && a.type === 'marcher' ? { type: 'marcher', metres: a.metres / 2 } : a);
-      v.actions = [{ type: 'attendre', secondes: 1.5 }, ...(g && !retif ? g.actions : []), ...gestes].slice(0, 6);
-      if (!retif && !v.fabrique && g) v.fabrique = { nom: g.nom, quoi: '', ou: g.ou };
-      v.pensee = tirer(retif ? CEDE : CEDE_OBEIT);
-      log('cede', {});
+      // Il ne « cède » que s'il y avait quelque chose à faire. Une phrase qu'il n'a pas comprise (dictée coupée, bruit capté)
+      // garde la réponse de Claude : lui faire dire « bon, d'accord » à propos de rien n'a aucun sens.
+      if (gestes.length || g || s.compris !== false && liste(v.actions).length === 0 && retif) {
+        v.actions = [{ type: 'attendre', secondes: 1.5 }, ...(g && !retif ? g.actions : []), ...gestes].slice(0, 6);
+        if (!retif && !v.fabrique && g) v.fabrique = { nom: g.nom, quoi: '', ou: g.ou };
+        v.pensee = tirer(retif ? CEDE : CEDE_OBEIT);
+        log('cede', {});
+      }
     }
     partie.porteur.refus_de_suite = v.attitude === 'refuse' ? partie.porteur.refus_de_suite + 1 : 0;
     // hors monde : un peu de confiance en moins (COUT_HORS_MONDE), de l'agacement s'il insiste
@@ -5771,6 +5775,7 @@ function reglerRelief(f){
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
+  if(f!==fiche) errance=true;                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
@@ -6132,7 +6137,7 @@ function simulate(dt){
   let v=0;
   if(!queue.length){ idle+=dt;
     if(meneur&&!meneurLibre){ if(idle>patience && !CFG.nowalk){ idle=0; patience=7; pasHistoire(); } }   // en histoire : petits pas, et elle attend la voix après chaque temps
-    else if(idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
+    else if(errance && idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
   const a=queue[0];
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
@@ -6159,6 +6164,7 @@ const coarse=matchMedia("(pointer:coarse)").matches;
 /* Qualité : « mobile » tient un téléphone moyen ; « complète » est faite pour un ordinateur (pleine résolution, bien plus de grains,
    carte d'ombres plus fine). Par défaut : complète sans écran tactile, mobile sinon. Le choix est gardé dans le navigateur. */
 var docile=!!CFG.docile; try{ if(localStorage.getItem("bodycam-docile")==="1") docile=true; }catch(_){}   // mode essai : il fait exactement ce qu'on demande
+var errance=true;                                             // il se promène de lui-même ; dès qu'on lui parle, il attend qu'on lui dise quoi faire
 var meneurLibre=false;                                        // vrai quand le meneur tourne sans histoire écrite (promenade libre)
 const QUAL={ full:CFG.full!==undefined?!!CFG.full:!coarse };
 try{ const q=localStorage.getItem("bodycam-qualite"); if(q&&CFG.full===undefined) QUAL.full=q==="1"; }catch(_){}
@@ -7134,10 +7140,11 @@ function setFrozen(v,m){
   $("monde").textContent=v&&mode==="monde"?"Annuler":"Décrire un monde";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
-  if(v){ $("msg").value=""; $("hint").classList.add("off"); if(!dict) setTimeout(()=>$("msg").focus(),50); }
+  if(v){ $("msg").value=""; $("hint").classList.add("off"); setTimeout(()=>$("msg").focus(),50); }
 }
-$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); if(on) ecouter(); };
-$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); if(on) ecouter(); };
+// Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
+$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); };
 $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
   const t=$("msg").value.trim(); if(!t) return;
@@ -7428,7 +7435,13 @@ function ticMeneur(){
   if(dbgOn) dbgEl.textContent=meneur.debug();
   if(meneur.fini()) clearInterval(meneurTimer);
 }
-function meneurEntendre(texte){ say("…"); return meneur.voix(texte); }
+function meneurEntendre(texte){ say("…");
+  if(meneurLibre){                                             // promenade libre : une fois qu'on lui a parlé, il ne repart plus tout seul
+    const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    errance=/promene|balade-toi|balade toi|continue ta|reprends ta|comme tu veux|ou tu veux|fais ta vie/.test(t);
+    if(/stop|arrete|bouge plus|ne bouge|attends|reste la|halte/.test(t)) queue.length=0;
+  }
+  return meneur.voix(texte); }
 function interfaceHistoire(on){
   for(const id of ["monde","lieu","mesurer","histoire","v3"]) if($(id)) $(id).hidden=on;
   if($("journal")) $("journal").hidden=!on&&!dernierJournal;
