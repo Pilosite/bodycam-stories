@@ -1,6 +1,6 @@
 # Le meneur de jeu
 
-Document de conception. Rien de ce qui suit n'est encore codé, sauf mention contraire. Il complète `contrat-histoire.md` (v0) et le remplace pour tout ce qui touche à la trame.
+Document de conception. Les étapes 1 à 8 du §10 sont réalisées dans `src/meneur.js` (tests : `npm test` ; essai sur artefact : `essai-meneur.md`) ; les étapes 9 à 12 (régisseur, accessoiriste, compilateur, essai sur téléphone) restent à faire. Les écarts de la réalisation sont notés en fin de document (§12). Il complète `contrat-histoire.md` (v0) et le remplace pour tout ce qui touche à la trame.
 
 Le meneur de jeu est la couche qui tient ensemble deux volontés : celle du concepteur (une trame, un ton, des fins) et celle du joueur (dire ce qu'il veut au porteur de la caméra). Il ne montre rien lui-même : il décide, et le moteur filme.
 
@@ -92,6 +92,7 @@ Ce sont les seules que la page sait vérifier sans IA. Dans un même objet elles
 "improvisation": { "ambiance": { "brume": [0.008, 0.03] }, "objets_nouveaux": 1, "permis": ["…"], "interdit": ["…"] }
 ```
 
+- `porteur.relances` (ajouté à la réalisation) : quelques pensées écrites par le concepteur pour les relances sans Claude ; celles qui finissent par « ? » servent au registre « question ».
 - `monde` porte les **règles du monde**. Avec `ton` et `jamais`, c'est la loi du récit : le sas s'en sert pour trier ce que dit le joueur, et le porteur s'y plie sans la connaître. Les listes sont courtes (6 lignes chacune au plus) et donnent l'esprit, pas un inventaire : l'IA juge le reste par analogie.
 - `lieux[].fiche` accepte une fiche complète en ligne : une histoire est alors un seul fichier, facile à relire et à partager. Tant que le moteur ne change pas de lieu, une histoire n'a qu'un lieu.
 - `accessoires` : des objets déjà construits dans la fiche, cachés, que le meneur peut montrer quand il en a besoin. `mobile` : la page le replace devant le porteur au moment de le montrer.
@@ -435,3 +436,16 @@ Ordre conseillé si le temps manque : 1 à 8 donnent un jeu complet. 9 améliore
 4. **L'IA peut-elle créer des objets en pleine partie**, au risque de formes ratées à l'image, ou seulement montrer ceux que le concepteur a prévus ? La conception permet les deux, avec un budget par histoire ; le réglage par défaut te revient.
 5. **Qui écrit les histoires ?** Toi seul pour l'instant, ou tout joueur, avec un bouton « Raconter une histoire » à côté de « Décrire un monde » ? Dans le second cas le compilateur et sa relecture passent avant le régisseur dans l'ordre de réalisation.
 6. **Le porteur est-il bavard ou taiseux quand on ne lui parle pas, et le meneur peut-il figer le monde de lui-même** pour attendre une réponse à un moment clé ? Aujourd'hui, par respect de la règle « figer est le geste du joueur », il ne le fait pas.
+
+## 12. Écarts de la réalisation (étapes 1 à 8)
+
+- **Budget de consigne : 9 000 caractères**, pas 7 000. Le contrat fourni en occupe déjà 3 900 (pas 2 500), et la consigne à vide 6 600. Au-delà du budget, la page réduit d'elle-même : échanges récents à 3, faits à 8, improvisation permise, résumé, puis échanges tronqués. Réglage `BUDGET_CONSIGNE`.
+- **Une proposition de l'IA à condition spatiale** (temps ou fin avec `pres_de`, `retour_m`, `avance_m`) n'est acceptée que si cette condition tient à deux fois près (`MARGE_IA`) : un Claude trop complaisant ne peut pas jouer « Il dort » à 60 m du hamac.
+- **`retour_m`** n'est vrai qu'après s'être éloigné d'au moins `m + 10` mètres (`RETOUR_ECART_M`) : sans cela, « demi-tour » se déclenchait au départ.
+- **`refus_de_suite`** compte les refus de suite, sans juger s'il s'agit de la même demande. Au troisième, si l'IA refuse encore (et que le sas n'a pas refusé l'apport), la page impose une demi-mesure : attente, puis la moitié du geste demandé (lexique), avec une pensée de concession.
+- **Filet du quatrième mur, en code** : une pensée qui contient un mot de coulisse (consigne, IA, joueur, règles du monde…) ou cinq mots de suite d'un secret, d'un `jamais`, d'un temps verrouillé ou d'une fin pas encore ouverte est remplacée par une réplique de secours. Même filtre sur les faits improvisés.
+- **Une pensée de l'IA pendant un événement** attend que la réplique ait été lue (`MIN_AFFICHAGE_S`, 5 s) ; seule la réponse au joueur passe devant.
+- **Rejeu** : la trace consigne la perception arrondie de chaque tic, les phrases, les réponses de Claude et celles du lexique de secours ; le meneur n'utilise que cela (et un aléa à graine gardé dans `partie`), donc une trace rejouée dans Node redonne exactement le même état.
+- **`montrer` d'un objet marqué `visible: false`** dans la fiche ne l'affichait pas (le drapeau de la fiche l'emportait) : `patchScene` le rend désormais visible.
+- **Pas encore fait** : `mobile` des accessoires (le ruban se montre à sa place), `demande_objet` (consigné dans la trace, jamais accepté), régisseur et `cap` (le champ existe, vide).
+- **Rythme sans parole** : Lina se promène seule le long du sentier ; sans joueur, elle passe les quatre temps obligatoires en deux ou trois minutes puis marche jusqu'à la fin par défaut. Les échéances ne servent qu'au joueur qui la retient. À régler avec Toine (une flânerie qui s'attarde aux lieux de la trame, ou des échéances « au plus tôt »).

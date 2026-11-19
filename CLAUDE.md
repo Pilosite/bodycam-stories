@@ -16,7 +16,9 @@ Nom de travail : `bodycam-proc`. Toine n'a pas encore choisi le vrai nom.
 
 ```bash
 npm install                     # Playwright, pour les captures
-npm run build                   # assemble src/ + scenes/ en dist/index.html
+npm run build                   # assemble src/ + scenes/ + histoires/ en dist/index.html
+npm test                        # meneur de jeu, sans navigateur ni Claude
+node tools/partie.mjs demi-tour # une partie d'« Avant la nuit » jouée dans la page, captures dans out/meneur/
 node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 270 480
 ```
 
@@ -27,6 +29,7 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 - `src/shaders/pathtrace.frag` : le monde (terrain, arbres, grès, canopée, dunes) et la lumière. C'est là que se joue le réalisme.
 - `src/shaders/camera.frag` : le capteur (fisheye, exposition, grain, compression, coins sombres).
 - `src/main.js` : boucle de rendu, reprojection temporelle, porteur de la caméra, voix dans sa tête, API `window.balade`.
+- `src/meneur.js` : le meneur de jeu (`docs/meneur-de-jeu.md`), module pur sans DOM, testé par `npm test` (`tests/`). Le build l'embarque avec `histoires/*.json`. Essai sur artefact : `docs/essai-meneur.md`.
 - `src/matieres.json` : bibliothèque de recettes de matière (sol, sentier, grès, écorces…), évaluées par `recette()` dans le shader.
 - `ref/` : vues de référence gelées ; `tools/vues.mjs` et `tools/compare.mjs` pour rendre et comparer.
 - `scenes/*.json` : fiches de lieu embarquées dans la page, format décrit dans `docs/fiche-de-lieu.md`.
