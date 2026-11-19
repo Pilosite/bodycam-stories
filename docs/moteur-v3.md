@@ -121,3 +121,72 @@ Le lanceur de rayons a reçu le vocabulaire de monde générique (`docs/refonte-
 | `lointain.eau` | eau à l'horizon | `eauLoin()` n'est pas appelée par `v3_ombrage.frag` |
 
 Le lointain en montagnes ou collines, lui, est rendu (calcul par direction, comme le ciel). Ce que la fusion a changé dans le semeur, sans changer ce qu'il rend sur la forêt : les uniformes de relief et de trajet (`uRel`, `uTraj`, `uCreux`) sont passés par `v3Monde`, la largeur du trajet vient de `uTraj` comme dans `render()`, et `recette()`/`matProp()` ont leur nouvelle signature (émission, normale dans le repère de la forme). Les fiches 01, 03 et 05 de `scenes/` restent rendues par le v3 ; 02 (nuit), 04 (dunes) et 06 à 08 (semis, kit nu) ne le sont pas. Une ambiance changée en cours d'histoire (lampe allumée) refait le même test.
+
+## Vers 30 images par seconde sur téléphone (branche `v3perf`, 19 novembre 2026)
+
+Point de départ, mesuré par Toine (Mali-G77, Chrome, qualité mobile, 252 × 456 en interne, écran 432 × 781) : 15,9 images/s en marche, environ 63 ms par image, dont déplacement 7,6 ms, rendu du monde 42,6 ms, capteur et écran 10,9 ms. À l'arrêt : passe plein écran matière et lumière ≈ 24 ms, tampon G « sol seul » ≈ 13 ms. Objectif : 33 ms tout compris, sans perdre la ressemblance avec `ref/`. Rien de ce qui suit n'est mesuré sur le téléphone : seul le rendu logiciel (SwiftShader) était disponible, où les proportions diffèrent (semis cher, pixels bon marché). Les gains sur Mali sont des estimations ; le bouton Mesurer est fait pour les vérifier.
+
+### Ce qui a changé, poste par poste
+
+Toutes les optimisations ne concernent que la qualité mobile (sauf les lectures différées, partout). Chacune se coupe par une option (`CFG`, ou dans l'adresse sur le téléphone : `index.html#v3&v3tapis=0`), et le bouton Mesurer les coupe tour à tour pendant la marche.
+
+| Poste | Avant | Après | Option pour revenir |
+|---|---|---|---|
+| Attente de la puce à chaque image | `v3Sync()` en fin de `v3Image` : le processeur attend que la puce ait tout fini, la puce attend ensuite les ordres de l'image suivante | aucune (sauf mesure) ; `V3.ms` devient l'intervalle entre deux images | `v3sync` |
+| Sonde de collision | `readPixels` bloquant toutes les 120 ms, à chaque image près d'un obstacle | lecture différée (PBO + `fenceSync`), réponse 1 à 3 images plus tard ; près d'un obstacle on sonde 12 cm devant, là où l'on sera | `sondeSync` |
+| Obstacles devant (meneur, 2 fois par seconde) | trois sondes bloquantes | trois lectures différées, la dernière réponse arrivée | `sondeSync` |
+| Exposition automatique | `readPixels` bloquant du halo toutes les 180 ms | lecture différée | `expoSync` |
+| Maillage du sol | 192 × 96 quadrilatères sur tout le tour, 6 sommets calculés par quadrilatère (110 592 sommets, 5 `terrainH` chacun) | sommets partagés (tampon d'indices, rangés secteur par secteur), secteurs limités au cap utile : environ 80 secteurs vers l'avant, ≈ 8 000 sommets distincts | `v3solPlein` |
+| Matière du sol | `recette()` par pixel et par image (litière, sentier, bord du trajet, mousse, relief) | **tapis du sol** : cuite dans des textures ancrées au monde, lue en 2 lectures filtrées (4 au fondu entre niveaux) | `v3tapis` |
+| Ombre de la canopée au sol (`canopyT` vers le soleil) | 6 pas × 2 bruits 3D par pixel et par image | cuite dans le même tapis (moyenne de 4 tirages, sans bruit) | `v3tapis` |
+| Troncs, perches, rochers, objets en marche | tout recalculé à chaque image | **damier** : blocs de 8 × 8 pixels ombrés une image sur deux, l'autre relit l'historique reprojeté ; part d'image neuve 1 − (1 − a)² pour la même réponse dans le temps | `v3damier` |
+| Accumulation | RGBA32F, lue texel par texel | RGBA16F filtrable : moitié moins d'octets écrits par l'ombrage, relus par la reprojection et le capteur | `v3acc32` |
+| Capteur (`camera.frag`) | 7 lectures bilinéaires faites à la main = 28 `texelFetch` RGBA32F + halo | 7 lectures filtrées par la puce + halo (8 en tout) ; même calcul, même image | `capteur4` |
+
+### Le tapis du sol
+
+Au sol, la matière ne dépend que du point du monde (recette du sol, trajet, mousse, relief) : rien ne justifie de la recalculer à chaque pixel de chaque image. `v3_tapis.frag` la cuit dans deux tableaux de textures RGBA8 (racine de l'albédo et brillance ; inclinaison du relief, émission, transmittance de la canopée vers le soleil), 7 niveaux de 512 × 512 texels, texel de 1 cm au niveau 0 doublé à chaque niveau (fenêtres de ±2,5 m à ±160 m autour de la caméra). Mémoire : 14,7 Mo.
+
+- **Générique** : c'est le même code que l'ombrage (même choix de recette, même fondu du trajet, un seul appel à `recette()`) ; toute recette de sol, y compris écrite par l'IA, est cuite pareil. La cuisson est refaite quand ce dont elle dépend change (graine, recettes, relief, trajet, soleil, canopée).
+- **Tapis roulant** : chaque niveau est un tore (le texel du monde I est rangé en I mod N). Quand la caméra avance, seules les bandes de 16 texels qui entrent dans la fenêtre sont cuites. En marche à 1,35 m/s et 30 images/s, cela fait en moyenne ≈ 4 600 texels par image tous niveaux confondus (4 % des pixels de l'image), en bandes ; tourner la tête ne coûte rien (la fenêtre suit la position, pas le regard).
+- **Par tranches** : au premier remplissage (ou après un saut de plus d'une demi-fenêtre), un niveau se cuit par lignes dans un budget de 32 768 texels par image (`v3tapisBudget`), soit 56 images pour tout le tapis. Tant qu'un niveau n'est pas prêt, l'ombrage revient à `recette()` pour ses pixels : l'image est la même, seulement plus lente pendant deux secondes.
+- **Niveau choisi** par la taille du pixel au sol (distance, angle rasant), comme un niveau de mipmap, avec un fondu entre deux niveaux ; `v3tapisBias` (−0,5) penche vers le plus fin. Un niveau grossier contient des échantillons de la recette fixés au monde : au loin, le sol ne scintille plus quand on marche.
+- **Ce qui se voit** : rien à l'arrêt ni en marche sur la planche (`out/v3perf-planche.png`, `node tools/v3perf.mjs`). Écart moyen après flou 5 × 5 entre v3 mobile avant et après : 2,2 (a-sentier), 1,7 (b-troncs), 2,8 (c-litière), 2,7 (marche, 2 m), sur 255 ; à `ref/`, l'écart reste le même qu'avant (13,6 contre 13,7 ; 13,1 contre 13,3 ; 15,4 contre 15,0). Pas de couture visible entre niveaux, pas de saut quand le tapis avance. Le premier plan à moins de 1 m est légèrement plus doux (texel de 1 cm filtré pour un pixel de 0,6 cm) : caché par le grain et la compression du capteur.
+
+### Opérations par pixel, avant et après (qualité mobile)
+
+Comptées dans le code pour les recettes de la forêt (un « bruit 2D » = 4 hachages, un « bruit 3D » = 8 ; « lectures » = lectures de texture).
+
+| Passe, pixel | Avant | Après |
+|---|---|---|
+| Ombrage, sol de litière | ≈ 16 bruits 2D + 1 Voronoï 3 × 3 (≈ 82 hachages), ≈ 45 lectures de `uMats` ; `canopyT` soleil : 12 bruits 3D ; `canopyT` ambiance : 12 bruits 3D ; `pres()` × 2 ; 4 lectures de carte d'ombres ; 2 lectures G ; 4 lectures de reprojection (RGBA32F) | 2 lectures filtrées du tapis (4 au fondu) ; `canopyT` ambiance, `pres()`, ombres, G inchangés ; reprojection en RGBA16F |
+| Ombrage, sentier | ≈ 25 bruits 2D + Voronoï ; au bord du trajet, fbm du bord (5 bruits) et deux recettes | idem sol : 2 à 4 lectures |
+| Ombrage, tronc de pin | ≈ 8 bruits 3D (nuance, fissures, relief par différences finies : 4 appels de `recetteH`, grain, mousse), ≈ 50 lectures de `uMats`, plus la lumière | à l'arrêt : inchangé ; en marche : la moitié des blocs ne fait que 4 lectures de reprojection |
+| Cuisson du tapis, par texel cuit | — | une recette de sol + 4 `canopyT` (≈ 48 bruits 3D) ; ≈ 4 % des pixels par image en marche |
+| Capteur, par pixel de l'écran | 28 `texelFetch` RGBA32F (448 octets) + 1 lecture du halo, 7 hachages | 7 lectures filtrées RGBA16F + 1, 7 hachages |
+| Tampon G, sol | 110 592 sommets × 5 `terrainH` | ≈ 8 000 sommets distincts × 5 `terrainH` (plus les reprises du cache de sommets) |
+
+Rendu logiciel (b-troncs, à l'arrêt, attente réelle, même machine) : ombrage 197 ms sans tapis, 160 ms avec. SwiftShader paie environ 120 à 160 ms fixes pour toute passe plein écran (une passe vide en coûte autant) : sur la part qui dépend du calcul, le tapis en enlève plus de la moitié. Par un découpage du shader (`v3prof`), `recette()` représente ≈ 60 % de la part variable de l'ombrage et le sol les deux tiers de `recette()` ; la lumière (`canopyT`, `pres`) pèse peu en rendu logiciel. Cuisson : 6,8 ms pour 10 000 texels, soit la moitié du coût d'un pixel ombré. Capteur seul à 270 × 480 : 15,8 ms au lieu de 18,2.
+
+### Estimation honnête sur Mali-G77
+
+| Poste mesuré par Toine | Avant | Estimation après | Pourquoi, et ce qui est incertain |
+|---|---|---|---|
+| Déplacement (sonde) | 7,6 ms | < 0,5 ms | presque tout était de l'attente (quatre pixels de calcul) ; sûr |
+| Attente de fin d'image | cachée dans « rendu » | 2 à 8 ms gagnés | le processeur prépare l'image suivante pendant que la puce finit ; dépend de l'aller-retour de Chrome sur Android, inconnu |
+| Ombrage | ≈ 24 ms | ≈ 12 à 15 ms | sol (souvent la moitié de l'image) sans `recette()` ni `canopyT` soleil, damier sur les troncs. Incertain : le shader garde tout le code de `recette()` (pour les troncs) ; si Mali est limité par le nombre de registres plutôt que par le calcul, le gain sera moindre |
+| Tampon G, sol | ≈ 13 ms (avec la synchronisation) | 1 à 3 ms gagnés | le maillage était probablement déjà bon marché ; ce qui reste est sans doute le vidage et l'aller-retour de lecture |
+| Capteur, écran | 10,9 ms | 3 à 8 ms | le temps ne suivait pas la taille de l'écran : une bonne part est sans doute l'attente du tampon d'affichage ou la lecture de synchronisation elle-même. La ligne « Capteur » de Mesurer (passe seule, sur une cible hors écran, aller-retour retranché) tranchera |
+
+Total estimé : 38 à 45 ms par image, soit 22 à 26 images/s. Les 30 images/s ne sont probablement pas encore atteintes ; les quatre premières lignes de Mesurer (« une optimisation coupée à la fois ») diront lesquelles comptent vraiment sur ce téléphone.
+
+### Le bouton Mesurer en v3
+
+En plus de ce qu'il affichait : images/s en marche avec chaque optimisation coupée tour à tour (3 s chacune) et le nombre de texels cuits par image ; ombrage avec et sans tapis à l'arrêt ; coût de la cuisson pour 10 000 texels (attente sur la couche du tapis cuite en dernier, lue en octets) ; passes seules, médiane de 7, avec l'aller-retour d'une lecture à vide mesuré à part : capteur (sur une cible de la taille de l'écran), capteur à 4 lectures, halo et exposition, sonde bloquante. Pour comparer à la main : `#v3&v3tapis=0`, `#v3&v3damier=0`, `#v3&sondeSync=1&expoSync=1&v3sync=1`.
+
+### Suite proposée
+
+1. Mesurer sur le téléphone (bouton Mesurer en v3, qualité mobile) et lire les lignes « une optimisation coupée à la fois » et « passes seules ».
+2. Si l'ombrage reste lourd : sortir `recette()` du shader d'ombrage dans une passe « matière » à part (troncs, rochers, objets), pour que la passe de lumière, plus petite, occupe mieux la puce ; et calculer l'ambiance (`canopyT` dans une direction tirée, `pres`) à demi-résolution.
+3. Si le capteur reste à 10 ms quelle que soit la taille : c'est l'attente de l'affichage, pas le shader ; ne plus la compter, ou alléger la composition (canvas sans `preserveDrawingBuffer`, déjà le cas).
+4. Le même tapis pour les semis au sol plats (marquage, pavés) quand le semeur saura les semer.

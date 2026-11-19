@@ -10,11 +10,13 @@
 //   w, h     résolution interne forcée                    maxSpp   nombre de passes maximum
 //   prevOnly reste en aperçu de mouvement                 scene    fiche de lieu qui remplace celle du build
 //   seed     graine du monde                              lookYaw  regard tourné (radians), level  niveau de mouvement
+//   full     false : qualité mobile (avec mobile:true, comme sur un téléphone) ; v3 mobile : tools/v3perf.mjs
 //   v2       moteur v2 (essai : panoramiques projetés) ; options v2w, v2h, v2passes, v2q, v2pas, v2nb, v2budget,
 //            v2fill, v2trous, v2scale, v2tour décrites en tête du bloc « moteur v2 » de src/main.js. En v2, le nombre
 //            de passes attendu est le nombre de panoramiques proches terminés (3 en pratique).
 //   v3       moteur v3 (essai : le semeur) ; options grains (budget de la caméra), grainsOmbre, v3k, v3carte, v3alpha,
-//            v3max, v3detail, v3net, v3pcf, v3amb, v3voir décrites en tête du bloc « moteur v3 » de src/main.js. En v3, le
+//            v3max, v3detail, v3net, v3pcf, v3amb, v3voir, et les optimisations mobiles (v3tapis, v3damier, v3acc32,
+//            capteur4, sondeSync, expoSync, v3sync, v3solPlein) décrites en tête du bloc « moteur v3 » de src/main.js. En v3, le
 //            nombre de passes attendu est le nombre d'images accumulées à l'arrêt.
 //
 // CHROME=/chemin/vers/chrome force l'exécutable (sinon celui de Playwright).

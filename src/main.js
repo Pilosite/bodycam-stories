@@ -743,7 +743,14 @@ function v2Basculer(on){
    v3k (recouvrement des grains), v3carte (largeur de la carte d'ombres), v3alpha (part d'image neuve en mouvement),
    v3max (images accumulées à l'arrêt), v3detail (chronomètre chaque passe : ajoute des synchronisations),
    v3net (soleil ponctuel, sans pénombre), v3pcf (flou de lecture de la carte, en texels), v3amb (niveau de l'ambiance,
-   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres). */
+   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres),
+   v3prof (mise au point du coût de l'ombrage : 1 sans recette, 2 sans ambiance, 4 sans soleil, 8 sans pres(), 16 passe vide,
+   64 sans recette au sol, 128 sans recette hors du sol).
+   Optimisations de la qualité mobile (docs/moteur-v3.md, « Vers 30 images par seconde ») ; chacune se coupe pour comparer,
+   aussi depuis l'adresse sur le téléphone (#v3&v3tapis=0) : v3tapis (tapis du sol, et ses réglages v3tapisN, v3tapisL,
+   v3tapisS0, v3tapisBudget, v3tapisBias), v3damier, v3acc32 (accumulation en RGBA32F), capteur4 (capteur à quatre lectures
+   par texel), sondeSync, expoSync (lectures bloquantes), v3sync (attente de la puce à chaque image), v3solPlein (ancien
+   maillage du sol). Le bouton Mesurer les coupe tour à tour pendant la marche. */
 const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||(QUAL.full?2048:1024),
   alpha:CFG.v3alpha||.18, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
   n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,

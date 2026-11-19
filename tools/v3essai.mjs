@@ -108,7 +108,7 @@ async function mesures() {
   const res = [];
   const une = async (c, moteur, browser) => {
     const cfg = { nohud: true, still: true, scene: c.scene, auto: marche, w: W, h: H };
-    if (moteur === 'v3') cfg.v3 = true; else cfg.level = 0;     // moteur actuel : résolution de mouvement fixée à la pleine résolution
+    if (moteur === 'v3') { cfg.v3 = true; cfg.v3sync = true; } else cfg.level = 0;   // v3sync : ms = temps de calcul attendu, pas l'intervalle entre images     // moteur actuel : résolution de mouvement fixée à la pleine résolution
     const p = await page(cfg, browser);
     const ech = [];
     const t0 = Date.now();
