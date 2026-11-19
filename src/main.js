@@ -1155,7 +1155,7 @@ function hud(now){
 }
 
 /* ------------------------------------------------------------------ commandes directes */
-$("lieu").onclick=()=>{ ficheIdx=(ficheIdx+1)%FICHES.length; applyFiche(FICHES[ficheIdx]); say(fiche.titre||"",true); };
+$("lieu").onclick=()=>atelier.basculer();                   // la banque de scènes (constructeur de monde)
 let dragId=null, px=0, py=0;
 canvas.addEventListener("pointerdown",e=>{ dragId=e.pointerId; px=e.clientX; py=e.clientY; canvas.setPointerCapture(e.pointerId); canvas.classList.add("drag"); });
 canvas.addEventListener("pointermove",e=>{ if(e.pointerId!==dragId) return;
@@ -1165,7 +1165,7 @@ canvas.addEventListener("pointermove",e=>{ if(e.pointerId!==dragId) return;
   px=e.clientX; py=e.clientY; $("hint").classList.add("off"); });
 const endDrag=e=>{ if(e.pointerId===dragId){ dragId=null; canvas.classList.remove("drag"); } };
 canvas.addEventListener("pointerup",endDrag); canvas.addEventListener("pointercancel",endDrag);
-addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT") return;
+addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
   if(e.key==="ArrowLeft") look.yaw-=.06; else if(e.key==="ArrowRight") look.yaw+=.06;
   else if(e.key==="ArrowUp") look.pitch=Math.min(1.4,look.pitch+.05); else if(e.key==="ArrowDown") look.pitch=Math.max(-1.3,look.pitch-.05); });
 addEventListener("resize",resize);
@@ -1304,71 +1304,7 @@ La voix dit : ${JSON.stringify(texte)}`;
 /* ------------------------------------------------------------------ décrire un monde
    Le joueur décrit un lieu, à la voix ou au clavier. Claude écrit une fiche de lieu ; le moteur la borne et la fabrique.
    Sans Claude, quelques mots-clés suffisent à composer une fiche. */
-const HEX=/^#[0-9a-f]{6}$/i, NOM=/^[a-z0-9_-]{1,30}$/;
-function validerForme(x){                                     // une forme d'objet ou d'élément de semis, bornée
-  const num3=(v,d)=>Array.isArray(v)?[0,1,2].map(i=>clampN(v[i],-40,40,d)):[d,d,d];
-  return {f:x.f,p:num3(x.p,0),taille:num3(x.taille,1),cap:clampN(x.cap,-360,360,0),
-    penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
-    couleur:x.couleur==="palette"||(typeof x.couleur==="string"&&HEX.test(x.couleur))?x.couleur:"#777777",
-    matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&NOM.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)};
-}
-function validerSemis(L){                                     // couches de semis : 4 au plus, 6 formes par élément, tout borné
-  return (Array.isArray(L)?L:[]).filter(isObj).slice(0,4).map((c,i)=>{
-    const formes=(Array.isArray(c.formes)?c.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,6).map(validerForme);
-    if(!formes.length) return null;
-    const tr=isObj(c.trajet)?c.trajet:{}, cel=Array.isArray(c.cellule)?c.cellule:[c.cellule,c.cellule], pair=(v,a,b,d)=>Array.isArray(v)?[clampN(v[0],a,b,d),clampN(v[1],a,b,d)]:[d,d];
-    const o={ id:String(c.id||"semis"+i).slice(0,30), nom:String(c.nom||"").slice(0,60),
-      cellule:[clampN(cel[0],1.5,30,6),clampN(cel[1]!==undefined?cel[1]:cel[0],1.5,30,6)], rotation:clampN(c.rotation,-180,180,0),
-      densite:clampN(c.densite,0,1,.6), groupes:clampN(c.groupes,0,1,0), groupes_echelle:clampN(c.groupes_echelle,5,400,40),
-      trajet:{ rangee:tr.rangee===true, cote:["gauche","droite"].includes(tr.cote)?tr.cote:"deux" },
-      oriente:ORIENTS[c.oriente]!==undefined?c.oriente:undefined, cap:clampN(c.cap,-360,360,0), tourne:clampN(c.tourne,0,360,0),
-      echelle:pair(c.echelle,.2,4,1), hauteur:pair(c.hauteur,.3,3,1), penche:clampN(c.penche,0,25,0), teinte:clampN(c.teinte,0,1,0), desordre:clampN(c.desordre,0,1,1),
-      pose:c.pose==="pente"?"pente":undefined, formes };
-    if(tr.min!==undefined) o.trajet.min=clampN(tr.min,0,200,0);
-    if(tr.max!==undefined) o.trajet.max=clampN(tr.max,0,400,400);
-    const pal=(Array.isArray(c.palette)?c.palette:[]).filter(x=>typeof x==="string"&&HEX.test(x)).slice(0,8); if(pal.length) o.palette=pal;
-    return o;
-  }).filter(Boolean);
-}
-function validerFiche(f){                                     // ne garde que ce que le moteur sait lire, dans ses plages
-  const kit=f.kit==="dunes"?"dunes":f.kit==="foret"?"foret":f.kit==="nu"||Array.isArray(f.semis)?"nu":"foret", a=f.ambiance||{}, so=a.soleil||{};
-  const out={ version:0, id:"monde-"+Date.now(), titre:String(f.titre||"Monde sans nom").slice(0,80), inspiration:String(f.inspiration||"").slice(0,200),
-    graine:Math.round(clampN(f.graine,1,99999,1000+Math.floor(Math.random()*9000))), kit,
-    ambiance:{ saison:["ete","automne","hiver"].includes(a.saison)?a.saison:"automne", meteo:a.meteo==="voile"?"voile":"clair",
-      soleil:{azimut:clampN(so.azimut,-180,180,-33),hauteur:clampN(so.hauteur,-10,70,21)}, brume:clampN(a.brume,0,.06,.011) },
-    camera:{ profil:"bodycam-poitrine", hauteur:clampN(f.camera&&f.camera.hauteur,.9,1.9,1.36), champ:125 },
-    note:String(f.note||"").slice(0,180) };
-  if(typeof a.lampe==="boolean") out.ambiance.lampe=a.lampe;
-  if(kit==="foret"){ const fo=f.foret||{}; out.foret={densite:clampN(fo.densite,0,1,.7),rochers:clampN(fo.rochers,0,1.5,1),feuillage:clampN(fo.feuillage,0,1.5,1)};
-    if(fo.houppier==="cone"){ out.foret.houppier="cone"; out.foret.houppier_bas=clampN(fo.houppier_bas,.3,8,1.6); out.foret.houppier_rayon=clampN(fo.houppier_rayon,.8,3.2,2.5); }
-    if(fo.perches!==undefined) out.foret.perches=clampN(fo.perches,0,1,1); }
-  else if(kit==="dunes") out.dunes={rochers:clampN(f.dunes&&f.dunes.rochers,0,1.5,0)};
-  if(kit!=="dunes"){                                          // relief et trajet réglables (forêt et monde nu)
-    const re=isObj(f.relief)?f.relief:null, tr=isObj(f.trajet)?f.trajet:null;
-    if(re){ out.relief={amplitude:clampN(re.amplitude,0,12,kit==="nu"?.8:1.5),echelle:clampN(re.echelle,20,600,150),pente:clampN(re.pente,-.35,.35,0)};
-      if(typeof re.niveler==="boolean") out.relief.niveler=re.niveler; }
-    if(tr) out.trajet={sinuosite:clampN(tr.sinuosite,0,2,1),largeur:clampN(tr.largeur,.6,30,1.7),creux:clampN(tr.creux,0,.4,.1),bord:tr.bord==="net"?"net":"irregulier"};
-  }
-  const sem=validerSemis(f.semis); if(sem.length) out.semis=sem;
-  const obj=(Array.isArray(f.objets)?f.objets:[]).slice(0,8).map((o,i)=>o&&Array.isArray(o.formes)?{
-    id:String(o.id||"objet"+i).slice(0,30), nom:String(o.nom||"").slice(0,60), devant:clampN(o.devant,2,90,12), cote:clampN(o.cote,-20,20,3),
-    cap:o.cap===undefined?undefined:clampN(o.cap,-360,360,0), echelle:clampN(o.echelle,.1,5,1), degage:clampN(o.degage,0,12,0), visible:o.visible!==false,
-    formes:o.formes.filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24).map(validerForme)}:null).filter(o=>o&&o.formes.length);
-  if(obj.length) out.objets=obj;
-  if(isObj(f.lointain)&&clampN(f.lointain.hauteur,0,40,0)>0){ const l=f.lointain; out.lointain={hauteur:clampN(l.hauteur,0,40,0),decoupe:clampN(l.decoupe,0,1,.5),neige:clampN(l.neige,0,1,0)};
-    for(const k of ["couleur","couleur_bas"]) if(typeof l[k]==="string"&&HEX.test(l[k])) out.lointain[k]=l[k];
-    if(l.eau===true||(typeof l.eau==="string"&&HEX.test(l.eau))) out.lointain.eau=l.eau; }
-  const mats=validerRecettes(f.matieres); if(mats) out.matieres=mats;
-  if(isObj(f.surfaces)){ const s={}, fs=f.surfaces, nom=v=>typeof v==="string"&&NOM.test(v)?v:undefined;
-    for(const k of ["sol","trajet","rochers"]) if(nom(fs[k])) s[k]=nom(fs[k]);
-    for(const k of ["arbres","perches"]) if(isObj(fs[k])) s[k]={a:nom(fs[k].a),b:nom(fs[k].b),part:clampN(fs[k].part,0,1,.5)};
-    out.surfaces=s; }
-  const h=f.histoire;
-  if(h&&typeof h==="object"&&h.pitch) out.histoire={ pitch:String(h.pitch).slice(0,400),
-    temps:(Array.isArray(h.temps)?h.temps:[]).slice(0,4).filter(t=>t&&t.id).map(t=>({id:String(t.id).slice(0,30),quand:String(t.quand||"").slice(0,160),
-      ce_qui_se_passe:String(t.ce_qui_se_passe||"").slice(0,200),scene:t.scene&&typeof t.scene==="object"?t.scene:undefined})) };
-  return out;
-}
+const validerFiche=(f,o)=>CONSTRUCTEUR.validerFiche(f,o);       // bornes de la fiche : src/constructeur.js (constructeur de monde)
 /* Secours sans IA pour les lieux bâtis : quelques éléments de semis génériques, que le lexique assemble.
    Ce ne sont pas des objets en dur du moteur : ce sont des données de fiche, comme Claude en écrirait. */
 const LEX={
@@ -1440,62 +1376,75 @@ function mondeBati(texte,t){                                  // ville, rue, vil
   f.note="Sans Claude, je compose ce lieu avec quelques éléments génériques : rue, maisons, voitures, lampadaires, tombes.";
   return f;
 }
-async function creerMonde(texte){
-  say("Je fabrique ce monde…");
-  let f=null;
-  if(sampler){
-    const consigne=`Tu écris la fiche de lieu d'un moteur de rendu qui filme un monde généré par code, en vue caméra-piéton (téléphone fatigué, crédibilité avant beauté). Le joueur décrit le lieu qu'il veut. Le moteur ne connaît aucun type de lieu : tu COMPOSES le lieu avec un vocabulaire générique (relief, trajet, sols, semis d'éléments répétés, objets uniques, horizon, lumière).
-Réponds uniquement par un objet JSON :
-{"titre": "court", "inspiration": "le lieu de référence en une phrase", "graine": 1..99999,
- "kit": "nu" (tout vient de la fiche ; à choisir pour tout ce qui n'est pas une forêt tempérée ou un désert) | "foret" (pins, chênes, grès, canopée en dur) | "dunes",
- "foret": {"densite": 0..1, "rochers": 0..1.5, "feuillage": 0..1.5, "houppier": "voute"|"cone", "perches": 0..1}, "dunes": {"rochers": 0..1.5},
- "relief": {"amplitude": 0..12 m (0 plat, 1 forêt, 3 à 6 collines), "echelle": 20..600 m (longueur d'onde), "pente": -0.35..0.35 (le long du trajet ; 0.28 = rue de San Francisco), "niveler": true (le trajet reste de niveau en travers)},
- "trajet": {"sinuosite": 0..2 (0 rue droite, 1 sentier), "largeur": 0.6..30 m, "creux": 0..0.4 m (0.15 = trottoir), "bord": "net"|"irregulier"},
- "surfaces": {"sol": "recette", "trajet": "recette"},
- "matieres": {"nom": {"base": "recette existante", "couleur": "#rrggbb" ou "forme", ...}},
- "semis": [ ... jusqu'à 4 couches ... ],
- "objets": [{"id", "nom", "devant": 2..90, "cote": -20..20, "cap", "degage": 0..12, "visible": true, "formes": [ ... 24 au plus ... ]}],
- "lointain": {"hauteur": 0..40 degrés, "decoupe": 0..1, "neige": 0..1, "couleur", "couleur_bas", "eau": "#rrggbb" (mer, baie ou lac sous l'horizon)},
- "ambiance": {"saison": "ete"|"automne"|"hiver", "meteo": "clair"|"voile", "soleil": {"azimut": -180..180, "hauteur": -10..70}, "lampe": true|false, "brume": 0..0.06},
- "histoire": {"pitch": "deux phrases", "temps": [{"id", "quand", "ce_qui_se_passe", "scene": {"brume", "lampe", "soleil", "montrer": ["id"], "cacher": ["id"]}}]},
- "note": "une phrase, seulement si une partie de la demande ne peut pas être montrée"}
-FORMES (objets et semis) : {"f": "boite"|"boule"|"cylindre"|"cone"|"capsule"|"toit", "p": [x, y, z] centre en mètres, "taille": [largeur, hauteur, profondeur] (cylindre, cône, capsule : [diamètre, hauteur, diamètre], debout ; toit : [longueur du faîtage, hauteur, largeur]), "cap": degrés, "penche": [autour de x, autour de z] (roue : [90, 0]), "couleur": "#rrggbb" ou "palette", "matiere": "mat"|"bois"|"pierre"|"metal"|"verre"|"tissu"|"tuile"|"lumineux" ou un nom de recette, "lisse": 0..0.5, "arrondi": 0..0.3}. Repère : y = 0 au sol (une boîte posée au sol descend d'elle-même sous terre sur une pente), +z = face avant. Portes, fenêtres isolées : boîtes minces 2 cm devant le mur.
-SEMIS : une couche répète un ÉLÉMENT (6 formes au plus) sur une grille, un élément par cellule ; c'est ainsi qu'on fait une rue d'immeubles, des voitures garées, des réverbères, des tombes, des arbres, des buissons, des poteaux.
- {"id", "nom", "cellule": [a, b] en mètres (1.5..30), "densite": 0..1, "groupes": 0..1 (regroupe en îlots), "groupes_echelle": m,
-  "trajet": {"rangee": true, "min": m, "max": m, "cote": "deux"|"gauche"|"droite"}, "rotation": degrés (grille libre),
-  "oriente": "trajet"|"aleatoire"|"fixe", "cap": degrés, "tourne": degrés d'aléa, "echelle": [min, max], "hauteur": [min, max] (étire en hauteur), "penche": 0..25, "teinte": 0..1, "desordre": 0..1, "pose": "pente" (l'élément suit le sol : voitures),
-  "palette": ["#rrggbb", ... 8 au plus] (chaque élément tire une couleur ; une forme y puise avec "couleur": "palette"), "formes": [ ... ]}
- Rangée ("rangee": true) : la grille suit le trajet ; "cellule" = [longueur le long du trajet, profondeur] ; la rangée commence à "min" mètres de l'axe et l'élément fait face au trajet : son +z regarde le trajet, son x court le long du trajet, son centre est au milieu de la cellule. Pour des immeubles mitoyens : longueur de cellule = largeur de façade, le moteur laisse 16 cm entre deux. Sans "rangee" : grille libre (forêt, buissons, tombes), "min"/"max" = écart permis à l'axe (par défaut, hors du trajet).
- L'élément doit tenir dans sa cellule (marge 8 cm) : sinon le moteur le réduit. Mets-le donc à l'échelle de la cellule.
-SOLS ET MATIÈRES : recettes prêtes : ${Object.keys(MAT_LIB.recettes).join(", ")}. "chaussee" = asphalte avec axe en tirets ; "facade" = enduit percé de fenêtres sur tous les étages. Une recette se dérive avec "base" et change ce qui diffère : "couleur" ("forme" = prend la couleur de la forme, utile avec une palette), "nuance", "taches", "mousse" {force}, "salissure" {force, hauteur}, "brillance", "motif" :
- {"type": "fenetres", "largeur", "hauteur", "pas" (entre deux fenêtres), "etage", "allege", "cadre", "rdc" (hauteur d'un rez-de-chaussée à vitrines, 0 = aucun), "allumees": 0..1 (la nuit), "couleur" (vitre), "cadre_couleur", "lumiere"},
- {"type": "marquage", "axe": "simple"|"double"|"aucun", "largeur", "tiret", "intervalle", "bords" (écart des lignes de rive), "passages" (période des passages piétons, m), "couleur"},
- {"type": "planches", "couchees": true (bardage)}, {"type": "paves", "echelle": [x, y, z] (briques : [4.4, 13, 4.4])}, "feuilles", "rides", "fissures".
-COMPOSER : une ville = relief + rue droite large ("largeur" 8 à 12, "creux" 0.15, "bord" "net", sol "dalles" pour les trottoirs, trajet "chaussee") + une rangée d'immeubles mitoyens face à la rue (façades en recette "fenetres", palette de couleurs) + une rangée de mobilier (réverbères, arbres d'alignement) + une rangée de voitures garées le long du trottoir + "lointain". Un village = rue étroite un peu sinueuse, maisons basses à toits, pavés. Un cimetière = grille libre de tombes, allée de gravier. Une forêt d'une autre essence = kit nu + semis d'arbres (tronc cylindre, houppier boule ou cône). Vise juste les mesures réelles (étage 3 m, voiture 4.4 × 1.8 m, réverbère 5 à 8 m).
-Repères : soleil négatif = nuit (lampe du téléphone allumée), rasant entre 4 et 15 ; brume 0.003 air sec, 0.011 matin, 0.03 épais. "lumineux" éclaire faiblement (fenêtre, lanterne) ; il n'existe pas encore de vraie source de lumière ponctuelle. Couleurs ternes et salies plutôt que franches.
-Le joueur dit : ${JSON.stringify(texte)}`;
-    try{ f=await sampler.json(consigne,{modelTier:"default",cache:false}); }
-    catch(e){ if(e&&e.code==="not_granted") sampler=null; }
-  }
-  if(!f||typeof f!=="object") f=mondeLexique(texte);
-  f=validerFiche(f);
-  FICHES.push(f); ficheIdx=FICHES.length-1; applyFiche(f);
-  try{ localStorage.setItem("bodycam-mondes",JSON.stringify(FICHES.filter(x=>String(x.id).startsWith("monde-")).slice(-6))); }catch(_){}
-  say(f.note?f.titre+". "+f.note:f.titre);
-  return f;
+/* ------------------------------------------------------------------ constructeur de monde (src/constructeur.js, src/atelier.js)
+   Une description part dans une chaîne en plusieurs temps : plan, fiche, contrôle sans image, relecture sur des vues
+   capturées ici, puis la banque de scènes. Elle tourne en tâche de fond : l'image n'est jamais figée, on peut l'arrêter.
+   Ici, seulement ce qui touche au moteur : appliquer une fiche, sa géométrie, et capturer des vues. Voir docs/constructeur-de-monde.md. */
+function attendreImage(passes,delai,signal){                  // attend que l'image soit posée (accumulation à l'arrêt), ou le délai
+  return new Promise((ok,ko)=>{ const t0=performance.now(); let n0=-1;
+    const tic=()=>{ if(signal&&signal.aborted) return ko({code:"cancelled",message:"arrêté"});
+      const k=V3.on?V3.n:n, prete=!sceneDirty&&!ptEnCours()&&(V3.on?!!V3.hist:!!hist);
+      if(prete&&n0<0) n0=k;                                     // première image après le déplacement (une image en mouvement compte pour plusieurs passes)
+      const voulu=V3.on?Math.min(passes,V3.max):passes;
+      if((prete&&k>=Math.min(n0+voulu,V3.on?V3.max:MAXS))||performance.now()-t0>delai) return ok(k);
+      setTimeout(tic,100); };
+    setTimeout(tic,100); });
 }
-try{ for(const f of JSON.parse(localStorage.getItem("bodycam-mondes")||"[]")) FICHES.push(validerFiche(f)); }catch(_){}
+/* Le canevas WebGL n'est lisible que dans l'image où il vient d'être dessiné (pas de preserveDrawingBuffer). frame() se
+   réinscrit en tête de chaque image : un rappel inscrit ensuite passe juste après lui, dans la même image, avant l'affichage. */
+function lireImage(largeur){
+  return new Promise(ok=>requestAnimationFrame(()=>{
+    const w=Math.max(16,Math.min(largeur,canvas.width)), h=Math.max(16,Math.round(canvas.height*w/canvas.width));
+    const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d"); x.drawImage(canvas,0,0,w,h);
+    const d=x.getImageData(0,0,w,h).data; let s=0,k=0; for(let i=0;i<d.length;i+=32){ s+=d[i]+d[i+1]+d[i+2]; k+=3; }
+    const vw=Math.min(120,w), v=document.createElement("canvas"); v.width=vw; v.height=Math.round(h*vw/w); v.getContext("2d").drawImage(c,0,0,v.width,v.height);
+    let vignette=v.toDataURL("image/jpeg",.62); if(vignette.length>CONSTRUCTEUR.BANQUE.vignetteMax) vignette=v.toDataURL("image/jpeg",.4);
+    c.toBlob(b=>ok({blob:b,url:b?URL.createObjectURL(b):"",vignette,moyenne:k?s/k:0,w,h}),"image/jpeg",.82);
+  }));
+}
+async function capturerVues(vues,o={}){                         // repérage : la caméra se pose sur chaque vue, attend l'image, la lit
+  const avant=hold, out=[]; hold=true; queue.length=0;
+  try{
+    for(const v of vues){
+      if(o.signal&&o.signal.aborted) throw {code:"cancelled",message:"arrêté"};
+      cam.x=v.x; cam.z=v.z; cam.yaw=v.yaw; cam.pitch=v.pitch!==undefined?v.pitch:-.03; look.yaw=0; look.pitch=0; sceneDirty=true;
+      await attendreImage(o.vite?Math.min(4,CFG.capPasses||10):CFG.capPasses||10,CFG.capDelai||9000,o.signal);
+      let im=await lireImage(CFG.capLargeur||384);
+      for(let k=0;k<2&&im.moyenne<2;k++) im=await lireImage(CFG.capLargeur||384);   // image noire : on relit à l'image suivante
+      out.push(Object.assign(im,{legende:v.legende}));
+    }
+  } finally {
+    hold=avant; cam.z=0; cam.x=S.kit!==1?pathX(0):0; cam.yaw=S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; sceneDirty=true;
+  }
+  return out;
+}
+let stockage=null; try{ localStorage.setItem("bodycam-essai","1"); localStorage.removeItem("bodycam-essai"); stockage=localStorage; }catch(_){}
+const capacite=nom=>window.claude&&window.claude.use?Promise.resolve().then(()=>window.claude.use(nom)).catch(()=>null):Promise.resolve(null);
+const atelier=ATELIER.creerAtelier({ C:CONSTRUCTEUR, embarquees:FICHES, stockage, db:capacite("db"), sansImages:!!CFG.sansImages,
+  moteur:{ appliquer:f=>applyFiche(CONSTRUCTEUR.resoudreFiche(f)), geo:()=>({pathX,terrainH,kit:S.kit}), recettes:Object.keys(MAT_LIB.recettes), capturer:capturerVues, lexique:t=>mondeLexique(t) },
+  sample:()=>sampler, oublierClaude:()=>{ sampler=null; },
+  appliquer:(f,d)=>{ if(d&&d.index!==undefined) ficheIdx=d.index; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); },   // « oriente » des objets traduit en cap
+  sceneVoulue:window.__CFG?null:(()=>{ try{ return localStorage.getItem("bodycam-scene"); }catch(_){ return null; } })(),
+  dire:(t,bref)=>say(t,bref),
+  dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
+  occupe:on=>{ $("monde").disabled=on; } });
+function creerMonde(texte){                                     // « Décrire un monde » : la fabrication part en tâche de fond
+  if(!atelier.creer(texte)) return Promise.resolve(null);
+  say("Je fabrique ce monde. Tu peux suivre la fabrication en haut de l'écran.",true);
+  return atelier.attendre().then(j=>j&&j.doc?j.doc.fiche:null);
+}
 
 /* ------------------------------------------------------------------ panneau de parole : au clavier ou à la voix */
-let mode="parler", dict=null, listening=false, dictBase="";
+let mode="parler", dict=null, listening=false, dictBase="", dictEl=null;   // dictEl : champ qui reçoit la dictée (par défaut la barre de parole)
 if(window.claude && window.claude.use) window.claude.use("dictation").then(d=>{ if(!d) return; dict=d; $("mic").hidden=false;
-  d.onPartial(({text})=>{ $("msg").value=(dictBase+" "+text).trim(); });
-  d.onFinal(({text})=>{ dictBase=(dictBase+" "+text).trim(); $("msg").value=dictBase; });
-  d.onState(({state})=>{ listening=state==="listening"; $("mic").setAttribute("aria-pressed",String(listening)); $("mic").textContent=listening?"J'écoute":"Micro"; });
+  d.onPartial(({text})=>{ (dictEl||$("msg")).value=(dictBase+" "+text).trim(); });
+  d.onFinal(({text})=>{ dictBase=(dictBase+" "+text).trim(); (dictEl||$("msg")).value=dictBase; });
+  d.onState(({state})=>{ listening=state==="listening"; $("mic").setAttribute("aria-pressed",String(listening)); $("mic").textContent=listening?"J'écoute":"Micro";
+    if(dictEl){ atelier.dictee(listening); if(!listening) dictEl=null; } });
 }).catch(()=>{});
 function ecouter(){                                           // appelé directement depuis un clic, sans rien attendre avant
   if(!dict||listening) return;
-  dictBase=$("msg").value.trim();
+  dictBase=(dictEl||$("msg")).value.trim();
   dict.start().catch(e=>{ if(e&&e.code==="not_granted"){ dict=null; $("mic").hidden=true; } });
 }
 $("mic").onclick=()=>{ if(listening) dict.stop().catch(()=>{}); else ecouter(); };
@@ -1514,7 +1463,7 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
   const t=$("msg").value.trim(); if(!t) return;
   const m=mode; $("msg").value=""; $("msg").blur(); $("envoi").disabled=true;
-  try{ if(m==="monde") await creerMonde(t); else await entendre(t); } finally { $("envoi").disabled=false; setFrozen(false); } });
+  try{ if(m==="monde") creerMonde(t); else await entendre(t); } finally { $("envoi").disabled=false; setFrozen(false); } });
 
 /* ------------------------------------------------------------------ mesure sur l'appareil
    Dix mètres de marche puis l'arrêt : images par seconde, résolution choisie, temps d'une passe fixe.
@@ -1838,6 +1787,8 @@ window.balade={
   agir(actions){ enqueue(actions); },
   dire(texte){ return entendre(texte); },
   monde(texte){ return creerMonde(texte); },
+  scenes:()=>atelier.docs().map(d=>({id:d.id,titre:d.titre,source:d.source,historique:d.historique.length})),   // banque de scènes (constructeur de monde)
+  atelier:()=>atelier,
   figer(v){ setFrozen(!!v); },
   percevoir:()=>meneur?percevoirMeneur():perception(),
   histoires:()=>HIST.map(h=>h.id),

@@ -56,7 +56,15 @@ const meneurSrc = read('src/meneur.js');
 const exports = [...meneurSrc.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
 if (/^\s*import\s/m.test(meneurSrc) || /<\/script/i.test(meneurSrc)) throw new Error('src/meneur.js : pas d\'import ni de </script>');
 const meneurJs = `const MENEUR=(function(){"use strict";\n${meneurSrc.replace(/^export\s+/gm, '')}\nreturn {${exports.join(',')}};\n})();\nconst HISTOIRES=${JSON.stringify(histoires).replace(/<\//g, '<\\/')};`;
-const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n</script>\n<script>\n' + js);
+// Le constructeur de monde (src/constructeur.js, module pur) et son interface (src/atelier.js) : même enveloppe, objets CONSTRUCTEUR et ATELIER.
+function embarquer(nom, fichier) {
+  const src = read(fichier);
+  const noms = [...src.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
+  if (/^\s*import\s/m.test(src) || /<\/script/i.test(src)) throw new Error(fichier + ' : pas d\'import ni de </script>');
+  return `const ${nom}=(function(){"use strict";\n${src.replace(/^export\s+/gm, '')}\nreturn {${noms.join(',')}};\n})();`;
+}
+const constructeurJs = embarquer('CONSTRUCTEUR', 'src/constructeur.js') + '\n' + embarquer('ATELIER', 'src/atelier.js');
+const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n' + constructeurJs + '\n</script>\n<script>\n' + js);
 mkdirSync(join(root, 'dist'), { recursive: true });
 writeFileSync(join(root, 'dist/index.html'), html);
 // Variante pour un artefact claude.ai : la page y est enveloppée à la publication, donc sans doctype, html, head ni body.
