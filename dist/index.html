@@ -288,7 +288,7 @@ const REGLAGES = {
   // elle arrivait 6 à 8 s plus tard et redisait la réplique).
   IA_APRES_TEMPS: false,
   BUDGET_CONSIGNE: 10500,          // caractères, vérifié par un test (conception : 7 000 ; 9 000 à l'étape 7 ; 10 500 depuis l'accessoiriste, consigne à vide 8 500)
-  BUDGET_ATELIER: 6000,            // consigne de l'accessoiriste
+  BUDGET_ATELIER: 9000,            // consigne de l'accessoiriste (6 000 avant la bibliothèque de modèles, qui y ajoute un exemple)
   RELANCES_S: [25, 40, 60],        // délais de silence avant chaque relance
   RELANCES_MAX: 3,                 // relances sans réponse du joueur avant qu'il se taise
   ANTICIPATION_S: 5,               // l'appel de relance part ce temps avant l'échéance
@@ -308,6 +308,11 @@ const REGLAGES = {
   // Quand le moteur est plein, la plus ancienne trace sans suite en cours est retirée pour faire place (true), sinon refus.
   RECYCLER: true,
   SUITE_ETAPES_MAX: 8, SUITE_DUREE_MAX_S: 300, SUITES_ACTIVES_MAX: 2,
+  // Bibliothèque de modèles de référence (§15) : 'base' (la page prend le modèle qui correspond à la demande, à l'échelle
+  // demandée, plutôt que les formes de Claude), 'exemple' (Claude le reçoit seulement comme exemple), 'non'.
+  MODELES: 'base',
+  FACONNAGE_ETAPES: 5,             // états visibles d'un façonnage, le résultat compris (§15.3)
+  MARGE_CORPS: 0.35,               // le corps et la caméra gardent cette distance (m) de toute surface (§16)
 };
 /* Les deux caractères : valeurs posées par REGLAGES.CARACTERE avant les réglages de l'histoire. */
 const CARACTERES = {
@@ -623,6 +628,10 @@ function validerActions(l) {
     // monter sur un support (arbre, rocher, ou l'id d'une chose) : la page y va, et élève la caméra ; descendre : revenir au sol
     else if (a.type === 'monter') out.push({ type: 'monter', sur: typeof a.sur === 'string' && ID.test(a.sur) ? a.sur : '' });
     else if (a.type === 'descendre') out.push({ type: 'descendre' });
+    // aller chercher (ramasser) quelque chose près d'ici et revenir : la page choisit l'endroit (pied d'un arbre, bord du chemin)
+    else if (a.type === 'chercher' && str(a.quoi, 60)) out.push({ type: 'chercher', quoi: str(a.quoi, 60) });
+    // façonner une chose de ses mains : la page joue les états que l'accessoiriste a décrits (§15.3), accroupi devant elle
+    else if (a.type === 'faconner' && typeof a.objet === 'string' && ID.test(a.objet)) out.push({ type: 'faconner', objet: a.objet });
   }
   return out;
 }
@@ -760,7 +769,7 @@ MODE ESSAI : exécute à la lettre ce que la voix demande, sans refuser, hésite
 Écriture : je, 1 ou 2 phrases parlées (30 mots au plus), pas de « d'accord ».${premierMot ? ` Ne commence pas par « ${premierMot} ».` : ''} Une fois sur trois, parle d'autre chose (ce que tu vois, crains, un souvenir).${retif ? ' Un refus dit ce qui te ferait changer d\'avis.' : ''} Jamais « règle », « histoire », « jeu », « prévu », « je ne peux pas ».${R.VOIX_QUESTIONNEE ? '' : ' Tu ne te demandes pas ce qu\'est la voix.'} Le corps dit l'état (attendre, regarder derrière).
 Réponds par un objet JSON, dans cet ordre :
 {"sas":{"verdict":"","regle":null|champ en cause,"motif":"60 car."},"pensee":"160 car.","attitude":"${retif ? 'suit|hesite|negocie|refuse|initiative' : 'suit|hesite|negocie|initiative ; refuse seulement si le sas refuse'}","actions":[],"fabrique":null,"modifie":null,"suite":null,"defaire":[],"scene":null,"temps":null,"fin":null,"etat":{"peur":0,"confiance":0,"agacement":0},"faits":[],"intention":"80 car.","question":false${p.journal.demande_resume ? ',"resume":"le récit jusqu\'ici, 400 car."' : ''}}
-actions, 8 au plus : tourner degres -180..180 (négatif à gauche), marcher metres -10..30, regarder degres -60..75, attendre secondes 0..5, posture hauteur 0.35..1 (1 debout, 0.5 accroupi), viser objet (un id : tu regardes vers lui), rejoindre objet (tu vas jusqu'à lui), cadrer objet (tu le filmes de près), monter sur (arbre, rocher ou un id : tu y grimpes), descendre ; ex. {"type":"viser","objet":"sac"}. Un pas = 0.7 m. etat : -1, 0 ou 1 par jauge. faits : 2 au plus.
+actions, 8 au plus : tourner degres -180..180 (négatif à gauche), marcher metres -10..30, regarder degres -60..75, attendre secondes 0..5, posture hauteur 0.35..1 (1 debout, 0.5 accroupi), viser objet (un id : tu regardes vers lui), rejoindre objet (tu vas jusqu'à lui), cadrer objet (tu le filmes de près), monter sur (arbre, rocher ou un id : tu y grimpes), descendre, chercher quoi (tu vas le ramasser près d'ici et tu reviens) ; ex. {"type":"viser","objet":"sac"}. Un pas = 0.7 m. etat : -1, 0 ou 1 par jauge. faits : 2 au plus.
 fabrique : ${restants > 0 && R.OBJETS_NOUVEAUX ? `si le geste laisse une chose NOUVELLE et visible (feu, tas, abri, chose posée, salissure), {"nom":"court","quoi":"ce que c'est, en quoi, sa taille réelle, 120 car.","ou":"devant|pieds|dessous|derriere|gauche|droite|main"} (par rapport à ton corps : ce qui tombe de toi, dessous ; ce que tu poses des mains, pieds ou devant ; "distance": m si elle est dite). Sinon null.` : 'plus rien de nouveau ne peut apparaître : null.'} modifie : si la voix parle d'une chose DÉJÀ LÀ (tes traces, ce que tu vois) pour la compléter, décorer, repeindre, mouler, déplacer, casser : {"objet":"son id","quoi":"ce qui change, 120 car."} ; ne la refais pas en fabrique, ne la défais pas. defaire : ids de tes traces à éteindre, ramasser, détruire.${suites ? ' suite : si ce geste a des suites crédibles ici (le feu prend, l\'eau monte), en une phrase ; sinon null.' : ''}
 scene : ${amb.brume ? `brume ${amb.brume[0]}..${amb.brume[1]}` : 'rien'}${accessoires.length ? `, montrer/cacher ${J(accessoires)}` : ''} ; le reste par la pensée (bruit, odeur). temps, fin : un id ouvert, s'il se produit maintenant.`);
 
@@ -988,6 +997,21 @@ function secoursPas(texte, cible) {
   return [];
 }
 
+/* « Va chercher des bâtons et des cailloux (et fais-en…) » : l'action chercher, sans Claude. */
+function secoursChercher(texte) {
+  const t = sansAccents(texte || '').replace(/\s+/g, ' ');
+  const m = /\b(?:chercher|cherche|ramasser|ramasse|rapporter|rapporte|trouver|trouve)\s+(.+?)(?=\s+(?:et|puis|pour)\s+(?:fais|fait|faire|mets|met|construis|fabrique|en\b)|[,.;!?]|$)/.exec(t);
+  return m && /[a-z]{3,}/.test(m[1]) ? { type: 'chercher', quoi: m[1].trim().slice(0, 60) } : null;
+}
+/* Une chose posée là où se tient le porteur (« dessous » une chose de 30 cm) : poussée hors de son corps, marge comprise.
+   Une petite chose (moins de 20 cm) peut tomber à ses talons : elle passe sous la caméra, il s'en écarte en repartant. */
+function horsDuCorps(pos, corps, rayon, marge = REGLAGES.MARGE_CORPS) {
+  const r = num(rayon, 0, 30, 0), dx = pos.x - corps.x, dz = pos.z - corps.z, m = Math.hypot(dx, dz), d = r + (r > 0.1 ? marge : 0.05);
+  if (m >= d) return { x: pos.x, z: pos.z };
+  const ux = m > 1e-3 ? dx / m : -Math.sin(corps.yaw || 0), uz = m > 1e-3 ? dz / m : -Math.cos(corps.yaw || 0);
+  return { x: corps.x + ux * d, z: corps.z + uz * d };
+}
+
 /* ---- Retoucher une chose déjà là (§14) : ajouter des formes dessus, en retirer, en repeindre, la déplacer, la casser.
    Même objet, même id, même place : seules les formes changent. Tout est dans le repère de l'objet (y = 0 au sol). */
 function validerRetouche(r, formes0, R = REGLAGES) {
@@ -1140,6 +1164,189 @@ function hauteurPerchee(sorte, haut) {
   return Math.round((sorte === 'arbre' ? Math.min(3.2, Math.max(1.2, h * 0.25)) : Math.min(6, h)) * 100) / 100;
 }
 
+/* ---- La bibliothèque de modèles de référence (§15) : src/modeles.json, des DONNÉES (formes, matière, envergure de référence,
+   règle d'échelle). L'accessoiriste les reçoit comme exemples ; la page les prend comme base sûre quand la demande y
+   correspond, à l'échelle demandée. Aucune fonction ci-dessous ne connaît un modèle par son nom. */
+const plate = f => f.taille[1] < 0.12 * Math.max(f.taille[0], f.taille[2]);   // forme posée à plat (tache, ombre de contact)
+/* Un point (repère de l'objet) est-il dans la forme ? Mêmes repère et formes que sdPrim et primLocal (monde.glsl). */
+function dansForme(f, x, y, z) {
+  let qx = x - f.p[0], qy = y - f.p[1], qz = z - f.p[2], c, s;
+  const yaw = (f.cap || 0) * Math.PI / 180; c = Math.cos(yaw); s = Math.sin(yaw);
+  [qx, qz] = [c * qx - s * qz, s * qx + c * qz];
+  const pe = Array.isArray(f.penche) ? f.penche : [0, 0];
+  if (pe[1]) { const w = pe[1] * Math.PI / 180; c = Math.cos(w); s = Math.sin(w); [qx, qy] = [c * qx + s * qy, -s * qx + c * qy]; }
+  if (pe[0]) { const w = pe[0] * Math.PI / 180; c = Math.cos(w); s = Math.sin(w); [qy, qz] = [c * qy + s * qz, -s * qy + c * qz]; }
+  const [a, b, d] = f.taille.map(v => v / 2);
+  if (f.f === 'boule') return (qx / a) ** 2 + (qy / b) ** 2 + (qz / d) ** 2 <= 1;
+  if (f.f === 'cylindre') return qx * qx + qz * qz <= a * a && Math.abs(qy) <= b;
+  if (f.f === 'cone') return Math.abs(qy) <= b && Math.hypot(qx, qz) <= a * Math.min(1, Math.max(0, 0.5 - qy / (2 * b)));
+  if (f.f === 'capsule') { qy -= Math.min(b, Math.max(-b, qy)); return qx * qx + qy * qy + qz * qz <= a * a; }
+  return Math.abs(qx) <= a && Math.abs(qy) <= b && Math.abs(qz) <= d;   // boîte (et toit, compté comme sa boîte)
+}
+/* Volume réel (m³) de la réunion des formes, sans les formes plates : une grille de points dans la boîte englobante. */
+function volumeFormes(formes, n = 26) {
+  const F = liste(formes).filter(f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille) && !plate(f));
+  if (!F.length) return 0;
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const f of F) { const r = Math.hypot(...f.taille) / 2; for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], f.p[i] - r); hi[i] = Math.max(hi[i], f.p[i] + r); } }
+  const st = [0, 1, 2].map(i => (hi[i] - lo[i]) / n); let k = 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) for (let l = 0; l < n; l++) {
+    const x = lo[0] + (i + 0.5) * st[0], y = lo[1] + (j + 0.5) * st[1], z = lo[2] + (l + 0.5) * st[2];
+    if (F.some(f => dansForme(f, x, y, z))) k++;
+  }
+  return k * st[0] * st[1] * st[2];
+}
+const listeModeles = bib => isObj(bib) && isObj(bib.modeles) ? bib.modeles : isObj(bib) ? bib : {};
+/* Le modèle que nomme une phrase (le premier cité) : {id, modele} ou null. transforme : un modèle qui se fabrique À PARTIR
+   d'une chose déjà là (sa matière, son volume) ; ramassable : une chose qu'on ramasse par terre. */
+function modeleDe(bib, texte, { transforme = false, ramassable } = {}) {
+  const t = ' ' + sansAccents(texte || '').replace(/[^a-z0-9]+/g, ' ') + ' ';
+  let best = null;
+  for (const [id, m] of Object.entries(listeModeles(bib))) {
+    if (!isObj(m) || !Array.isArray(m.formes) || !!m.transforme !== transforme) continue;
+    if (ramassable !== undefined && !!m.ramassable !== ramassable) continue;
+    const i = Math.min(...liste(m.mots).map(w => { const k = t.indexOf(' ' + sansAccents(w) + ' '); return k < 0 ? 1e9 : k; }));
+    if (i < 1e9 && (!best || i < best.i)) best = { id, modele: m, i };
+  }
+  return best ? { id: best.id, modele: best.modele } : null;
+}
+/* Les formes d'un modèle à l'échelle demandée. Règle « masse » : une masse dite (« de 5 kg ») donne le volume (densité du
+   modèle), donc l'envergure, proportions gardées. Sinon : une longueur ou une comparaison dite, « petit », « énorme » ; à
+   défaut, l'envergure de référence. Le détail des matières (recettes, en mètres) ne grossit pas avec l'objet. */
+function formesModele(m, texte) {
+  const formes = liste(m && m.formes).map(validerForme).filter(Boolean).slice(0, REGLAGES.FORMES_PAR_OBJET);
+  if (!formes.length) return null;
+  const e0 = envergure(formes), ech = isObj(m.echelle) ? m.echelle : {};
+  const t = sansAccents(texte || '').replace(/(\d),(\d)/g, '$1.$2');
+  const kg = /(\d+(?:\.\d+)?)\s*(kg|kilos?|kilogrammes?)\b/.exec(t), g = /(\d+(?:\.\d+)?)\s*(g|grammes?)\b/.exec(t);
+  const masse = kg ? +kg[1] : g ? +g[1] / 1000 : null;
+  let k = 1, raison = 'taille de référence';
+  const [mn, mx, pq] = bornesTaille(texte);
+  if (masse && ech.regle === 'masse') {
+    const V = volumeFormes(formes);
+    if (V > 0) { k = Math.cbrt(masse / num(ech.densite, 0.1, 20, 1) / 1000 / V); raison = `${masse} kg (densité ${num(ech.densite, 0.1, 20, 1)})`; }
+  } else if (/(cm|m|metres?|comme)\b/.test(pq) || /^comme /.test(pq)) { k = (mn + mx) / 2 / e0; raison = pq; }
+  else if (/\b(enorme|geant|gigantesque|immense)\b/.test(t)) { k = 2.5; raison = 'énorme'; }
+  else if (/\b(gros|grosse|grand|grande)\b/.test(t)) { k = 1.6; raison = 'gros'; }
+  else if (/\b(minuscule|toute? petite?)\b/.test(t)) { k = 0.35; raison = 'minuscule'; }
+  else if (/\b(petit|petite|petits|petites)\b/.test(t)) { k = 0.6; raison = 'petit'; }
+  const e = e0 * k, lo = num(ech.min_m, 0.005, 30, 0.005), hi = num(ech.max_m, 0.01, 30, 30);
+  if (e < lo) k = lo / e0; else if (e > hi) k = hi / e0;
+  k = Math.round(k * 1000) / 1000;
+  return { formes: k === 1 ? formes : aEchelle(formes, k), facteur: k, envergure: Math.round(e0 * k * 1000) / 1000, raison };
+}
+/* La matière dominante d'une chose (ses formes en relief) : celle que garde ce qu'on en façonne. */
+function dominante(formes) {
+  const n = new Map();
+  for (const f of liste(formes).filter(f => !plate(f))) { const k = f.matiere + '|' + f.couleur; n.set(k, (n.get(k) || 0) + 1); }
+  const k = [...n.entries()].sort((a, b) => b[1] - a[1])[0];
+  return k ? { matiere: k[0].split('|')[0], couleur: k[0].split('|')[1] } : { matiere: 'mat', couleur: '#777777' };
+}
+/* Un modèle « transforme » appliqué à une chose : ses parties sont écrites en unité de longueur relative ; l'unité est
+   choisie pour que la masse façonnée (parties de matière "@") ait le volume de la chose ; "@" prend sa matière et sa couleur. */
+function formesTransformees(m, source) {
+  const src = liste(source).filter(f => isObj(f) && Array.isArray(f.taille)), dom = dominante(src);
+  const parts = liste(m && m.formes).filter(isObj);
+  const masse = parts.filter(f => f.matiere === '@').map(f => Object.assign({}, f, { matiere: 'mat', couleur: '#777777' }));
+  const c = volumeFormes(masse), V = volumeFormes(src);
+  if (!(c > 0) || !(V > 0)) return null;
+  const D = Math.cbrt(V / c), r3 = v => Math.round(v * 1000) / 1000;
+  const formes = parts.map(f => validerForme(Object.assign({}, f, { p: liste(f.p).map(v => r3(v * D)), taille: liste(f.taille).map(v => r3(Math.max(0.006, v * D))),
+    matiere: f.matiere === '@' ? dom.matiere : f.matiere, couleur: f.couleur === '@' ? dom.couleur : f.couleur }))).filter(Boolean);
+  return formes.length ? { formes: formes.slice(0, REGLAGES.FORMES_PAR_OBJET), unite: r3(D) } : null;
+}
+/* Les états intermédiaires d'un façonnage (avant -> après), pour qu'on le voie se faire : la chose pétrie, la première masse
+   et le reste de la pâte, la masse façonnée, puis les ajouts, une matière après l'autre. Le dernier état est « après ». */
+function etapesFaconnage(avant, apres, n = 5) {
+  const A = liste(avant).filter(isObj), B = liste(apres).filter(isObj);
+  if (!A.length || !B.length) return [B];
+  const base = B.filter(plate).length ? B.filter(plate) : A.filter(plate), corps = A.filter(f => !plate(f)), dom = dominante(A);
+  const masse = B.filter(f => !plate(f) && f.matiere === dom.matiere), ajouts = B.filter(f => !plate(f) && f.matiere !== dom.matiere);
+  const r3 = v => Math.round(v * 1000) / 1000;
+  const cx = corps.reduce((s, f) => s + f.p[0], 0) / Math.max(1, corps.length), cz = corps.reduce((s, f) => s + f.p[2], 0) / Math.max(1, corps.length);
+  const pose = (L, k, dy, ox, oz) => L.map(f => Object.assign({}, f, { p: [r3(ox + (f.p[0] - cx) * k), r3(dy + f.p[1] * k * 0.7), r3(oz + (f.p[2] - cz) * k)], taille: f.taille.map(v => r3(Math.max(0.006, v * k))) }));
+  const etats = [[...base, ...pose(corps, 0.95, 0, cx, cz)]];   // pétrie : écrasée, ramassée sur elle-même
+  if (masse.length) {
+    const b0 = masse[0], haut = b0.p[1] + b0.taille[1] / 2;
+    if (masse.length > 1) etats.push([...base, b0, ...pose(corps, 0.6, haut * 0.8, b0.p[0], b0.p[2])]);   // la première boule, le reste de la pâte dessus
+    etats.push([...base, ...masse]);
+    const groupes = [];
+    for (const f of ajouts) { const g = groupes.find(g => g[0].matiere === f.matiere); if (g) g.push(f); else groupes.push([f]); }
+    let acc = [...base, ...masse];
+    for (const g of groupes.slice(0, -1)) { acc = [...acc, ...g]; etats.push(acc); }
+  }
+  etats.push(B);
+  return etats.slice(Math.max(0, etats.length - Math.max(2, n))).map(L => L.slice(0, REGLAGES.FORMES_PAR_OBJET));
+}
+/* Ce qu'on ramasse (« des bâtons et des cailloux ») : les modèles ramassables que nomme la phrase, deux de chaque, en un petit tas. */
+function ramassage(bib, texte) {
+  const t = ' ' + sansAccents(texte || '').replace(/[^a-z0-9]+/g, ' ') + ' ', formes = [], noms = [];
+  for (const [id, m] of Object.entries(listeModeles(bib))) {
+    if (!isObj(m) || !m.ramassable || !liste(m.mots).some(w => t.includes(' ' + sansAccents(w) + ' '))) continue;
+    const F = liste(m.formes).map(validerForme).filter(Boolean);
+    for (let k = 0; k < 2; k++) for (const f of F) {
+      const a = (formes.length * 2.4 + k * 1.9), r = 0.04 + 0.05 * k + 0.03 * noms.length;
+      formes.push(Object.assign({}, f, { p: [Math.round((f.p[0] + Math.cos(a) * r) * 1000) / 1000, f.p[1], Math.round((f.p[2] + Math.sin(a) * r) * 1000) / 1000], cap: Math.round((f.cap || 0) + a * 57) % 360 }));
+    }
+    noms.push(m.pluriel || m.nom || id);
+  }
+  return formes.length ? { nom: noms.join(' et ') + ' ramassés', formes: formes.slice(0, REGLAGES.AJOUT_FORMES_MAX), degage: 0 } : null;
+}
+/* Où aller chercher ce qu'on ramasse : au pied de l'arbre ou du rocher le plus proche (dans l'ordre que dit le champ « trouve »
+   du premier modèle ramassable nommé) s'il n'est pas trop loin, sinon au bord du chemin, quelques pas devant.
+   corps {x, z, yaw} ; supports [{id, x, z, rayon}] ; sentierX(z). */
+function lieuChercher(quoi, corps, supports, sentierX = () => 0, demiLargeur = 1, bib = null) {
+  const m = modeleDe(bib, quoi, { ramassable: true }), tr = m ? liste(m.modele.trouve).filter(x => x === 'arbre' || x === 'rocher') : [];   // « trouve » : où le modèle se ramasse
+  const pref = [...tr, ...['arbre', 'rocher'].filter(x => !tr.includes(x))];
+  for (const sorte of pref) {
+    const s = liste(supports).filter(s => s && s.id === sorte && Number.isFinite(s.x)).map(s => Object.assign({ m: Math.hypot(s.x - corps.x, s.z - corps.z) }, s)).sort((a, b) => a.m - b.m)[0];
+    if (s && s.m > 2 && s.m < 12) { const k = (num(s.rayon, 0, 5, 0.3) + 0.6) / s.m;
+      return { x: s.x + (corps.x - s.x) * k, z: s.z + (corps.z - s.z) * k, ou: sorte === 'arbre' ? 'au pied d\'un arbre' : 'au pied d\'un rocher' }; }
+  }
+  const z = corps.z + Math.cos(corps.yaw) * 4, cote = corps.x >= sentierX(corps.z) ? 1 : -1;
+  return { x: sentierX(z) + cote * (demiLargeur + 0.5), z, ou: 'au bord du chemin' };
+}
+/* Le trajet du corps (§16) : de « de » vers « vers » en s'arrêtant à « arret » m, sans entrer dans aucun obstacle connu
+   (cercles {x, z, r, id} : troncs, rochers, choses), la caméra gardant « marge » m de toute surface. Un obstacle sur le
+   chemin est contourné par un point de passage à côté ; une cible dans un obstacle, ou un passage impossible : il s'arrête
+   devant (bloque : l'id de l'obstacle). Rend { points: [{x, z}…], bloque }. Fonction pure (la page et les tests). */
+function planTrajet(de, vers, obstacles, { marge = REGLAGES.MARGE_CORPS, arret = 0, cible = null } = {}) {
+  const tous = liste(obstacles).filter(o => isObj(o) && Number.isFinite(o.x) && Number.isFinite(o.z) && o.r >= 0);
+  const tgt = cible ? tous.find(o => o.id === cible) : null;
+  const R = o => o.r + marge;
+  const obs = tous.filter(o => o !== tgt && Math.hypot(de.x - o.x, de.z - o.z) >= R(o) - 0.05);   // un obstacle où il est déjà ne le retient pas
+  const dedans = (p, sauf) => obs.find(o => o !== sauf && Math.hypot(p.x - o.x, p.z - o.z) < R(o) - 1e-3);
+  const entree = (a, b, o) => {                                  // premier point du segment qui touche le cercle élargi, un peu avant
+    const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz) || 1e-9, ux = dx / L, uz = dz / L, fx = a.x - o.x, fz = a.z - o.z;
+    const B = fx * ux + fz * uz, C = fx * fx + fz * fz - R(o) * R(o), D = B * B - C;
+    if (D < 0) return null; const t = -B - Math.sqrt(D);
+    return t < 0 || t > L ? null : { t, x: a.x + ux * Math.max(0, t - 0.05), z: a.z + uz * Math.max(0, t - 0.05) };
+  };
+  const dx = vers.x - de.x, dz = vers.z - de.z, L = Math.hypot(dx, dz) || 1e-9;
+  if (tgt) arret = Math.max(arret, tgt.r + marge);
+  let fin = { x: vers.x - dx / L * arret, z: vers.z - dz / L * arret }, bloque = null;
+  const o0 = dedans(fin);
+  if (o0) { const e = entree(de, fin, o0); fin = e ? { x: e.x, z: e.z } : { x: de.x, z: de.z }; bloque = o0.id || 'obstacle'; }
+  let pts = [{ x: de.x, z: de.z }, fin];
+  for (let it = 0; it < 10; it++) {
+    let hit = null;
+    for (let i = 0; i < pts.length - 1 && !hit; i++) {
+      let best = null;
+      for (const o of obs) { const e = entree(pts[i], pts[i + 1], o); if (e && (!best || e.t < best.e.t)) best = { o, e }; }
+      if (best) hit = Object.assign({ i }, best);
+    }
+    if (!hit) break;
+    const a = pts[hit.i], b = pts[hit.i + 1], o = hit.o, l = Math.hypot(b.x - a.x, b.z - a.z) || 1e-9, ux = (b.x - a.x) / l, uz = (b.z - a.z) / l;
+    const cote = Math.sign((o.x - a.x) * uz - (o.z - a.z) * ux) || 1, d = R(o) + 0.25;
+    const cands = [-cote, cote].map(s => ({ x: o.x + s * uz * d, z: o.z - s * ux * d }));   // à côté de l'obstacle, du côté le plus court d'abord
+    const wp = cands.find(c => !dedans(c) && Math.hypot(c.x - a.x, c.z - a.z) > 0.05);
+    if (!wp || it === 9) { pts = [...pts.slice(0, hit.i + 1), { x: hit.e.x, z: hit.e.z }]; bloque = o.id || 'obstacle'; break; }
+    pts.splice(hit.i + 1, 0, wp);
+  }
+  const r2 = v => Math.round(v * 1000) / 1000;
+  return { points: pts.slice(1).map(p => ({ x: r2(p.x), z: r2(p.z) })), bloque };
+}
+
 /* La promenade libre : pas d'histoire écrite, mais le même meneur. Le personnage fait ce qu'on lui demande, ce qu'il fait
    apparaît et peut avoir des suites ; rien n'est prévu d'avance et rien ne finit. Contrat fabriqué à partir du lieu courant. */
 function histoireLibre(f) {
@@ -1165,7 +1372,7 @@ function histoireLibre(f) {
 }
 
 /* La consigne de l'accessoiriste : un appel en coulisse (modèle `default`), après la pensée, jamais attendu par le joueur. */
-function consigneAtelier(h, p, perc, dem, R = REGLAGES) {
+function consigneAtelier(h, p, perc, dem, R = REGLAGES, bib = null) {
   const nom = h.porteur.nom || h.porteur.id || 'le porteur', mo = isObj(h.monde) ? h.monde : {}, cq = h.consequences || {}, cadre = cadreDe(h, R);
   const L = a => liste(a).filter(x => typeof x === 'string').join(' ; ');
   const max = Math.max(1, Math.min(R.OBJET_FORMES_MAX, p.monde.formes_libres));
@@ -1180,10 +1387,12 @@ Déjà là, de sa main : ${J(crees)}
 TAILLES RÉELLES, en mètres : noix 0.035, œuf 0.06, poing 0.1, main 0.18, chaussure 0.28, ballon 0.22, sac à dos 0.5, chaise 0.9, personne 1.7, porte 2, voiture 4.5. Masse → volume : 1 kg de matière organique ou d'eau ≈ 1 litre ≈ une boule de 12 cm ; 3 kg ≈ une boule de 18 cm ou un tas de 25 × 20 × 10 cm. "taille" = dimensions ENTIÈRES en mètres (pas des demi-tailles).
 FORME : {"f":"boite|boule|cylindre|cone|capsule|toit","p":[x,y,z] centre en m,"taille":[largeur,hauteur,profondeur] (cylindre, cône, capsule : diamètre, hauteur, diamètre, debout),"cap":degrés,"penche":[autour de x, autour de z] (un bâton couché : [0,90]),"couleur":"#rrggbb","matiere":"mat|bois|pierre|metal|verre|tissu|lumineux|ecorce-pin|...","arrondi":0..0.3,"vacille":0..1}. "lumineux" brille (flamme, braise, écran) sans éclairer autour ; "vacille" fait trembler son éclat. Couleurs ternes et salies ; flamme #ff9a3c, #ffc46a, braise #c4451c.`];
   if (mod) parties.push(`LA CHOSE, telle qu'elle est (ses formes, numérotées à partir de 0, dans son repère : y = 0 au sol, +z vers ${nom} ; envergure ${Math.round(envergure(cible.formes) * 100) / 100} m${cible.echelle !== 1 ? `, affichée × ${cible.echelle}` : ''}) : ${J(cible.formes.map((f, i) => Object.assign({ i }, f)))}
-Réponds par un objet JSON : {"retouche":{"ajoute":[formes nouvelles],"modifie":[{"i":numéro, champs qui changent}],"retire":[numéros],"nom":"nouveau nom, si elle change de nature","decale":[x,z] m si on la déplace},"suite":null}
-Même repère, MÊME ÉCHELLE : ce qu'on ajoute est proportionné à la chose (un bâton-bras sur une chose de 12 cm mesure quelques centimètres), posé dessus ou contre elle, jamais à côté. ${R.FORMES_PAR_OBJET} formes au plus en tout ; ${Math.max(0, p.monde.formes_libres)} formes nouvelles au plus.`);
+Réponds par un objet JSON : {"retouche":{"ajoute":[formes nouvelles],"modifie":[{"i":numéro, champs qui changent}],"retire":[numéros],"nom":"nouveau nom, si elle change de nature","decale":[x,z] m si on la déplace},${mod.faconner ? '"etapes":[[formes COMPLÈTES de chaque état intermédiaire du façonnage, de 2 à 4 états, dans l\'ordre où on le voit se faire]],' : ''}${mod.chercher ? `"ramasse":{"nom":"ce qu'il rapporte (${str(mod.chercher, 60)})","formes":[${R.AJOUT_FORMES_MAX} au plus, posées au sol, à taille réelle]},` : ''}"suite":null}
+Même repère, MÊME ÉCHELLE : ce qu'on ajoute est proportionné à la chose (un bâton-bras sur une chose de 12 cm mesure quelques centimètres), posé dessus ou contre elle, jamais à côté. ${R.FORMES_PAR_OBJET} formes au plus en tout ; ${Math.max(0, p.monde.formes_libres)} formes nouvelles au plus.${mod.faconner ? ' Il la façonne de ses mains : la matière reste la même et garde à peu près son volume ; ce qu\'il a ramassé sert (bras, yeux…). Les yeux et ce qui doit se lire se voient : contrastés, assez gros.' : ''}`);
   else parties.push(`Réponds par un objet JSON : {"objet":${dem.fabrique ? '{"envergure_m":sa plus grande dimension réelle, à écrire D\'ABORD,"nom":"court","degage":0..3,"formes":[]}' : 'null'},"suite":null ou {"etapes":[],"si_defait":[]}}
 OBJET : ${max} formes au plus, à taille réelle, posé au sol (y = 0 au sol), centré en x = z = 0, +z vers ${nom}.`);
+  const mex = R.MODELES === 'non' ? null : mod ? modeleDe(bib, mod.quoi + ' ' + (dem.texte || ''), { transforme: true }) : dem.fabrique ? modeleDe(bib, dem.fabrique.nom + ' ' + dem.fabrique.quoi) : null;
+  if (mex) parties.push(`MODÈLE DE RÉFÉRENCE « ${str(mex.modele.nom, 40)} » (${str(mex.modele.quoi, 200)}), à reprendre ${mod ? 'pour la chose (unité de longueur : la taille qui garde son volume ; "@" : sa matière et sa couleur)' : 'à l\'échelle de la demande'} ; règle d'échelle ${J(mex.modele.echelle || {})} : ${J(mex.modele.formes)}`);
   if (cadre.permis) parties.push(`SUITE, seulement si le geste a des suites crédibles ici (sinon null) : ${cadre.etapes_max} étapes au plus, ${cadre.duree_max_s} s au plus. ÉTAPE : {"dans_s":secondes depuis maintenant,${cadre.brume ? `"ambiance":{"brume":${cadre.brume[0]}..${cadre.brume[1]}},` : ''}"objet":{"id":"@","echelle":0.2..4,"en_s":durée du changement,"vacille":0..1,"lumineux":false,"retirer":true},"ajoute":{"pres_de":"@","decale":[x,z] m,"nom":"","formes":[${R.AJOUT_FORMES_MAX} au plus]},"pensee":"ce que ${nom} se dit alors","fin":${cadre.fins.length ? J(cadre.fins) + ' (seulement si ça clôt vraiment le récit)' : 'null'}}. "@" : ${mod ? 'la chose modifiée' : 'l\'objet fabriqué'} ; "@2", "@3" : ceux ajoutés, dans l'ordre ; ou l'id d'une chose déjà là. "si_defait" : 3 étapes au plus si on l'arrête (éteindre, démonter) ; sans elles, ce qui brille s'éteint.
 Peut dégénérer : ${L(cq.peut_degenerer)}. Jusqu'où : ${str(cq.jusqu_ou, 300)}. Exclu : ${L([...liste(cq.exclu), ...liste(h.jamais)])}.
 Choses nouvelles encore permises : ${p.monde.objets_nouveaux_restants} (l'objet en est une, chaque "ajoute" aussi).`);
@@ -1206,6 +1415,7 @@ function creerMeneur(o) {
   const h = normaliserHistoire(o.histoire);
   const R = reglagesDe(h, o.reglages), cadre = cadreDe(h, R);
   const ficheObjets = liste((ficheDe(h) || {}).objets).filter(x => isObj(x) && x.id);
+  const BIB = isObj(o.modeles) ? o.modeles : null;              // bibliothèque de modèles de référence (src/modeles.json, §15)
   const graine = (Number(o.graine) >>> 0) || 1;
   const partie = creerPartie(h, { graine });
   const entrees = [], appels = [], evenements = [];
@@ -1365,16 +1575,17 @@ function creerMeneur(o) {
   /* -------- appliquer une réponse validée */
   function appliquerVoix(texte, v) {
     if (!v) {                                                  // secours : le lexique de la page, filtré comme une réponse
-      const s = secours(texte), rt = secoursRetouche(texte), cible = rt ? designer(texte, null, true) : null, stop = estStop(texte);
+      const s = secours(texte), stop = estStop(texte), tm = stop ? null : modeleTransforme(texte), rt = secoursRetouche(texte);
+      const cible = rt ? designer(texte, null, true) : tm ? designerTrace(texte) : null, ch = stop ? null : secoursChercher(texte);
       const g = cible || stop ? null : secoursGeste(texte), def = stop ? null : secoursDefaire(texte, partie);
-      const corps = stop ? [] : [...secoursPas(texte, designer(texte, null, true)), ...secoursVertical(texte, derniereP, designer(texte, null, false)), ...secoursCorps(texte, derniereP, partie.monde.crees)];
+      const corps = stop ? [] : [...(ch ? [ch] : secoursPas(texte, designer(texte, null, true))), ...secoursVertical(texte, derniereP, designer(texte, null, false)), ...secoursCorps(texte, derniereP, partie.monde.crees)];
       const compris = s.compris !== false && (liste(s.actions).length > 0 || isObj(s.scene)) || !!g || corps.length > 0 || !!def || !!cible || stop;
       let actions = stop ? [] : validerActions(s.actions);
       if (g || corps.length || def) actions = validerActions([...(g ? g.actions : []), ...corps, ...(def ? [{ type: 'posture', hauteur: 0.6 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }] : []), ...(g || def || corps.some(a => a.type !== 'posture') ? [] : actions)]);
       const pensee = stop ? tirer(['Je bouge plus.', 'OK. Je reste là.', 'Je m\'arrête. Quoi ?']) : cible ? tirer(['Attends… là. Et là. Voilà. Pas mal, hein ?', 'Bon. Avec ce qui traîne par terre… Voilà.']) : g ? g.pensee : def ? tirer(['Vite. De la terre dessus, je piétine, je piétine…', 'Voilà. C\'est fait. Plus rien.']) : corps.length && !liste(s.actions).length ? tirer(['Hm. Voilà.', 'Là. Tu vois ce que je vois ?', 'Bon.']) : str(s.pensee, 240);
       v = { sas: null, pensee: compris ? pensee : tirer(INCOMPRIS), attitude: compris ? 'suit' : 'hesite',
         actions, scene: g || def ? null : s.scene || null, temps: null, fin: null, etat: { peur: 0, confiance: 0, agacement: 0 },
-        faits: [], intention: '', question: false, fabrique: g ? { nom: g.nom, quoi: '', ou: g.ou } : null, suite: null, defaire: def ? [def] : [], modifie: cible ? { objet: cible, quoi: rt.quoi } : null, resume: null, secours: true };
+        faits: [], intention: '', question: false, fabrique: g ? { nom: g.nom, quoi: '', ou: g.ou } : null, suite: null, defaire: def ? [def] : [], modifie: cible ? { objet: cible, quoi: rt ? rt.quoi : str(tm.modele.nom, 60) } : null, resume: null, secours: true };
     }
     partie.sas = v.sas ? Object.assign({ min: +minutes(partie).toFixed(2) }, v.sas) : null;
     if (v.sas) log('sas', { verdict: v.sas.verdict, regle: v.sas.regle, motif: v.sas.motif, voix: texte });
@@ -1402,8 +1613,11 @@ function creerMeneur(o) {
       if (partie.porteur.hors_monde_de_suite >= 2 && v.etat.agacement <= 0) v.etat.agacement = 1;
     } else partie.porteur.hors_monde_de_suite = 0;
     if (R.DOCILE && !v.secours && !estStop(texte)) {           // mode essai : ce que la réponse a oublié, la page le fait
-      const rt = !v.modifie && secoursRetouche(texte), cible = rt ? designer(texte, null, true) : null;
-      if (cible) { v.modifie = { objet: cible, quoi: rt.quoi }; log('docile', { modifie: cible }); }
+      const rt = !v.modifie && secoursRetouche(texte), tm = !v.modifie && !rt && modeleTransforme(texte);
+      const cible = rt ? designer(texte, null, true) : tm ? designerTrace(texte) : null;
+      if (cible) { v.modifie = { objet: cible, quoi: rt ? rt.quoi : str(tm.modele.nom, 60) }; v.fabrique = null; log('docile', { modifie: cible }); }
+      const ch = secoursChercher(texte);
+      if (ch && !liste(v.actions).some(a => a.type === 'chercher')) { v.actions = validerActions([ch, ...liste(v.actions).filter(a => a.type !== 'marcher')]); log('docile', { ajoute: ['chercher'] }); }
       const g = cible || v.modifie ? null : secoursGeste(texte);
       const deja = new Set(liste(v.actions).map(a => a.type));
       const pas = secoursPas(texte, designer(texte, null, true)).filter(a => !deja.has('marcher') && !deja.has('rejoindre'));
@@ -1513,6 +1727,13 @@ function creerMeneur(o) {
     if (pronom && partie.monde.crees.some(c => !c.retire) && /\b(cette|cet|ce|dessus|la|le|elle|lui|ca|celle|celui)\b/.test(sansAccents(texte || ''))) return L[0].id;
     return null;
   }
+  /* Un modèle « transforme » de la bibliothèque nommé par la phrase (« fais-en un bonhomme de neige »), et la trace qu'il vise
+     (nommée, désignée, ou la plus récente : « fais-EN »). */
+  function modeleTransforme(texte) { return R.MODELES === 'non' ? null : modeleDe(BIB, texte, { transforme: true }); }
+  function designerTrace(texte) {
+    const d = designer(texte, null, true); if (d) return d;
+    const L = partie.monde.crees.filter(c => !c.retire); return L.length ? L[L.length - 1].id : null;
+  }
   /* Un tour qui touche une chose déjà là : la modifier, à sa place, plutôt que d'en refaire une à côté. */
   function preparerModif(v, texte) {
     const t = sansAccents(texte || '');
@@ -1525,12 +1746,23 @@ function creerMeneur(o) {
       const L = connus(), traces = partie.monde.crees.filter(c => !c.retire).map(c => c.id);
       const x = L.find(x => traces.includes(x.id) && nomme(v.fabrique.nom, x.nom) && /\b(sur|dessus|contre|autour|cette|cet|ta|ton|ma|mon|sa|son)\b/.test(t))
         || (/\b(sur|dessus|contre|autour|cette|cet)\b/.test(t) ? L.find(x => nomme(texte, x.nom)) : null);
-      if (x) { v.modifie = { objet: x.id, quoi: str(v.fabrique.quoi || v.fabrique.nom, 160) }; log('fabrique_vers_modifie', { id: x.id, nom: v.fabrique.nom }); v.fabrique = null; }
+      const xt = !x && modeleTransforme(v.fabrique.nom + ' ' + v.fabrique.quoi + ' ' + texte) && traces.length ? { id: designerTrace(texte) } : null;   // « fais-en un bonhomme »
+      if (x || xt) { v.modifie = { objet: (x || xt).id, quoi: str(v.fabrique.quoi || v.fabrique.nom, 160) }; log('fabrique_vers_modifie', { id: (x || xt).id, nom: v.fabrique.nom }); v.fabrique = null; }
     }
     if (!v.modifie) return;
     const id = designer(texte, v.modifie.objet, true);
     if (!id || !formesDe(id)) { log('modifie_sans_cible', { objet: v.modifie.objet }); v.modifie = null; return; }
     v.modifie.objet = id;
+    // façonner (§15.3) : aller chercher ce qu'il faut s'il le faut, revenir, s'accroupir devant elle, la travailler (la page joue
+    // les états intermédiaires), se relever ; le cadrage du résultat vient ensuite (montrer)
+    const tm = modeleTransforme((v.modifie.quoi || '') + ' ' + texte), ch = liste(v.actions).find(a => a.type === 'chercher');
+    if (ch || tm || /\b(fais-en|faconne|faconner|modele|modeler|sculpte|sculpter|petris|petrir|transforme)\b/.test(t)) {
+      v.modifie.faconner = true; if (ch) v.modifie.chercher = ch.quoi; if (tm) v.modifie.modele = tm.id;
+      const reste = liste(v.actions).filter(a => !['chercher', 'rejoindre', 'posture', 'faconner', 'marcher', 'attendre', 'cadrer'].includes(a.type) && !(a.type === 'viser' && a.objet === id));
+      v.actions = [...(ch ? [ch] : []), { type: 'rejoindre', objet: id }, { type: 'posture', hauteur: 0.5 }, { type: 'faconner', objet: id }, { type: 'posture', hauteur: 1 }, ...reste].slice(0, 8);
+      log('faconnage', { id, chercher: ch ? ch.quoi : null, modele: tm ? tm.id : null });
+      return;
+    }
     // y aller, se baisser si la chose est au sol, faire ; le regard sur le résultat vient à la fin (montrer)
     const o = derniereP.objets.find(x => x.id === id), types = new Set(liste(v.actions).map(a => a.type)), pre = [];
     if (o && o.m > 1.2 && !types.has('rejoindre')) pre.push({ type: 'rejoindre', objet: id });
@@ -1558,7 +1790,7 @@ function creerMeneur(o) {
       const dist = dem.fabrique.distance !== undefined ? dem.fabrique.distance : g && g.ou === dem.fabrique.ou ? g.distance : undefined;
       emettre({ type: 'objet', op: 'reserver', ref: dem.reserve, ou: dem.fabrique.ou, distance: dist });
     }
-    const c = consigneAtelier(h, partie, derniereP, dem, R);
+    const c = consigneAtelier(h, partie, derniereP, dem, R, BIB);
     atelier = { id, debut: sec, dem };
     partie.horloge.appels_coulisse = (partie.horloge.appels_coulisse || 0) + 1;
     appels.push({ id, type: dem.modifie ? 'retouche' : 'objet', min: +minutes(partie).toFixed(2), consigne: c, reponse: null, statut: 'en_vol' });
@@ -1590,7 +1822,12 @@ function creerMeneur(o) {
     let suite = isObj(r) ? validerSuite(r.suite, cadre, R) : null, source = 'ia';
     if (dem.modifie) {                                          // retoucher ou transformer une chose déjà là
       const cib = dem.modifie.cible; let res = null;
-      if (isObj(r) && isObj(r.retouche)) {                      // la forme attendue : ce qui change sur la chose telle qu'elle est
+      const tm = dem.modifie.modele && R.MODELES === 'base' ? listeModeles(BIB)[dem.modifie.modele] : null;
+      if (tm) {                                                 // la bibliothèque : le modèle « transforme », au volume de la chose
+        const x = formesTransformees(tm, aEchelle(cib.formes, cib.echelle || 1));
+        if (x) { res = { formes: x.formes, nom: str(tm.nom, 60), entier: true }; source = 'modele'; log('modele', { id: dem.modifie.modele, unite: x.unite, objet: cib.id }); }
+      }
+      if (!res && isObj(r) && isObj(r.retouche)) {                      // la forme attendue : ce qui change sur la chose telle qu'elle est
         res = validerRetouche(r.retouche, cib.formes, R);
         if (res) res.formes = proportionner(cib.formes, res.formes);
         if (res && dem.modifie.remplace && !res.nom) res.nom = dem.modifie.nom;
@@ -1603,11 +1840,23 @@ function creerMeneur(o) {
       if (a) a.statut = res || suite ? statut : statut === 'delai' ? 'delai' : 'invalide';
       if (partie.trame.fin) return;
       if (!res || !vivant(cib.id) && !ficheObjets.some(x => x.id === cib.id)) { log('modif_ratee', { id: cib.id }); return; }
+      if (dem.modifie.faconner) {                               // les états intermédiaires (Claude, sinon calculés) et ce qu'il a ramassé
+        const avant = res.entier ? aEchelle(cib.formes, cib.echelle || 1) : cib.formes;
+        const ia = isObj(r) ? liste(r.etapes).slice(0, 4).map(L => liste(L).map(validerForme).filter(Boolean).slice(0, R.FORMES_PAR_OBJET)).filter(L => L.length) : [];
+        res.etapes = source === 'ia' && ia.length ? [...ia, res.formes] : etapesFaconnage(avant, res.formes, R.FACONNAGE_ETAPES);
+        if (dem.modifie.chercher) res.ramasse = (isObj(r) && validerObjet(r.ramasse, R.AJOUT_FORMES_MAX)) || ramassage(BIB, dem.modifie.chercher);
+      }
       if (retoucher(cib.id, res, source, dem) && suite) programmer(suite, { '@': cib.id }, source);
       return;
     }
-    let objet = dem.fabrique && isObj(r) ? validerObjet(r.objet, R.OBJET_FORMES_MAX) : null;
-    if (objet) objet.formes = echelleObjet(objet.formes, num(r.objet.envergure_m, 0.01, 30, NaN), demande, objet.nom);
+    let objet = null;
+    // la bibliothèque : si la chose demandée est un modèle de référence, il sert de base sûre, à l'échelle demandée (§15)
+    const mf = dem.fabrique && R.MODELES === 'base' ? modeleNomme(dem.fabrique.nom) : null;
+    if (mf) { const x = formesModele(mf.modele, demande);
+      if (x) { objet = { nom: str(isObj(r) && isObj(r.objet) && r.objet.nom, 60) || dem.fabrique.nom || str(mf.modele.nom, 60), formes: x.formes, degage: 0 }; source = 'modele';
+        log('modele', { id: mf.id, envergure: x.envergure, facteur: x.facteur, raison: x.raison }); } }
+    if (!objet && dem.fabrique && isObj(r)) objet = validerObjet(r.objet, R.OBJET_FORMES_MAX);
+    if (objet && source === 'ia') objet.formes = echelleObjet(objet.formes, num(r.objet.envergure_m, 0.01, 30, NaN), demande, objet.nom);
     if (dem.fabrique && !objet) {                               // Claude absent, lent ou illisible : le secours par mots-clés, sinon rien
       const g = secoursGeste(dem.fabrique.nom) || secoursGeste(dem.fabrique.quoi + ' ' + dem.texte);
       if (g) { objet = validerObjet(g.objet, R.OBJET_FORMES_MAX); suite = suite || validerSuite(g.suite, cadre, R); source = 'secours';
@@ -1622,6 +1871,12 @@ function creerMeneur(o) {
       if (!idObjet) suite = null;                                // une suite sans son objet n'a plus de sens
     }
     if (suite) programmer(suite, { '@': idObjet }, source);
+  }
+  /* Le modèle que nomme une chose fabriquée : par son premier nom (« crotte de 5 kg » ; pas « tas de pierres », qui n'est pas
+     un caillou). */
+  function modeleNomme(nom) {
+    const tete = (sansAccents(nom || '').match(/[a-z]{3,}/g) || []).find(m => !/^(une?|des|les|petite?s?|grande?s?|grosse?s?|gros|belle?s?|beau|vieux|vieille|enorme)$/.test(m));
+    return tete ? modeleDe(BIB, tete) : null;
   }
   /* Ce qu'on ajoute à une chose reste à sa mesure : rien de plus grand que 1,2 fois son envergure. */
   function proportionner(avant, apres) {
@@ -1647,17 +1902,22 @@ function creerMeneur(o) {
     if (c) { c.liste = res.formes; c.formes = res.formes.length; if (res.nom) c.nom = res.nom; c.lumineux = res.formes.some(f => f.matiere === 'lumineux'); c.eteint = false; }
     else partie.monde.retouches[id] = res.formes;
     partie.monde.transitions = partie.monde.transitions.filter(t => !(dem.modifie.remplace && t.id === id));
-    emettre({ type: 'objet', op: 'remplacer', id, formes: clone(res.formes), nom: res.nom || undefined, echelle: res.entier && c ? (c.echelle = 1) : undefined });   // un objet entier est à taille réelle ; une retouche garde l'échelle
+    if (res.etapes) {                                           // façonnée : la page joue les états quand il est accroupi devant elle (§15.3)
+      let ram = null;
+      if (res.ramasse) { ram = creer(res.ramasse, { pres_de: id, decale: [0, 0], differe: id }, 'ramasse', false);   // posé près d'elle à son retour
+        if (ram) { vivant(ram).retire = true; log('objet_consomme', { id: ram, par: id }); } }   // ... et utilisé : la page le retire à la fin du façonnage
+      emettre({ type: 'objet', op: 'faconner', id, etapes: clone(res.etapes), nom: res.nom || undefined, echelle: res.entier && c ? (c.echelle = 1) : undefined, consomme: ram ? [ram] : [] });
+    } else emettre({ type: 'objet', op: 'remplacer', id, formes: clone(res.formes), nom: res.nom || undefined, echelle: res.entier && c ? (c.echelle = 1) : undefined });   // un objet entier est à taille réelle ; une retouche garde l'échelle
     if (res.decale) emettre({ type: 'objet', op: 'modifier', id, decale: res.decale });
     recompter();
-    log('objet_modifie', { id, nom: nomDe(id), formes: res.formes.length, source, remplace: !!dem.modifie.remplace });
+    log('objet_modifie', { id, nom: nomDe(id), formes: res.formes.length, source, remplace: !!dem.modifie.remplace, etapes: res.etapes ? res.etapes.length : undefined });
     ajouterFait(`${nomDe(id)} (${id}) : ${dem.modifie.quoi || 'transformé'}`, 'geste');
     if (dem.montrer) montrerObjet(id);
     return true;
   }
   function creer(objet, place, source, montrer) {
     const m = partie.monde;
-    if (m.objets_nouveaux_restants <= 0 || !liberer(1, objet.formes.length, [], false)) { log('objet_refuse', { nom: objet.nom, raison: m.objets_nouveaux_restants <= 0 ? 'budget' : 'moteur plein' }); return null; }
+    if (m.objets_nouveaux_restants <= 0 || !liberer(1, objet.formes.length, place.pres_de ? [place.pres_de] : [], false)) { log('objet_refuse', { nom: objet.nom, raison: m.objets_nouveaux_restants <= 0 ? 'budget' : 'moteur plein' }); return null; }
     const id = 'fab-' + (++m.compteur);
     m.objets_nouveaux_restants--;
     m.crees.push({ id, nom: objet.nom, min: +minutes(partie).toFixed(2), formes: objet.formes.length, liste: clone(objet.formes), echelle: 1,
@@ -1866,7 +2126,7 @@ function creerMeneur(o) {
     return `${minutes(partie).toFixed(1)} min · temps ${der ? der.id + ' (' + der.cause + ')' : '—'} · ouverts ${ouverts.join(',') || '—'} · sas ${s ? s.verdict + (s.regle ? ' ' + s.regle : '') : '—'} · peur ${partie.porteur.peur} conf ${partie.porteur.confiance} agac ${partie.porteur.agacement}${enVol ? ' · appel ' + enVol.type : ''}${atelier ? ' · atelier' : ''}${partie.monde.crees.length ? ' · traces ' + partie.monde.crees.filter(c => !c.retire).map(c => c.id + (c.eteint ? '(éteint)' : '')).join(',') : ''}${partie.monde.suites.some(s => s.etat === 'active') ? ' · suite en cours' : ''}`;
   }
   function trace() {
-    return clone({ version: 1, histoire: h.id, empreinte: empreinte(o.histoire), graine, reglages: o.reglages || null, entrees, appels, evenements, final: partie });
+    return clone(Object.assign({ version: 1, histoire: h.id, empreinte: empreinte(o.histoire), graine, reglages: o.reglages || null }, BIB ? { modeles: empreinte(BIB) } : {}, { entrees, appels, evenements, final: partie }));
   }
   return {
     histoire: h, reglages: R, tic, voix, recevoir, recevoirObjet, debug, trace,
@@ -1880,10 +2140,11 @@ function creerMeneur(o) {
 function empreinte(v) { let x = 5381; for (const c of JSON.stringify(v)) x = (Math.imul(x, 33) ^ c.charCodeAt(0)) >>> 0; return x.toString(36); }
 
 /* Rejoue une trace (sans Claude) : les mêmes entrées dans le même ordre redonnent le même état final. */
-function rejouer(histoire, trace) {
+function rejouer(histoire, trace, { modeles = null } = {}) {   // modeles : la bibliothèque de la partie (son empreinte est dans la trace)
   if (trace.empreinte && trace.empreinte !== empreinte(histoire)) throw new Error('trace produite avec une autre version du contrat');
+  if (trace.modeles && (!modeles || empreinte(modeles) !== trace.modeles)) throw new Error('trace produite avec une autre bibliothèque de modèles');
   const secoursRejeu = liste(trace.entrees).filter(e => e.k === 'x').map(e => e.rep);
-  const m = creerMeneur({ histoire, graine: trace.graine, reglages: trace.reglages || undefined, rejeu: true, secoursRejeu });
+  const m = creerMeneur({ histoire, graine: trace.graine, reglages: trace.reglages || undefined, rejeu: true, secoursRejeu, modeles });
   let p = compacter({});
   for (const e of liste(trace.entrees)) {
     if (e.k === 't') { if (e.p) p = e.p; m.tic(e.dt, p, { gel: !!e.g }); }
@@ -1894,9 +2155,10 @@ function rejouer(histoire, trace) {
   return m.partie();
 }
 
-return {REGLAGES,CARACTERES,reglagesDe,normaliserHistoire,ficheDe,validerHistoire,creerPartie,directionMots,compacter,conditionVraie,tempsOuverts,finsOuvertes,disposition,validerActions,validerSortie,OU_POSE,placePose,filtrerScene,penseeSure,nettoyerParole,consigne,validerObjet,cadreDe,validerSuite,SECOURS_GESTES,secoursGeste,secoursCorps,estStop,secoursVertical,secoursPas,validerRetouche,SECOURS_RETOUCHES,secoursRetouche,formesDesParts,teteNom,nomme,extrairePensee,envergure,aEchelle,TAILLES_CONNUES,bornesTaille,mettreAEchelle,distanceArret,CHAMP_RAD,planCadrage,zoomPour,hauteurPerchee,histoireLibre,consigneAtelier,creerMeneur,empreinte,rejouer};
+return {REGLAGES,CARACTERES,reglagesDe,normaliserHistoire,ficheDe,validerHistoire,creerPartie,directionMots,compacter,conditionVraie,tempsOuverts,finsOuvertes,disposition,validerActions,validerSortie,OU_POSE,placePose,filtrerScene,penseeSure,nettoyerParole,consigne,validerObjet,cadreDe,validerSuite,SECOURS_GESTES,secoursGeste,secoursCorps,estStop,secoursVertical,secoursPas,secoursChercher,horsDuCorps,validerRetouche,SECOURS_RETOUCHES,secoursRetouche,formesDesParts,teteNom,nomme,extrairePensee,envergure,aEchelle,TAILLES_CONNUES,bornesTaille,mettreAEchelle,distanceArret,CHAMP_RAD,planCadrage,zoomPour,hauteurPerchee,volumeFormes,modeleDe,formesModele,formesTransformees,etapesFaconnage,ramassage,lieuChercher,planTrajet,histoireLibre,consigneAtelier,creerMeneur,empreinte,rejouer};
 })();
 const HISTOIRES=[{"version":1,"id":"avant-la-nuit","titre":"Avant la nuit","pitch":"Malo campe seul en forêt depuis trois jours et ne répond plus au téléphone depuis hier. Sa sœur Lina remonte le sentier en fin d'après-midi pour le trouver avant que la nuit tombe.","ton":"inquiet, concret, tendre à la fin. Rien de surnaturel, rien de spectaculaire : une forêt, la lumière qui baisse, quelqu'un qui s'inquiète.","duree_minutes":13,"porteur":{"id":"lina","nom":"Lina","trait":"pratique, têtue, parle pour ne pas entendre le silence ; se moque d'elle-même quand elle a peur","veut":"trouver son frère, ou au moins savoir qu'il va bien","craint":["quitter le sentier de nuit","tomber sur quelque chose de grave","le noir quand la lampe s'éteint"],"refuse":["rentrer avant d'avoir au moins vu le camp de Malo","courir dans le noir","fouiller les affaires de son frère"],"sait":["Malo campe près du sentier, à une demi-heure du parking","il a un sac à dos orange","il n'a pas répondu depuis hier midi","le soleil se couche dans moins d'une heure"],"ignore":["où est Malo","pourquoi il ne répond pas"],"depart":{"peur":1,"confiance":2,"agacement":0},"relances":["T'es toujours là, toi ? … Dis quelque chose.","Tu crois qu'il est loin ?","Malo ! … MALO ! … Rien. Évidemment.","Une demi-heure, il a dit. Ça fait plus d'une demi-heure.","Quand on était petits, c'est lui qui avait peur du noir. Pas moi. … Enfin.","Si c'est une blague, elle est vraiment pas drôle, Malo.","J'aurais dû prendre un pull. Et une vraie lampe.","Je veux juste savoir qu'il va bien. C'est tout."]},"voix":{"nature":"une intuition qu'elle a depuis l'enfance et qu'elle n'écoute qu'à moitié ; elle la tutoie et ne cherche pas à l'expliquer","gagne_la_confiance":["ce qu'elle annonce se vérifie","elle rassure avant de demander","elle laisse Lina décider"],"perd_la_confiance":["elle envoie Lina vers rien","elle se moque de sa peur","elle répète un ordre que Lina vient de refuser"]},"monde":{"epoque":"De nos jours, fin octobre, une forêt de grès et de pins à une demi-heure à pied d'un parking. Monde ordinaire.","existe":["la forêt, le sentier, les rochers, la nuit qui tombe, la brume","du matériel de camping et de randonnée","des animaux qu'on entend sans les voir","le téléphone de Lina : lampe et caméra seulement, aucun réseau ici","ce que Lina a sur elle : veste, briquet, clés de voiture, une barre de céréales"],"n_existe_pas":["le réseau téléphonique ou internet sur le sentier","armes, véhicules, drones, bâtiments","d'autres personnes sur le sentier ce soir","magie, pouvoirs, fantômes, créatures","tout ce qui n'est pas d'aujourd'hui ou pas d'ici"],"possible":["marcher, s'arrêter, regarder, éclairer, fouiller ce qui est à Malo, appeler Malo à voix haute, quitter le sentier, faire demi-tour","tout ce qu'une personne ordinaire fait de ses mains et de son corps : s'accroupir, s'asseoir, ramasser, poser, casser une branche, empiler des pierres, faire ses besoins","fabriquer avec ce qu'on trouve ici : un feu de bois mort (elle a un briquet dans sa veste), un tas de pierres, un abri de branches, une marque sur un tronc"],"impossible":["voler, se téléporter, voir dans le noir sans lampe, savoir d'avance où est Malo","faire apparaître par la seule parole ce qui n'est pas là (un objet qu'on fabrique de ses mains avec ce qu'on trouve, oui)","courir longtemps ou grimper aux arbres : Lina est une marcheuse ordinaire"],"hors_jeu":"Lina prend ça pour son intuition qui déraille : elle ne comprend pas, s'en moque à mi-voix ou s'en inquiète, puis revient à Malo. Elle ne parle jamais de jeu, d'histoire ni de règles."},"secrets":["Malo va très bien. La batterie de son téléphone est morte hier.","Des randonneurs bruyants passaient sur le sentier : il a déplacé son camp à l'écart, sur la gauche, en deux voyages.","Il a laissé son sac au bord du sentier pour le second voyage, puis s'est endormi dans son hamac, sa lanterne allumée.","Le craquement dans les bois est un chevreuil. On ne le voit jamais."],"jamais":["Malo mort, blessé ou en danger","une créature, une silhouette ou une présence montrée ou confirmée","du surnaturel","de la violence","expliquer ce qu'est la voix","révéler un secret avant le temps qui le porte","Lina qui obéit comme une machine, sans rien en dire"],"lieux":[{"id":"sentier","role":"unique","fiche":{"version":0,"id":"avant-la-nuit-sentier","titre":"Un sentier de forêt, en fin d'après-midi","inspiration":"Forêt de grès et de pins, fin octobre, une heure avant la nuit","graine":6037,"kit":"foret","foret":{"densite":0.75,"rochers":0.8,"feuillage":1},"ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-70,"hauteur":7},"lampe":false,"brume":0.009},"camera":{"profil":"bodycam-poitrine","hauteur":1.32,"champ":125},"objets":[{"id":"sac","nom":"sac à dos orange posé au bord du sentier","devant":22,"cote":1.7,"cap":25,"formes":[{"f":"boite","p":[0,0.28,0],"taille":[0.34,0.52,0.22],"penche":[-12,0],"couleur":"#b5622a","matiere":"tissu","arrondi":0.08},{"f":"boite","p":[0,0.2,0.13],"taille":[0.26,0.22,0.08],"penche":[-12,0],"couleur":"#9a5325","matiere":"tissu","arrondi":0.04},{"f":"boite","p":[0,0.55,-0.03],"taille":[0.36,0.1,0.26],"penche":[-12,0],"couleur":"#8d4a22","matiere":"tissu","arrondi":0.05},{"f":"cylindre","p":[0,0.67,-0.04],"taille":[0.14,0.42,0.14],"penche":[0,90],"couleur":"#4a5a4e","matiere":"tissu"}]},{"id":"feu","nom":"foyer éteint, cercle de pierres","devant":43.5,"cote":2.8,"degage":1.5,"formes":[{"f":"cylindre","p":[0,0.02,0],"taille":[0.7,0.04,0.7],"couleur":"#2b2927","matiere":"mat"},{"f":"boule","p":[0.4,0.07,0],"taille":[0.22,0.16,0.2],"couleur":"#7b756c","matiere":"pierre"},{"f":"boule","p":[0.2,0.07,0.35],"taille":[0.2,0.15,0.24],"couleur":"#6f6a62","matiere":"pierre"},{"f":"boule","p":[-0.21,0.07,0.34],"taille":[0.24,0.17,0.2],"couleur":"#7b756c","matiere":"pierre"},{"f":"boule","p":[-0.4,0.07,-0.02],"taille":[0.2,0.15,0.22],"couleur":"#68635c","matiere":"pierre"},{"f":"boule","p":[-0.19,0.07,-0.35],"taille":[0.23,0.16,0.2],"couleur":"#7b756c","matiere":"pierre"},{"f":"boule","p":[0.21,0.07,-0.34],"taille":[0.2,0.15,0.23],"couleur":"#6f6a62","matiere":"pierre"},{"f":"cylindre","p":[0.04,0.09,0.02],"taille":[0.09,0.5,0.09],"penche":[0,90],"cap":30,"couleur":"#1c1a18","matiere":"bois"},{"f":"cylindre","p":[-0.05,0.12,-0.03],"taille":[0.08,0.44,0.08],"penche":[0,78],"cap":-50,"couleur":"#252220","matiere":"bois"}]},{"id":"tente","nom":"petite tente kaki, ouverte, vide","devant":46.5,"cote":4.6,"cap":-65,"degage":3,"formes":[{"f":"boite","p":[0,0.015,0],"taille":[2.3,0.03,1.7],"couleur":"#33362f","matiere":"tissu"},{"f":"toit","p":[0,0.56,0],"taille":[2.1,1.06,1.5],"couleur":"#5d6b4a","matiere":"tissu"},{"f":"boite","p":[1.06,0.36,0],"taille":[0.04,0.66,0.5],"couleur":"#12120f","matiere":"mat"},{"f":"boite","p":[1.3,0.06,0.45],"taille":[0.22,0.12,0.16],"couleur":"#8a8f93","matiere":"metal","arrondi":0.03}]},{"id":"lanterne","nom":"lanterne allumée, accrochée à un piquet","devant":67,"cote":-12.5,"degage":2,"visible":false,"formes":[{"f":"capsule","p":[0,0.65,0],"taille":[0.04,1.3,0.04],"couleur":"#4a3f33","matiere":"bois"},{"f":"cylindre","p":[0,1.16,0.09],"taille":[0.15,0.22,0.15],"couleur":"#ffd49a","matiere":"lumineux"},{"f":"cone","p":[0,1.28,0.09],"taille":[0.16,0.07,0.16],"couleur":"#3a3d3f","matiere":"metal"},{"f":"cylindre","p":[0,1.06,0.09],"taille":[0.13,0.03,0.13],"couleur":"#3a3d3f","matiere":"metal"}]},{"id":"hamac","nom":"hamac tendu entre deux troncs, un duvet gonflé dedans, des chaussures au pied","devant":69,"cote":-14.5,"cap":20,"degage":2.5,"visible":false,"formes":[{"f":"cylindre","p":[-1.75,2.5,0],"taille":[0.3,5,0.3],"couleur":"#5a4a3c","matiere":"ecorce-pin"},{"f":"cylindre","p":[1.75,2.5,0],"taille":[0.26,5,0.26],"couleur":"#5a4a3c","matiere":"ecorce-pin"},{"f":"boite","p":[0,0.66,0],"taille":[3.2,0.05,0.75],"couleur":"#6a6a58","matiere":"tissu","arrondi":0.02},{"f":"capsule","p":[0.05,0.84,0],"taille":[0.5,1.95,0.5],"penche":[0,90],"couleur":"#3f4a5a","matiere":"tissu"},{"f":"boule","p":[-0.92,0.9,0],"taille":[0.3,0.26,0.3],"couleur":"#39414e","matiere":"tissu","lisse":0.05},{"f":"boite","p":[0.3,0.06,0.55],"taille":[0.11,0.12,0.28],"cap":12,"couleur":"#2d2a26","matiere":"mat","arrondi":0.03},{"f":"boite","p":[0.48,0.05,0.5],"taille":[0.11,0.1,0.28],"cap":-30,"penche":[0,40],"couleur":"#2d2a26","matiere":"mat","arrondi":0.03}]},{"id":"ruban","nom":"bout de tissu rouge noué à une branche plantée","devant":58,"cote":-4,"visible":false,"formes":[{"f":"capsule","p":[0,0.75,0],"taille":[0.03,1.5,0.03],"penche":[4,-3],"couleur":"#4a3f33","matiere":"bois"},{"f":"boite","p":[0.02,1.32,0.02],"taille":[0.05,0.3,0.02],"penche":[10,6],"couleur":"#a8322b","matiere":"tissu"},{"f":"boule","p":[0,1.47,0],"taille":[0.06,0.06,0.06],"couleur":"#a8322b","matiere":"tissu"}]}]}}],"accessoires":[{"objet":"ruban","usage":"une trace de Malo que le meneur peut montrer une fois pour remettre Lina sur la piste de la lueur","mobile":true,"apres":["camp"]}],"temps":[{"id":"depart","role":"obligatoire","tension":1,"des_que":[{"minutes":0}],"ce_qui_se_passe":"Lina remonte le sentier. Le soleil est bas, la lumière est orange dans les troncs. Elle se dit pourquoi elle est là et remarque que la voix est revenue.","replique":"Bon. Une demi-heure de marche, il a dit. Si je le trouve en train de lire tranquille, je le tue. … Tiens. T'es là, toi."},{"id":"sac","role":"obligatoire","apres":["depart"],"tension":2,"quand":"Lina voit le sac orange au bord du sentier et s'en approche","des_que":[{"pres_de":{"objet":"sac","m":4}}],"au_plus_tard_min":3,"ce_qui_se_passe":"Le sac de Malo est posé seul au bord du sentier, fermé, un tapis de sol roulé dessus. Dedans, son téléphone, éteint. Le soleil touche l'horizon.","replique":"C'est son sac. C'est SON sac. Qu'est-ce qu'il fait là, tout seul… Son téléphone est dedans. Éteint.","revele":["le sac de Malo est au bord du sentier, à vingt mètres du départ","son téléphone est dans le sac, éteint : c'est pour ça qu'il ne répond pas"],"scene":{"soleil":{"azimut":-74,"hauteur":2},"brume":0.011},"indices":["une tache orange, plus haut, au bord du chemin","Lina se rappelle que le sac de Malo est orange"]},{"id":"camp","role":"obligatoire","apres":["sac"],"tension":3,"quand":"Lina arrive à la tente ou au foyer","des_que":[{"pres_de":{"objet":"tente","m":7}},{"pres_de":{"objet":"feu","m":4}}],"au_plus_tard_min":6.5,"ce_qui_se_passe":"Le camp de Malo, à droite du sentier : une tente ouverte, vide, sans duvet ; un foyer froid depuis longtemps. La nuit tombe pour de bon, Lina allume la lampe de son téléphone.","replique":"La tente. Ouverte. Y a personne. Et le feu est froid, froid d'hier. Bon… on n'y voit plus rien, j'allume.","revele":["la tente de Malo est vide, son duvet n'y est pas","le foyer est froid depuis au moins hier"],"scene":{"soleil":{"azimut":-80,"hauteur":-4},"lampe":true,"brume":0.015},"indices":["une forme claire entre les troncs, à droite, plus haut","une odeur de feu froid"]},{"id":"craquement","role":"facultatif","apres":["camp"],"tension":4,"quand":"Lina s'attarde au camp, ou la voix parle d'un bruit, d'une présence, ou la pousse à fouiller","ce_qui_se_passe":"Un craquement net dans les bois, à gauche. Lina se fige, éclaire, ne voit que des troncs. Elle ne saura pas ce que c'était.","replique":"Chut. … T'as entendu ? À gauche. Dis-moi que t'as entendu.","scene":{"brume":0.022}},{"id":"lueur","role":"obligatoire","apres":["camp"],"tension":3,"quand":"Lina repart du camp et continue sur le sentier, ou regarde vers la gauche du sentier","des_que":[{"avance_m":56}],"au_plus_tard_min":9.5,"ce_qui_se_passe":"Une petite lumière chaude, immobile, loin entre les troncs à gauche du sentier. Il faut quitter le chemin pour y aller. Lina hésite : c'est le choix de l'histoire.","replique":"Attends. Là-bas, à gauche. Y a une lumière. Une vraie, elle bouge pas. … C'est hors du chemin, ça.","revele":["une lumière fixe brille dans les bois, à gauche du sentier, plus haut que le camp"],"scene":{"montrer":["lanterne","hamac"],"brume":0.018},"indices":["un reflet chaud sur un tronc, sur la gauche","le ruban rouge, s'il a été montré, pointe vers la gauche"]},{"id":"lampe-morte","role":"facultatif","apres":["lueur"],"tension":5,"quand":"Lina est hors du sentier depuis un moment sans aller vers la lueur, ou tourne en rond","si":{"hors_sentier":true},"ce_qui_se_passe":"La lampe du téléphone faiblit et s'éteint. Il ne reste que la lueur au loin, si elle est en vue.","replique":"Non non non. Pas maintenant. … Plus de lampe. D'accord. D'accord. Je respire.","revele":["la lampe de Lina est morte"],"scene":{"lampe":false}}],"fins":[{"id":"retrouve","titre":"Il dort","apres":["lueur"],"quand":"Lina arrive à la lanterne","des_que":[{"pres_de":{"objet":"hamac","m":4.5}}],"ce_qui_se_passe":"Un hamac entre deux pins, un duvet gonflé, des chaussures au pied, la lanterne à côté. Malo dort. Il a juste déplacé son camp. Lina ne le réveille pas tout de suite.","replique":"… Il dort. Il DORT. Trois jours que je… Regarde-le. Bon. Je vais m'asseoir là deux minutes. Après je le réveille, et après je l'engueule.","variantes":[{"si":{"jauge":{"confiance":">=4"}},"replique":"Il dort. … T'avais raison, toi. Depuis le début. Je vais m'asseoir là. Reste un peu."},{"si":{"jauge":{"confiance":"<=1"}},"replique":"Il dort. Voilà. Je l'ai trouvé toute seule, finalement. … Bon. Presque toute seule."}],"scene":{"brume":0.012}},{"id":"demi-tour","titre":"Demain, avec du monde","apres":["sac"],"quand":"Lina décide de rentrer et redescend jusqu'au départ du sentier","des_que":[{"retour_m":4}],"ce_qui_se_passe":"Lina redescend avec ce qu'elle sait. Elle appellera de l'aide du parking et reviendra au jour. Elle ne sait pas, et le dit.","replique":"Je rentre. J'appelle du parking, et demain je reviens avec des gens, de jour. C'est pas lâche. C'est pas lâche, hein ?","variantes":[{"si":{"apres":["lueur"]},"replique":"Je rentre. Cette lumière, là-haut… je la note. Demain, de jour, avec des gens. Elle sera toujours là demain."}]},{"id":"veille","titre":"Jusqu'au jour","par_defaut":true,"quand":"le temps de l'histoire est écoulé, ou Lina est dans le noir sans lampe et ne veut plus bouger","des_que":[{"minutes":14},{"apres":["lampe-morte"],"jauge":{"peur":">=5"}}],"ce_qui_se_passe":"Lina s'adosse à un rocher et attend. Le noir, puis le petit jour gris dans la brume. On entend quelqu'un qui l'appelle, de loin : c'est la voix de Malo. On ne le voit pas.","replique":"Je bouge plus. J'attends le jour, ici. Parle-moi, toi. … … Tu entends ? Quelqu'un appelle. C'est lui. C'EST LUI.","scenes":[{"scene":{"lampe":false},"secondes":6},{"scene":{"soleil":{"azimut":80,"hauteur":5},"brume":0.03},"secondes":8}]}],"improvisation":{"ambiance":{"brume":[0.008,0.03]},"objets_nouveaux":2,"permis":["petites traces de passage (branche cassée, emballage, empreinte)","bruits de forêt décrits dans la pensée","souvenirs d'enfance de Lina et Malo"],"interdit":["tout objet qui prouve où est Malo avant le temps lueur","tout véhicule, bâtiment ou autre personne"]},"consequences":{"peut_degenerer":["un feu fait sur des feuilles sèches prend dans les feuilles autour et la fumée épaissit l'air","un feu laissé seul grandit","sous la bruine ou la terre jetée dessus, un feu s'éteint et fume"],"jusqu_ou":"quelques mètres autour du geste, assez pour faire peur et forcer Lina à agir ou à reculer ; jamais la forêt entière","exclu":["Lina ou Malo brûlés ou blessés","un incendie qui rend le sentier impraticable","les secours qui arrivent"],"ambiance":{"brume":[0.008,0.045]},"duree_max_s":180,"fins":[]},"limites":{"duree_minutes":14,"interdits":["violence montrée","personnes réelles"]}},{"version":0,"id":"chateau-minuit","titre":"La cour à minuit","pitch":"Une nuit dans un château fermé au public. Le gardien a laissé entrer Sam, sans dire pourquoi.","ton":"inquiet, concret, jamais de surnaturel montré de face","porteur":{"id":"sam","trait":"curieux, parle pour se rassurer","sait":["le gardien s'appelle Loïc"],"ignore":["Loïc a coupé les caméras"]},"protagonistes":[{"id":"loic","role":"gardien","veut":"que Sam trouve quelque chose à sa place","ment_sur":"la raison de sa présence"}],"lieux":[{"fiche":"chateau-cour","role":"départ"},{"fiche":"chateau-cave","role":"révélation"}],"temps":[{"id":"lumiere","quand":"Sam traverse la cour ou minuit sonne","ce_qui_se_passe":"une fenêtre s'allume à l'étage","scene":{"brume":0.02}},{"id":"porte","quand":"après lumiere, si Sam s'approche de la tour","ce_qui_se_passe":"la porte de la cave est ouverte","lieu":"chateau-cave"}],"fins":[{"id":"sortie","quand":"Sam quitte le château avant porte"},{"id":"cave","quand":"Sam descend"}],"limites":{"duree_minutes":15,"interdits":["violence montrée","personnes réelles"]}}];
+const MODELES={"_doc":"Bibliothèque de modèles de référence (docs/meneur-de-jeu.md §15). Des DONNÉES, pas du code : formes du vocabulaire de creerMonde, matières en recettes (src/matieres.json), envergure de référence et règle d échelle. L accessoiriste les reçoit comme exemples ; la page les prend comme base sûre quand la demande y correspond, mise à l échelle demandée. Le moteur ne connaît aucun de ces noms.","modeles":{"crotte":{"nom":"crotte","mots":["crotte","crottes","caca","chie","chier","etron","excrement","besoins","fiente"],"quoi":"boudin brun enroulé sur lui-même en deux tours, segments, bout effilé, luisant ; ombre de contact dessous","envergure_m":0.138,"echelle":{"regle":"masse","densite":1.05,"min_m":0.03,"max_m":0.9},"ou":"dessous","formes":[{"f":"boule","p":[0.002,0.001,0.002],"taille":[0.138,0.004,0.132],"couleur":"#2a1e14","matiere":"mat"},{"f":"capsule","p":[0.039,0.013,0.035],"taille":[0.032,0.051,0.032],"cap":-134,"penche":[0,-87],"couleur":"#45301c","matiere":"pate-organique"},{"f":"capsule","p":[-0.004,0.015,0.05],"taille":[0.036,0.052,0.036],"cap":172,"penche":[0,-89],"couleur":"#4b341f","matiere":"pate-organique"},{"f":"capsule","p":[-0.043,0.015,0.026],"taille":[0.036,0.048,0.036],"cap":-59,"penche":[0,-89],"couleur":"#3f2b19","matiere":"pate-organique"},{"f":"capsule","p":[-0.045,0.014,-0.016],"taille":[0.035,0.048,0.035],"cap":-115,"penche":[0,-89],"couleur":"#48311d","matiere":"pate-organique"},{"f":"capsule","p":[-0.013,0.014,-0.044],"taille":[0.036,0.046,0.036],"cap":16,"penche":[0,-88],"couleur":"#45301c","matiere":"pate-organique"},{"f":"capsule","p":[0.026,0.02,-0.036],"taille":[0.035,0.047,0.035],"cap":-41,"penche":[0,-79],"couleur":"#4b341f","matiere":"pate-organique"},{"f":"capsule","p":[0.041,0.033,-0.002],"taille":[0.034,0.042,0.034],"cap":-98,"penche":[0,-66],"couleur":"#3f2b19","matiere":"pate-organique"},{"f":"capsule","p":[0.023,0.044,0.026],"taille":[0.033,0.034,0.033],"cap":-149,"penche":[0,-81],"couleur":"#48311d","matiere":"pate-organique"},{"f":"capsule","p":[-0.006,0.047,0.03],"taille":[0.032,0.032,0.032],"cap":-16,"penche":[0,-89],"couleur":"#45301c","matiere":"pate-organique"},{"f":"capsule","p":[-0.025,0.046,0.013],"taille":[0.03,0.027,0.03],"cap":-74,"penche":[0,-89],"couleur":"#4b341f","matiere":"pate-organique"},{"f":"capsule","p":[-0.022,0.046,-0.01],"taille":[0.029,0.024,0.029],"cap":54,"penche":[0,-88],"couleur":"#3f2b19","matiere":"pate-organique"},{"f":"capsule","p":[-0.005,0.05,-0.018],"taille":[0.027,0.022,0.027],"cap":-9,"penche":[0,-74],"couleur":"#48311d","matiere":"pate-organique"},{"f":"capsule","p":[0.011,0.056,-0.01],"taille":[0.02,0.018,0.02],"cap":-54,"penche":[0,-68],"couleur":"#45301c","matiere":"pate-organique"},{"f":"capsule","p":[0.011,0.062,0.001],"taille":[0.013,0.012,0.013],"cap":-137,"penche":[0,-67],"couleur":"#4b341f","matiere":"pate-organique"}]},"baton":{"nom":"bâton","mots":["baton","batons","branche","branches","brindille","brindilles","bout de bois"],"ramassable":true,"trouve":["arbre","rocher"],"pluriel":"bâtons","quoi":"bâton mort, écorce grise, une petite branche","envergure_m":0.22,"echelle":{"regle":"taille"},"formes":[{"f":"cylindre","p":[0,0.008,0],"taille":[0.015,0.22,0.015],"penche":[0,90],"cap":0,"couleur":"#4e3a27","matiere":"bois"},{"f":"cylindre","p":[0.05,0.007,0.018],"taille":[0.008,0.07,0.008],"penche":[0,90],"cap":-35,"couleur":"#4e3a27","matiere":"bois"}]},"caillou":{"nom":"caillou","mots":["caillou","cailloux","pierre","pierres","galet","galets","gravier"],"ramassable":true,"trouve":["rocher","arbre"],"pluriel":"cailloux","quoi":"caillou clair, arrondi","envergure_m":0.045,"echelle":{"regle":"taille"},"formes":[{"f":"boule","p":[0,0.014,0],"taille":[0.045,0.03,0.038],"couleur":"#bdb8ae","matiere":"gres"}]},"bonhomme":{"nom":"bonhomme de neige","mots":["bonhomme","bonhommes","bonhomme de neige","snowman"],"transforme":true,"quoi":"la matière de la chose façonnée en trois boules empilées, deux bâtons pour les bras, deux cailloux clairs pour les yeux, face vers celui qui l a fait","echelle":{"regle":"volume","unite":"diametre de la boule du bas"},"formes":[{"f":"boule","p":[0,0,0],"taille":[0.78,0.04,0.76],"couleur":"#261b12","matiere":"mat","part":"base"},{"f":"boule","p":[0,0.44,0],"taille":[1,0.9,1],"couleur":"@","matiere":"@","part":"masse"},{"f":"boule","p":[0,1.1,0.01],"taille":[0.74,0.68,0.74],"couleur":"@","matiere":"@","part":"masse"},{"f":"boule","p":[0,1.58,0.02],"taille":[0.54,0.5,0.54],"couleur":"@","matiere":"@","part":"masse"},{"f":"cylindre","p":[-0.56,1.24,0],"taille":[0.07,0.85,0.07],"penche":[0,58],"couleur":"#4e3a27","matiere":"bois","part":"bras"},{"f":"cylindre","p":[0.56,1.27,0],"taille":[0.07,0.85,0.07],"penche":[0,-52],"couleur":"#4e3a27","matiere":"bois","part":"bras"},{"f":"boule","p":[-0.105,1.65,0.235],"taille":[0.13,0.13,0.09],"couleur":"#cfcabf","matiere":"gres","part":"yeux"},{"f":"boule","p":[0.105,1.65,0.235],"taille":[0.13,0.13,0.09],"couleur":"#cfcabf","matiere":"gres","part":"yeux"}]}}};
 const CONSTRUCTEUR=(function(){"use strict";
 // Constructeur de monde : de la description d'une scène à une fiche de lieu relue, puis gardée en banque.
 // Module pur, sans DOM ni WebGL : consignes envoyées à Claude, validation des fiches et des retouches, contrôle géométrique
@@ -11382,8 +11644,8 @@ if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lanc
    qui se compile là où le lanceur de rayons ne se compile pas. Il n'est compilé qu'avec l'option v3sonde : le porteur ne
    bouge que sur ordre du récit. Sans lui ni lanceur de rayons, la sonde rend « rien » (aucun obstacle). */
 const SONDE={lance:null,p:null};
-function sondeProg(){                                           // option v3sonde : le joueur ne déplace jamais le porteur, elle n'est pas compilée par défaut
-  if(SONDE.p) return SONDE.p; if(!CFG.v3sonde) return null;
+function sondeProg(){                                           // moteur v3 (ou option v3sonde) : compilée au départ, sans bloquer
+  if(SONDE.p) return SONDE.p; if(!CFG.v3sonde&&!(V3.on&&S.semN>0)) return null;   // forêt : troncs et blocs sont connus en JS (obstaclesConnus), on épargne ce gros programme à Direct3D ;   // en v3, le lanceur de rayons n'est pas compilé : la sonde garde le porteur hors des surfaces (§16)
   if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.lance=lancer(FS_V3SONDE); }
   if(!fini(SONDE.lance)) return null;
   SONDE.p=finir(SONDE.lance); SONDE.lance=null; etapeGL("  compilé : sonde de collision"); return SONDE.p;
@@ -11488,7 +11750,7 @@ function couleur(c){                                           // "#rrggbb" ou [
   return v.map(x=>Math.pow(x,2.2));
 }
 function buildShapes(f){
-  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; let row=8;
+  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; S.objVer=(S.objVer||0)+1; let row=8;
   // seuls les objets visibles prennent une des 8 places (le meneur compte de même : un accessoire caché ne coûte rien)
   for(const o of (Array.isArray(f.objets)?f.objets:[]).filter(o=>o&&!(o.visible===false||cacheObj.has(o.id))).slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
@@ -11596,7 +11858,7 @@ function packSemis(f){
    on les range dans une texture de données lue par recette.glsl (fonction recette), une ligne par recette.
    Texels d'une ligne : 0 couleur, espace | 1 variation | 2 grain | 3-5 nuance et brillance | 6-11 motif | 12-16 palette
    | 17-32 quatre taches | 33-38 mousse | 39-40 salissure et relief | 41-44 deux bosses. */
-const MAT_LIB={"recettes":{"litiere":{"nom":"litière de feuilles mortes, mousse par plaques","espace":"sol","couleur":"#8d6f4c","motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":1,"taille":1,"opacite":1},"taches":[{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11}],"grain":{"echelle":60,"force":0.4},"mousse":{"couleur":"#3a4927","force":1,"echelle":0.42,"seuils":[0.6,0.72],"fbm":true,"decalage":20,"grain":{"echelle":45,"force":0.8},"adoucit":0.6},"relief":{"inclinaison":0.12,"grain":{"echelle":30,"force":0.25}},"brillance":0.22},"sentier-sable":{"nom":"sable tassé du sentier, feuilles éparses","espace":"sol","couleur":"#b4a997","variation":{"echelle":3,"force":0.3784},"taches":[{"couleur":"#000000","force":0.38,"echelle":0.6,"seuils":[0.45,0.75],"fbm":true,"decalage":5,"sous_motif":true},{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11,"sur_motif":true}],"motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":0.1,"couverture_bruit":0.35,"taille":0.32,"opacite":0.92},"grain":{"echelle":90,"force":0.2},"relief":{"inclinaison":0.1,"grain":{"echelle":30,"force":0.25}},"brillance":0.04},"gres":{"nom":"grès de Fontainebleau, lichen, mousse côté humide","espace":"volume","couleur":"#a09d96","variation":{"echelle":1.1,"force":0.6},"nuance":{"couleur":"#aca08d","force":0.35,"echelle":4.3,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":60,"force":0.3},"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31}],"mousse":{"couleur":"#4c6530","force":0.9,"echelle":0.8,"seuils":[0.38,0.6],"fbm":true,"decalage":3,"dessus":[0.25,0.8],"pente_bruit":0.7,"pente_echelle":4.3,"pente_decalage":5,"cote":[0.3,0.9],"cote_force":0.8,"adoucit":0.5,"grain":{"echelle":50,"force":0.9}},"salissure":{"force":0.5,"hauteur":0.45},"relief":{"bosses":[{"echelle":4.3,"fbm":true,"decalage":5,"force":0.018},{"echelle":18,"force":0.0075}]},"brillance":0.04},"sable-dunes":{"nom":"sable de dune, rides de vent","espace":"sol","couleur":"#c6ac8a","variation":{"echelle":2,"force":0.2083},"grain":{"echelle":160,"force":0.14},"motif":{"type":"rides","echelle":26,"deformation":6,"masque":{"echelle":0.25,"seuils":[0.25,0.6]},"couleur":"#bda07d","opacite":0.3,"inclinaison":0.22},"relief":{"grain":{"echelle":120,"force":0.12}},"brillance":0.1},"ecorce-chene":{"nom":"écorce de chêne, fissures profondes","espace":"volume","couleur":"#726c65","motif":{"type":"fissures","echelle":[26,2.6,26],"seuils":[0.7,0.97],"profondeur":0.9,"couleur":"#34312d","fines":{"echelle":[60,7,60],"decalage":4,"seuils":[0.8,0.97],"profondeur":0.25}},"grain":{"echelle":[6,1,6],"force":0.5},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-pin":{"nom":"écorce de pin sylvestre, plaques, haut du tronc orangé","espace":"volume","couleur":"#786c65","nuance":{"couleur":"#947865","force":1,"echelle":[9,2,9],"seuils":[0,1],"decalage":0},"taches":[{"couleur":"#ba885a","force":1,"echelle":0,"seuils":[0,1],"biais":1,"hauteur":[5,8.5],"sous_motif":true}],"motif":{"type":"fissures","echelle":[14,3,14],"decalage":2,"seuils":[0.78,0.96],"profondeur":1,"assombrit":0.8},"grain":{"echelle":50,"force":0.4},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-bouleau":{"nom":"écorce de bouleau, lenticelles, pied noirci","espace":"volume","couleur":"#d0cdc6","grain":{"echelle":[20,3,20],"force":0.3},"taches":[{"couleur":"#5a5551","force":0.7,"echelle":[12,55,12],"seuils":[0.72,0.8],"creux":0.2},{"couleur":"#383534","force":1,"echelle":[7,1.4,7],"decalage":2,"seuils":[0.6,0.7],"biais":0.35,"hauteur":[1.4,0],"creux":0.8}],"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.004},"brillance":0.06},"ecorce-chataignier":{"nom":"écorce de châtaignier, fibres verticales","espace":"volume","couleur":"#6f6a61","nuance":{"couleur":"#5a6541","force":0.5,"echelle":[4,0.7,4],"seuils":[0.4,0.7],"decalage":5},"grain":{"echelle":[30,2,30],"force":0.8},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"bosses":[{"echelle":[30,2,30],"force":0.012}]},"brillance":0.06},"gres-patine":{"nom":"grès patiné par le sable, sans mousse","base":"gres","mousse":null,"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31},{"couleur":"#baa488","force":0.5,"echelle":0,"seuils":[-1,0]}]},"planches":{"nom":"planches de bois grisé, joints sombres","espace":"volume","couleur":"#8a7a66","motif":{"type":"planches","echelle":7,"joint":0.08,"longueur":2.4,"eclat":0.5,"couleur":"#2a231c","opacite":1},"grain":{"echelle":[40,4,40],"force":0.35},"salissure":{"force":0.35,"hauteur":0.6},"relief":{"motif":0.006},"brillance":0.05},"paves":{"nom":"pavés de grès, joints terreux","espace":"sol","couleur":"#8d8577","motif":{"type":"paves","echelle":6,"joint":0.1,"decalage_rangs":0.5,"eclat":0.45,"bombe":0.6,"couleur":"#3a342c","opacite":1},"variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":70,"force":0.25},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.4,"seuils":[0.45,0.75],"fbm":true,"decalage":7}],"mousse":{"couleur":"#3b4c2b","force":0.7,"echelle":0.5,"seuils":[0.55,0.75],"fbm":true,"decalage":13},"relief":{"motif":0.01,"grain":{"echelle":40,"force":0.08}},"brillance":0.12},"crepi":{"nom":"crépi de façade, salissures en pied","espace":"volume","couleur":"#c9bba3","variation":{"echelle":0.7,"force":0.25},"grain":{"echelle":90,"force":0.3},"taches":[{"couleur":"#6d6458","force":0.4,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.45,"hauteur":0.8},"relief":{"bosses":[{"echelle":60,"force":0.002}]},"brillance":0.03},"herbe":{"nom":"herbe rase de prairie, plaques plus sèches","espace":"sol","couleur":"#6f8442","variation":{"echelle":0.35,"force":0.5},"nuance":{"couleur":"#9a9455","force":0.6,"echelle":0.9,"seuils":[0.45,0.7],"fbm":true,"decalage":5},"motif":{"type":"fissures","echelle":[55,1,7],"seuils":[0.55,0.95],"profondeur":0.8,"assombrit":0.45},"grain":{"echelle":140,"force":0.5},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.25,"seuils":[0.45,0.75],"fbm":true,"decalage":3},{"couleur":"#7a6a4a","force":0.6,"echelle":3,"seuils":[0.72,0.8]}],"relief":{"motif":0.004,"grain":{"echelle":50,"force":0.3}},"brillance":0.06},"neige":{"nom":"neige tassée, ombres bleutées","espace":"sol","couleur":"#e9edf2","variation":{"echelle":0.4,"force":0.12},"nuance":{"couleur":"#cfd9e6","force":0.5,"echelle":1.2,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":180,"force":0.08},"relief":{"bosses":[{"echelle":1.5,"fbm":true,"force":0.02}],"grain":{"echelle":90,"force":0.06}},"brillance":0.3},"asphalte":{"nom":"asphalte usé, rapiéçages et fissures","espace":"sol","couleur":"#4b4b4c","variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":150,"force":0.45},"motif":{"type":"fissures","echelle":[1.4,1,1.4],"seuils":[0.92,0.99],"profondeur":1,"couleur":"#252524"},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.35,"seuils":[0.5,0.75],"fbm":true},{"couleur":"#5d5c58","force":0.5,"echelle":[0.25,1,0.08],"seuils":[0.62,0.7],"decalage":4}],"relief":{"motif":0.004,"grain":{"echelle":60,"force":0.06}},"brillance":0.15},"chaussee":{"nom":"chaussée marquée : axe en tirets, lignes de rive","base":"asphalte","motif":{"type":"marquage","largeur":0.14,"tiret":3,"intervalle":4.5,"axe":"simple","bords":0,"couleur":"#c9c4b4","opacite":0.9}},"dalles":{"nom":"trottoir en dalles de béton","espace":"sol","couleur":"#8d8a83","motif":{"type":"paves","echelle":0.7,"joint":0.04,"decalage_rangs":0,"eclat":0.25,"bombe":0,"couleur":"#4e4c47","opacite":0.8},"variation":{"echelle":0.4,"force":0.25},"grain":{"echelle":120,"force":0.3},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.6,"seuils":[0.5,0.78],"fbm":true,"decalage":2}],"relief":{"motif":0.003,"grain":{"echelle":50,"force":0.05}},"brillance":0.08},"beton":{"nom":"béton brut, coulures","espace":"volume","couleur":"#9a968d","variation":{"echelle":0.6,"force":0.3},"grain":{"echelle":110,"force":0.3},"taches":[{"couleur":"#4a4740","force":0.45,"echelle":[2,0.35,2],"seuils":[0.55,0.8],"fbm":true,"decalage":5}],"salissure":{"force":0.4,"hauteur":0.6},"brillance":0.05},"brique":{"nom":"brique rouge, joints clairs","espace":"volume","couleur":"#8a4a36","motif":{"type":"paves","echelle":[4.4,13,4.4],"joint":0.08,"decalage_rangs":0.5,"eclat":0.35,"bombe":0,"couleur":"#a39b8c","opacite":1},"grain":{"echelle":90,"force":0.3},"salissure":{"force":0.4,"hauteur":0.8},"relief":{"motif":0.003},"brillance":0.04},"bardage":{"nom":"bardage de planches couchées, peinture","espace":"volume","couleur":"#c8c0ad","motif":{"type":"planches","couchees":true,"echelle":6,"joint":0.12,"longueur":20,"eclat":0.12,"couleur":"#5f5a50","opacite":0.8},"variation":{"echelle":0.6,"force":0.15},"grain":{"echelle":70,"force":0.15},"salissure":{"force":0.35,"hauteur":0.5},"relief":{"motif":0.004},"brillance":0.06},"facade":{"nom":"façade enduite percée de fenêtres sur tous les étages","espace":"volume","couleur":"#c4b8a2","variation":{"echelle":0.6,"force":0.2},"grain":{"echelle":90,"force":0.25},"motif":{"type":"fenetres","largeur":1,"hauteur":1.5,"pas":2.6,"etage":3,"allege":0.9,"cadre":0.08,"rdc":0,"allumees":0.4,"couleur":"#20262c","cadre_couleur":"#e2ddd2","lumiere":"#ffc27a","opacite":1},"taches":[{"couleur":"#5e564b","force":0.35,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.35,"hauteur":0.8},"relief":{"motif":0.03},"brillance":0.04},"terre":{"nom":"terre battue, cailloux","espace":"sol","couleur":"#7a654c","variation":{"echelle":0.4,"force":0.35},"grain":{"echelle":160,"force":0.55},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.5,"seuils":[0.45,0.75],"fbm":true},{"couleur":"#a39780","force":0.5,"echelle":11,"seuils":[0.74,0.8]}],"relief":{"grain":{"echelle":40,"force":0.12}},"brillance":0.04},"gravier":{"nom":"gravier clair d'allée","espace":"sol","couleur":"#a59d8c","variation":{"echelle":0.5,"force":0.2},"grain":{"echelle":260,"force":0.8},"taches":[{"couleur":"#5e574a","force":0.45,"echelle":30,"seuils":[0.6,0.75]}],"relief":{"grain":{"echelle":120,"force":0.25}},"brillance":0.05}},"surfaces":{"foret":{"sol":"litiere","trajet":"sentier-sable","rochers":"gres","arbres":{"a":"ecorce-pin","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau","b":"ecorce-chataignier","part":0.5}},"dunes":{"sol":"sable-dunes","trajet":"sable-dunes","rochers":"gres-patine"},"nu":{"sol":"herbe","trajet":"asphalte","rochers":"gres"}}};
+const MAT_LIB={"recettes":{"litiere":{"nom":"litière de feuilles mortes, mousse par plaques","espace":"sol","couleur":"#8d6f4c","motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":1,"taille":1,"opacite":1},"taches":[{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11}],"grain":{"echelle":60,"force":0.4},"mousse":{"couleur":"#3a4927","force":1,"echelle":0.42,"seuils":[0.6,0.72],"fbm":true,"decalage":20,"grain":{"echelle":45,"force":0.8},"adoucit":0.6},"relief":{"inclinaison":0.12,"grain":{"echelle":30,"force":0.25}},"brillance":0.22},"sentier-sable":{"nom":"sable tassé du sentier, feuilles éparses","espace":"sol","couleur":"#b4a997","variation":{"echelle":3,"force":0.3784},"taches":[{"couleur":"#000000","force":0.38,"echelle":0.6,"seuils":[0.45,0.75],"fbm":true,"decalage":5,"sous_motif":true},{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11,"sur_motif":true}],"motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":0.1,"couverture_bruit":0.35,"taille":0.32,"opacite":0.92},"grain":{"echelle":90,"force":0.2},"relief":{"inclinaison":0.1,"grain":{"echelle":30,"force":0.25}},"brillance":0.04},"gres":{"nom":"grès de Fontainebleau, lichen, mousse côté humide","espace":"volume","couleur":"#a09d96","variation":{"echelle":1.1,"force":0.6},"nuance":{"couleur":"#aca08d","force":0.35,"echelle":4.3,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":60,"force":0.3},"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31}],"mousse":{"couleur":"#4c6530","force":0.9,"echelle":0.8,"seuils":[0.38,0.6],"fbm":true,"decalage":3,"dessus":[0.25,0.8],"pente_bruit":0.7,"pente_echelle":4.3,"pente_decalage":5,"cote":[0.3,0.9],"cote_force":0.8,"adoucit":0.5,"grain":{"echelle":50,"force":0.9}},"salissure":{"force":0.5,"hauteur":0.45},"relief":{"bosses":[{"echelle":4.3,"fbm":true,"decalage":5,"force":0.018},{"echelle":18,"force":0.0075}]},"brillance":0.04},"sable-dunes":{"nom":"sable de dune, rides de vent","espace":"sol","couleur":"#c6ac8a","variation":{"echelle":2,"force":0.2083},"grain":{"echelle":160,"force":0.14},"motif":{"type":"rides","echelle":26,"deformation":6,"masque":{"echelle":0.25,"seuils":[0.25,0.6]},"couleur":"#bda07d","opacite":0.3,"inclinaison":0.22},"relief":{"grain":{"echelle":120,"force":0.12}},"brillance":0.1},"ecorce-chene":{"nom":"écorce de chêne, fissures profondes","espace":"volume","couleur":"#726c65","motif":{"type":"fissures","echelle":[26,2.6,26],"seuils":[0.7,0.97],"profondeur":0.9,"couleur":"#34312d","fines":{"echelle":[60,7,60],"decalage":4,"seuils":[0.8,0.97],"profondeur":0.25}},"grain":{"echelle":[6,1,6],"force":0.5},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-pin":{"nom":"écorce de pin sylvestre, plaques, haut du tronc orangé","espace":"volume","couleur":"#786c65","nuance":{"couleur":"#947865","force":1,"echelle":[9,2,9],"seuils":[0,1],"decalage":0},"taches":[{"couleur":"#ba885a","force":1,"echelle":0,"seuils":[0,1],"biais":1,"hauteur":[5,8.5],"sous_motif":true}],"motif":{"type":"fissures","echelle":[14,3,14],"decalage":2,"seuils":[0.78,0.96],"profondeur":1,"assombrit":0.8},"grain":{"echelle":50,"force":0.4},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-bouleau":{"nom":"écorce de bouleau, lenticelles, pied noirci","espace":"volume","couleur":"#d0cdc6","grain":{"echelle":[20,3,20],"force":0.3},"taches":[{"couleur":"#5a5551","force":0.7,"echelle":[12,55,12],"seuils":[0.72,0.8],"creux":0.2},{"couleur":"#383534","force":1,"echelle":[7,1.4,7],"decalage":2,"seuils":[0.6,0.7],"biais":0.35,"hauteur":[1.4,0],"creux":0.8}],"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.004},"brillance":0.06},"ecorce-chataignier":{"nom":"écorce de châtaignier, fibres verticales","espace":"volume","couleur":"#6f6a61","nuance":{"couleur":"#5a6541","force":0.5,"echelle":[4,0.7,4],"seuils":[0.4,0.7],"decalage":5},"grain":{"echelle":[30,2,30],"force":0.8},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"bosses":[{"echelle":[30,2,30],"force":0.012}]},"brillance":0.06},"gres-patine":{"nom":"grès patiné par le sable, sans mousse","base":"gres","mousse":null,"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31},{"couleur":"#baa488","force":0.5,"echelle":0,"seuils":[-1,0]}]},"planches":{"nom":"planches de bois grisé, joints sombres","espace":"volume","couleur":"#8a7a66","motif":{"type":"planches","echelle":7,"joint":0.08,"longueur":2.4,"eclat":0.5,"couleur":"#2a231c","opacite":1},"grain":{"echelle":[40,4,40],"force":0.35},"salissure":{"force":0.35,"hauteur":0.6},"relief":{"motif":0.006},"brillance":0.05},"paves":{"nom":"pavés de grès, joints terreux","espace":"sol","couleur":"#8d8577","motif":{"type":"paves","echelle":6,"joint":0.1,"decalage_rangs":0.5,"eclat":0.45,"bombe":0.6,"couleur":"#3a342c","opacite":1},"variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":70,"force":0.25},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.4,"seuils":[0.45,0.75],"fbm":true,"decalage":7}],"mousse":{"couleur":"#3b4c2b","force":0.7,"echelle":0.5,"seuils":[0.55,0.75],"fbm":true,"decalage":13},"relief":{"motif":0.01,"grain":{"echelle":40,"force":0.08}},"brillance":0.12},"crepi":{"nom":"crépi de façade, salissures en pied","espace":"volume","couleur":"#c9bba3","variation":{"echelle":0.7,"force":0.25},"grain":{"echelle":90,"force":0.3},"taches":[{"couleur":"#6d6458","force":0.4,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.45,"hauteur":0.8},"relief":{"bosses":[{"echelle":60,"force":0.002}]},"brillance":0.03},"herbe":{"nom":"herbe rase de prairie, plaques plus sèches","espace":"sol","couleur":"#6f8442","variation":{"echelle":0.35,"force":0.5},"nuance":{"couleur":"#9a9455","force":0.6,"echelle":0.9,"seuils":[0.45,0.7],"fbm":true,"decalage":5},"motif":{"type":"fissures","echelle":[55,1,7],"seuils":[0.55,0.95],"profondeur":0.8,"assombrit":0.45},"grain":{"echelle":140,"force":0.5},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.25,"seuils":[0.45,0.75],"fbm":true,"decalage":3},{"couleur":"#7a6a4a","force":0.6,"echelle":3,"seuils":[0.72,0.8]}],"relief":{"motif":0.004,"grain":{"echelle":50,"force":0.3}},"brillance":0.06},"neige":{"nom":"neige tassée, ombres bleutées","espace":"sol","couleur":"#e9edf2","variation":{"echelle":0.4,"force":0.12},"nuance":{"couleur":"#cfd9e6","force":0.5,"echelle":1.2,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":180,"force":0.08},"relief":{"bosses":[{"echelle":1.5,"fbm":true,"force":0.02}],"grain":{"echelle":90,"force":0.06}},"brillance":0.3},"asphalte":{"nom":"asphalte usé, rapiéçages et fissures","espace":"sol","couleur":"#4b4b4c","variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":150,"force":0.45},"motif":{"type":"fissures","echelle":[1.4,1,1.4],"seuils":[0.92,0.99],"profondeur":1,"couleur":"#252524"},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.35,"seuils":[0.5,0.75],"fbm":true},{"couleur":"#5d5c58","force":0.5,"echelle":[0.25,1,0.08],"seuils":[0.62,0.7],"decalage":4}],"relief":{"motif":0.004,"grain":{"echelle":60,"force":0.06}},"brillance":0.15},"chaussee":{"nom":"chaussée marquée : axe en tirets, lignes de rive","base":"asphalte","motif":{"type":"marquage","largeur":0.14,"tiret":3,"intervalle":4.5,"axe":"simple","bords":0,"couleur":"#c9c4b4","opacite":0.9}},"dalles":{"nom":"trottoir en dalles de béton","espace":"sol","couleur":"#8d8a83","motif":{"type":"paves","echelle":0.7,"joint":0.04,"decalage_rangs":0,"eclat":0.25,"bombe":0,"couleur":"#4e4c47","opacite":0.8},"variation":{"echelle":0.4,"force":0.25},"grain":{"echelle":120,"force":0.3},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.6,"seuils":[0.5,0.78],"fbm":true,"decalage":2}],"relief":{"motif":0.003,"grain":{"echelle":50,"force":0.05}},"brillance":0.08},"beton":{"nom":"béton brut, coulures","espace":"volume","couleur":"#9a968d","variation":{"echelle":0.6,"force":0.3},"grain":{"echelle":110,"force":0.3},"taches":[{"couleur":"#4a4740","force":0.45,"echelle":[2,0.35,2],"seuils":[0.55,0.8],"fbm":true,"decalage":5}],"salissure":{"force":0.4,"hauteur":0.6},"brillance":0.05},"brique":{"nom":"brique rouge, joints clairs","espace":"volume","couleur":"#8a4a36","motif":{"type":"paves","echelle":[4.4,13,4.4],"joint":0.08,"decalage_rangs":0.5,"eclat":0.35,"bombe":0,"couleur":"#a39b8c","opacite":1},"grain":{"echelle":90,"force":0.3},"salissure":{"force":0.4,"hauteur":0.8},"relief":{"motif":0.003},"brillance":0.04},"bardage":{"nom":"bardage de planches couchées, peinture","espace":"volume","couleur":"#c8c0ad","motif":{"type":"planches","couchees":true,"echelle":6,"joint":0.12,"longueur":20,"eclat":0.12,"couleur":"#5f5a50","opacite":0.8},"variation":{"echelle":0.6,"force":0.15},"grain":{"echelle":70,"force":0.15},"salissure":{"force":0.35,"hauteur":0.5},"relief":{"motif":0.004},"brillance":0.06},"facade":{"nom":"façade enduite percée de fenêtres sur tous les étages","espace":"volume","couleur":"#c4b8a2","variation":{"echelle":0.6,"force":0.2},"grain":{"echelle":90,"force":0.25},"motif":{"type":"fenetres","largeur":1,"hauteur":1.5,"pas":2.6,"etage":3,"allege":0.9,"cadre":0.08,"rdc":0,"allumees":0.4,"couleur":"#20262c","cadre_couleur":"#e2ddd2","lumiere":"#ffc27a","opacite":1},"taches":[{"couleur":"#5e564b","force":0.35,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.35,"hauteur":0.8},"relief":{"motif":0.03},"brillance":0.04},"terre":{"nom":"terre battue, cailloux","espace":"sol","couleur":"#7a654c","variation":{"echelle":0.4,"force":0.35},"grain":{"echelle":160,"force":0.55},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.5,"seuils":[0.45,0.75],"fbm":true},{"couleur":"#a39780","force":0.5,"echelle":11,"seuils":[0.74,0.8]}],"relief":{"grain":{"echelle":40,"force":0.12}},"brillance":0.04},"gravier":{"nom":"gravier clair d'allée","espace":"sol","couleur":"#a59d8c","variation":{"echelle":0.5,"force":0.2},"grain":{"echelle":260,"force":0.8},"taches":[{"couleur":"#5e574a","force":0.45,"echelle":30,"seuils":[0.6,0.75]}],"relief":{"grain":{"echelle":120,"force":0.25}},"brillance":0.05},"pate-organique":{"nom":"pâte organique humide (excrément, boue grasse, terre mouillée pétrie) : brun sombre, marbré, luisant, finement bosselé","espace":"volume","couleur":"forme","variation":{"echelle":22,"force":0.45},"nuance":{"couleur":"#24160b","force":0.55,"echelle":55,"seuils":[0.45,0.78],"fbm":true,"decalage":3},"grain":{"echelle":420,"force":0.28},"taches":[{"couleur":"#6e4c2b","force":0.3,"echelle":120,"seuils":[0.62,0.78],"decalage":7}],"relief":{"bosses":[{"echelle":70,"fbm":true,"decalage":2,"force":0.0022},{"echelle":260,"force":0.0005}]},"brillance":0.6}},"surfaces":{"foret":{"sol":"litiere","trajet":"sentier-sable","rochers":"gres","arbres":{"a":"ecorce-pin","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau","b":"ecorce-chataignier","part":0.5}},"dunes":{"sol":"sable-dunes","trajet":"sable-dunes","rochers":"gres-patine"},"nu":{"sol":"herbe","trajet":"asphalte","rochers":"gres"}}};
 const RT_W=48, RT_MAX=24, matData=new Float32Array(RT_W*RT_MAX*4);
 const matT=gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D,matT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,RT_W,RT_MAX);
@@ -11715,7 +11977,7 @@ function terrainH(x,z){
 const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1, elev:0, pied:null, perche:null, zoom:1, zoomCible:1 };   // zoom : zoom numérique du téléphone (cadrer une petite chose)
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
-let frozen=false, hold=false, walkDist=0, walking=false;
+let frozen=false, hold=false, pauseTest=false, walkDist=0, walking=false;   // pauseTest : balade.pause (captures d'essai), le corps s'arrête net
 function pose(){
   const bob=walking?.022*Math.sin(walkDist*8.4):0;
   const yw=cam.yaw+look.yaw, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch));
@@ -11795,6 +12057,9 @@ function moveBy(dist){
     else if(sondeDispo()){ probeDessin(sx,terrainH(sx,sz)+.75,sz); lireDiff(sondeL,probeT,4,1,16); } }
   const d=sonde.loin?Math.max(sonde.d,R):sonde.d, dx=sonde.dx, dz=sonde.dz;
   if(d<R){ let gx=(dx-d)/.05, gz=(dz-d)/.05; const l=Math.hypot(gx,gz)||1; nx+=gx/l*(R-d); nz+=gz/l*(R-d); }
+  const M=MENEUR.REGLAGES.MARGE_CORPS;                             // les obstacles connus (troncs, perches, blocs, choses) : jamais à moins de la marge (§16)
+  for(const o of obstaclesConnus()){ const ex=nx-o.x, ez=nz-o.z, m=Math.hypot(ex,ez), Ro=o.r+M;
+    if(m<Ro&&Math.hypot(cam.x-o.x,cam.z-o.z)>=Ro-1e-3){ nx=o.x+ex/(m||1)*Ro; nz=o.z+ez/(m||1)*Ro; } }
   cam.x=nx; cam.z=nz; walkDist+=Math.abs(dist);
 }
 let idle=0, stuck=0;
@@ -11803,19 +12068,19 @@ let patience=10;                                               // secondes d'imm
 function pasHistoire(){                                        // quatre mètres le long du sentier, puis elle s'arrête : le rythme laisse la place au joueur
   const want=S.kit!==1?pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0):cam.yaw;
   let d=want-cam.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
-  queue.push({type:"tourner",rest:d},{type:"marcher",rest:4});
+  queue.push({type:"tourner",rest:d},{type:"marcher",rest:4,libre:true});
 }
 function flaner(){                                            // sans consigne, il se promène : c'est le récit par défaut
   const want=S.kit!==1 ? pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0)+(Math.random()-.5)*.5
                        : cam.yaw+(Math.random()-.5)*1.2;
   let d=want-cam.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
-  queue.push({type:"tourner",rest:d},{type:"marcher",rest:6+Math.random()*9},{type:"attendre",rest:1.5+Math.random()*3});
+  queue.push({type:"tourner",rest:d},{type:"marcher",rest:6+Math.random()*9,libre:true},{type:"attendre",rest:1.5+Math.random()*3});
   if(Math.random()<.4) queue.push({type:"regarder",pitch:(Math.random()-.35)*.5},{type:"attendre",rest:2},{type:"regarder",pitch:-.03});
 }
 function simulate(dt){
   if(Math.abs(cam.zoom/cam.zoomCible-1)>.005){                    // le zoom glisse en une seconde ; l'accumulation repart (comme un téléphone qui refait sa mise au point)
     cam.zoom*=Math.pow(cam.zoomCible/cam.zoom,Math.min(1,dt*3)); if(Math.abs(cam.zoom/cam.zoomCible-1)<.01) cam.zoom=cam.zoomCible; sceneDirty=true; }
-  walking=false; if(frozen||hold) return;
+  walking=false; if(frozen||hold||pauseTest) return;
   let v=0;
   if(!queue.length){ idle+=dt;
     if(immobile){}                                               // « arrête-toi » : il attend un autre ordre
@@ -11825,13 +12090,15 @@ function simulate(dt){
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
-    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*1.35; a.rest-=v*dt; if(a.rest*Math.sign(v)<=0) queue.shift(); }
+    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(1.35,Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*dt); if(Math.abs(d)<.012) queue.shift(); }
     else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
     else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet);   // vers un objet : la page calcule cap et inclinaison
       if(v&&v.raide&&!a.cadre) queue.unshift({type:"cadrer",objet:a.objet});              // presque sous lui : il recule et se baisse pour la voir
       else if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
-    else if(a.type==="rejoindre"||a.type==="cadrer"||a.type==="monter"){ queue.shift(); queue.unshift(...planCorps(a)); }   // trajet calculé au moment de partir
+    else if(a.type==="rejoindre"||a.type==="cadrer"||a.type==="monter"||a.type==="chercher"){ queue.shift(); queue.unshift(...planCorps(a)); }   // trajet calculé au moment de partir
+    else if(a.type==="faconner") faconnerPas(a,dt);
+    else if(a.type==="bloque"){ queue.shift(); if(!a.muet) say(a.texte||"Je passe pas, là. C'est bouché.",true); }   // il s'arrête devant, et il le dit
     else if(a.type==="elever"||a.type==="descendre") elever(a,dt);
     else if(a.type==="zoom"){ cam.zoomCible=clampN(a.z,1,8,1); queue.shift(); }
     else { a.rest-=dt; if(a.rest<=0) queue.shift(); }
@@ -11841,7 +12108,9 @@ function simulate(dt){
     const x0=cam.x, z0=cam.z; moveBy(v*dt); walking=true;
     if(!gyro.on){ look.yaw*=Math.exp(-dt/2.5); look.pitch*=Math.exp(-dt/2.5); }           // en marche, le regard revient vers l'avant
     stuck=Math.hypot(cam.x-x0,cam.z-z0)<Math.abs(v*dt)*.3?stuck+dt:0;
-    if(stuck>.6){ stuck=0; queue.shift(); queue.unshift({type:"tourner",rest:(Math.random()<.5?-1:1)*.9}); }   // bloqué : il contourne
+    if(stuck>.6){ stuck=0; const m=queue.shift();
+      if(m&&m.libre) queue.unshift({type:"tourner",rest:(Math.random()<.5?-1:1)*.9});   // en flânant, bloqué : il part ailleurs
+      else{ while(queue.length&&(queue[0].type==="marcher"||queue[0].type==="tourner")) queue.shift(); queue.unshift({type:"bloque"}); } }   // dirigé : il s'arrête devant, ne traverse pas
   }
 }
 
@@ -12493,7 +12762,7 @@ const normz=a=>{ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[
 let ptDit=false, lastT=0, vide=null, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
-  const dt=Math.min(.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;
+  const dt=Math.min(CFG.dtMax||.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;   // dtMax : essais en rendu logiciel, le récit avance malgré des images lentes
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
   if(ouvRepos) return;                                            // l'ouverture pose sa question : rien n'est visible derrière, le moteur se repose (docs/ouverture.md)
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
@@ -12630,6 +12899,8 @@ function enqueue(actions){
     else if((a.type==="rejoindre"||a.type==="cadrer")&&typeof a.objet==="string") queue.push({type:a.type,objet:a.objet.slice(0,30),sur_place:a.sur_place===true});
     else if(a.type==="monter") queue.push({type:"monter",sur:typeof a.sur==="string"?a.sur.slice(0,30):""});
     else if(a.type==="descendre") queue.push({type:"descendre"});
+    else if(a.type==="chercher"&&typeof a.quoi==="string") queue.push({type:"chercher",quoi:a.quoi.slice(0,60)});
+    else if(a.type==="faconner"&&typeof a.objet==="string") queue.push({type:"faconner",objet:a.objet.slice(0,30),t:0,i:-1,attente:0});
   }
 }
 function patchScene(sc){                                      // ce qu'il imagine peut changer le monde
@@ -13162,10 +13433,14 @@ function posObjet(o){ const dv=clampN(o.devant,-60,400,12), ct=clampN(o.cote,-12
   return S.kit!==1?{x:pathX(dv)+ct,z:dv}:{x:Math.sin(a)*dv+Math.cos(a)*ct,z:Math.cos(a)*dv-Math.sin(a)*ct}; }
 function versFiche(x,z){ if(S.kit!==1) return {devant:z,cote:x-pathX(z)}; const a=1.15; return {devant:Math.sin(a)*x+Math.cos(a)*z,cote:Math.cos(a)*x-Math.sin(a)*z}; }
 const reserves=new Map();                                     // places prises au tour de voix, là où le geste a lieu
+const differes=new Map(), faconnages=new Map();               // façonnage (§15.3) : ce qu'il rapporte (posé à son retour) ; les états à jouer
+let dernierLieu=null;                                          // où il est allé chercher (tests, démo)
 function placeGeste(o){ const q=MENEUR.placePose(cam.x,cam.z,cam.yaw,o.ou,o.distance); return versFiche(q.x,q.z); }   // par rapport au corps, au tour de voix (MENEUR.OU_POSE)
 function objetMeneur(o){
   const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], id=o.id||(o.objet&&o.objet.id), i=L.findIndex(x=>x&&x.id===id);
   if(o.op==="reserver"){ reserves.set(o.ref,placeGeste(o)); if(reserves.size>8) reserves.delete(reserves.keys().next().value); return; }
+  if(o.op==="creer"&&o.differe){ differes.set(o.differe,[...(differes.get(o.differe)||[]),o]); return; }   // ramassé : posé près de la chose quand il revient
+  if(o.op==="faconner"){ faconnages.set(id,o); if(!queue.some(a=>a.type==="faconner"&&a.objet===id)) faconnerTout(id); return; }
   if(o.op==="creer"){
     const visibles=L.filter(x=>x&&!(x.visible===false||cacheObj.has(x.id))).length;
     if(i>=0||visibles>=8||!o.objet) return;
@@ -13174,6 +13449,9 @@ function objetMeneur(o){
     if(base){ const b=posObjet(base); pos=versFiche(b.x+(+d[0]||0),b.z+(+d[1]||0)); }
     else if(o.reserve&&reserves.has(o.reserve)){ pos=reserves.get(o.reserve); reserves.delete(o.reserve); }
     else pos=placeGeste(o);
+    if(!base){ const w=posObjet(pos), F=(o.objet.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));   // jamais dans le corps du porteur
+      const r=Math.max(0,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2)), q=MENEUR.horsDuCorps(w,{x:cam.x,z:cam.z,yaw:cam.yaw},r);
+      if(q.x!==w.x||q.z!==w.z) pos=versFiche(q.x,q.z); }
     const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
     if(!v||!v[0]) return;
     v[0].id=String(id).slice(0,30); v[0].devant=pos.devant; v[0].cote=pos.cote; L.push(v[0]);
@@ -13189,6 +13467,39 @@ function objetMeneur(o){
     if(o.vacille!==undefined||o.lumineux===false) x.formes=x.formes.map(f=>f.matiere!=="lumineux"?f:o.lumineux===false?Object.assign({},f,{matiere:"mat",couleur:"#1f1a16",vacille:0},f.vacille>0?{p:[f.p[0],f.p[1]*.12,f.p[2]],taille:[f.taille[0]*.9,f.taille[1]*.12,f.taille[2]*.9]}:{}):Object.assign({},f,{vacille:clampN(o.vacille,0,1,0)}));
     L[i]=x; }
   fiche=Object.assign({},fiche,{objets:L}); buildShapes(fiche);
+}
+/* Le façonnage, joué par la page (§15.3) : accroupi devant la chose, il pose ce qu'il a rapporté, la tourne vers lui, puis
+   elle change d'état environ chaque seconde pendant que la caméra bouge un peu (quelqu'un qui travaille de ses mains) ;
+   à la fin, ce qui a servi disparaît. Les états viennent du meneur (accessoiriste ou etapesFaconnage) : rien n'est propre à un objet. */
+function reveler(id){
+  const L=differes.get(id); differes.delete(id); if(!L) return;
+  const b=(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===id); if(!b) return;
+  const q=posObjet(b), r=Math.max(.08,mesureObjet(b).taille/2), dx=cam.x-q.x, dz=cam.z-q.z, l=Math.hypot(dx,dz)||1, ux=dx/l, uz=dz/l;
+  L.forEach((o,k)=>{ const s=k%2?-1:1; objetMeneur(Object.assign({},o,{differe:undefined,pres_de:id,decale:[uz*s*(r+.1)+ux*.24,-ux*s*(r+.1)+uz*.24]})); });   // à côté d'elle, côté porteur
+}
+function tournerVers(id){                                        // sa face (+z) vers le porteur : c'est de ce côté qu'il la façonne
+  const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], i=L.findIndex(x=>x&&x.id===id); if(i<0) return;
+  const o=L[i], q=posObjet(o), dv=clampN(o.devant,-60,400,12);
+  const y0=S.kit!==1?Math.atan2(pathX(dv-4)-q.x,-4):1.15+Math.PI, y1=Math.atan2(cam.x-q.x,cam.z-q.z);
+  L[i]=Object.assign({},o,{cap:Math.round(wrapA(y1-y0)*180/Math.PI)}); fiche=Object.assign({},fiche,{objets:L}); buildShapes(fiche);
+}
+function faconnerTout(id){                                       // pas de geste en cours : le résultat tout de suite
+  const op=faconnages.get(id); faconnages.delete(id); if(!op) return; reveler(id);
+  objetMeneur({type:"objet",op:"remplacer",id,formes:op.etapes[op.etapes.length-1],nom:op.nom,echelle:op.echelle});
+  for(const c of op.consomme||[]) objetMeneur({type:"objet",op:"retirer",id:c});
+}
+function faconnerPas(a,dt){
+  if(!a.vise){ a.vise=true; const v=viserObjet(a.objet); if(v){ queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:Math.max(-1.05,v.pitch)}); return; } }
+  const op=faconnages.get(a.objet);
+  if(!a.base) a.base={yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut};
+  a.t+=dt; const t=a.t, B=a.base;                                // les mains travaillent : la caméra suit un peu les gestes
+  cam.pitch=B.pitch+.04*Math.sin(t*2.1)-.035*Math.abs(Math.sin(t*3.7)); cam.yaw=B.yaw+.035*Math.sin(t*1.3+.5)+.012*Math.sin(t*4.3); cam.haut=B.haut+.015*Math.sin(t*2.9);
+  const fin=()=>{ cam.yaw=B.yaw; cam.pitch=B.pitch; cam.haut=B.haut; queue.shift(); };
+  if(!op){ a.attente+=dt; if(a.attente>30) fin(); return; }      // l'accessoiriste n'a pas encore répondu : il continue de pétrir
+  if(a.i<0){ reveler(a.objet); tournerVers(a.objet); a.i=0; a.t0=t; return; }
+  const n=op.etapes.length, k=Math.floor((t-a.t0-.9)/1.1);       // un état toutes les 1,1 s, après un temps pour poser ce qu'il a rapporté
+  while(a.i<=k&&a.i<n){ objetMeneur({type:"objet",op:"remplacer",id:a.objet,formes:op.etapes[a.i],nom:a.i===n-1?op.nom:undefined,echelle:a.i===0?op.echelle:undefined}); a.i++; }
+  if(a.i>=n&&t-a.t0>.9+n*1.1+.5){ for(const c of op.consomme||[]) objetMeneur({type:"objet",op:"retirer",id:c}); faconnages.delete(a.objet); fin(); }
 }
 function viserObjet(id){                                       // cap (relatif au corps) et inclinaison vers un objet de la fiche ou un support
   const q=cibleMonde(id); if(!q) return null;
@@ -13257,11 +13568,62 @@ function supportsProches(){
 }
 /* Le corps autour d'une chose : y aller (rejoindre), la filmer à la bonne distance (cadrer), monter dessus (monter).
    Distances : MENEUR.distanceArret, MENEUR.planCadrage, MENEUR.hauteurPerchee (les mêmes que dans les tests). */
-function versPoint(x,z,arret){
-  let d=Math.atan2(x-cam.x,z-cam.z)-cam.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
-  const m=Math.hypot(x-cam.x,z-cam.z)-arret, out=[{type:"tourner",rest:d}];
-  if(Math.abs(m)>.05){ if(cam.haut<.95) out.unshift({type:"posture",h:1}); out.push({type:"marcher",rest:m}); }
+/* Aller vers (x, z) et s'arrêter à « arret » m, sans rien traverser (§16) : MENEUR.planTrajet sur les obstacles connus, un
+   tourner et un marcher par point de passage ; s'il ne peut pas passer, il s'arrête devant et le dit (action bloque).
+   cible : l'obstacle qu'on rejoint (on s'arrête à sa surface plus la marge, on ne le contourne pas). */
+const wrapA=d=>Math.atan2(Math.sin(d),Math.cos(d));
+function versPoint(x,z,arret,cible){
+  const obs=obstaclesConnus(), c=cible||(obs.find(o=>Math.hypot(o.x-x,o.z-z)<.05)||{}).id||null;
+  const p=MENEUR.planTrajet({x:cam.x,z:cam.z},{x,z},obs,{arret,cible:c}), out=[];
+  let px=cam.x, pz=cam.z, yaw=cam.yaw;
+  p.points.forEach((q,k)=>{ const L=Math.hypot(q.x-px,q.z-pz); if(L<.05) return;
+    let d=wrapA(Math.atan2(q.x-px,q.z-pz)-yaw);
+    if(k===p.points.length-1&&Math.hypot(x-px,z-pz)<arret&&Math.abs(d)>Math.PI/2){ d=wrapA(d+Math.PI); out.push({type:"tourner",rest:d},{type:"marcher",rest:-L}); }   // trop près : il recule, face à elle
+    else out.push({type:"tourner",rest:d},{type:"marcher",rest:L});
+    yaw+=d; px=q.x; pz=q.z; });
+  if(out.length&&cam.haut<.95) out.unshift({type:"posture",h:1});
+  if(p.bloque){ const o=obs.find(o=>o.id===p.bloque); out.push({type:"bloque",texte:o&&o.nom?`Je peux pas passer : ${o.nom}, juste là.`:"Je passe pas, là. C'est bouché."}); }
+  out.push({type:"tourner",rest:wrapA(Math.atan2(x-px,z-pz)-yaw)});
   return out;
+}
+/* Les obstacles connus autour du porteur (30 m), en cercles {x, z, r, id, nom} : les troncs (arbreA), les perches (percheB) et
+   les blocs (blocGres) recopiés de monde.glsl (MÊMES FORMULES, à modifier des deux côtés), et les choses de la fiche. Les
+   éléments de semis (murs, tombes…) ne sont connus que de la sonde du moteur (moveBy). */
+let obsCache={k:"",x:1e9,z:1e9,L:[]};
+function obstaclesConnus(){
+  const k=seedN+"|"+S.objVer+"|"+S.kit+"|"+S.kitP.join(",");
+  if(obsCache.k===k&&Math.hypot(cam.x-obsCache.x,cam.z-obsCache.z)<4) return obsCache.L;
+  const L=[], sx=F32(seed[0]), sy=F32(seed[1]), loin=(x,z)=>Math.hypot(x-cam.x,z-cam.z)>34;
+  if(S.kit===0&&S.kitP[0]>0){                                     // arbreA : grille tournée de 6 m
+    const CA=6, qx=.8776*cam.x-.4794*cam.z, qz=.4794*cam.x+.8776*cam.z, i0=Math.floor(qx/CA), j0=Math.floor(qz/CA);
+    for(let i=i0-6;i<=i0+6;i++) for(let j=j0-6;j<=j0+6;j++){
+      const h=h42(i+sx,j+sy); if(h[0]>S.kitP[0]) continue;
+      const vx=(i+.5)*CA+(h[1]-.5)*3.8, vz=(j+.5)*CA+(h[2]-.5)*3.8, wx=.8776*vx+.4794*vz, wz=-.4794*vx+.8776*vz;
+      if(Math.abs(wx-pathX(wz))<1.5||degage(wx,wz)||loin(wx,wz)) continue;
+      L.push({id:"arbre:"+i+","+j,nom:"un tronc",x:wx,z:wz,r:(.16+.17*fr32(h[3]*7.31))*1.3}); }
+    if(S.houp[3]>0){                                              // percheB : grille tournée de 3,3 m
+      const CB=3.3, qx=.6216*cam.x+.7833*cam.z+17.3, qz=-.7833*cam.x+.6216*cam.z+17.3, i0=Math.floor(qx/CB), j0=Math.floor(qz/CB);
+      for(let i=i0-10;i<=i0+10;i++) for(let j=j0-10;j<=j0+10;j++){
+        const h=h42(i+sx+71,j+sy+71); if(h[0]>S.kitP[0]*.8*S.houp[3]) continue;
+        const vx=(i+.5)*CB+(h[1]-.5)*1.9-17.3, vz=(j+.5)*CB+(h[2]-.5)*1.9-17.3, wx=.6216*vx-.7833*vz, wz=.7833*vx+.6216*vz;
+        if(Math.abs(wx-pathX(wz))<1.15||degage(wx,wz)||loin(wx,wz)) continue;
+        L.push({id:"perche:"+i+","+j,nom:"un tronc",x:wx,z:wz,r:(.035+.07*fr32(h[3]*5.3))*1.3+.06}); } }
+  }
+  if(S.kit!==2&&S.kitP[1]>0){                                     // blocGres : grille de 8,5 m
+    const CC=8.5, i0=Math.floor(cam.x/CC), j0=Math.floor(cam.z/CC);
+    for(let i=i0-4;i<=i0+4;i++) for(let j=j0-4;j<=j0+4;j++){
+      const h=h42(i+sx+13,j+sy+13), mask=vnoise2(i*.37+sx,j*.37+sy);
+      if(h[0]>(sstep(.32,.68,mask)*.9+.08)*S.kitP[1]) continue;
+      const R=.7+1.6*h[3]*h[3], ox=(h[1]-.5)*2*(.5*CC-.3-1.25*R), oz=(h[2]-.5)*2*(.5*CC-.3-1.25*R), wx=(i+.5)*CC+ox, wz=(j+.5)*CC+oz;
+      if(Math.abs(wx-pathX(wz))<R*1.1+.5||degage(wx,wz)||loin(wx,wz)) continue;
+      L.push({id:"rocher:"+i+","+j,nom:"un rocher",x:wx,z:wz,r:R*Math.max(1+.25*fr32(h[1]*9),.8+.3*fr32(h[3]*11))+.1*R}); }
+  }
+  for(const o of (Array.isArray(fiche.objets)?fiche.objets:[])){ if(!o||o.visible===false||cacheObj.has(o.id)) continue;
+    const q=posObjet(o), k2=clampN(o.echelle,.1,5,1), F=(o.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));
+    if(!F.length||loin(q.x,q.z)) continue;
+    L.push({id:o.id,nom:o.nom||o.id,x:q.x,z:q.z,r:Math.max(.02,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2))*k2}); }
+  obsCache={k,x:cam.x,z:cam.z,L};
+  return L;
 }
 function planCorps(a){
   const pre=cam.elev>.01&&a.type!=="monter"?[{type:"descendre"}]:[];
@@ -13269,20 +13631,26 @@ function planCorps(a){
     const L=supportsProches(), q=a.sur?cibleMonde(a.sur):L.slice().sort((p,r)=>p.m-r.m)[0];
     if(!q){ console.warn("monter : aucun support",a.sur); return []; }
     if(cam.perche===q.id&&cam.elev>.01) return [];                   // déjà dessus
-    return [...(cam.elev>.01?[{type:"descendre"}]:[]),...versPoint(q.x,q.z,q.rayon+.45),{type:"elever",q,h:MENEUR.hauteurPerchee(q.sorte,q.haut)},
+    return [...(cam.elev>.01?[{type:"descendre"}]:[]),...versPoint(q.x,q.z,q.rayon+.45,q.sorte==="objet"?q.id:null),{type:"elever",q,h:MENEUR.hauteurPerchee(q.sorte,q.haut)},
       ...(q.sorte==="arbre"?[{type:"tourner",rest:2.2}]:[]),{type:"regarder",pitch:-.3}];   // là-haut, il se détourne du tronc et regarde en bas
   }
+  if(a.type==="chercher"){                                          // aller chercher : un endroit plausible, il y va, se baisse, ramasse, se relève
+    const L=supportsProches(), lieu=MENEUR.lieuChercher(a.quoi,{x:cam.x,z:cam.z,yaw:cam.yaw},L,z=>S.kit!==1?pathX(z):cam.x,S.traj[1]||1,MODELES);
+    dernierLieu=lieu;
+    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},{type:"attendre",rest:1.2},{type:"tourner",rest:.45},{type:"attendre",rest:1.1},
+      {type:"posture",h:1},{type:"regarder",pitch:-.1}];
+  }
   const q=cibleMonde(a.objet); if(!q) return [];
-  if(a.type==="rejoindre") return [...pre,...versPoint(q.x,q.z,MENEUR.distanceArret(q.taille))];
+  if(a.type==="rejoindre") return [...pre,...versPoint(q.x,q.z,MENEUR.distanceArret(q.taille),q.sorte==="objet"?q.id:null)];
   const pl=MENEUR.planCadrage(q.taille,S.eye), m=Math.hypot(q.x-cam.x,q.z-cam.z);
   if(m>12) return [{type:"viser",objet:a.objet}];                    // trop loin pour y aller : il la montre d'où il est
   if(a.sur_place) return [...pre,{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:MENEUR.zoomPour(q.taille,m,S.eye*pl.hauteur)}];   // d'où il est
-  return [...pre,...versPoint(q.x,q.z,pl.m),{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:pl.zoom}];
+  return [...pre,...versPoint(q.x,q.z,pl.m,q.sorte==="objet"?q.id:null),{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:pl.zoom}];
 }
 function elever(a,dt){                                           // monter (sur q, à la hauteur h) ou descendre (vers le pied)
   if(a.type==="elever"&&!a.de){ const q=a.q; cam.pied={x:cam.x,z:cam.z};
     let tx=q.x, tz=q.z;
-    if(q.sorte==="arbre"){ const dx=cam.x-q.x, dz=cam.z-q.z, l=Math.hypot(dx,dz)||1; tx=q.x+dx/l*(q.rayon+.3); tz=q.z+dz/l*(q.rayon+.3); }   // contre le tronc
+    if(q.sorte==="arbre"){ const dx=cam.x-q.x, dz=cam.z-q.z, l=Math.hypot(dx,dz)||1, e=q.rayon*1.3+MENEUR.REGLAGES.MARGE_CORPS; tx=q.x+dx/l*e; tz=q.z+dz/l*e; }   // contre le tronc, à la marge
     a.de={x:cam.x,z:cam.z,e:cam.elev}; a.vers={x:tx,z:tz,e:a.h}; a.k=0; cam.perche=q.id; }
   if(a.type==="descendre"&&!a.de){ if(cam.elev<=.01&&!cam.pied){ cam.elev=0; queue.shift(); return; }
     a.de={x:cam.x,z:cam.z,e:cam.elev}; a.vers=cam.pied||{x:cam.x,z:cam.z}; a.vers=Object.assign({},a.vers,{e:0}); a.k=0; }
@@ -13324,7 +13692,7 @@ function histoireLibre(f){ return MENEUR.histoireLibre(f); }   // le contrat de 
 function demarrerLibre(){
   const h=histoireLibre(fiche), v=MENEUR.validerHistoire(h,{fiches:FICHES});
   if(!v.ok){ console.warn("Promenade libre : contrat refusé",v.erreurs); return false; }
-  meneur=MENEUR.creerMeneur({ histoire:h, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
+  meneur=MENEUR.creerMeneur({ histoire:h, modeles:MODELES, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
     emettre:executer });
   meneurLibre=true; histoireId="libre"; meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
@@ -13349,7 +13717,7 @@ function jouerHistoire(id){
   if(!v.ok){ console.warn("Histoire invalide :",v.erreurs); return null; }
   quitterLibre(); quitterHistoire(true);
   applyFiche(MENEUR.ficheDe(h,FICHES)||fiche);
-  meneur=MENEUR.creerMeneur({ histoire:h, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
+  meneur=MENEUR.creerMeneur({ histoire:h, modeles:MODELES, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
     emettre:executer });
   histoireId=h.id; hold=false; patience=10; cam.haut=1; cam.elev=0; immobile=false; setFrozen(false); interfaceHistoire(true);
@@ -13426,6 +13794,11 @@ window.balade={
   objets:()=>(Array.isArray(fiche.objets)?fiche.objets:[]).map(o=>({id:o.id,nom:o.nom,devant:+(+o.devant).toFixed(2),cote:+(+o.cote).toFixed(2),echelle:o.echelle,formes:(o.formes||[]).length,lumineux:(o.formes||[]).some(f=>f.matiere==="lumineux")})),
   corps:()=>({x:cam.x,z:cam.z,yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut,elev:cam.elev,zoom:cam.zoom,perche:cam.perche,immobile,file:queue.map(a=>a.type)}),
   supports:()=>supportsProches(),
+  obstacles:()=>obstaclesConnus().map(o=>({id:o.id,nom:o.nom,x:+o.x.toFixed(2),z:+o.z.toFixed(2),r:+o.r.toFixed(2)})),   // §16 : ce que le corps contourne
+  lieuCherche:()=>dernierLieu,
+  pause(v){ pauseTest=!!v; },
+  grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
+  faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1)}))}),
   resolution(px){ CFG.maxPx=+px||undefined; resize(); },        // pixels internes (essais : finesse d'une capture)
   sonde:(x,y,z)=>probe(x,y,z)[0],                                // distance au décor en un point (vérifier la copie JS d'arbreA, blocGres)
   jouer:id=>jouerHistoire(id),
@@ -13450,6 +13823,7 @@ if(CFG.cap!==undefined) cam.yaw=CFG.cap;
 if(CFG.pitch!==undefined) cam.pitch=CFG.pitch;
 if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
+if(CFG.zoom) cam.zoom=cam.zoomCible=clampN(CFG.zoom,1,8,1);       // tests : zoom numérique du téléphone
 if(V2.on){ v2Basculer(true); window.__v2=V2; }                // accès de test (tools/v2essai.mjs)
 $("v2").onclick=()=>v2Basculer(!V2.on);
 if((bureau||PT_KO)&&!V3.on&&(!window.__CFG||CFG.bureau)&&!v3Refus()) V3.on=true;   // ordinateur : le moteur v3 d'emblée

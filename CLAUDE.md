@@ -29,6 +29,7 @@ npm install                     # Playwright, pour les captures
 npm run build                   # assemble src/ + scenes/ + histoires/ en dist/index.html
 npm test                        # meneur de jeu, sans navigateur ni Claude
 node tools/partie.mjs demi-tour # une partie d'« Avant la nuit » jouée dans la page, captures dans out/meneur/
+node tools/demo.mjs              # la démo (crotte, 5 kg, aller chercher, bonhomme, obstacle), v3, captures dans out/demo/
 node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 270 480
 ```
 
@@ -41,6 +42,7 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 - `src/main.js` : boucle de rendu, reprojection temporelle, porteur de la caméra, voix dans sa tête, API `window.balade`.
 - `src/meneur.js` : le meneur de jeu (`docs/meneur-de-jeu.md`), module pur sans DOM, testé par `npm test` (`tests/`). Le build l'embarque avec `histoires/*.json`. Essai sur artefact : `docs/essai-meneur.md`.
 - `src/constructeur.js` et `src/atelier.js` : constructeur de scènes (description → plan → fiche → contrôle → relecture en image → banque de scènes), voir `docs/constructeur.md`.
+- `src/modeles.json` : bibliothèque de modèles de référence (formes + matière + envergure + règle d'échelle), des données que l'accessoiriste reçoit en exemple et que la page prend comme base sûre (`docs/meneur-de-jeu.md` §15). Jamais de nom de modèle dans le code.
 - `src/matieres.json` : bibliothèque de recettes de matière (sol, sentier, grès, écorces…), évaluées par `recette()` dans le shader.
 - `ref/` : vues de référence gelées ; `tools/vues.mjs` et `tools/compare.mjs` pour rendre et comparer.
 - `scenes/*.json` : fiches de lieu embarquées dans la page, format décrit dans `docs/fiche-de-lieu.md`.
@@ -57,6 +59,7 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 - Les champs des fiches sont en français, sans accents dans les clés.
 - Tout aléa du monde dérive de la graine. Même fiche, même monde.
 - Une matière s'ajoute en recette (données), jamais en code GLSL. `recette()` ne doit avoir qu'un seul appel dans le shader : chaque appel supplémentaire est déplié par le compilateur.
+- Le corps ne traverse rien : tout déplacement passe par `MENEUR.planTrajet` et `obstaclesConnus` (troncs, perches, blocs recopiés de `monde.glsl`, choses de la fiche), plus la sonde du moteur en marche ; marge `MARGE_CORPS` (§16 de `docs/meneur-de-jeu.md`). Une nouvelle famille d'objets de cellule s'ajoute aussi à `obstaclesConnus`.
 - Après un changement de rendu : `node tools/vues.mjs out/vues && node tools/compare.mjs`, puis regarder la planche.
 
 ## État au 19 novembre 2026
@@ -74,5 +77,7 @@ Essai du moteur v2 (« tourner, puis projeter ») : bouton « Moteur v2 », opti
 Essai n° 1 du moteur v3 (« on ne trace plus, on sème ») : bouton « Moteur v3 », option `v3` ; compte rendu dans `docs/moteur-v3.md`, planche et test du triptyque par `node tools/v3essai.mjs out/v3`. Le semeur ne connaît pas encore les semis, le relief réglable ni le kit nu : sur ces fiches le bouton est désactivé et la page reste sur le lanceur de rayons (`v3Refus` dans `src/main.js`, liste dans `docs/moteur-v3.md`).
 
 Ouverture de démo (« Quel monde veux-tu filmer ? », rejeu accéléré d'une préparation réellement faite, `ouvertures/*.json`, mention éteinte par défaut) et arrivée immobile dans un lieu : `docs/ouverture.md`, `node tools/ouverture.mjs`.
+
+Démo : bibliothèque de modèles, échelle par la masse, actions `chercher` et `faconner` (états visibles), trajet qui contourne les obstacles ; `docs/meneur-de-jeu.md` §15 et §16. Pas de mains dans le champ (§15.4). Rien n'a tourné avec le vrai Claude ni sur GPU.
 
 Autres pistes : `docs/rendu.md` et `docs/contrat-histoire.md`.

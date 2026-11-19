@@ -1,6 +1,8 @@
 // Outils de test du meneur : un monde de papier, de faux Claude, de faux joueurs, et une partie simulée en accéléré.
 import { readFileSync } from 'node:fs';
-import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour } from '../src/meneur.js';
+import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour, planTrajet, lieuChercher, horsDuCorps } from '../src/meneur.js';
+
+export const MODELES = JSON.parse(readFileSync(new URL('../src/modeles.json', import.meta.url), 'utf8'));
 
 export const lireHistoire = f => JSON.parse(readFileSync(new URL('../histoires/' + f, import.meta.url), 'utf8'));
 export const ANLN = lireHistoire('avant-la-nuit.json');
@@ -30,19 +32,44 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     lumineux: (o.formes || []).some(f => f.matiere === 'lumineux') }));
   const caches = new Set((fiche.objets || []).filter(o => o.visible === false).map(o => o.id));
   const w = { x: 0, z: 0, yaw: 0, haut: 1, elev: 0, zoom: 1, objets, file: [], idle: 0, nuit: false, lampe: false, brume: 0.009, fin: null, ordres: [], pensees: [], flaner,
-    reserves: {}, immobile: false, arbres, rochers };
+    reserves: {}, immobile: false, arbres, rochers, differes: {}, faconnages: {}, faconnes: [], bloques: [], marge: 9, cherche: null };
   const taille = o => envergure(o.formesL || []) * (o.echelle || 1);
   // supports : l'arbre et le rocher les plus proches (comme supportsProches dans main.js)
   const supports = () => [['arbre', arbres], ['rocher', rochers]].map(([id, L]) => {
     const b = L.map(s => Object.assign({ m: Math.hypot(s.x - w.x, s.z - w.z) }, s)).sort((a, c) => a.m - c.m)[0];
     if (!b) return null;
-    let ang = (Math.atan2(b.x - w.x, b.z - w.z) - w.yaw) * 180 / Math.PI; ang = ((ang + 540) % 360) - 180;
+    let ang = (Math.atan2(b.x - w.x, b.z - w.z) - w.yaw) * 180 / Math.PI; ang = (((ang % 360) + 540) % 360) - 180;
     return { id, nom: id, m: b.m, angle: ang, haut: b.haut, x: b.x, z: b.z, rayon: b.rayon || 0.3 };
   }).filter(Boolean);
-  const versPoint = (x, z, arret) => {                          // se tourner vers un point et marcher jusqu'à « arret » mètres
-    let d = Math.atan2(x - w.x, z - w.z) - w.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
-    const m = Math.hypot(x - w.x, z - w.z) - arret;
-    return [{ type: 'tourner', rest: d }, ...(Math.abs(m) > 0.05 ? [{ type: 'marcher', rest: m }] : [])];
+  // les obstacles connus (comme obstaclesConnus dans main.js) : troncs, rochers, choses posées ; la caméra en garde MARGE_CORPS
+  const obstacles = () => [...arbres.map((a, i) => ({ id: 'a' + i, x: a.x, z: a.z, r: a.rayon || 0.3 })), ...rochers.map((a, i) => ({ id: 'r' + i, x: a.x, z: a.z, r: a.rayon || 0.5 })),
+    ...objets.filter(o => !caches.has(o.id)).map(o => ({ id: o.id, x: o.x, z: o.z, r: taille(o) / 2 }))];
+  const idA = (x, z) => (obstacles().find(o => Math.hypot(o.x - x, o.z - z) < 1e-6) || {}).id || null;
+  const versPoint = (x, z, arret, cible) => {                   // le trajet de la page (planTrajet) : tourner, marcher, d'un point de passage à l'autre
+    const p = planTrajet({ x: w.x, z: w.z }, { x, z }, obstacles(), { arret, cible: cible || idA(x, z) }), out = [];
+    let px = w.x, pz = w.z, yaw = w.yaw;
+    for (const q of p.points) {
+      const L = Math.hypot(q.x - px, q.z - pz); if (L < 0.02) continue;
+      let d = Math.atan2(q.x - px, q.z - pz) - yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+      // le dernier tronçon vers une cible plus près que l'arrêt : il recule face à elle (comme avant)
+      if (q === p.points[p.points.length - 1] && Math.hypot(x - px, z - pz) < arret && Math.abs(d) > Math.PI / 2) { d = Math.atan2(Math.sin(d + Math.PI), Math.cos(d + Math.PI)); out.push({ type: 'tourner', rest: d }, { type: 'marcher', rest: -L }); }
+      else out.push({ type: 'tourner', rest: d }, { type: 'marcher', rest: L });
+      yaw += d; px = q.x; pz = q.z;
+    }
+    if (p.bloque) { out.push({ type: 'bloque', rest: 0, devant: p.bloque }); }
+    let d = Math.atan2(x - px, z - pz) - yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+    if (Math.abs(d) > 0.01) out.push({ type: 'tourner', rest: d });   // face à la cible
+    return out;
+  };
+  const reveler = id => { for (const o of w.differes[id] || []) { const b = objets.find(x => x.id === id); o.x = b.x + 0.3; o.z = b.z; objets.push(o); } delete w.differes[id]; };
+  const faconner = op => {                                      // les états joués, puis ce qui a été ramassé est consommé
+    reveler(op.id);
+    const i = objets.findIndex(x => x.id === op.id); if (i < 0) return;
+    for (const L of op.etapes) objets[i].formesL = L;
+    objets[i].formes = objets[i].formesL.length; if (op.nom) objets[i].nom = op.nom; if (op.echelle !== undefined) objets[i].echelle = op.echelle;
+    w.faconnes.push({ id: op.id, etapes: op.etapes.length, consomme: (op.consomme || []).slice(), vus: (op.consomme || []).filter(c => objets.some(x => x.id === c)).length });
+    for (const c of op.consomme || []) { const k = objets.findIndex(x => x.id === c); if (k >= 0) objets.splice(k, 1); }
+    delete w.faconnages[op.id];
   };
   w.executer = o => {
     w.ordres.push(o);
@@ -66,8 +93,10 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
         if (objets.filter(x => !caches.has(x.id)).length >= 8) return;
         let x, z; const base = o.pres_de && objets.find(b => b.id === o.pres_de);
         if (base) { x = base.x + (o.decale ? o.decale[0] : 0); z = base.z + (o.decale ? o.decale[1] : 0); }
-        else ({ x, z } = (o.reserve && w.reserves[o.reserve]) || place());
-        objets.push({ id: o.objet.id, nom: o.objet.nom, x, z, formes: o.objet.formes.length, formesL: o.objet.formes, echelle: 1, lumineux: o.objet.formes.some(f => f.matiere === 'lumineux') });
+        else ({ x, z } = horsDuCorps((o.reserve && w.reserves[o.reserve]) || place(), w, envergure(o.objet.formes) / 2));   // jamais dans le corps du porteur
+        const ob = { id: o.objet.id, nom: o.objet.nom, x, z, formes: o.objet.formes.length, formesL: o.objet.formes, echelle: 1, lumineux: o.objet.formes.some(f => f.matiere === 'lumineux') };
+        if (o.differe) (w.differes[o.differe] = w.differes[o.differe] || []).push(ob); else objets.push(ob);
+      } else if (o.op === 'faconner') { w.faconnages[o.id] = o; if (!w.file.some(a => a.type === 'faconner' && a.objet === o.id)) faconner(o);
       } else if (i < 0) return;
       else if (o.op === 'retirer') objets.splice(i, 1);
       else if (o.op === 'remplacer') { objets[i].formesL = o.formes; objets[i].formes = o.formes.length; if (o.nom) objets[i].nom = o.nom; if (o.echelle !== undefined) objets[i].echelle = o.echelle;
@@ -84,6 +113,8 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
         else if (a.type === 'tourner') w.file.push({ type: 'tourner', rest: a.degres * Math.PI / 180 });
         else if (a.type === 'marcher') w.file.push({ type: 'marcher', rest: a.metres });
         else if (a.type === 'attendre') w.file.push({ type: 'attendre', rest: a.secondes });
+        else if (a.type === 'chercher') w.file.push({ type: 'chercher', quoi: a.quoi });
+        else if (a.type === 'faconner') w.file.push({ type: 'faconner', objet: a.objet, rest: 30 });
       }
     }
   };
@@ -100,14 +131,26 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
       if (ob) { let d = Math.atan2(ob.x - w.x, ob.z - w.z) - w.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); w.file.unshift({ type: 'tourner', rest: d }); w.vise = a.objet; }
       return;
     }
+    if (a.type === 'chercher') {                                 // comme main.js : un endroit plausible, il y va, se baisse, ramasse, se relève
+      w.file.shift();
+      const sup = [['arbre', arbres], ['rocher', rochers]].flatMap(([id, L]) => L.map(s => ({ id, x: s.x, z: s.z, rayon: s.rayon || 0.3 })));
+      const q = lieuChercher(a.quoi, w, sup, () => 0, 1.2, MODELES); w.cherche = q;
+      w.file.unshift(...versPoint(q.x, q.z, 0), { type: 'posture', rest: 0.45 }, { type: 'attendre', rest: 2 }, { type: 'posture', rest: 1 });
+      return;
+    }
+    if (a.type === 'faconner') {                                 // il attend, accroupi, que l'accessoiriste ait décrit les états ; puis il les joue
+      if (w.faconnages[a.objet]) { faconner(w.faconnages[a.objet]); w.file.shift(); return; }
+      a.rest -= dt; if (a.rest <= 0) w.file.shift(); return;
+    }
+    if (a.type === 'bloque') { w.bloques.push(a.devant); w.file.shift(); return; }
     if (a.type === 'rejoindre' || a.type === 'cadrer') {           // comme main.js : la page calcule le trajet, l'arrêt et le cadrage
       w.file.shift();
       const ob = objets.find(x => x.id === a.objet) || supports().find(x => x.id === a.objet); if (!ob) return;
       const t = ob.formesL ? taille(ob) : ob.rayon * 2, pl = planCadrage(t);
       const pre = w.elev > 0 ? [{ type: 'descendre' }] : [];
-      if (a.type === 'rejoindre') w.file.unshift(...pre, ...versPoint(ob.x, ob.z, distanceArret(t)));
+      if (a.type === 'rejoindre') w.file.unshift(...pre, ...versPoint(ob.x, ob.z, distanceArret(t), ob.formesL ? ob.id : null));
       else if (a.sur_place) w.file.unshift(...pre, { type: 'posture', rest: pl.hauteur }, { type: 'viser', objet: a.objet, cadre: true }, { type: 'zoom', rest: zoomPour(t, Math.hypot(ob.x - w.x, ob.z - w.z), 1.36 * pl.hauteur) });
-      else w.file.unshift(...pre, ...versPoint(ob.x, ob.z, pl.m), { type: 'posture', rest: pl.hauteur }, { type: 'viser', objet: a.objet, cadre: true }, { type: 'zoom', rest: pl.zoom });
+      else w.file.unshift(...pre, ...versPoint(ob.x, ob.z, pl.m, ob.formesL ? ob.id : null), { type: 'posture', rest: pl.hauteur }, { type: 'viser', objet: a.objet, cadre: true }, { type: 'zoom', rest: pl.zoom });
       w.cadre = a.type === 'cadrer' ? a.objet : w.cadre;
       return;
     }
@@ -127,7 +170,13 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     if (a.type === 'posture') { w.haut = a.rest; w.file.shift(); return; }
     if (a.type === 'tourner') { const d = Math.sign(a.rest) * Math.min(Math.abs(a.rest), 1.5 * dt); w.yaw += d; a.rest -= d; if (Math.abs(a.rest) < 1e-3) w.file.shift(); }
     else if (a.type === 'marcher') { const v = Math.sign(a.rest) * 1.35, s = Math.abs(a.rest) < Math.abs(v * dt) ? a.rest : v * dt;
-      w.x += Math.sin(w.yaw) * s; w.z += Math.cos(w.yaw) * s; a.rest -= s; if (Math.abs(a.rest) < 1e-6) w.file.shift(); }
+      let nx = w.x + Math.sin(w.yaw) * s, nz = w.z + Math.cos(w.yaw) * s;
+      for (const o of obstacles()) {                             // jamais dans un obstacle : repoussé à la marge (comme moveBy dans main.js)
+        const dx = nx - o.x, dz = nz - o.z, m = Math.hypot(dx, dz), R = o.r + REGLAGES.MARGE_CORPS;
+        if (m < R && Math.hypot(w.x - o.x, w.z - o.z) >= R - 1e-6) { nx = o.x + dx / (m || 1) * R; nz = o.z + dz / (m || 1) * R; }
+      }
+      w.x = nx; w.z = nz; a.rest -= s; if (Math.abs(a.rest) < 1e-6) w.file.shift();
+      for (const o of obstacles()) w.marge = Math.min(w.marge, Math.hypot(w.x - o.x, w.z - o.z) - o.r); }
     else { a.rest -= dt; if (a.rest <= 0) w.file.shift(); }
   };
   w.perception = () => ({
@@ -136,7 +185,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     supports: supports().filter(s => s.m < 25).map(({ id, nom, m, angle, haut }) => ({ id, nom, m, angle, haut })),
     objets: objets.map(o => {
       const dx = o.x - w.x, dz = o.z - w.z, m = Math.hypot(dx, dz);
-      let ang = (Math.atan2(dx, dz) - w.yaw) * 180 / Math.PI; ang = ((ang + 540) % 360) - 180;
+      let ang = (Math.atan2(dx, dz) - w.yaw) * 180 / Math.PI; ang = (((ang % 360) + 540) % 360) - 180;
       const portee = o.lumineux ? REGLAGES.VU_LUMINEUX_M : w.nuit ? (w.lampe ? REGLAGES.VU_LAMPE_M : 4) : REGLAGES.VU_JOUR_M;
       const visible = !caches.has(o.id);
       return { id: o.id, nom: o.nom, m, angle: ang, visible, vu: visible && m <= portee && Math.abs(ang) <= REGLAGES.VU_ANGLE, taille: taille(o) };
