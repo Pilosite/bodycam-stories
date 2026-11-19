@@ -2014,7 +2014,7 @@ uniform int uLin;            // 1 = source filtrable (RGBA16F, LINEAR) : une lec
 out vec4 o;
 float h12(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
 vec3 smp(vec2 uv){
-  if(uLin==1) return texture(uTex,uv).rgb;
+  if(uLin==1) return textureLod(uTex,uv,0.).rgb;
   vec2 p=uv*uSrcRes-.5; vec2 i=floor(p), f=p-i; ivec2 m=ivec2(uSrcRes)-1;
   ivec2 a=clamp(ivec2(i),ivec2(0),m), b=clamp(ivec2(i)+1,ivec2(0),m);
   return mix(mix(texelFetch(uTex,a,0).rgb,texelFetch(uTex,ivec2(b.x,a.y),0).rgb,f.x),
@@ -2035,7 +2035,7 @@ void main(){
   vec3 hdr=vec3(smp(.5+q*(1.+.0032*r2)).r,smp(.5+q).g,smp(.5+q*(1.-.0032*r2)).b);
   if(uSoft>0.){ vec2 sp=uSoft/uSrcRes;
     hdr=(hdr+smp(.5+q+sp*vec2(1.,.6))+smp(.5+q+sp*vec2(-.6,1.))+smp(.5+q+sp*vec2(-1.,-.6))+smp(.5+q+sp*vec2(.6,-1.)))*.2; }
-  vec3 bl=texture(uBloom,.5+q).rgb;
+  vec3 bl=textureLod(uBloom,.5+q,0.).rgb;
   vec2 px=1.2/uSrcRes;
   vec3 nb=(smp(.5+q+vec2(px.x,0.))+smp(.5+q-vec2(px.x,0.))+smp(.5+q+vec2(0.,px.y))+smp(.5+q-vec2(0.,px.y)))*.25;
   vec3 c=tone(mix(hdr,bl,.11)), cn=tone(mix(nb,bl,.11));
@@ -4310,11 +4310,11 @@ bool tapis(vec2 xz, float lod, out vec4 a, out vec4 b){
   if(k0<0) return false;
   float s=uTapS0*exp2(float(k0)), f=float(k0)==l0?fract(lod):0.;
   vec3 c=vec3(xz/(s*float(uTapN)),float(k0));
-  a=texture(uTap0,c); b=texture(uTap1,c);
+  a=textureLod(uTap0,c,0.); b=textureLod(uTap1,c,0.);
   int k1=k0+1;
   if(f>0. && k1<uTapL && ((uTapPret>>k1)&1)==1 && tapisDans(k1,xz)){
     vec3 c1=vec3(c.xy*.5,float(k1));
-    a=mix(a,texture(uTap0,c1),f); b=mix(b,texture(uTap1,c1),f);
+    a=mix(a,textureLod(uTap0,c1,0.),f); b=mix(b,textureLod(uTap1,c1,0.),f);
   }
   return true;
 }          // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
@@ -4333,7 +4333,7 @@ float ombreSoleil(vec3 p, vec3 gn){                          // 1 = éclairé ; 
   float v=0.; vec2 tx=uSoleilE.w/(2.*uSoleilE.xy);
   for(int k=0;k<4;k++){
     vec2 o=(vec2(rnd(),rnd())-.5)*tx*uPcf;
-    v+=z<=texture(uOmbre,uv+o).r?1.:0.;
+    v+=z<=textureLod(uOmbre,uv+o,0.).r?1.:0.;
   }
   return mix(v*.25,stat,bord);
 }
@@ -4448,7 +4448,7 @@ void main(){
   }
   col=min(max(col,vec3(0.)),vec3(60.));
   if(col.x!=col.x||col.y!=col.y||col.z!=col.z) col=vec3(0.);
-  if(uVoir==5){ float z=texture(uOmbre,gl_FragCoord.xy/uRes).r; col=vec3(z<1.?1.:0.); }   // la carte d'ombres elle-même
+  if(uVoir==5){ float z=textureLod(uOmbre,gl_FragCoord.xy/uRes,0.).r; col=vec3(z<1.?1.:0.); }   // la carte d'ombres elle-même
   outCol=vec4(melangeHistoireA(col,uCamPos+rd*t,ip,dam?uAlphaD:uAlpha),t);
 }`, FS_V3TAPIS = `#version 300 es
 // Moteur v3 : le tapis du sol. La matière du sol (recette du sol, trajet par-dessus, mousse, relief) ne dépend que du point
@@ -5722,6 +5722,9 @@ function resize(){
   const maxPx=CFG.maxPx||(QUAL.full?2000000:V3.on?115000:coarse?250000:440000);   // v3 en mobile : la résolution que le moteur à rayons tenait en marche   // mode complet : jusqu'à la pleine résolution de l'écran
   const s=Math.min(1,Math.sqrt(maxPx/(cw*ch)));
   W=CFG.w||Math.max(2,Math.round(cw*s)); H=CFG.h||Math.max(2,Math.round(ch*s));
+  // Mobile en v3 : le capteur simulé coûte par pixel d'écran (17 ms mesurés à 432 × 781 sur Mali-G77). On le calcule à peine
+  // plus fin que l'image interne et le navigateur agrandit : c'est aussi ce que fait un téléphone qui filme en basse définition.
+  if(!QUAL.full&&V3.on&&!CFG.ecranPlein){ const k=CFG.ecranK||1.25; canvas.width=Math.min(cw,Math.round(W*k)); canvas.height=Math.min(ch,Math.round(H*k)); }
   pairs.forEach(p=>{ if(p){ freeT(p.a); freeT(p.b); } }); pairs=[]; freeT(bl1); freeT(bl2);
   const bs=128/Math.max(W,H);
   bl1=target(Math.max(8,Math.round(W*bs)),Math.max(8,Math.round(H*bs)),gl.RGBA16F,gl.LINEAR);
@@ -5775,10 +5778,11 @@ function postFX(src){
   if(lu){
     let s=0,ws=0,any=false;
     for(let y=0;y<bl1.h;y++) for(let x=0;x<bl1.w;x++){ const i=(y*bl1.w+x)*4;
-      const L=.2126*blBuf[i]+.7152*blBuf[i+1]+.0722*blBuf[i+2]; if(L>0) any=true;
+      const L=.2126*blBuf[i]+.7152*blBuf[i+1]+.0722*blBuf[i+2]; if(!(L>=0)||L===Infinity) continue;   // une valeur invalide ne doit jamais rendre l'écran noir
+      if(L>0) any=true;
       const dx=x/bl1.w-.5, dy=y/bl1.h-.5, w=1-1.6*(dx*dx+dy*dy);
       s+=w*Math.log(Math.min(L,8)+.004); ws+=w; }
-    if(any) expTarget=Math.min(S.nuit?9:14,Math.max(.25,.25/Math.exp(s/ws)));   // la nuit, le gain plafonne : le noir reste noir
+    if(any&&ws>0&&Number.isFinite(s)) expTarget=Math.min(S.nuit?9:14,Math.max(.25,.25/Math.exp(s/ws)));   // la nuit, le gain plafonne : le noir reste noir
   }
   gl.useProgram(P_BLUR.p);
   bindTex(0,bl1.t,P_BLUR.u.uTex); gl.uniform2f(P_BLUR.u.uDir,1/bl1.w,0); gl.bindFramebuffer(gl.FRAMEBUFFER,bl2.f); draw();
@@ -6217,12 +6221,15 @@ function v3Image(p){
   V3.hist=dst; V3.histPose=p; V3.n++;
 }
 function v3Frame(p,dt){
-  if(!v3Init()) return;                                        // programmes encore en compilation
+  if(!v3Init()){ const d=performance.now()-(V3.t0prep||(V3.t0prep=performance.now()));
+    if(d>2500) say(d>25000?"La préparation du moteur dure anormalement. Touche trois fois le chrono REC… ou recharge la page. Dernière étape : "+(ETAPES[ETAPES.length-1]||""):"Préparation du moteur graphique…",true);
+    return; }                                        // programmes encore en compilation
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
   v3Image(p); frames++;
   if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,cuits:V3.tap.cuits,t:performance.now()});
-  postFX(V3.hist);
+  // Halo et exposition : 28 ms mesurés sur Mali-G77 pour trois petites passes. En mobile, une image sur quatre suffit (ils varient lentement).
+  if(QUAL.full||CFG.haloToujours||V3.nImg%4===0||!bl1.fait){ postFX(V3.hist); bl1.fait=true; }
 }
 function qualite(full){                                        // bascule mobile / complète : tout se réalloue à la nouvelle taille
   QUAL.full=!!full; try{ localStorage.setItem("bodycam-qualite",full?"1":"0"); }catch(_){}
@@ -6290,6 +6297,7 @@ function frame(now){
   }
   etape("rendu",v2pret?V2.out||hist:V3.on?V3.hist||hist:hist);
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
+  if(!(exposure>0)||!Number.isFinite(exposure)){ exposure=1.2; if(!(expTarget>0)) expTarget=1.2; }
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
   etape("aff",null); hud(now);
   if(pf&&walking) prof.push(pf);
