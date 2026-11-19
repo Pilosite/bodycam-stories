@@ -244,3 +244,7 @@ Sur Direct3D, l'ombrage ne compilait plus avec `sdSemis` déplié (main, variant
 ### Ce qui coûte
 
 Rien de neuf par image en dehors des recettes, évaluées une fois par pixel : la litière superposée parcourt neuf cellules comme le Voronoï d'avant ; le grès a deux bosses et un grain (sa première version, avec des creux en relief, faisait tomber Chrome en rendu logiciel sur un bloc plein écran : allégée). Les couches de semis entrent dans le budget fixe de grains. En qualité mobile, le sol passe par le tapis (cuit une fois). Rien n'est mesuré sur un vrai GPU.
+
+### Ce qu'on voit, et ce qui trahit encore
+
+Planches (`tools/fidelite.mjs` puis `tools/fidelite-planche.mjs`, qualité complète, 6 images accumulées, rendu logiciel) : sept poses PC 1280 × 800 (sentier à z 0, 22, 40, 56, sol, rocher, marche) et huit en portrait 450 × 800 (gros plans à 1 m : sol, rocher, bouleau, pin, haut du pin, chêne ; sentier ; marche). Mieux : la litière (des feuilles, plus des pavés), le sable blanc, le grès (moins de camouflage, lichens, patine), le bouleau (noir au pied, lenticelles), le pin orangé en hauteur, les troncs qui ne se ressemblent plus, les branches mortes et les éclats de grès qui cassent le sol nu. Trahit encore : de près, la fougère (des plans raides découpés en peigne, qui se lisent comme de la vannerie) et la callune (boules hérissées sombres) ; le grès reste une ellipsoïde lisse de silhouette, avec un liseré sombre au bord ; l'écorce du pin à 1 m a des plaques molles ; feuilles de la canopée en points (hors de ce lot).

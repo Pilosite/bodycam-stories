@@ -41,14 +41,14 @@
         0.7,
         1.15
       ],
-      "teinte": 0.35,
+      "teinte": 0.25,
       "desordre": 1,
       "palette": [
-        "#8a4b22",
-        "#9c5a2a",
-        "#7a4524",
-        "#a8723a",
-        "#6b4a2c"
+        "#6e4a2e",
+        "#7d5634",
+        "#5e4029",
+        "#8a6440",
+        "#57412e"
       ],
       "formes": [
         {
@@ -174,7 +174,7 @@
             0
           ],
           "dents": 23,
-          "couleur": "#6b4a2c",
+          "couleur": "#4f3a28",
           "matiere": "fougere-rousse"
         }
       ]
