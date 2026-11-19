@@ -766,7 +766,8 @@ function v2Basculer(on){
    v3tapisS0, v3tapisBudget, v3tapisBias), v3damier, v3acc32 (accumulation en RGBA32F), capteur4 (capteur à quatre lectures
    par texel), sondeSync, expoSync (lectures bloquantes), v3sync (attente de la puce à chaque image), v3solPlein (ancien
    maillage du sol). Le bouton Mesurer les coupe tour à tour pendant la marche. */
-const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||(QUAL.full?2048:1024),
+const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG.grainsOmbre||0, k:CFG.v3k||2.5,   // côté d'un grain = k × l'écart moyen : à 1,8 des grains ronds tirés au hasard laissaient 8 % de trous, à 2,5 moins de 1 %
+   carte:CFG.v3carte||(QUAL.full?2048:1024),
   alpha:CFG.v3alpha||.18, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
   n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},
@@ -778,7 +779,9 @@ function v3Init(){                                             // rend vrai quan
     if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
-  V3.maxPt=Math.min(64,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
+  // Taille maximale d'un grain : plafonnée à 64 pixels, une surface vue de très près (tronc, bloc, mur) ne pouvait plus être couverte
+  // et laissait voir à travers. Le plafond suit maintenant ce que la puce accepte, jusqu'à 320 pixels.
+  V3.maxPt=Math.min(CFG.v3maxPt||320,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
   V3.tapVide=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,V3.tapVide); gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,1,1,1);
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,72);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
