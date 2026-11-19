@@ -4395,11 +4395,17 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP); }
 }
 const px3=new Float32Array(4);
-function v3Sync(){ gl.bindFramebuffer(gl.FRAMEBUFFER,dummy.f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3); }
+/* Attendre la fin du calcul graphique d'UNE cible : sur une puce à tuiles (Mali), lire un pixel ne force que la cible lue.
+   Lire une autre cible (comme le faisait la première version) ne mesure rien : le vrai travail se cachait jusqu'à l'affichage. */
+const u8s=new Uint8Array(4);
+function v3Sync(t){
+  if(t===null){ gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,u8s); return; }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,(t||dummy).f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3);
+}
 function v3Image(p){
   v3Init(); v3Cibles();
   const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
-  const chrono=nom=>{ if(!V3.detail) return; v3Sync(); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
+  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
   const rnd=Math.random;
   const jit=bouge?[0,0]:[rnd()-.5,rnd()-.5];                   // décalage sous-pixel, seulement à l'arrêt
   // soleil de cette image : tiré dans le disque solaire (pénombre par accumulation)
@@ -4427,7 +4433,7 @@ function v3Image(p){
   gl.uniform1i(u.uTrait,0);
   if(ps.total>0) gl.drawArrays(gl.POINTS,0,ps.total);
   if(ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
-  chrono("ombre");
+  chrono("ombre");                                            // carte de profondeur : illisible, son coût retombe sur la passe qui la consulte
   // (2) tampon G : le sol, puis les grains
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
@@ -4446,7 +4452,7 @@ function v3Image(p){
     gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
   if(pc.total>0) gl.drawArrays(gl.POINTS,0,pc.total);
   gl.disable(gl.DEPTH_TEST);
-  chrono("tamponG");
+  chrono("tamponG",g);
   // (3) matière, lumière, ciel, accumulation
   const dst=V3.hist===V3.A?V3.B:V3.A;
   u=G.ombrage.u; gl.useProgram(G.ombrage.p); v3Monde(u,W,H,p);
@@ -4459,7 +4465,7 @@ function v3Image(p){
   gl.uniform1f(u.uAlpha,alpha); gl.uniform1i(u.uReproj,bouge?1:0);
   if(V3.hist){ gl.uniform3fv(u.uPrevPos,V3.histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,V3.histPose.mat); }
   gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,W,H); draw();
-  chrono("ombrage");
+  chrono("ombrage",dst);
   v3Sync();                                                   // force la fin du calcul : le temps mesuré est le vrai temps GPU
   V3.ms=performance.now()-t0; V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; V3.nImg++;
   V3.hist=dst; V3.histPose=p; V3.n++;
@@ -4493,7 +4499,7 @@ function frame(now){
   const dt=Math.min(.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
-  const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=k=>{ if(!pf) return; v3Sync(); const t=performance.now(); pf[k]=t-pt; pt=t; };
+  const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=(k,cible)=>{ if(!pf) return; if(cible!==undefined) v3Sync(cible); const t=performance.now(); pf[k]=t-pt; pt=t; };
   simulate(dt); etape("sim");
   walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
   const p=pose(); lastPose=p;
@@ -4507,10 +4513,10 @@ function frame(now){
     do{ done=staticRows(p); } while(!done && performance.now()-t0<20);
     if(done && (n<14||n%4===0)) postFX(hist);
   }
-  etape("rendu");
+  etape("rendu",v2pret?V2.out||hist:V3.on?V3.hist||hist:hist);
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist,(now-startT)/1000);
-  etape("aff"); hud(now);
+  etape("aff",null); hud(now);
   if(pf&&walking) prof.push(pf);
 }
 let lastHud=0;
@@ -4869,7 +4875,14 @@ async function mesurerV3(f,wait,med){
   out.textContent="Marche mesurée. Détail des passes à l'arrêt…";
   const det=V3.detail; V3.detail=true; V3.passes={}; V3.n=0; V3.max=Math.max(V3.max,1);
   const k0=V3.nImg; while(V3.nImg<k0+12) { V3.n=0; await wait(60); }
-  const pa=Object.assign({},V3.passes); V3.detail=det; hold=false;
+  const pa=Object.assign({},V3.passes);
+  const g0=V3.grains, essais=[];                              // le coût réel d'une image selon le budget de grains
+  for(const g of [150000,300000,700000,1500000]){
+    out.textContent="Coût réel avec "+Math.round(g/1000)+" k grains…";
+    V3.grains=g; V3.passes={}; const k1=V3.nImg, t9=performance.now(); while(V3.nImg<k1+10 && performance.now()-t9<6000){ V3.n=0; await wait(40); }
+    essais.push(Math.round(g/1000)+" k : "+fx((V3.passes.tamponG||0)+(V3.passes.ombrage||0),0)+" ms");
+  }
+  V3.grains=g0; V3.n=0; V3.detail=det; hold=false;
   const ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
   const ips=f.length>1?(f.length-1)/((f[f.length-1].t-f[0].t)/1000):null;   // horloge réelle : dt est plafonné à 100 ms dans la boucle
   const dbg=gl.getExtension("WEBGL_debug_renderer_info"), gpu=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"inconnu";
@@ -4882,7 +4895,6 @@ async function mesurerV3(f,wait,med){
     "",
     "EN MARCHE ("+f.length+" images)",
     "Images/seconde   "+(ips?fx(ips):"non mesuré"),
-    "Calcul par image "+fx(ms,1)+" ms",
     "Résolution       "+W+" × "+H,
     "",
     "BUDGET DE GRAINS",
@@ -4890,10 +4902,12 @@ async function mesurerV3(f,wait,med){
     "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.sm.w+" × "+V3.sm.h,
     "Sol              "+V3.sol.anneaux*V3.sol.secteurs*2+" triangles",
     "",
-    "PAR PASSE (à l'arrêt, synchronisé)",
-    "Carte d'ombres   "+fx(pa.ombre,1)+" ms",
-    "Tampon G         "+fx(pa.tamponG,1)+" ms",
-    "Matière, lumière "+fx(pa.ombrage,1)+" ms",
+    "PAR PASSE (à l'arrêt, attente réelle de la puce)",
+    "Semis des grains "+fx(pa.tamponG,1)+" ms",
+    "Ombres, matière, lumière "+fx(pa.ombrage,1)+" ms",
+    "",
+    "COÛT RÉEL D'UNE IMAGE SELON LE BUDGET",
+    essais.join(" · "),
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
