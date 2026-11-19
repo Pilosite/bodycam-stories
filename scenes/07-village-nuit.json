@@ -1,0 +1,42 @@
+{ "version": 0, "id": "essai-village-nuit", "titre": "Rue de village, la nuit", "inspiration": "La grand-rue pavée d'un village français, tard, quelques fenêtres encore allumées",
+  "graine": 5120, "kit": "nu",
+  "relief": { "amplitude": 1.2, "echelle": 160, "pente": 0.04 },
+  "trajet": { "sinuosite": 0.35, "largeur": 5.5, "creux": 0.1, "bord": "net" },
+  "surfaces": { "sol": "dalles", "trajet": "paves" },
+  "matieres": {
+    "maison": { "base": "crepi", "couleur": "forme",
+      "motif": { "type": "fenetres", "largeur": 0.9, "hauteur": 1.25, "pas": 2.3, "etage": 2.8, "allege": 0.95, "cadre": 0.07, "allumees": 0.3,
+                 "couleur": "#15181c", "cadre_couleur": "#cfc8b8", "lumiere": "#ffbb66" } },
+    "volets": { "base": "maison", "couleur": "forme", "motif": { "type": "fenetres", "largeur": 0.9, "hauteur": 1.25, "pas": 6, "etage": 2.8, "allege": 0.95, "cadre": 0.07, "allumees": 0.45,
+                 "couleur": "#15181c", "cadre_couleur": "#cfc8b8", "lumiere": "#ffbb66" } }
+  },
+  "ambiance": { "saison": "hiver", "soleil": { "azimut": 120, "hauteur": -10 }, "lampe": true, "brume": 0.016 },
+  "lointain": { "hauteur": 4, "decoupe": 0.3, "couleur": "#2a2d2a", "couleur_bas": "#1d211c" },
+  "semis": [
+    { "id": "maisons", "nom": "maisons de village mitoyennes", "cellule": [7.5, 9], "trajet": { "rangee": true, "min": 3.9, "cote": "deux" },
+      "densite": 0.92, "hauteur": [0.85, 1.25], "teinte": 0.1,
+      "palette": ["#c9bba3", "#b9ad9a", "#d4c6aa", "#a8a090", "#c4ae8c", "#bdb6a6"],
+      "formes": [
+        { "f": "boite", "p": [0, 2.9, -0.2], "taille": [7.3, 5.8, 8.2], "couleur": "palette", "matiere": "maison" },
+        { "f": "toit", "p": [0, 6.6, -0.2], "taille": [7.34, 1.6, 8.7], "couleur": "#5f4034", "matiere": "tuile" },
+        { "f": "boite", "p": [-1.15, 1.05, 3.92], "taille": [1.1, 2.1, 0.08], "couleur": "#3b2e24", "matiere": "planches" },
+        { "f": "boite", "p": [2.3, 1.6, 3.91], "taille": [2.0, 1.5, 0.05], "couleur": "#4d5f52", "matiere": "volets" },
+        { "f": "boite", "p": [-2.3, 4.4, 3.91], "taille": [2.0, 1.5, 0.05], "couleur": "#4d5f52", "matiere": "volets" },
+        { "f": "boite", "p": [2.4, 7.0, -1.5], "taille": [0.55, 1.4, 0.55], "couleur": "#7a4a3a", "matiere": "brique" } ] },
+    { "id": "lampadaires", "nom": "lanternes murales", "cellule": [16, 2], "trajet": { "rangee": true, "min": 2.15, "cote": "gauche" },
+      "densite": 1,
+      "formes": [
+        { "f": "cylindre", "p": [0, 2.0, 0.0], "taille": [0.1, 4.0, 0.1], "couleur": "#26282a", "matiere": "metal" },
+        { "f": "boite", "p": [0, 3.95, 0.3], "taille": [0.06, 0.06, 0.6], "couleur": "#26282a", "matiere": "metal" },
+        { "f": "boite", "p": [0, 3.75, 0.6], "taille": [0.24, 0.32, 0.24], "couleur": "#ffcf8a", "matiere": "lumineux" } ] },
+    { "id": "bornes", "nom": "bornes de pierre au bord du trottoir", "cellule": [4.5, 1.5], "trajet": { "rangee": true, "min": 2.35 },
+      "densite": 0.5, "teinte": 0.15,
+      "formes": [ { "f": "cylindre", "p": [0, 0.35, 0], "taille": [0.3, 0.7, 0.3], "couleur": "#8a857a", "matiere": "pierre", "arrondi": 0.04 } ] }
+  ],
+  "objets": [
+    { "id": "eglise", "nom": "clocher au bout de la rue", "devant": 46, "cote": 0, "degage": 6, "formes": [
+      { "f": "boite", "p": [0, 7, 0], "taille": [4.5, 14, 4.5], "couleur": "#a39a88", "matiere": "pierre" },
+      { "f": "cone", "p": [0, 16.5, 0], "taille": [5.2, 5, 5.2], "couleur": "#3a3d42", "matiere": "tuile" },
+      { "f": "boite", "p": [0, 11.5, 2.26], "taille": [1.0, 2.0, 0.05], "couleur": "#15171a", "matiere": "mat" },
+      { "f": "boule", "p": [0, 8.0, 2.27], "taille": [1.1, 1.1, 0.06], "couleur": "#e8dcc0", "matiere": "lumineux" } ] }
+  ] }

@@ -105,3 +105,19 @@ La machine était chargée (charge moyenne 6 à 8 sur 4 cœurs) : d'un passage �
 2. Le feuillage : semer les branches de la canopée ; essayer des grains ronds ou des disques orientés ; une part du budget réservée aux feuilles proches.
 3. Les objets : un recouvrement plus fort pour les faces planes, et suivre les fusions douces par deux pas de Newton sur l'objet entier.
 4. L'ambiance rangée dans le monde, branchée dans `ambiance()`, à la place du facteur réglé à l'œil.
+
+## Ce que le semeur ne sait pas encore rendre (fusion avec la branche `semis`, 19 novembre 2026)
+
+Le lanceur de rayons a reçu le vocabulaire de monde générique (`docs/refonte-monde-generique.md`, étape 3). Le semeur partage le même `monde.glsl` et la même `recette.glsl` (relief et trajet réglés par uniformes, nouveaux motifs de matière), mais il ne sème pas encore ce vocabulaire. Sur une fiche qui en a besoin, le bouton « Moteur v3 » est désactivé (« Moteur v3 · pas ici », la raison en infobulle) et la page reste sur le lanceur de rayons ; si le v3 était actif, il se coupe, et revient de lui-même sur la prochaine fiche qu'il sait rendre. Le test est `v3Refus()` dans `src/main.js`, dans cet ordre :
+
+| Ce que demande la fiche | Raison affichée | Ce qu'il manque au semeur |
+|---|---|---|
+| `semis[]` (au moins une couche) | semis | semer les éléments d'une couche (grille, rangée le long du trajet, formes de l'élément), avec `gInst` et la palette |
+| `kit: "dunes"` | dunes | jamais essayé avec le semeur : sable ridé, rochers épars des dunes, part du budget sans arbres |
+| `kit: "nu"` (ou une fiche sans kit qui a des semis) | monde nu | un monde sans arbres ni canopée n'a jamais été essayé avec le semeur ; il vient en pratique avec des semis |
+| `relief` ou `trajet` différents de la forêt d'origine | relief ou trajet réglé | le maillage du sol suit `terrainH`, mais la répartition des grains (`v3Cap`, distances) et la pente le long de z (`uYTop`) n'ont pas été revues ; pas de pas réduit près d'un bord de trottoir |
+| nuit, ou lampe allumée | nuit, lampe | la lampe du téléphone ; les fenêtres allumées (`uNuit`) passent par la recette, mais sans lampe ni lumière ponctuelle |
+| `foret.houppier: "cone"` | conifères en cône | le cœur de feuillage des conifères n'est pas semé |
+| `lointain.eau` | eau à l'horizon | `eauLoin()` n'est pas appelée par `v3_ombrage.frag` |
+
+Le lointain en montagnes ou collines, lui, est rendu (calcul par direction, comme le ciel). Ce que la fusion a changé dans le semeur, sans changer ce qu'il rend sur la forêt : les uniformes de relief et de trajet (`uRel`, `uTraj`, `uCreux`) sont passés par `v3Monde`, la largeur du trajet vient de `uTraj` comme dans `render()`, et `recette()`/`matProp()` ont leur nouvelle signature (émission, normale dans le repère de la forme). Les fiches 01, 03 et 05 de `scenes/` restent rendues par le v3 ; 02 (nuit), 04 (dunes) et 06 à 08 (semis, kit nu) ne le sont pas. Une ambiance changée en cours d'histoire (lampe allumée) refait le même test.
