@@ -73,6 +73,11 @@ export function validerFiche(f, opts = {}) {
     camera: { profil: 'bodycam-poitrine', hauteur: clampN(f.camera && f.camera.hauteur, 0.9, 1.9, 1.36), champ: 125 },
     note: String(f.note || '').slice(0, 180) };
   if (typeof a.lampe === 'boolean') out.ambiance.lampe = a.lampe;
+  if (a.atmosphere === true || isObj(a.atmosphere)) {            // modèle atmosphère : soleil, ciel et brume selon la hauteur du soleil
+    const at = isObj(a.atmosphere) ? a.atmosphere : {};
+    out.ambiance.atmosphere = { trouble: clampN(at.trouble, 0, 1, 0.35), rebord: clampN(at.rebord, 0, 2, 1) };
+    if (isObj(a.brume_basse)) out.ambiance.brume_basse = { densite: clampN(a.brume_basse.densite, 0, 0.2, 0.04), hauteur: clampN(a.brume_basse.hauteur, 0.3, 30, 3) };
+  }
   if (kit === 'foret') { const fo = isObj(f.foret) ? f.foret : {}; out.foret = { densite: clampN(fo.densite, 0, 1, 0.7), rochers: clampN(fo.rochers, 0, 1.5, 1), feuillage: clampN(fo.feuillage, 0, 1.5, 1) };
     if (fo.houppier === 'cone') { out.foret.houppier = 'cone'; out.foret.houppier_bas = clampN(fo.houppier_bas, 0.3, 8, 1.6); out.foret.houppier_rayon = clampN(fo.houppier_rayon, 0.8, 3.2, 2.5); }
     if (fo.perches !== undefined) out.foret.perches = clampN(fo.perches, 0, 1, 1); }
@@ -472,7 +477,7 @@ const FORMAT_FICHE = `FORMAT DE LA FICHE (JSON, rien d'autre)
  "matieres": {"nom-en-minuscules": {"base": "recette prête", "couleur": "#rrggbb" ou "forme", ...}} (12 au plus),
  "semis": [ jusqu'à 4 couches ], "objets": [ jusqu'à 8 objets ],
  "lointain": {"hauteur": 0..40 degrés (collines 3 à 6, montagnes 8 à 15, haute montagne 18 à 30), "decoupe": 0..1, "neige": 0..1, "couleur", "couleur_bas", "eau": "#rrggbb" (mer, lac ou baie sous l'horizon)},
- "ambiance": {"saison": "ete"|"automne"|"hiver", "meteo": "clair"|"voile", "soleil": {"azimut": -180..180, "hauteur": -10..70 (négatif = nuit)}, "lampe": true|false, "brume": 0..0.06},
+ "ambiance": {"saison": "ete"|"automne"|"hiver", "meteo": "clair"|"voile", "soleil": {"azimut": -180..180, "hauteur": -10..70 (négatif = nuit)}, "lampe": true|false, "brume": 0..0.06, "atmosphere": {"trouble": 0..1, "rebord": 0..2} (soleil et ciel selon la hauteur : aube et soir colorés, à mettre de jour), "brume_basse": {"densite": 0..0.2, "hauteur": 0.3..30} (brume au sol, avec atmosphere ; 0.03 à 0.06 et 2 à 4 m pour un matin)},
  "note": "une phrase, seulement si une partie de la demande ne peut pas être montrée, et comment tu l'as contournée"}
 FORME : {"f": "boite"|"boule"|"cylindre"|"cone"|"capsule"|"toit", "p": [x, y, z] centre en mètres, "taille": [largeur, hauteur, profondeur] (cylindre, cône, capsule : [diamètre, hauteur, diamètre], debout ; toit : [longueur du faîtage, hauteur, largeur]), "cap": degrés, "penche": [autour de x, autour de z] (roue, tuyau couché : [90, 0]), "couleur": "#rrggbb" ou "palette", "matiere": "mat"|"bois"|"pierre"|"metal"|"verre"|"tissu"|"tuile"|"lumineux" ou un nom de recette, "lisse": 0..0.5 (fond avec la voisine), "arrondi": 0..0.3}. Repère : y = 0 au sol, +z = la face avant. Une boîte posée au sol s'enfonce d'elle-même sur une pente. Porte, fenêtre, enseigne : boîte mince à 2 cm devant le mur.
 OBJET : {"id": "court-sans-accent", "nom": "ce que c'est, en mots", "devant": 2..90 m le long du trajet, "cote": -20..20 m (négatif = à gauche), "oriente": "trajet" (facultatif : comme un élément de rangée, son x court le long du trajet et sa face +z regarde le trajet, de côté : façade sur la rue, quai, mur, clôture ; sans lui, sa face avant regarde le porteur qui arrive), "cap": degrés ajoutés, "echelle": 0.1..5, "degage": 0..12 m (écarte arbres et semis autour), "formes": [24 au plus]}

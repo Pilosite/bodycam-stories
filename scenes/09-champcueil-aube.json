@@ -1,0 +1,39 @@
+{
+  "version": 0,
+  "id": "champcueil-aube",
+  "titre": "Grands Avaux, le soleil se lève entre les pins",
+  "inspiration": "Forêt départementale des Grands Avaux, Champcueil (Essonne), début novembre, une quarantaine de minutes après le lever du soleil : lumière rasante entre les troncs, brume basse sur le sentier",
+  "graine": 4821,
+  "kit": "foret",
+  "foret": {
+    "densite": 0.7,
+    "rochers": 1,
+    "feuillage": 0.45
+  },
+  "ambiance": {
+    "saison": "automne",
+    "meteo": "clair",
+    "soleil": {
+      "azimut": 35,
+      "hauteur": 8
+    },
+    "brume": 0.005,
+    "atmosphere": {
+      "trouble": 0.35
+    },
+    "brume_basse": {
+      "densite": 0.035,
+      "hauteur": 2.5
+    }
+  },
+  "camera": {
+    "profil": "bodycam-poitrine",
+    "hauteur": 1.36,
+    "champ": 125
+  },
+  "parcours": {
+    "type": "sentier",
+    "pas": 5.5
+  },
+  "evenements": []
+}

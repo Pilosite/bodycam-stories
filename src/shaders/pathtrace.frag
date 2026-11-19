@@ -190,6 +190,8 @@ vec3 lightSurf(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd){
       vis*=canopyT(po,sd);
       vec3 h=normalize(sd-rd);
       col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),28.));
+      if(uAtmo2.y>0.){ float fr=1.-abs(dot(n,rd)); fr*=fr; fr*=fr;   // rebord en contre-jour (modèle atmosphère), comme v3_ombrage.frag
+        col+=SUN*vis*uAtmo2.y*fr*smoothstep(-.1,.7,dot(rd,sd))*smoothstep(-.35,.25,dot(n,sd))*(alb*1.6+.025); }
     }
   }
   if(uTorch>0.){
@@ -226,6 +228,8 @@ vec3 render(vec3 ro, vec3 rd){
     vec3 c=rd.y>0.?skyCol(rd):uEau.w>0.?eauLoin(rd):fogCol(rd);
     if(uLoin.w>0. && rd.y>-.02) c=lointain(rd,c);
     if(uTorch>0.) c+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.07;
+    if(uAtmo.x>0.){ float T=exp(-(brumeTau(ro,rd,400.)-uFog*400.));   // brume basse devant le ciel (modèle atmosphère)
+      c=c*T+(brumeAmb(rd)+brumeSoleil(rd)*brumeStat(ro.y-uAtmo2.x)*.5)*(1.-T); }
     return c;
   } else {
     t=tS; vec3 p=ro+rd*t;
@@ -256,7 +260,8 @@ vec3 render(vec3 ro, vec3 rd){
     col=lightSurf(p,gn,n,alb,spec,rd)+alb*emis*8.;
   }
   gT=t;
-  col=mix(fogCol(rd),col,exp(-t*uFog));
+  if(uAtmo.x>0.) col=brumeMix(col,ro,rd,t,brumeStat(ro.y-uAtmo2.x)*.5);   // sans carte d'ombres : pas de rais, l'ombre statistique (canopée comptée pour moitié)
+  else col=mix(fogCol(rd),col,exp(-t*uFog));
   if(uTorch>0.) col+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.045*(1.667-1./max(t,.6));
   return col;
 }
