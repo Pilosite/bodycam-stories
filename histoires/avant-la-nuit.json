@@ -15,7 +15,17 @@
     "refuse": ["rentrer avant d'avoir au moins vu le camp de Malo", "courir dans le noir", "fouiller la tente sans y être poussée par une vraie raison"],
     "sait": ["Malo campe près du sentier, à une demi-heure du parking", "il a un sac à dos orange", "il n'a pas répondu depuis hier midi", "le soleil se couche dans moins d'une heure"],
     "ignore": ["où est Malo", "pourquoi il ne répond pas"],
-    "depart": { "peur": 1, "confiance": 2, "agacement": 0 }
+    "depart": { "peur": 1, "confiance": 2, "agacement": 0 },
+    "relances": [
+      "T'es toujours là, toi ? … Dis quelque chose.",
+      "Tu crois qu'il est loin ?",
+      "Malo ! … MALO ! … Rien. Évidemment.",
+      "Une demi-heure, il a dit. Ça fait plus d'une demi-heure.",
+      "Quand on était petits, c'est lui qui avait peur du noir. Pas moi. … Enfin.",
+      "Si c'est une blague, elle est vraiment pas drôle, Malo.",
+      "J'aurais dû prendre un pull. Et une vraie lampe.",
+      "Je veux juste savoir qu'il va bien. C'est tout."
+    ]
   },
 
   "voix": {

@@ -62,7 +62,20 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #mesure pre{margin:0;max-width:100%;overflow:auto;font:400 12.5px/1.6 var(--f-mono);white-space:pre-wrap;-webkit-user-select:text;user-select:text;font-variant-numeric:tabular-nums}
 #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:left;
   background:var(--bg);font-family:var(--f-mono);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow:auto}
+/* meneur de jeu : bouton qui pulse quand le porteur pose une question, écran de fin, ligne de mise au point (CFG.debug) */
+button.pulse{animation:pulse 1.4s ease-in-out infinite;border-color:var(--ink)}
+@keyframes pulse{50%{box-shadow:0 0 0 7px rgba(243,240,232,.22)}}
+#fin[hidden]{display:none}
+#fin{position:fixed;inset:0;z-index:4;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;
+  padding:calc(24px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(28px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  background:linear-gradient(rgba(12,15,11,.35),rgba(12,15,11,.88) 60%)}
+#fin .fin-sur{margin:0;font:500 12px/1 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim)}
+#fin h2{margin:0;font:600 30px/1.1 var(--f-ui);text-wrap:balance}
+#fin p#fin-texte{margin:0 0 10px;max-width:26em;font-size:15px;line-height:1.4;font-style:italic;color:var(--ink-dim);text-wrap:balance}
+#debug-meneur{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));top:calc(84px + env(safe-area-inset-top,0px));
+  font:400 10.5px/1.4 var(--f-mono);color:var(--ink-dim);text-shadow:0 1px 2px rgba(0,0,0,.9);pointer-events:none;z-index:3}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
+@media (prefers-reduced-motion:reduce){button.pulse{animation:none}}
 </style>
 </head>
 <body>
@@ -92,6 +105,12 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
   <div class="row"><button id="mesure-copier" type="button">Copier</button><button id="mesure-fermer" type="button" class="ghost">Fermer</button></div>
 </div>
 <div id="err"></div>
+<div id="fin" hidden>
+  <p class="fin-sur">Fin</p>
+  <h2 id="fin-titre"></h2>
+  <p id="fin-texte"></p>
+  <div class="row"><button id="fin-rejouer" type="button">Rejouer</button><button id="fin-quitter" type="button" class="ghost">Se promener</button></div>
+</div>
 
 <script>
 __MAIN_JS__

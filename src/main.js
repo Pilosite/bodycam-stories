@@ -495,7 +495,9 @@ function patchScene(sc){                                      // ce qu'il imagin
   if(sc.brume!==undefined) a.brume=clampN(sc.brume,0,.06,a.brume);
   if(sc.soleil&&typeof sc.soleil==="object") a.soleil={azimut:clampN(sc.soleil.azimut,-180,180,-33),hauteur:clampN(sc.soleil.hauteur,-10,60,21)};
   if(typeof sc.lampe==="boolean") a.lampe=sc.lampe;
-  if(Array.isArray(sc.cacher)||Array.isArray(sc.montrer)){ (sc.cacher||[]).forEach(id=>cacheObj.add(id)); (sc.montrer||[]).forEach(id=>cacheObj.delete(id)); buildShapes(fiche); }
+  if(Array.isArray(sc.cacher)||Array.isArray(sc.montrer)){ (sc.cacher||[]).forEach(id=>cacheObj.add(id)); (sc.montrer||[]).forEach(id=>cacheObj.delete(id));
+    if(Array.isArray(sc.montrer)&&Array.isArray(fiche.objets)) fiche=Object.assign({},fiche,{objets:fiche.objets.map(o=>o&&sc.montrer.includes(o.id)?Object.assign({},o,{visible:true}):o)});   // sinon visible:false l'emporte
+    buildShapes(fiche); }
   fiche=Object.assign({},fiche,{ambiance:a}); applyAmbiance(a);
 }
 function lexique(t){                                          // secours sans IA : quelques ordres simples
@@ -518,6 +520,7 @@ function lexique(t){                                          // secours sans IA
   return out;
 }
 async function entendre(texte){
+  if(meneur) return meneurEntendre(texte);                      // une histoire se joue : voir « meneur de jeu »
   say("…");
   let rep=null;
   if(sampler){
@@ -705,6 +708,78 @@ $("mesure-copier").onclick=()=>{ const t=$("mesure-txt"), b=$("mesure-copier"), 
   const sel=()=>{ const r=document.createRange(); r.selectNodeContents(t); const s=getSelection(); s.removeAllRanges(); s.addRange(r); };
   try{ navigator.clipboard.writeText(t.textContent).then(ok,sel); }catch(_){ sel(); } };
 
+/* ------------------------------------------------------------------ meneur de jeu (src/meneur.js, docs/meneur-de-jeu.md)
+   Une histoire se joue par-dessus la promenade : deux fois par seconde, le meneur lit la perception et rend des ordres
+   (pensée, scène, gestes, fin). Sans histoire, rien ici n'agit et la promenade libre reste celle d'avant. */
+const HIST=typeof HISTOIRES!=="undefined"?HISTOIRES:[];
+let meneur=null, meneurTimer=0, meneurT=0, histoireId=null;
+function objetsPercus(){                                      // distance, direction par rapport au corps, « vu » : visible, à portée, dans le champ
+  const rel=a=>((a*180/Math.PI)%360+540)%360-180, yw=cam.yaw+look.yaw, out=[];
+  for(const o of (Array.isArray(fiche.objets)?fiche.objets:[]).slice(0,8)){
+    if(!o||!o.id) continue;
+    const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), a=1.15;           // même placement que buildShapes
+    const x=S.kit===0?pathX(dv)+ct:Math.sin(a)*dv+Math.cos(a)*ct, z=S.kit===0?dv:Math.cos(a)*dv-Math.sin(a)*ct;
+    const dx=x-cam.x, dz=z-cam.z, m=Math.hypot(dx,dz), dir=Math.atan2(dx,dz);
+    const visible=!(o.visible===false||cacheObj.has(o.id)), lum=(o.formes||[]).some(f=>f&&f.matiere==="lumineux");
+    const portee=lum?90:S.nuit?(S.torch>0?12:4):30;
+    out.push({id:o.id, nom:o.nom||o.id, m:+m.toFixed(1), angle:Math.round(rel(dir-cam.yaw)), visible, vu:visible&&m<=portee&&Math.abs(rel(dir-yw))<=50});
+  }
+  return out;
+}
+function percevoirMeneur(){ const p=perception(), x0=S.kit===0?pathX(0):0;
+  p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z).toFixed(1); p.objets=objetsPercus(); return p; }
+function executer(o){                                         // les ordres du meneur, traduits pour le moteur
+  if(o.type==="pensee") say(o.texte);
+  else if(o.type==="scene") patchScene(o.scene);
+  else if(o.type==="actions"){ if(o.vider) queue.length=0; enqueue(o.actions); }
+  else if(o.type==="pulse") $("parler").classList.toggle("pulse",!!o.on);
+  else if(o.type==="figer"){ if(!frozen) setFrozen(true,"parler"); }
+  else if(o.type==="arret"){ hold=true; queue.length=0; }
+  else if(o.type==="fin"){ $("fin-titre").textContent=o.titre; $("fin-texte").textContent=o.replique||""; $("fin").hidden=false; setFrozen(false); }
+}
+function ticMeneur(){
+  if(!meneur) return;
+  const now=performance.now(), dt=Math.min(5,(now-meneurT)/1000); meneurT=now;
+  meneur.tic(dt,percevoirMeneur(),{gel:frozen});
+  if(dbgOn) dbgEl.textContent=meneur.debug();
+  if(meneur.fini()) clearInterval(meneurTimer);
+}
+function meneurEntendre(texte){ say("…"); return meneur.voix(texte); }
+function interfaceHistoire(on){
+  for(const id of ["monde","lieu","mesurer","histoire"]) if($(id)) $(id).hidden=on;
+  $("hint").textContent=on?"Glisse pour regarder · « Lui parler » pour lui dire quelque chose":"Glisse pour regarder autour de lui";
+  $("hint").classList.remove("off"); $("parler").classList.remove("pulse"); $("fin").hidden=true;
+}
+function jouerHistoire(id){
+  const h=HIST.find(x=>x.id===id)||(id===undefined||id===true?HIST.find(x=>MENEUR.ficheDe(x)):null);
+  if(!h){ console.warn("Histoire inconnue :",id,"— disponibles :",HIST.map(x=>x.id)); return null; }
+  const v=MENEUR.validerHistoire(h,{fiches:FICHES});
+  if(!v.ok){ console.warn("Histoire invalide :",v.erreurs); return null; }
+  quitterHistoire(true);
+  applyFiche(MENEUR.ficheDe(h,FICHES)||fiche);
+  meneur=MENEUR.creerMeneur({ histoire:h, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
+    demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
+    emettre:executer });
+  histoireId=h.id; hold=false; setFrozen(false); interfaceHistoire(true);
+  meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
+  return meneur.partie();
+}
+function quitterHistoire(garderLieu){
+  if(!meneur) return; meneur=null; clearInterval(meneurTimer); hold=false; interfaceHistoire(false); dbgEl.textContent="";
+  if(!garderLieu) applyFiche(FICHES[ficheIdx]);
+}
+/* Pour l'auteur : une ligne discrète avec le verdict du sas et le temps en cours. CFG.debug, ou trois touches rapides
+   sur le chrono REC (réglage gardé dans le navigateur) : utile dans l'artefact sur téléphone, sans console. */
+let dbgOn=!!CFG.debug; try{ if(localStorage.getItem("bodycam-debug")==="1") dbgOn=true; }catch(_){}
+const dbgEl=document.body.appendChild(document.createElement("div")); dbgEl.id="debug-meneur"; dbgEl.setAttribute("aria-hidden","true"); dbgEl.hidden=!dbgOn;
+{ const chip=document.querySelector(".hud.top .chip"); let n=0,t=0; chip.style.pointerEvents="auto";
+  chip.addEventListener("pointerdown",()=>{ const now=performance.now(); n=now-t<450?n+1:1; t=now; if(n<3) return; n=0;
+    dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=meneur&&dbgOn?meneur.debug():""; try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }); }
+if(HIST.some(x=>MENEUR.ficheDe(x))){ const b=document.createElement("button"); b.type="button"; b.id="histoire"; b.textContent="Jouer l'histoire";
+  $("monde").before(b); b.onclick=()=>jouerHistoire(); }
+$("fin-rejouer").onclick=()=>jouerHistoire(histoireId);
+$("fin-quitter").onclick=()=>quitterHistoire(false);
+
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
   fiches:()=>FICHES.map(f=>f.id),
@@ -715,7 +790,12 @@ window.balade={
   dire(texte){ return entendre(texte); },
   monde(texte){ return creerMonde(texte); },
   figer(v){ setFrozen(!!v); },
-  percevoir:()=>perception(),
+  percevoir:()=>meneur?percevoirMeneur():perception(),
+  histoires:()=>HIST.map(h=>h.id),
+  jouer:id=>jouerHistoire(id),
+  quitter:()=>quitterHistoire(false),
+  partie:()=>meneur?meneur.partie():null,
+  trace:()=>meneur?meneur.trace():null,
   histoire:()=>({ temps_passes:tempsFaits.slice(), echanges:echanges.slice() }),
   etat:()=>({ fiche:fiche.id, graine:seedN, x:cam.x, z:cam.z, yaw:cam.yaw, pitch:cam.pitch, passes:n, file:queue.length }),
 };
@@ -724,6 +804,7 @@ window.balade={
 if(CFG.nohud) document.querySelectorAll(".hud").forEach(e=>e.style.display="none");
 if(typeof CFG.scene==="number") ficheIdx=CFG.scene;
 applyFiche(typeof CFG.scene==="object"&&CFG.scene?CFG.scene:FICHES[ficheIdx]);
+if(CFG.histoire) jouerHistoire(CFG.histoire===true?undefined:CFG.histoire);   // la page démarre sur l'histoire
 if(CFG.seed){ setSeed(CFG.seed); cam.x=S.kit===0?pathX(0):0; }
 if(CFG.z!==undefined){ cam.z=CFG.z; if(S.kit===0){ cam.x=pathX(cam.z); cam.yaw=pathYaw(cam.z); } }
 if(CFG.yaw!==undefined) cam.yaw+=CFG.yaw;
