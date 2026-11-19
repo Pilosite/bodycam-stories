@@ -1252,7 +1252,7 @@ $("lieu").onclick=()=>{ fermerOutils(); atelier.basculer(); };   // la banque de
 /* « Plus » : les commandes de réglage et d'essai du moteur, rangées au-dessus de la rangée du bas pour qu'elle tienne au pouce. */
 function fermerOutils(){ $("outils").hidden=true; $("plus").setAttribute("aria-expanded","false"); }
 $("plus").onclick=()=>{ const on=$("outils").hidden; $("outils").hidden=!on; $("plus").setAttribute("aria-expanded",String(on)); if(on){ const b=[...$("outils").querySelectorAll("button")].find(x=>!x.hidden); if(b) b.focus(); } };
-$("outils").addEventListener("keydown",e=>{ if(e.key==="Escape"){ e.stopPropagation(); fermerOutils(); $("plus").focus(); } });
+$("outils").addEventListener("keydown",e=>{ if(e.key==="Escape"){ e.stopPropagation(); e.preventDefault(); fermerOutils(); $("plus").focus(); } });
 $("outils").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b&&!b.hasAttribute("aria-pressed")) setTimeout(fermerOutils,0); });   // un interrupteur laisse le menu ouvert : on voit son nouvel état
 document.addEventListener("pointerdown",e=>{ if(!$("outils").hidden&&!e.target.closest("#outils,#plus")) fermerOutils(); });
 let dragId=null, px=0, py=0;
@@ -1403,7 +1403,7 @@ La voix dit : ${JSON.stringify(texte)}`;
     const t=(fiche.histoire.temps||[]).find(x=>x.id===rep.temps);
     if(t){ tempsFaits.push(t.id); patchScene(t.scene); }
   }
-  patchScene(rep.scene); enqueue(rep.actions); say(pensee);
+  patchScene(rep.scene); enqueue(rep.actions); penser(pensee);
 }
 
 /* ------------------------------------------------------------------ décrire un monde
@@ -1611,6 +1611,22 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   const t=$("msg").value.trim(); if(!t) return;
   const m=mode; $("msg").value=""; $("msg").blur(); $("envoi").disabled=true;
   try{ if(m==="monde") creerMonde(t); else await entendre(t); } finally { $("envoi").disabled=false; setFrozen(false); } });
+
+/* ------------------------------------------------------------------ voix du personnage (src/voix.js) : ses pensées lues à voix haute
+   Capacité « tts » de l'artefact, sinon la voix du navigateur. Éteinte par défaut (« Voix » dans « Plus »), allumée par CFG.demo. */
+const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal},
+  onParle:p=>{ $("taire").hidden=!p; } });
+function penser(t){ say(t); voixP.dire(t); }                  // une pensée du personnage : affichée, et dite si la voix est allumée
+function voixInter(on){ voixP.actif(on); $("voix-inter").setAttribute("aria-pressed",String(on)); $("voix-inter").textContent=on?"Voix : oui":"Voix : non"; return on; }
+voixInter(!!CFG.demo||(()=>{ try{ return localStorage.getItem("bodycam-voix")==="1"; }catch(_){ return false; } })());
+$("voix-inter").onclick=()=>{ const on=voixInter(!voixP.actif()); try{ localStorage.setItem("bodycam-voix",on?"1":"0"); }catch(_){} };
+$("taire").onclick=()=>voixP.taire();
+for(const id of ["parler","mic","banque-dicter"]) if($(id)) $(id).addEventListener("click",()=>voixP.taire());   // le joueur prend la parole : il se tait
+$("msg").addEventListener("input",()=>voixP.taire());
+capacite("dictation").then(d=>{ if(d) d.onState(({state})=>{ if(state==="listening") voixP.taire(); }); });
+addEventListener("pointerdown",e=>{ if(!(e.target.closest&&e.target.closest("#dire,#parler,#mic,#taire,#voix-inter"))) voixP.geste(); },true);   // premier son : après un geste du joueur
+addEventListener("keydown",e=>{ if(e.key!=="Escape"&&!(e.target.closest&&e.target.closest("input,textarea"))) voixP.geste(); },true);
+window.voix={ dire:t=>voixP.dire(t), taire:()=>voixP.taire(), actif:v=>v===undefined?voixP.actif():voixInter(!!v), etat:()=>voixP.etat() };
 
 /* ------------------------------------------------------------------ mesure sur l'appareil
    Dix mètres de marche puis l'arrêt : images par seconde, résolution choisie, temps d'une passe fixe.
@@ -1841,7 +1857,7 @@ function percevoirMeneur(){ const p=perception(), x0=S.kit!==1?pathX(0):0;
   p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z).toFixed(1); p.objets=objetsPercus();
   p.supports=supportsProches().map(({id,nom,m,angle,haut})=>({id,nom,m,angle,haut})); p.hauteur_m=+cam.elev.toFixed(1); return p; }
 function executer(o){                                         // les ordres du meneur, traduits pour le moteur
-  if(o.type==="pensee") say(o.texte);
+  if(o.type==="pensee") penser(o.texte);
   else if(o.type==="scene") patchScene(o.scene);
   else if(o.type==="actions"){ if(o.vider){ cam.zoomCible=1; queue.length=0; patience=PATIENCE_APRES_TEMPS; } enqueue(o.actions); }   // un temps vient d'arriver : elle s'arrête et attend la voix
   else if(o.type==="pulse") $("parler").classList.toggle("pulse",!!o.on);
@@ -1849,7 +1865,7 @@ function executer(o){                                         // les ordres du m
   else if(o.type==="arret"){ hold=true; queue.length=0; }
   else if(o.type==="stop"){ queue.length=0; immobile=true; errance=false; }     // « arrête-toi » : tout de suite, sans attendre Claude
   else if(o.type==="reprendre") immobile=false;
-  else if(o.type==="apercu") say(o.texte);                       // la pensée, dès qu'elle est écrite
+  else if(o.type==="apercu") penser(o.texte);                       // la pensée, dès qu'elle est écrite
   else if(o.type==="objet") objetMeneur(o);
   else if(o.type==="fin"){ $("fin-titre").textContent=o.titre; $("fin-texte").textContent=o.replique||""; $("fin").hidden=false; setFrozen(false); }
 }

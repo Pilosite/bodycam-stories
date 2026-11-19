@@ -31,7 +31,7 @@ export function creerAtelier(deps) {
     setTimeout(() => { if (o.nouvelle) { panneau.scrollTop = 0; $('banque-desc').focus(); } else $('banque-fermer').focus(); }, 30); }
   function fermer() { panneau.hidden = true; document.body.classList.remove('banque-ouverte'); $('lieu').setAttribute('aria-expanded', 'false'); if (dicteeOn && deps.arreterDictee) deps.arreterDictee(); rendrePuce(); }
   $('banque-fermer').onclick = () => { fermer(); $('lieu').focus(); };
-  panneau.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); fermer(); $('lieu').focus(); } });
+  panneau.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); fermer(); $('lieu').focus(); } });
   puce.onclick = ouvrir;
   $('banque-nouvelle').addEventListener('submit', e => { e.preventDefault(); const t = $('banque-desc').value.trim(); if (!t) { $('banque-desc').focus(); return; } if (creer(t)) $('banque-desc').value = ''; });
   if (deps.dicteeDispo) Promise.resolve(deps.dicteeDispo).then(ok => { $('banque-dicter').hidden = !ok; }).catch(() => {});

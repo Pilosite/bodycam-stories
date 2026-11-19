@@ -9,6 +9,10 @@ Ce qu'il faut faire pour jouer « Avant la nuit » avec le vrai Claude, et quoi 
 3. Le joueur regarde (glisser, ou orienter le téléphone) et parle avec **Lui parler** (clavier ou micro). Le monde se fige pendant qu'il parle.
 4. À la fin : un écran avec le titre de la fin, **Rejouer** ou **Se promener** (retour à la promenade libre, inchangée).
 
+**Voix du personnage** (`src/voix.js`, testé par `tests/voix.test.mjs`) : ses pensées sont lues à voix haute si **Plus › Voix : oui** (mémorisé, éteint par défaut, allumé par `CFG.demo`). Dans l'artefact, déclarer aussi `tts` : `capabilities: { sample: { images: true }, db: {}, dictation: {}, tts: {} }` ; voix « airy », débit 0,92, réglables par `CFG.voix`, `CFG.voixDebit`. Ailleurs, ou si `tts` est limité ou en panne, la voix française du navigateur (`speechSynthesis`) ; si le joueur a coupé la lecture pour l'artefact (`not_granted`), silence, sans repli.
+Une seule voix à la fois, la plus récente gagne ; on se tait quand le joueur touche « Lui parler », tape, dicte ou touche « Silence » ; les « … » ne sont pas lus ; une pensée refusée faute de geste est rejouée au premier toucher. API : `window.voix.dire(texte)`, `.taire()`, `.actif(bool)`.
+Non vérifié : le son lui-même (essais Playwright avec des capacités simulées, rien d'entendu), et le rendu de « airy » en français sur la vraie plateforme.
+
 Sans Claude (fichier `dist/index.html` ouvert en local, ou si l'appel échoue) l'histoire se joue quand même : répliques écrites du contrat, relances de `porteur.relances`, lexique pour les ordres simples. Une réponse de Claude qui tarde plus de 12 s est abandonnée au profit du secours.
 
 ## La ligne de mise au point

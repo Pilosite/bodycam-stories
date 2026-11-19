@@ -42,7 +42,7 @@ Captures dans `out/variete/` et `out/variete-lexique/`.
 ## À déclarer à la publication
 
 ```js
-capabilities: { sample: { images: true }, db: {}, dictation: {} }
+capabilities: { sample: { images: true }, db: {}, dictation: {}, tts: {} }
 ```
 
 `db: { rules: [ { path: "scenes", read: "view", write: "admin" } ] }` si seuls l'auteur et ses éditeurs doivent écrire dans la banque.

@@ -66,7 +66,7 @@ function embarquer(nom, fichier) {
   if (/^\s*import\s/m.test(src) || /<\/script/i.test(src)) throw new Error(fichier + ' : pas d\'import ni de </script>');
   return `const ${nom}=(function(){"use strict";\n${src.replace(/^export\s+/gm, '')}\nreturn {${noms.join(',')}};\n})();`;
 }
-const constructeurJs = embarquer('CONSTRUCTEUR', 'src/constructeur.js') + '\n' + embarquer('ATELIER', 'src/atelier.js');
+const constructeurJs = embarquer('CONSTRUCTEUR', 'src/constructeur.js') + '\n' + embarquer('ATELIER', 'src/atelier.js') + '\n' + embarquer('VOIX', 'src/voix.js');   // VOIX : la voix du personnage
 const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n' + constructeurJs + '\n</script>\n<script>\n' + js);
 mkdirSync(join(root, 'dist'), { recursive: true });
 writeFileSync(join(root, 'dist/index.html'), html);
