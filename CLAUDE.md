@@ -4,6 +4,16 @@ Jeu narratif mobile vu à travers une caméra-piéton. Le monde est généré pa
 
 Nom de travail : `bodycam-proc`. Toine n'a pas encore choisi le vrai nom.
 
+## Le triptyque (la boussole de Toine)
+
+Tout choix de moteur se juge sur ces trois points, ensemble :
+
+1. **N'importe quel monde, par procédure.** Toute demande (une ville, une montagne, un intérieur) doit se fabriquer par code à partir d'une description écrite par l'IA. Rien de prédéfini : ni kit, ni objet, ni paysage en dur. Si une demande échoue, on élargit le vocabulaire, on n'ajoute pas un cas particulier.
+2. **Un coût indépendant de la complexité.** Un monde dix fois plus riche ne doit pas coûter dix fois plus à afficher. Le budget par image est fixe ; c'est la finesse qui s'adapte, pas la fluidité.
+3. **Le parti pris vidéo de téléphone sert à tricher.** Résolution modeste, grain, compression, exposition, bougé : ces défauts font le réalisme et cachent les raccourcis du moteur. On les exploite exprès.
+
+Pour y arriver, on s'autorise à sortir des approches de rendu classiques. Voir `docs/moteur-v3.md`.
+
 ## Règles du projet
 
 1. **Crédibilité, pas qualité.** On ne cherche pas de beaux graphismes, on cherche l'impression que quelqu'un filme la réalité. Une image sale et crédible vaut mieux qu'une image propre et synthétique. Tout arbitrage se tranche avec cette règle.
