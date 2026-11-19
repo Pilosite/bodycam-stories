@@ -1,0 +1,21 @@
+{
+  "version": 0,
+  "id": "grands-avaux-sentier",
+  "titre": "Sentier entre les grès, fin d'automne",
+  "inspiration": "Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux",
+  "graine": 4821,
+  "kit": "foret",
+  "ambiance": {
+    "saison": "automne",
+    "meteo": "clair",
+    "soleil": { "azimut": -33, "hauteur": 21 },
+    "brume": 0.011
+  },
+  "camera": {
+    "profil": "bodycam-poitrine",
+    "hauteur": 1.36,
+    "champ": 125
+  },
+  "parcours": { "type": "sentier", "pas": 5.5 },
+  "evenements": []
+}

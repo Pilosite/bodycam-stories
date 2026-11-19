@@ -1,0 +1,52 @@
+# bodycam-proc
+
+Jeu narratif mobile vu à travers une caméra-piéton. Le monde est généré par code, sans aucun asset, et doit passer pour une vidéo filmée par quelqu'un avec un téléphone moyen. Une IA fait vivre l'histoire ; le joueur regarde et parle au porteur de la caméra.
+
+Nom de travail : `bodycam-proc`. Toine n'a pas encore choisi le vrai nom.
+
+## Règles du projet
+
+1. **Crédibilité, pas qualité.** On ne cherche pas de beaux graphismes, on cherche l'impression que quelqu'un filme la réalité. Une image sale et crédible vaut mieux qu'une image propre et synthétique. Tout arbitrage se tranche avec cette règle.
+2. **Le joueur ne pilote jamais le personnage.** Il regarde librement autour de la caméra et il parle au porteur, dans sa tête, pendant que le monde se fige. C'est le récit (IA ou script) qui décide des déplacements et des événements.
+3. **Rien n'est prédéfini, l'IA interprète.** Le moteur est un accélérateur : il fournit un vocabulaire (kits de paysage, formes de base, matières, lumière, actions du porteur, temps du récit) et l'IA traduit n'importe quelle demande dans ce vocabulaire. On n'ajoute jamais un objet en dur (pas de « cabane », pas de « lapin ») : on élargit le vocabulaire.
+4. **Code seulement.** Pas de texture, de modèle, de photo ni de son importés. Les données ouvertes (cartes, relief) sont admises comme entrée, pas les médias.
+5. **Mobile, portrait, navigateur.** WebGL2, une seule page autonome en sortie.
+
+## Commandes
+
+```bash
+npm install                     # Playwright, pour les captures
+npm run build                   # assemble src/ + scenes/ en dist/index.html
+node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 270 480
+```
+
+`tools/shot.mjs` documente toutes les options de test en tête de fichier. Sans GPU, Chrome calcule en logiciel : compter environ 10 s par passe en 270 × 480. Regarder l'image produite avant de conclure qu'un changement de shader est bon.
+
+## Organisation
+
+- `src/shaders/pathtrace.frag` : le monde (terrain, arbres, grès, canopée, dunes) et la lumière. C'est là que se joue le réalisme.
+- `src/shaders/camera.frag` : le capteur (fisheye, exposition, grain, compression, coins sombres).
+- `src/main.js` : boucle de rendu, reprojection temporelle, porteur de la caméra, voix dans sa tête, API `window.balade`.
+- `scenes/*.json` : fiches de lieu embarquées dans la page, format décrit dans `docs/fiche-de-lieu.md`.
+- `histoires/*.json` : contrats d'histoire, format décrit dans `docs/contrat-histoire.md`.
+- `docs/` : principes, formats, pistes de rendu. À lire avant de toucher au moteur.
+
+## Conventions
+
+- Les formules de terrain et de sentier existent en double, en GLSL et en JS (`terrainH`, `pathX`). Toute modification se fait des deux côtés.
+- Un objet par cellule de grille (arbres, perches, rochers). Chaque objet reste à l'intérieur de sa cellule avec une marge, sinon le lancer de rayons saute par-dessus.
+- Pas d'accent grave ni de `${` dans les shaders : le build les insère dans des gabarits JS.
+- Les champs des fiches sont en français, sans accents dans les clés.
+- Tout aléa du monde dérive de la graine. Même fiche, même monde.
+
+## État au 19 novembre 2026
+
+Fait : forêt (sentier, grès, pins, chênes, bouleaux, canopée), dunes, jour, soleil voilé, nuit à la lampe, capteur bodycam, reprojection temporelle pour rester net en mouvement, porteur autonome qui se promène, voix dans sa tête avec Claude ou lexique de secours, contrat d'histoire minimal porté par la fiche, bouton « Décrire un monde » (voix ou clavier, Claude écrit la fiche).
+
+Non vérifié : les performances sur un vrai téléphone. Tous les tests ont tourné en rendu logiciel. La seule mesure réelle est une capture de Toine sur son Samsung, avec l'ancienne version.
+
+Faiblesses connues : sol proche de la caméra, pas de sous-bois, rochers trop lisses de près, feuilles de canopée en disques, pas de kit urbain ni d'intérieur, pas de son.
+
+Chantier en cours : `docs/refonte-monde-generique.md`. Les kits `foret` et `dunes` et les objets en formes sont des étapes, pas la cible : la cible est un vocabulaire générique (relief, semis, matières, volumes) dans lequel la forêt elle-même n'est qu'une fiche.
+
+Autres pistes : `docs/rendu.md` et `docs/contrat-histoire.md`.

@@ -1,0 +1,558 @@
+"use strict";
+/* =====================================================================
+   bodycam-proc : monde procédural (aucun asset), path tracing progressif
+   en WebGL2 avec reprojection temporelle, puis simulation d'un capteur
+   de caméra-piéton à l'affichage. Voir docs/ pour les principes.
+   ===================================================================== */
+
+const VS = __SHADER_VS__;
+const FS_PT = __SHADER_FS_PT__;
+const FS_DOWN = __SHADER_FS_DOWN__;
+const FS_BLUR = __SHADER_FS_BLUR__;
+const FS_CAM = __SHADER_FS_CAM__;
+const FICHES = __SCENES__;                      // fiches de lieu embarquées (scenes/*.json)
+
+const $ = id => document.getElementById(id);
+const canvas = $("view");
+const CFG = window.__CFG || {};                 // réglages de test injectés par tools/shot.mjs
+function fail(msg){ const e=$("err"); e.style.display="flex"; e.textContent=msg; throw new Error(msg); }
+
+/* ------------------------------------------------------------------ WebGL */
+const gl = canvas.getContext("webgl2",{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:"high-performance"});
+if(!gl) fail("Ce navigateur ne propose pas WebGL2, nécessaire pour le rendu.\nEssaie avec une version récente de Chrome, Safari ou Firefox.");
+if(!gl.getExtension("EXT_color_buffer_float") && !gl.getExtension("EXT_color_buffer_half_float"))
+  fail("Ce GPU ne sait pas dessiner dans une texture flottante, nécessaire pour accumuler la lumière.");
+
+function sh(type,src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) fail("Erreur de compilation du shader :\n"+gl.getShaderInfoLog(s)); return s; }
+function prog(fs){ const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) fail("Erreur de liaison du shader :\n"+gl.getProgramInfoLog(p));
+  const u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<n;i++){ const a=gl.getActiveUniform(p,i); u[a.name.replace("[0]","")]=gl.getUniformLocation(p,a.name); }
+  return {p,u}; }
+const P_PT=prog(FS_PT), P_DOWN=prog(FS_DOWN), P_BLUR=prog(FS_BLUR), P_CAM=prog(FS_CAM);
+gl.bindVertexArray(gl.createVertexArray());
+
+function target(w,h,ifmt,filter){
+  const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,ifmt,w,h);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,filter); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,filter);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  return {t,f,w,h,ok:gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE};
+}
+function freeT(x){ if(x){ gl.deleteTexture(x.t); gl.deleteFramebuffer(x.f); } }
+let ACC_FMT=gl.RGBA32F;
+{ const probe=target(4,4,gl.RGBA32F,gl.NEAREST); if(!probe.ok) ACC_FMT=gl.RGBA16F; freeT(probe); }
+const dummy=target(1,1,ACC_FMT,gl.NEAREST), probeT=target(4,1,ACC_FMT,gl.NEAREST);
+function draw(){ gl.drawArrays(gl.TRIANGLES,0,3); }
+function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t); gl.uniform1i(loc,unit); }
+
+/* ------------------------------------------------------------------ scène : ce que la fiche de lieu pilote */
+const S={ objN:0, kit:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
+let fiche=null, ficheIdx=0, seedN=4821, seed=[0,0,0], sceneDirty=true;
+function setSeed(n){ seedN=n; seed=[(n*12.9898)%89,(n*78.233)%83,(n*.618034)%6.2832]; }
+function applyAmbiance(a){
+  const so=a.soleil||{azimut:-33,hauteur:21};
+  S.nuit=so.hauteur<-1;
+  const el=S.nuit?38:Math.max(2,so.hauteur), az=so.azimut*Math.PI/180, e=el*Math.PI/180;
+  S.sunDir=[Math.sin(az)*Math.cos(e),Math.sin(e),Math.cos(az)*Math.cos(e)];
+  if(S.nuit){ S.sun=[.020,.027,.042]; S.sky=[.005,.007,.012]; }       // clair de lune
+  else {
+    const k=Math.min(1,el/38), I=7*Math.min(1,.35+el/14);              // soleil bas : plus faible et plus chaud
+    S.sun=[I,I*(.62+.33*k),I*(.30+.55*k)]; S.sky=[1,1,1];
+    if(a.meteo==="voile"){ S.sun=S.sun.map(v=>v*.22); S.sky=[.92,.86,.78]; }
+  }
+  S.torch=(a.lampe!==undefined?a.lampe:S.nuit)?26:0;
+  S.fog=a.brume!==undefined?a.brume:.011;
+  if(S.kit===0) S.kitP[3]=a.saison==="ete"?0:1;
+  sceneDirty=true;
+}
+function applyFiche(f){
+  fiche=f; setSeed(f.graine||4821);
+  S.kit=f.kit==="dunes"?1:0;
+  const fo=f.foret||{};
+  S.kitP=S.kit===1 ? [-1,(f.dunes&&f.dunes.rochers)||0,0,1]
+                   : [fo.densite!==undefined?.2+.6*fo.densite:.62, fo.rochers!==undefined?fo.rochers:1, fo.feuillage!==undefined?fo.feuillage:1, 1];
+  S.eye=(f.camera&&f.camera.hauteur)||1.36;
+  buildShapes(f);
+  applyAmbiance(f.ambiance||{});
+  if(f.ambiance&&f.ambiance.saison==="hiver") S.kitP[2]*=.15;
+  cam.z=0; cam.x=S.kit===0?pathX(0):0; cam.yaw=S.kit===0?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; queue.length=0; tempsFaits.length=0;
+  cacheObj.clear(); (f.objets||[]).forEach(o=>{ if(o&&o.visible===false) cacheObj.add(o.id); }); buildShapes(f);
+}
+
+/* Objets : la fiche les décrit en formes de base, on les range dans une texture de données lue par le shader. */
+const FORMES={boite:0,boule:1,cylindre:2,cone:3,capsule:4,toit:5};
+const MATIERES={mat:0,bois:1,pierre:2,metal:3,verre:4,pelage:5,tissu:5,tuile:6,lumineux:7};
+const SH_ROWS=72, shapesData=new Float32Array(4*4*SH_ROWS), cacheObj=new Set();
+const shapesT=gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,4,SH_ROWS);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+function couleur(c){                                           // "#rrggbb" ou [r,v,b] entre 0 et 1, converti en linéaire
+  let v=[.4,.4,.4];
+  if(typeof c==="string"&&/^#[0-9a-f]{6}$/i.test(c)) v=[1,3,5].map(i=>parseInt(c.slice(i,i+2),16)/255);
+  else if(Array.isArray(c)&&c.length>=3) v=c.slice(0,3).map(x=>clampN(x,0,1,.4));
+  return v.map(x=>Math.pow(x,2.2));
+}
+function buildShapes(f){
+  shapesData.fill(0); S.objN=0; let row=8;
+  for(const o of (Array.isArray(f.objets)?f.objets:[]).slice(0,8)){
+    const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
+    if(!formes.length || row+formes.length>SH_ROWS) continue;
+    const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), ech=clampN(o.echelle,.1,5,1);
+    let x,z,yaw;
+    if(S.kit===0){ z=dv; x=pathX(z)+ct; yaw=Math.atan2(pathX(z-4)-x,-4); }          // par défaut, la face avant regarde celui qui arrive
+    else { const a=1.15; x=Math.sin(a)*dv+Math.cos(a)*ct; z=Math.cos(a)*dv-Math.sin(a)*ct; yaw=a+Math.PI; }
+    if(o.cap!==undefined) yaw+=clampN(o.cap,-360,360,0)*Math.PI/180;
+    const y=terrainH(x,z), c=Math.cos(yaw), sn=Math.sin(yaw), i=S.objN; let rad=.1;
+    formes.forEach((fo,k)=>{
+      const p=(Array.isArray(fo.p)?fo.p:[0,0,0]).map(v=>clampN(v,-30,30,0)*ech);
+      const t=(Array.isArray(fo.taille)?fo.taille:[1,1,1]).map(v=>clampN(v,.01,40,1)*ech*.5);
+      const pe=Array.isArray(fo.penche)?fo.penche:[0,0], col=couleur(fo.couleur), r=(row+k)*16;
+      shapesData.set([x+c*p[0]+sn*p[2], y+p[1], z-sn*p[0]+c*p[2], FORMES[fo.f],
+                      t[0],t[1],t[2], yaw+clampN(fo.cap,-360,360,0)*Math.PI/180,
+                      col[0],col[1],col[2], MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
+                      clampN(fo.lisse,0,.5,0)*ech, clampN(fo.arrondi,0,.3,0)*ech, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
+      rad=Math.max(rad,Math.hypot(p[0],p[1],p[2])+Math.hypot(t[0],t[1],t[2]));
+    });
+    shapesData.set([x,y,z,rad, row,formes.length, clampN(o.degage,0,12,0), (o.visible===false||cacheObj.has(o.id))?0:1], i*16);
+    row+=formes.length; S.objN++;
+  }
+  gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,4,SH_ROWS,gl.RGBA,gl.FLOAT,shapesData);
+  sceneDirty=true;
+}
+
+/* Mêmes formules que dans pathtrace.frag : à modifier des deux côtés. */
+const sstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+const pathX=z=>3.2*Math.sin(z*.047+seed[2])+1.6*Math.sin(z*.113+1.7+seed[2]*2);
+const pathYaw=z=>Math.atan2(pathX(z+3)-pathX(z-3),6);
+function terrainH(x,z){
+  if(S.kit===1){ const a=x*.045+.9*Math.sin(z*.021+seed[2])+.5*Math.sin(z*.05+1.3);
+    return 3.2*(1-Math.abs(Math.sin(a)))*(.62+.38*Math.sin(z*.03+2+seed[2]))+.5*Math.sin(x*.11+z*.08); }
+  const h=1.5*Math.sin(x*.041+.6+seed[2])*Math.cos(z*.035+1.1)+.65*Math.sin(x*.097+z*.071+2)+.22*Math.sin(x*.29-z*.21+seed[2]*3);
+  return h-.10*sstep(1.8,.4,Math.abs(x-pathX(z)));
+}
+
+/* ------------------------------------------------------------------ porteur de la caméra */
+const cam={ x:0, z:0, yaw:0, pitch:-.03 };         // le corps du porteur : seul le récit le déplace
+const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
+const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
+let frozen=false, walkDist=0, walking=false;
+function pose(){
+  const bob=walking?.022*Math.sin(walkDist*8.4):0;
+  const yw=cam.yaw+look.yaw, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch));
+  const cy=Math.cos(yw),sy=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
+  const f=[sy*cp,sp,cy*cp], r=[cy,0,-sy], u=[f[1]*r[2]-f[2]*r[1],f[2]*r[0]-f[0]*r[2],f[0]*r[1]-f[1]*r[0]];
+  return { pos:[cam.x,terrainH(cam.x,cam.z)+S.eye+bob,cam.z], mat:new Float32Array([r[0],r[1],r[2],u[0],u[1],u[2],f[0],f[1],f[2]]) };
+}
+function samePose(a,b){ if(!a||!b) return false;
+  for(let i=0;i<3;i++) if(Math.abs(a.pos[i]-b.pos[i])>1e-5) return false;
+  for(let i=0;i<9;i++) if(Math.abs(a.mat[i]-b.mat[i])>1e-6) return false;
+  return true; }
+
+function common(w,h,p){
+  const u=P_PT.u; gl.useProgram(P_PT.p);
+  gl.uniform2f(u.uRes,w,h); gl.uniform1f(u.uTick,(tick++)%60000);
+  gl.uniform3fv(u.uCamPos,p.pos); gl.uniformMatrix3fv(u.uCam,false,p.mat);
+  gl.uniform1f(u.uFish,1.09/(.5*Math.max(1,w/h)));            // 125° sur le grand côté
+  gl.uniform1f(u.uFog,S.fog); gl.uniform3fv(u.uSeed,seed); gl.uniform3fv(u.uSunDir,S.sunDir);
+  gl.uniform3fv(u.uSun,S.sun); gl.uniform3fv(u.uSky,S.sky); gl.uniform1f(u.uTorch,S.torch);
+  bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
+  gl.uniform1i(u.uKit,S.kit); gl.uniform4fv(u.uKitP,S.kitP); gl.uniform1i(u.uMode,0);
+  return u;
+}
+const pb=new Float32Array(16);
+function probe(x,y,z){                                         // distance au décor, lue sur le GPU
+  const u=common(4,1,lastPose||pose()); gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
+  gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,probeT.f); gl.viewport(0,0,4,1); draw();
+  gl.readPixels(0,0,4,1,gl.RGBA,gl.FLOAT,pb);
+  return [pb[0],pb[4],pb[8]];
+}
+function moveBy(dist){
+  let nx=cam.x+Math.sin(cam.yaw)*dist, nz=cam.z+Math.cos(cam.yaw)*dist;
+  const R=.42, [d,dx,dz]=probe(nx,terrainH(nx,nz)+.75,nz);
+  if(d<R){ let gx=(dx-d)/.05, gz=(dz-d)/.05; const l=Math.hypot(gx,gz)||1; nx+=gx/l*(R-d); nz+=gz/l*(R-d); }
+  cam.x=nx; cam.z=nz; walkDist+=Math.abs(dist);
+}
+let idle=0, stuck=0;
+function flaner(){                                            // sans consigne, il se promène : c'est le récit par défaut
+  const want=S.kit===0 ? pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0)+(Math.random()-.5)*.5
+                       : cam.yaw+(Math.random()-.5)*1.2;
+  let d=want-cam.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
+  queue.push({type:"tourner",rest:d},{type:"marcher",rest:6+Math.random()*9},{type:"attendre",rest:1.5+Math.random()*3});
+  if(Math.random()<.4) queue.push({type:"regarder",pitch:(Math.random()-.35)*.5},{type:"attendre",rest:2},{type:"regarder",pitch:-.03});
+}
+function simulate(dt){
+  walking=false; if(frozen) return;
+  let v=0;
+  if(!queue.length){ idle+=dt; if(idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
+  const a=queue[0];
+  if(a){
+    if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
+    else if(a.type==="marcher"){ v=Math.sign(a.rest)*1.35; a.rest-=v*dt; if(a.rest*Math.sign(v)<=0) queue.shift(); }
+    else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*dt); if(Math.abs(d)<.012) queue.shift(); }
+    else { a.rest-=dt; if(a.rest<=0) queue.shift(); }
+  }
+  if(v!==0){
+    const x0=cam.x, z0=cam.z; moveBy(v*dt); walking=true;
+    look.yaw*=Math.exp(-dt/2.5); look.pitch*=Math.exp(-dt/2.5);           // en marche, le regard revient vers l'avant
+    stuck=Math.hypot(cam.x-x0,cam.z-z0)<Math.abs(v*dt)*.3?stuck+dt:0;
+    if(stuck>.6){ stuck=0; queue.shift(); queue.unshift({type:"tourner",rest:(Math.random()<.5?-1:1)*.9}); }   // bloqué : il contourne
+  }
+}
+
+/* ------------------------------------------------------------------ tampons et rendu */
+const LEVELS=[1,.8,.64,.5];                   // résolutions de mouvement, en fraction de la résolution fixe
+let W=0,H=0, pairs=[], bl1,bl2;
+let hist=null, histPose=null, lastPose=null, n=0, row=0, sDst=null, sReproj=0, tick=0, frames=0;
+let mLevel=0, msMotion=50, msPerRow=.25, exposure=1.2, expTarget=1.2, lastExpRead=0;
+const coarse=matchMedia("(pointer:coarse)").matches;
+const MAXS=CFG.maxSpp||400;
+function pairAt(i){ if(!pairs[i]){ const w=Math.max(2,Math.round(W*LEVELS[i])), h=Math.max(2,Math.round(H*LEVELS[i]));
+  pairs[i]={a:target(w,h,ACC_FMT,gl.NEAREST),b:target(w,h,ACC_FMT,gl.NEAREST)}; } return pairs[i]; }
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const cw=Math.max(2,Math.round(canvas.clientWidth*dpr)), ch=Math.max(2,Math.round(canvas.clientHeight*dpr));
+  canvas.width=cw; canvas.height=ch;
+  const maxPx=CFG.maxPx||(coarse?250000:440000);
+  const s=Math.min(1,Math.sqrt(maxPx/(cw*ch)));
+  W=CFG.w||Math.max(2,Math.round(cw*s)); H=CFG.h||Math.max(2,Math.round(ch*s));
+  pairs.forEach(p=>{ if(p){ freeT(p.a); freeT(p.b); } }); pairs=[]; freeT(bl1); freeT(bl2);
+  const bs=128/Math.max(W,H);
+  bl1=target(Math.max(8,Math.round(W*bs)),Math.max(8,Math.round(H*bs)),gl.RGBA16F,gl.LINEAR);
+  bl2=target(bl1.w,bl1.h,gl.RGBA16F,gl.LINEAR);
+  hist=null; n=0; row=0; mLevel=CFG.level!==undefined?CFG.level:1;
+}
+const px1=new Float32Array(4);
+function renderPass(dst,y0,rows,o,p){
+  const u=common(dst.w,dst.h,p);
+  gl.uniform1i(u.uQ,o.q); gl.uniform1f(u.uAlpha,hist?o.alpha:1); gl.uniform1i(u.uReproj,o.reproj); gl.uniform1f(u.uJit,o.jit);
+  if(hist){ gl.uniform3fv(u.uPrevPos,histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,histPose.mat); }
+  bindTex(0,(hist||dummy).t,u.uPrev);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,dst.w,dst.h);
+  gl.enable(gl.SCISSOR_TEST); gl.scissor(0,y0,dst.w,rows); draw(); gl.disable(gl.SCISSOR_TEST);
+  gl.readPixels(0,y0,1,1,gl.RGBA,gl.FLOAT,px1);              // force la fin du calcul pour mesurer le temps réel
+}
+/* En mouvement : une image entière par trame, mélangée à l'historique reprojeté. La résolution s'adapte au GPU. */
+function motionFrame(p){
+  const P=pairAt(mLevel), dst=hist===P.a?P.b:P.a, t0=performance.now();
+  renderPass(dst,0,dst.h,{q:0,alpha:sceneDirty?1:.14,reproj:1,jit:0},p);
+  msMotion=msMotion*.8+(performance.now()-t0)*.2;
+  hist=dst; histPose=p; n=mLevel===0?6:2; row=0; sceneDirty=false; frames++;
+  if(CFG.level===undefined){
+    if(msMotion>85 && mLevel<LEVELS.length-1){ mLevel++; msMotion=50; }       // une vidéo saccadée reste crédible, une vidéo pixelisée non
+    else if(msMotion<30 && mLevel>0){ mLevel--; msMotion=50; }
+  }
+}
+/* À l'arrêt : accumulation pleine résolution, par bandes pour ne jamais bloquer l'interface. */
+function staticRows(p){
+  const P=pairAt(0);
+  if(row===0){ sDst=hist===P.a?P.b:P.a; sReproj=hist.w!==sDst.w?1:0; }
+  const rows=Math.max(2,Math.min(H-row,Math.round(14/msPerRow))), t0=performance.now();
+  renderPass(sDst,row,rows,{q:1,alpha:1/(n+1),reproj:sReproj,jit:1},p);
+  msPerRow=Math.max(.002,msPerRow*.6+((performance.now()-t0)/rows)*.4);
+  row+=rows;
+  if(row>=H){ row=0; n++; hist=sDst; histPose=p; return true; }
+  return false;
+}
+let blBuf=null;
+function postFX(src){
+  gl.useProgram(P_DOWN.p); bindTex(0,src.t,P_DOWN.u.uTex); gl.uniform2f(P_DOWN.u.uDstRes,bl1.w,bl1.h);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,bl1.f); gl.viewport(0,0,bl1.w,bl1.h); draw();
+  const now=performance.now();
+  if(now-lastExpRead>180){                                    // exposition auto : moyenne logarithmique, pondérée au centre
+    lastExpRead=now;
+    if(!blBuf||blBuf.length!==bl1.w*bl1.h*4) blBuf=new Float32Array(bl1.w*bl1.h*4);
+    gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf);
+    let s=0,ws=0,any=false;
+    for(let y=0;y<bl1.h;y++) for(let x=0;x<bl1.w;x++){ const i=(y*bl1.w+x)*4;
+      const L=.2126*blBuf[i]+.7152*blBuf[i+1]+.0722*blBuf[i+2]; if(L>0) any=true;
+      const dx=x/bl1.w-.5, dy=y/bl1.h-.5, w=1-1.6*(dx*dx+dy*dy);
+      s+=w*Math.log(Math.min(L,8)+.004); ws+=w; }
+    if(any) expTarget=Math.min(S.nuit?9:14,Math.max(.25,.25/Math.exp(s/ws)));   // la nuit, le gain plafonne : le noir reste noir
+  }
+  gl.useProgram(P_BLUR.p);
+  bindTex(0,bl1.t,P_BLUR.u.uTex); gl.uniform2f(P_BLUR.u.uDir,1/bl1.w,0); gl.bindFramebuffer(gl.FRAMEBUFFER,bl2.f); draw();
+  bindTex(0,bl2.t,P_BLUR.u.uTex); gl.uniform2f(P_BLUR.u.uDir,0,1/bl1.h); gl.bindFramebuffer(gl.FRAMEBUFFER,bl1.f); draw();
+}
+const still=matchMedia("(prefers-reduced-motion:reduce)").matches || !!CFG.still;
+let walkAmt=0;
+function display(src,t){
+  const u=P_CAM.u; gl.useProgram(P_CAM.p);
+  bindTex(0,src.t,u.uTex); bindTex(1,bl1.t,u.uBloom);
+  gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
+  gl.uniform1f(u.uExp,exposure); gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0);
+  gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
+  if(still) gl.uniform3f(u.uShake,0,0,0);                     // sinon : dérive de la main et balancement de la marche
+  else gl.uniform3f(u.uShake,
+    .0030*(Math.sin(t*1.31)+.6*Math.sin(t*2.9+1)+.25*Math.sin(t*7.1))+.005*walkAmt*Math.sin(walkDist*4.2),
+    .0036*(Math.sin(t*1.07+2)+.5*Math.sin(t*3.3)+.25*Math.sin(t*6.3+4)),
+    .0040*(Math.sin(t*.83+2)+.5*Math.sin(t*2.3))+.010*walkAmt*Math.sin(walkDist*4.2+1));
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,canvas.width,canvas.height); draw();
+}
+
+/* ------------------------------------------------------------------ boucle */
+let lastT=0; const startT=performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min(.1,(now-lastT)/1000); lastT=now;
+  simulate(dt);
+  walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
+  const p=pose(); lastPose=p;
+  if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); }
+  else if(n<MAXS){
+    const t0=performance.now(); let done=false;
+    do{ done=staticRows(p); } while(!done && performance.now()-t0<20);
+    if(done && (n<14||n%4===0)) postFX(hist);
+  }
+  exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
+  display(hist,(now-startT)/1000);
+  hud(now);
+}
+let lastHud=0;
+function hud(now){
+  if(now-lastHud<250) return; lastHud=now;
+  const s=Math.floor((now-startT)/1000), p2=v=>String(v).padStart(2,"0"), d=new Date();
+  $("rec").textContent=p2(Math.floor(s/60))+":"+p2(s%60);
+  $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
+  $("camid").textContent="CAM 07 · GRAINE "+seedN;
+  $("stat").textContent=frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
+  window.__state={n:CFG.auto?frames:n,W,H,mLevel,msMotion:+msMotion.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
+}
+
+/* ------------------------------------------------------------------ commandes directes */
+$("lieu").onclick=()=>{ ficheIdx=(ficheIdx+1)%FICHES.length; applyFiche(FICHES[ficheIdx]); say(fiche.titre||"",true); };
+let dragId=null, px=0, py=0;
+canvas.addEventListener("pointerdown",e=>{ dragId=e.pointerId; px=e.clientX; py=e.clientY; canvas.setPointerCapture(e.pointerId); canvas.classList.add("drag"); });
+canvas.addEventListener("pointermove",e=>{ if(e.pointerId!==dragId) return;
+  const k=1.5/Math.max(canvas.clientWidth,canvas.clientHeight);
+  look.yaw-=(e.clientX-px)*k; look.pitch=Math.max(-1.3,Math.min(1.4,look.pitch+(e.clientY-py)*k));
+  px=e.clientX; py=e.clientY; $("hint").classList.add("off"); });
+const endDrag=e=>{ if(e.pointerId===dragId){ dragId=null; canvas.classList.remove("drag"); } };
+canvas.addEventListener("pointerup",endDrag); canvas.addEventListener("pointercancel",endDrag);
+addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT") return;
+  if(e.key==="ArrowLeft") look.yaw-=.06; else if(e.key==="ArrowRight") look.yaw+=.06;
+  else if(e.key==="ArrowUp") look.pitch=Math.min(1.4,look.pitch+.05); else if(e.key==="ArrowDown") look.pitch=Math.max(-1.3,look.pitch-.05); });
+addEventListener("resize",resize);
+
+/* ------------------------------------------------------------------ voix dans sa tête
+   Le monde se fige, le joueur parle, le porteur de la caméra pense à voix basse puis agit.
+   Avec Claude (capacité « sample » de la page) la réponse est libre ; sans, un petit lexique de commandes prend le relais. */
+let sampler=null; const echanges=[], tempsFaits=[];
+if(window.claude && window.claude.use) window.claude.use("sample").then(s=>{ sampler=s; }).catch(()=>{});
+let sayTimer=0;
+function say(text,bref){ const el=$("pensee"); el.textContent=text; el.classList.toggle("on",!!text);
+  clearTimeout(sayTimer); if(text) sayTimer=setTimeout(()=>el.classList.remove("on"),bref?3500:9000); }
+function perception(){
+  const ahead=[1.5,3,5].map(d=>{ const x=cam.x+Math.sin(cam.yaw)*d, z=cam.z+Math.cos(cam.yaw)*d; return probe(x,terrainH(x,z)+.75,z)[0]; });
+  return { lieu:fiche.titre, inspiration:fiche.inspiration, kit:fiche.kit,
+    position:{x:+cam.x.toFixed(1),z:+cam.z.toFixed(1)}, cap_degres:Math.round(((cam.yaw*180/Math.PI)%360+360)%360),
+    sur_le_sentier:S.kit===0?Math.abs(cam.x-pathX(cam.z))<1.3:null,
+    obstacle_devant_m:ahead[0]<.5?1.5:ahead[1]<.5?3:ahead[2]<.5?5:null,
+    lumiere:S.nuit?"nuit":"jour", lampe:S.torch>0, brume:S.fog };
+}
+const clampN=(v,a,b,d)=>{ v=Number(v); return Number.isFinite(v)?Math.min(b,Math.max(a,v)):d; };
+function enqueue(actions){
+  for(const a of (Array.isArray(actions)?actions:[]).slice(0,6)){
+    if(!a||typeof a!=="object") continue;
+    if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});
+    else if(a.type==="marcher") queue.push({type:"marcher",rest:clampN(a.metres,-10,30,0)});
+    else if(a.type==="regarder") queue.push({type:"regarder",pitch:clampN(a.degres,-60,75,0)*Math.PI/180});
+    else if(a.type==="attendre") queue.push({type:"attendre",rest:clampN(a.secondes,0,5,1)});
+  }
+}
+function patchScene(sc){                                      // ce qu'il imagine peut changer le monde
+  if(!sc||typeof sc!=="object") return;
+  const a=Object.assign({},fiche.ambiance||{});
+  if(sc.brume!==undefined) a.brume=clampN(sc.brume,0,.06,a.brume);
+  if(sc.soleil&&typeof sc.soleil==="object") a.soleil={azimut:clampN(sc.soleil.azimut,-180,180,-33),hauteur:clampN(sc.soleil.hauteur,-10,60,21)};
+  if(typeof sc.lampe==="boolean") a.lampe=sc.lampe;
+  if(Array.isArray(sc.cacher)||Array.isArray(sc.montrer)){ (sc.cacher||[]).forEach(id=>cacheObj.add(id)); (sc.montrer||[]).forEach(id=>cacheObj.delete(id)); buildShapes(fiche); }
+  fiche=Object.assign({},fiche,{ambiance:a}); applyAmbiance(a);
+}
+function lexique(t){                                          // secours sans IA : quelques ordres simples
+  t=t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const num=(t.match(/(\d+)/)||[])[1], out={pensee:"",actions:[],scene:null};
+  if(/stop|arrete|attends/.test(t)){ queue.length=0; out.pensee="Je m'arrête."; return out; }
+  if(/demi.?tour|retourne/.test(t)){ out.actions.push({type:"tourner",degres:180}); out.pensee="Demi-tour."; }
+  else if(/gauche/.test(t)){ out.actions.push({type:"tourner",degres:-(num||(/(un peu|leger)/.test(t)?30:90))}); out.pensee="À gauche, d'accord."; }
+  else if(/droite/.test(t)){ out.actions.push({type:"tourner",degres:+(num||(/(un peu|leger)/.test(t)?30:90))}); out.pensee="À droite, d'accord."; }
+  if(/recule/.test(t)){ out.actions.push({type:"marcher",metres:-(num||4)}); out.pensee=out.pensee||"Je recule."; }
+  else if(/avance|marche|continue|tout droit|\bva\b|vas-y/.test(t)){ out.actions.push({type:"marcher",metres:+(num&&!/gauche|droite/.test(t)?num:8)}); out.pensee=out.pensee||"J'avance."; }
+  if(/en haut|ciel|leve/.test(t)){ out.actions.push({type:"regarder",degres:50}); out.pensee=out.pensee||"Je lève la caméra."; }
+  else if(/en bas|sol|pieds|baisse/.test(t)){ out.actions.push({type:"regarder",degres:-40}); out.pensee=out.pensee||"Je regarde par terre."; }
+  else if(/devant|horizon/.test(t)){ out.actions.push({type:"regarder",degres:-2}); }
+  if(/eteins/.test(t)) out.scene={lampe:false}; else if(/lampe|torche|allume/.test(t)) out.scene={lampe:true};
+  if(/nuit/.test(t)) out.scene=Object.assign(out.scene||{},{soleil:{azimut:-33,hauteur:-10}});
+  else if(/jour|matin|soleil/.test(t)) out.scene=Object.assign(out.scene||{},{soleil:{azimut:-33,hauteur:21},lampe:false});
+  if(/brouillard|brume/.test(t)) out.scene=Object.assign(out.scene||{},{brume:.035});
+  if(!out.pensee) out.pensee=out.scene?"Tiens, ça change autour de moi.":"Je n'ai pas compris. Dis-moi gauche, droite, avance, regarde en haut…";
+  return out;
+}
+async function entendre(texte){
+  say("…");
+  let rep=null;
+  if(sampler){
+    const consigne=`Tu es Sam, une personne qui marche seule en portant une caméra-piéton. Une voix (le joueur) te parle dans ta tête : le monde se fige pendant qu'elle parle. Tu lui fais confiance sans être un robot : tu penses à voix basse, à la première personne, en une ou deux phrases courtes et naturelles, puis tu agis.
+Réponds uniquement par un objet JSON de cette forme :
+{"pensee": "ce que tu te dis", "actions": [ ... ], "scene": { ... }}
+Actions possibles, dans l'ordre d'exécution, six au plus :
+{"type":"tourner","degres":-180..180} (négatif = vers la gauche), {"type":"marcher","metres":-10..30}, {"type":"regarder","degres":-60..75} (positif = vers le haut), {"type":"attendre","secondes":0..5}.
+"scene" est facultatif : ne le mets que si ce que la voix évoque change le monde autour de toi. Champs possibles : "brume" (0 à 0.06), "soleil" {"azimut","hauteur"} (hauteur négative = nuit), "lampe" (true ou false).
+${fiche.histoire?`L'histoire que tu vis sans la connaître d'avance (ne la récite pas, laisse-la arriver) : ${JSON.stringify(fiche.histoire)}
+Temps du récit déjà passés : ${JSON.stringify(tempsFaits)}. Si ce moment déclenche un nouveau temps, ajoute "temps": "son id".
+`:""}Ce que tu perçois : ${JSON.stringify(perception())}
+Échanges précédents : ${JSON.stringify(echanges.slice(-6))}
+La voix dit : ${JSON.stringify(texte)}`;
+    try{ rep=await sampler.json(consigne,{modelTier:"quick",cache:false}); }
+    catch(e){ if(e&&e.code==="not_granted") sampler=null; }
+  }
+  if(!rep||typeof rep!=="object") rep=lexique(texte);
+  const pensee=String(rep.pensee||"").slice(0,280);
+  echanges.push({voix:texte,pensee});
+  if(rep.temps && fiche.histoire && !tempsFaits.includes(rep.temps)){            // un temps du récit se déclenche
+    const t=(fiche.histoire.temps||[]).find(x=>x.id===rep.temps);
+    if(t){ tempsFaits.push(t.id); patchScene(t.scene); }
+  }
+  patchScene(rep.scene); enqueue(rep.actions); say(pensee);
+}
+
+/* ------------------------------------------------------------------ décrire un monde
+   Le joueur décrit un lieu, à la voix ou au clavier. Claude écrit une fiche de lieu ; le moteur la borne et la fabrique.
+   Sans Claude, quelques mots-clés suffisent à composer une fiche. */
+function validerFiche(f){                                     // ne garde que ce que le moteur sait lire, dans ses plages
+  const kit=f.kit==="dunes"?"dunes":"foret", a=f.ambiance||{}, so=a.soleil||{};
+  const out={ version:0, id:"monde-"+Date.now(), titre:String(f.titre||"Monde sans nom").slice(0,80), inspiration:String(f.inspiration||"").slice(0,200),
+    graine:Math.round(clampN(f.graine,1,99999,1000+Math.floor(Math.random()*9000))), kit,
+    ambiance:{ saison:["ete","automne","hiver"].includes(a.saison)?a.saison:"automne", meteo:a.meteo==="voile"?"voile":"clair",
+      soleil:{azimut:clampN(so.azimut,-180,180,-33),hauteur:clampN(so.hauteur,-10,70,21)}, brume:clampN(a.brume,0,.06,.011) },
+    camera:{ profil:"bodycam-poitrine", hauteur:clampN(f.camera&&f.camera.hauteur,.9,1.9,1.36), champ:125 },
+    note:String(f.note||"").slice(0,180) };
+  if(typeof a.lampe==="boolean") out.ambiance.lampe=a.lampe;
+  if(kit==="foret"){ const fo=f.foret||{}; out.foret={densite:clampN(fo.densite,0,1,.7),rochers:clampN(fo.rochers,0,1.5,1),feuillage:clampN(fo.feuillage,0,1.5,1)}; }
+  else out.dunes={rochers:clampN(f.dunes&&f.dunes.rochers,0,1.5,0)};
+  const num3=(v,d)=>Array.isArray(v)?[0,1,2].map(i=>clampN(v[i],-40,40,d)):[d,d,d];
+  const obj=(Array.isArray(f.objets)?f.objets:[]).slice(0,8).map((o,i)=>o&&Array.isArray(o.formes)?{
+    id:String(o.id||"objet"+i).slice(0,30), nom:String(o.nom||"").slice(0,60), devant:clampN(o.devant,2,90,12), cote:clampN(o.cote,-20,20,3),
+    cap:o.cap===undefined?undefined:clampN(o.cap,-360,360,0), echelle:clampN(o.echelle,.1,5,1), degage:clampN(o.degage,0,12,0), visible:o.visible!==false,
+    formes:o.formes.filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24).map(x=>({f:x.f,p:num3(x.p,0),taille:num3(x.taille,1),cap:clampN(x.cap,-360,360,0),
+      penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
+      couleur:x.couleur, matiere:MATIERES[x.matiere]!==undefined?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)}))}:null).filter(o=>o&&o.formes.length);
+  if(obj.length) out.objets=obj;
+  const h=f.histoire;
+  if(h&&typeof h==="object"&&h.pitch) out.histoire={ pitch:String(h.pitch).slice(0,400),
+    temps:(Array.isArray(h.temps)?h.temps:[]).slice(0,4).filter(t=>t&&t.id).map(t=>({id:String(t.id).slice(0,30),quand:String(t.quand||"").slice(0,160),
+      ce_qui_se_passe:String(t.ce_qui_se_passe||"").slice(0,200),scene:t.scene&&typeof t.scene==="object"?t.scene:undefined})) };
+  return out;
+}
+function mondeLexique(texte){                                 // secours sans IA
+  const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const f={ titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:/desert|dune|sable|sahara|erg|plage/.test(t)?"dunes":"foret",
+    ambiance:{soleil:{azimut:-33,hauteur:21}}, foret:{}, dunes:{} };
+  const a=f.ambiance;
+  if(/nuit|minuit|nocturne|obscur/.test(t)) a.soleil={azimut:120,hauteur:-10};
+  else if(/aube|matin|lever/.test(t)) a.soleil={azimut:80,hauteur:8};
+  else if(/soir|couch|crepuscule/.test(t)) a.soleil={azimut:-70,hauteur:6};
+  else if(/midi|plein soleil/.test(t)) a.soleil={azimut:10,hauteur:55};
+  if(/brouillard|brume/.test(t)) a.brume=.035; else if(f.kit==="dunes") a.brume=.003;
+  if(/hiver|neige|gel/.test(t)) a.saison="hiver"; else if(/ete|printemps|vert/.test(t)) a.saison="ete";
+  if(/gris|couvert|voile|nuage|pluie/.test(t)) a.meteo="voile";
+  if(/dense|epais|touffu|jungle|sombre/.test(t)){ f.foret.densite=.95; f.foret.feuillage=1.3; }
+  else if(/clairsem|clairiere|ouvert|lande/.test(t)){ f.foret.densite=.3; f.foret.feuillage=.6; }
+  if(/sans rocher/.test(t)){ f.foret.rochers=0; } else if(/rocher|roche|pierre|gres|chaos|caillou/.test(t)){ f.foret.rochers=1.4; f.dunes.rochers=1; }
+  f.note="Sans Claude, je ne lis que des mots-clés : désert, nuit, matin, soir, brume, saison, dense, rochers. Les objets demandent Claude.";
+  return f;
+}
+async function creerMonde(texte){
+  say("Je fabrique ce monde…");
+  let f=null;
+  if(sampler){
+    const consigne=`Tu écris la fiche de lieu d'un moteur de rendu qui filme un monde généré par code, en vue caméra-piéton. Le joueur décrit le monde qu'il veut. Tu ne décris jamais de géométrie : tu choisis un kit, tu le règles, tu poses l'ambiance.
+Réponds uniquement par un objet JSON :
+{"titre": "court, évocateur", "inspiration": "le lieu de référence en une phrase", "graine": entier de 1 à 99999,
+ "kit": "foret" ou "dunes",
+ "foret": {"densite": 0..1, "rochers": 0..1.5, "feuillage": 0..1.5},
+ "dunes": {"rochers": 0..1.5},
+ "ambiance": {"saison": "ete"|"automne"|"hiver", "meteo": "clair"|"voile", "soleil": {"azimut": -180..180, "hauteur": -10..70}, "lampe": true|false, "brume": 0..0.06},
+ "objets": [{"id": "mot", "nom": "ce que c'est", "devant": 2..90, "cote": -20..20, "degage": 0..12, "visible": true,
+   "formes": [{"f": "boite"|"boule"|"cylindre"|"cone"|"capsule"|"toit", "p": [x, y, z], "taille": [largeur, hauteur, profondeur], "cap": degrés, "penche": [avant, côté], "couleur": "#rrggbb", "matiere": "mat"|"bois"|"pierre"|"metal"|"verre"|"pelage"|"tissu"|"tuile"|"lumineux", "lisse": 0..0.5, "arrondi": 0..0.3}]}],
+ "histoire": {"pitch": "facultatif : ce qui arrive au porteur de la caméra, deux phrases", "temps": [{"id": "mot", "quand": "condition", "ce_qui_se_passe": "…", "scene": {"brume": 0..0.06, "lampe": true|false, "soleil": {"azimut": 0, "hauteur": 0}}}]},
+ "note": "une phrase, seulement si une partie de la demande ne peut pas être montrée"}
+Repères : une hauteur de soleil négative donne la nuit, et la lampe du téléphone s'allume. Soleil rasant entre 4 et 15. Brume : 0.003 air sec, 0.011 matin, 0.03 épais. La forêt est tempérée (pins, chênes, bouleaux, blocs de grès, sentier de sable). Les dunes sont un désert de sable.
+Objets : rien n'est prédéfini, tu construis tout ce que la demande contient (bâtiments, animaux, véhicules, mobilier, personnages, ruines…) en assemblant des formes. Huit objets au plus, 24 formes par objet, 64 formes en tout : va à l'essentiel de la silhouette, c'est filmé de loin par une mauvaise caméra.
+Repère d'un objet : mètres réels, y = 0 au sol, x vers la droite, +z = sa face avant, tournée vers celui qui arrive. "p" est le centre de la forme, "taille" ses dimensions entières (boule : diamètres ; cylindre, cône, capsule : [diamètre, hauteur, diamètre], debout ; toit : [longueur du faîtage, hauteur, largeur], à poser au-dessus des murs). "penche" incline une forme en degrés. "lisse" fond la forme dans les voisines (corps d'animal : 0.03 à 0.08). "lumineux" éclaire (fenêtre allumée, feu, écran). Portes et fenêtres : boîtes minces posées 2 cm devant le mur.
+Placement : "devant" est la distance le long du trajet depuis le départ, "cote" l'écart latéral (négatif à gauche ; moins de 1,5 = sur le sentier). Un bâtiment se pose 10 à 20 m devant, à 5 m de côté ou plus, avec "degage" égal à sa demi-largeur plus 2 pour écarter les arbres. Les temps de l'histoire peuvent faire apparaître ou disparaître des objets : "scene": {"montrer": ["id"], "cacher": ["id"]}, avec "visible": false au départ.
+Pour le décor il n'existe que les kits forêt et dunes : si la demande veut un autre sol ou un autre paysage (ville, mer, intérieur), choisis l'ambiance la plus proche, construis le reste en objets, garde l'idée dans "inspiration" et "histoire", et dis-le franchement dans "note".
+Le joueur dit : ${JSON.stringify(texte)}`;
+    try{ f=await sampler.json(consigne,{modelTier:"default",cache:false}); }
+    catch(e){ if(e&&e.code==="not_granted") sampler=null; }
+  }
+  if(!f||typeof f!=="object") f=mondeLexique(texte);
+  f=validerFiche(f);
+  FICHES.push(f); ficheIdx=FICHES.length-1; applyFiche(f);
+  try{ localStorage.setItem("bodycam-mondes",JSON.stringify(FICHES.filter(x=>String(x.id).startsWith("monde-")).slice(-6))); }catch(_){}
+  say(f.note?f.titre+". "+f.note:f.titre);
+  return f;
+}
+try{ for(const f of JSON.parse(localStorage.getItem("bodycam-mondes")||"[]")) FICHES.push(validerFiche(f)); }catch(_){}
+
+/* ------------------------------------------------------------------ panneau de parole : au clavier ou à la voix */
+let mode="parler", dict=null, listening=false, dictBase="";
+if(window.claude && window.claude.use) window.claude.use("dictation").then(d=>{ if(!d) return; dict=d; $("mic").hidden=false;
+  d.onPartial(({text})=>{ $("msg").value=(dictBase+" "+text).trim(); });
+  d.onFinal(({text})=>{ dictBase=(dictBase+" "+text).trim(); $("msg").value=dictBase; });
+  d.onState(({state})=>{ listening=state==="listening"; $("mic").setAttribute("aria-pressed",String(listening)); $("mic").textContent=listening?"J'écoute":"Micro"; });
+}).catch(()=>{});
+function ecouter(){                                           // appelé directement depuis un clic, sans rien attendre avant
+  if(!dict||listening) return;
+  dictBase=$("msg").value.trim();
+  dict.start().catch(e=>{ if(e&&e.code==="not_granted"){ dict=null; $("mic").hidden=true; } });
+}
+$("mic").onclick=()=>{ if(listening) dict.stop().catch(()=>{}); else ecouter(); };
+function setFrozen(v,m){
+  if(!v && listening && dict) dict.stop().catch(()=>{});
+  frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v;
+  $("parler").textContent=v&&mode==="parler"?"Reprendre":"Lui parler";
+  $("monde").textContent=v&&mode==="monde"?"Annuler":"Décrire un monde";
+  $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
+  $("envoi").textContent=mode==="monde"?"Générer":"Dire";
+  if(v){ $("msg").value=""; $("hint").classList.add("off"); if(!dict) setTimeout(()=>$("msg").focus(),50); }
+}
+$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); if(on) ecouter(); };
+$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); if(on) ecouter(); };
+$("dire").addEventListener("submit",async e=>{ e.preventDefault();
+  if(listening && dict){ try{ await dict.stop(); }catch(_){} }
+  const t=$("msg").value.trim(); if(!t) return;
+  const m=mode; $("msg").value=""; $("msg").blur(); $("envoi").disabled=true;
+  try{ if(m==="monde") await creerMonde(t); else await entendre(t); } finally { $("envoi").disabled=false; setFrozen(false); } });
+
+/* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
+window.balade={
+  fiches:()=>FICHES.map(f=>f.id),
+  lieu(i){ ficheIdx=((i%FICHES.length)+FICHES.length)%FICHES.length; applyFiche(FICHES[ficheIdx]); },
+  fiche(f){ applyFiche(f); },
+  ambiance(a){ patchScene(a); },
+  agir(actions){ enqueue(actions); },
+  dire(texte){ return entendre(texte); },
+  monde(texte){ return creerMonde(texte); },
+  figer(v){ setFrozen(!!v); },
+  percevoir:()=>perception(),
+  histoire:()=>({ temps_passes:tempsFaits.slice(), echanges:echanges.slice() }),
+  etat:()=>({ fiche:fiche.id, graine:seedN, x:cam.x, z:cam.z, yaw:cam.yaw, pitch:cam.pitch, passes:n, file:queue.length }),
+};
+
+/* ------------------------------------------------------------------ démarrage */
+if(CFG.nohud) document.querySelectorAll(".hud").forEach(e=>e.style.display="none");
+if(typeof CFG.scene==="number") ficheIdx=CFG.scene;
+applyFiche(typeof CFG.scene==="object"&&CFG.scene?CFG.scene:FICHES[ficheIdx]);
+if(CFG.seed){ setSeed(CFG.seed); cam.x=S.kit===0?pathX(0):0; }
+if(CFG.z!==undefined){ cam.z=CFG.z; if(S.kit===0){ cam.x=pathX(cam.z); cam.yaw=pathYaw(cam.z); } }
+if(CFG.yaw!==undefined) cam.yaw+=CFG.yaw;
+if(CFG.pitch!==undefined) cam.pitch=CFG.pitch;
+if(CFG.auto) enqueue(CFG.auto);
+if(CFG.lookYaw) look.yaw=CFG.lookYaw;
+if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
+if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
+resize();
+requestAnimationFrame(frame);

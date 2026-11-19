@@ -1,0 +1,24 @@
+{
+  "version": 0,
+  "id": "chateau-minuit",
+  "titre": "La cour à minuit",
+  "pitch": "Une nuit dans un château fermé au public. Le gardien a laissé entrer Sam, sans dire pourquoi.",
+  "ton": "inquiet, concret, jamais de surnaturel montré de face",
+  "porteur": { "id": "sam", "trait": "curieux, parle pour se rassurer", "sait": ["le gardien s'appelle Loïc"], "ignore": ["Loïc a coupé les caméras"] },
+  "protagonistes": [
+    { "id": "loic", "role": "gardien", "veut": "que Sam trouve quelque chose à sa place", "ment_sur": "la raison de sa présence" }
+  ],
+  "lieux": [
+    { "fiche": "chateau-cour", "role": "départ" },
+    { "fiche": "chateau-cave", "role": "révélation" }
+  ],
+  "temps": [
+    { "id": "lumiere", "quand": "Sam traverse la cour ou minuit sonne", "ce_qui_se_passe": "une fenêtre s'allume à l'étage", "scene": { "brume": 0.02 } },
+    { "id": "porte", "quand": "après lumiere, si Sam s'approche de la tour", "ce_qui_se_passe": "la porte de la cave est ouverte", "lieu": "chateau-cave" }
+  ],
+  "fins": [
+    { "id": "sortie", "quand": "Sam quitte le château avant porte" },
+    { "id": "cave", "quand": "Sam descend" }
+  ],
+  "limites": { "duree_minutes": 15, "interdits": ["violence montrée", "personnes réelles"] }
+}

@@ -1,0 +1,18 @@
+{
+  "version": 0,
+  "id": "grands-avaux-nuit",
+  "titre": "Le même sentier, de nuit, à la lampe du téléphone",
+  "inspiration": "Forêt des Grands Avaux, Champcueil, après la tombée du jour",
+  "graine": 4821,
+  "kit": "foret",
+  "ambiance": { "saison": "automne", "soleil": { "azimut": 120, "hauteur": -10 }, "lampe": true, "brume": 0.012 },
+  "camera": { "profil": "bodycam-poitrine", "hauteur": 1.36, "champ": 125 },
+  "histoire": {
+    "pitch": "Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.",
+    "protagonistes": [ { "id": "sam", "role": "porteur de la caméra", "trait": "prudent, se parle pour se rassurer" } ],
+    "temps": [
+      { "id": "bruit", "quand": "après quelques dizaines de mètres ou si la voix parle d'un bruit", "ce_qui_se_passe": "un craquement sur la gauche, Sam se fige", "scene": { "brume": 0.03 } },
+      { "id": "panne", "quand": "plus tard, si Sam s'éloigne du sentier", "ce_qui_se_passe": "la lampe faiblit puis s'éteint", "scene": { "lampe": false } }
+    ]
+  }
+}

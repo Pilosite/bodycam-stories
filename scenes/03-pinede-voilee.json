@@ -1,0 +1,11 @@
+{
+  "version": 0,
+  "id": "sous-bois-voile",
+  "titre": "Sous-bois d'été, ciel voilé, brume épaisse",
+  "inspiration": "Futaie dense par temps laiteux, sans ombres nettes",
+  "graine": 7313,
+  "kit": "foret",
+  "foret": { "densite": 0.85, "rochers": 0.5, "feuillage": 1.3 },
+  "ambiance": { "saison": "ete", "meteo": "voile", "soleil": { "azimut": 40, "hauteur": 34 }, "brume": 0.028 },
+  "camera": { "profil": "bodycam-poitrine", "hauteur": 1.36, "champ": 125 }
+}

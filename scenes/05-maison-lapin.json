@@ -1,0 +1,31 @@
+{
+  "version": 0,
+  "id": "maison-lapin",
+  "titre": "Une maison dans les bois, un lapin devant",
+  "inspiration": "Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur",
+  "graine": 3170,
+  "kit": "foret",
+  "foret": { "densite": 0.7, "rochers": 0.6, "feuillage": 1 },
+  "ambiance": { "saison": "automne", "soleil": { "azimut": -33, "hauteur": 24 }, "brume": 0.009 },
+  "objets": [
+    { "id": "maison", "nom": "petite maison en bois", "devant": 14, "cote": 5.5, "degage": 4.5, "formes": [
+      { "f": "boite", "p": [0, 1.15, 0], "taille": [4, 2.6, 3], "couleur": "#8a765f", "matiere": "bois" },
+      { "f": "toit", "p": [0, 2.95, 0], "taille": [4.5, 1.3, 3.7], "couleur": "#4a4440", "matiere": "tuile" },
+      { "f": "boite", "p": [1.2, 3.4, 0.4], "taille": [0.4, 1.0, 0.4], "couleur": "#8b4a38", "matiere": "pierre" },
+      { "f": "boite", "p": [-0.5, 0.98, 1.51], "taille": [0.9, 1.95, 0.04], "couleur": "#3c2f25", "matiere": "bois" },
+      { "f": "boite", "p": [1.05, 1.35, 1.51], "taille": [0.8, 0.7, 0.04], "couleur": "#2a3038", "matiere": "verre" },
+      { "f": "boite", "p": [1.05, 1.35, 1.52], "taille": [0.86, 0.05, 0.03], "couleur": "#b9b3a8", "matiere": "mat" },
+      { "f": "boite", "p": [1.05, 1.35, 1.52], "taille": [0.05, 0.76, 0.03], "couleur": "#b9b3a8", "matiere": "mat" },
+      { "f": "boite", "p": [-0.5, 0.06, 1.8], "taille": [1.2, 0.12, 0.6], "couleur": "#7d7a74", "matiere": "pierre" }
+    ] },
+    { "id": "lapin", "nom": "lapin de garenne assis", "devant": 10.5, "cote": 2.2, "cap": 70, "formes": [
+      { "f": "boule", "p": [0, 0.11, 0], "taille": [0.18, 0.22, 0.30], "couleur": "#8a7560", "matiere": "pelage", "lisse": 0.04 },
+      { "f": "boule", "p": [0, 0.09, -0.09], "taille": [0.20, 0.20, 0.20], "couleur": "#8a7560", "matiere": "pelage", "lisse": 0.04 },
+      { "f": "boule", "p": [0, 0.21, 0.13], "taille": [0.11, 0.12, 0.13], "couleur": "#8f7a64", "matiere": "pelage", "lisse": 0.04 },
+      { "f": "capsule", "p": [0.025, 0.32, 0.10], "taille": [0.03, 0.10, 0.03], "penche": [-12, 6], "couleur": "#7d6955", "matiere": "pelage" },
+      { "f": "capsule", "p": [-0.025, 0.32, 0.10], "taille": [0.03, 0.10, 0.03], "penche": [-12, -6], "couleur": "#7d6955", "matiere": "pelage" },
+      { "f": "boule", "p": [0, 0.10, -0.19], "taille": [0.07, 0.07, 0.07], "couleur": "#e6e1d8", "matiere": "pelage" }
+    ] }
+  ],
+  "camera": { "profil": "bodycam-poitrine", "hauteur": 1.36, "champ": 125 }
+}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Balade en forêt procédurale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* layout : le rendu occupe tout l'écran, l'interface flotte dessus comme celle d'une app caméra */
+  --ink:#f3f0e8;
+  --ink-dim:rgba(243,240,232,.72);
+  --scrim:rgba(14,17,13,.52);
+  --line:rgba(243,240,232,.24);
+  --rec:#ff4b3e;
+  --bg:#0c0f0b;
+  --f-ui:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"DM Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;background:var(--bg)}
+#view.drag{cursor:grabbing}
+.hud{position:fixed;left:0;right:0;display:flex;gap:10px;padding:14px 16px;pointer-events:none;align-items:center}
+.hud.top{top:0;justify-content:space-between}
+.hud.bottom{bottom:0;flex-direction:column;padding-bottom:20px;gap:12px}
+.chip{font-family:var(--f-mono);font-size:12px;letter-spacing:.02em;font-variant-numeric:tabular-nums;
+  background:var(--scrim);border-radius:999px;padding:6px 11px;display:flex;align-items:center;gap:7px;
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--rec);animation:blink 1.6s steps(1) infinite}
+@keyframes blink{50%{opacity:.25}}
+.osd{font-family:var(--f-mono);font-size:12px;line-height:1.45;letter-spacing:.03em;text-align:right;display:flex;flex-direction:column;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 3px rgba(0,0,0,.9),0 1px 2px rgba(0,0,0,.8)}
+.hint{font-size:13px;color:var(--ink-dim);text-shadow:0 1px 6px rgba(0,0,0,.7);transition:opacity .6s}
+.hint.off{opacity:0}
+.pensee{max-width:34em;text-align:center;font-size:16px;line-height:1.35;font-style:italic;color:var(--ink);
+  text-shadow:0 0 4px rgba(0,0,0,.95),0 1px 8px rgba(0,0,0,.8);opacity:0;transition:opacity .5s;text-wrap:balance}
+.pensee.on{opacity:1}
+.dire{display:flex;gap:8px;width:100%;max-width:30em;pointer-events:auto}
+.dire[hidden]{display:none}
+.dire input{flex:1;min-width:0;font:500 16px/1.2 var(--f-ui);color:var(--ink);background:var(--scrim);border:1px solid var(--line);
+  border-radius:999px;padding:12px 16px;-webkit-user-select:text;user-select:text;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.dire input::placeholder{color:var(--ink-dim)}
+.dire input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.dire button{min-width:0}
+.dire .mic[hidden]{display:none}
+.dire .mic[aria-pressed="true"]{background:var(--rec);border-color:var(--rec)}
+button:disabled{opacity:.5}
+.row{display:flex;gap:10px;pointer-events:auto;flex-wrap:wrap;justify-content:center}
+button{font:600 15px/1 var(--f-ui);color:var(--ink);background:var(--scrim);border:1px solid var(--line);
+  border-radius:999px;padding:13px 18px;min-width:0;cursor:pointer;
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+button.ghost{min-width:0;font-weight:500;color:var(--ink-dim)}
+button:active{background:rgba(243,240,232,.2)}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:left;
+  background:var(--bg);font-family:var(--f-mono);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow:auto}
+@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="Vue de la forêt générée. Glisser pour regarder autour de soi."></canvas>
+<div class="hud top">
+  <div class="chip"><span class="dot"></span><span id="rec">00:00</span></div>
+  <div class="osd"><span id="clock">----</span><span id="camid">CAM 07</span><span id="stat">MISE AU POINT</span></div>
+</div>
+<div class="hud bottom">
+  <div class="pensee" id="pensee" aria-live="polite"></div>
+  <div class="hint" id="hint">Glisse pour regarder autour de lui</div>
+  <form class="dire" id="dire" hidden>
+    <button id="mic" type="button" class="mic" aria-pressed="false" hidden>Micro</button>
+    <input id="msg" type="text" autocomplete="off" enterkeyhint="send" placeholder="Dis-lui quoi faire…" aria-label="Ce que tu dis, au porteur de la caméra ou pour décrire un monde">
+    <button type="submit" id="envoi">Dire</button>
+  </form>
+  <div class="row">
+    <button id="parler" type="button">Lui parler</button>
+    <button id="monde" type="button">Décrire un monde</button>
+    <button id="lieu" type="button" class="ghost">Lieu suivant</button>
+  </div>
+</div>
+<div id="err"></div>
+
+<script>
+__MAIN_JS__
+</script>
+</body>
+</html>

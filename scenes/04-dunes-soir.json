@@ -1,0 +1,10 @@
+{
+  "version": 0,
+  "id": "dunes-soir",
+  "titre": "Dunes en fin de journée",
+  "inspiration": "Erg saharien, soleil rasant, rides de vent sur le sable",
+  "graine": 2207,
+  "kit": "dunes",
+  "ambiance": { "soleil": { "azimut": -60, "hauteur": 11 }, "brume": 0.0025 },
+  "camera": { "profil": "bodycam-poitrine", "hauteur": 1.36, "champ": 125 }
+}
