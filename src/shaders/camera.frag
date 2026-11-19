@@ -7,7 +7,7 @@ uniform int uLin;            // 1 = source filtrable (RGBA16F, LINEAR) : une lec
 out vec4 o;
 float h12(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
 vec3 smp(vec2 uv){
-  if(uLin==1) return texture(uTex,uv).rgb;
+  if(uLin==1) return textureLod(uTex,uv,0.).rgb;
   vec2 p=uv*uSrcRes-.5; vec2 i=floor(p), f=p-i; ivec2 m=ivec2(uSrcRes)-1;
   ivec2 a=clamp(ivec2(i),ivec2(0),m), b=clamp(ivec2(i)+1,ivec2(0),m);
   return mix(mix(texelFetch(uTex,a,0).rgb,texelFetch(uTex,ivec2(b.x,a.y),0).rgb,f.x),
@@ -28,7 +28,7 @@ void main(){
   vec3 hdr=vec3(smp(.5+q*(1.+.0032*r2)).r,smp(.5+q).g,smp(.5+q*(1.-.0032*r2)).b);
   if(uSoft>0.){ vec2 sp=uSoft/uSrcRes;
     hdr=(hdr+smp(.5+q+sp*vec2(1.,.6))+smp(.5+q+sp*vec2(-.6,1.))+smp(.5+q+sp*vec2(-1.,-.6))+smp(.5+q+sp*vec2(.6,-1.)))*.2; }
-  vec3 bl=texture(uBloom,.5+q).rgb;
+  vec3 bl=textureLod(uBloom,.5+q,0.).rgb;
   vec2 px=1.2/uSrcRes;
   vec3 nb=(smp(.5+q+vec2(px.x,0.))+smp(.5+q-vec2(px.x,0.))+smp(.5+q+vec2(0.,px.y))+smp(.5+q-vec2(0.,px.y)))*.25;
   vec3 c=tone(mix(hdr,bl,.11)), cn=tone(mix(nb,bl,.11));

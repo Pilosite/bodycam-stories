@@ -47,11 +47,11 @@ bool tapis(vec2 xz, float lod, out vec4 a, out vec4 b){
   if(k0<0) return false;
   float s=uTapS0*exp2(float(k0)), f=float(k0)==l0?fract(lod):0.;
   vec3 c=vec3(xz/(s*float(uTapN)),float(k0));
-  a=texture(uTap0,c); b=texture(uTap1,c);
+  a=textureLod(uTap0,c,0.); b=textureLod(uTap1,c,0.);
   int k1=k0+1;
   if(f>0. && k1<uTapL && ((uTapPret>>k1)&1)==1 && tapisDans(k1,xz)){
     vec3 c1=vec3(c.xy*.5,float(k1));
-    a=mix(a,texture(uTap0,c1),f); b=mix(b,texture(uTap1,c1),f);
+    a=mix(a,textureLod(uTap0,c1,0.),f); b=mix(b,textureLod(uTap1,c1,0.),f);
   }
   return true;
 }          // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
@@ -70,7 +70,7 @@ float ombreSoleil(vec3 p, vec3 gn){                          // 1 = éclairé ; 
   float v=0.; vec2 tx=uSoleilE.w/(2.*uSoleilE.xy);
   for(int k=0;k<4;k++){
     vec2 o=(vec2(rnd(),rnd())-.5)*tx*uPcf;
-    v+=z<=texture(uOmbre,uv+o).r?1.:0.;
+    v+=z<=textureLod(uOmbre,uv+o,0.).r?1.:0.;
   }
   return mix(v*.25,stat,bord);
 }
@@ -185,6 +185,6 @@ void main(){
   }
   col=min(max(col,vec3(0.)),vec3(60.));
   if(col.x!=col.x||col.y!=col.y||col.z!=col.z) col=vec3(0.);
-  if(uVoir==5){ float z=texture(uOmbre,gl_FragCoord.xy/uRes).r; col=vec3(z<1.?1.:0.); }   // la carte d'ombres elle-même
+  if(uVoir==5){ float z=textureLod(uOmbre,gl_FragCoord.xy/uRes,0.).r; col=vec3(z<1.?1.:0.); }   // la carte d'ombres elle-même
   outCol=vec4(melangeHistoireA(col,uCamPos+rd*t,ip,dam?uAlphaD:uAlpha),t);
 }
