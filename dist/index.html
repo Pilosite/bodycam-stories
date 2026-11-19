@@ -6852,7 +6852,32 @@ async function mesurerV3(f,wait,med){
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
-$("mesurer").onclick=()=>{ mesurer().then(()=>{ $("mesure-txt").textContent+="\n"+profTexte; }).catch(e=>{ hold=false; bench=null; $("mesure-txt").textContent="La mesure a échoué : "+(e&&e.message||e); }); };
+/* Banc des passes : que coûte, sur cette puce, une passe de rendu presque vide, selon le format et la taille de la cible ?
+   Sur le Mali-G77 de Toine, trois petites passes de halo prenaient 28 à 42 ms : si le prix est par passe et non par pixel,
+   c'est le nombre de passes par image qu'il faut réduire. Dix (ou cent) passes en ping-pong, une seule attente à la fin. */
+function bancPasses(){
+  const L=[], fx=v=>v.toFixed(2).replace(".",","), f32=new Float32Array(4), u8=new Uint8Array(4);
+  const lire=(t,flo)=>{ gl.bindFramebuffer(gl.FRAMEBUFFER,t.f); if(flo) gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,f32); else gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,u8); };
+  const essai=(nom,fmt,flo,w,h,N)=>{
+    const a=target(w,h,fmt,gl.NEAREST), b=target(w,h,fmt,gl.NEAREST); if(!a.ok||!b.ok){ freeT(a); freeT(b); L.push(nom.padEnd(30)+"cible refusée"); return; }
+    gl.useProgram(P_DOWN.p); gl.uniform2f(P_DOWN.u.uDstRes,w,h); gl.disable(gl.DEPTH_TEST); gl.disable(gl.SCISSOR_TEST);
+    const tour=n=>{ let src=a, dst=b; for(let i=0;i<n;i++){ bindTex(0,src.t,P_DOWN.u.uTex); gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,w,h); draw(); const x=src; src=dst; dst=x; } return src; };
+    lire(tour(2),flo);                                            // mise en route
+    const m=[]; for(let k=0;k<5;k++){ lire(a,flo); const t0=performance.now(); const fin=tour(N); lire(fin,flo); m.push((performance.now()-t0)/N); }
+    m.sort((x,y)=>x-y); L.push(nom.padEnd(30)+fx(m[2])+" ms par passe ("+N+" passes)");
+    freeT(a); freeT(b);
+  };
+  essai("RGBA8, 128 × 128",gl.RGBA8,false,128,128,10);
+  essai("RGBA16F, 128 × 128",gl.RGBA16F,true,128,128,10);
+  essai("RGBA32F, 128 × 128",gl.RGBA32F,true,128,128,10);
+  essai("RGBA8, taille de l'image",gl.RGBA8,false,W,H,10);
+  essai("RGBA16F, taille de l'image",gl.RGBA16F,true,W,H,10);
+  essai("RGBA32F, taille de l'image",gl.RGBA32F,true,W,H,10);
+  essai("RGBA8, 128 × 128, à la chaîne",gl.RGBA8,false,128,128,100);
+  essai("RGBA16F, 128 × 128, à la chaîne",gl.RGBA16F,true,128,128,100);
+  return ["","BANC DES PASSES (une passe presque vide)",...L].join("\n");
+}
+$("mesurer").onclick=()=>{ mesurer().then(()=>{ let banc=""; try{ banc=bancPasses(); }catch(e){ banc="\nBanc des passes : "+(e&&e.message||e); } $("mesure-txt").textContent+="\n"+profTexte+"\n"+banc; }).catch(e=>{ hold=false; bench=null; $("mesure-txt").textContent="La mesure a échoué : "+(e&&e.message||e); }); };
 $("mesure-fermer").onclick=()=>{ $("mesure").hidden=true; };
 $("mesure-copier").onclick=()=>{ const t=$("mesure-txt"), b=$("mesure-copier"), ok=()=>{ b.textContent="Copié"; setTimeout(()=>b.textContent="Copier",1500); };
   const sel=()=>{ const r=document.createRange(); r.selectNodeContents(t); const s=getSelection(); s.removeAllRanges(); s.addRange(r); };
