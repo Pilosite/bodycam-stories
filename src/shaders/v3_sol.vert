@@ -29,7 +29,10 @@ void main(){
   vec3 N=normalize(vec3(terrainH(xz-vec2(e,0.))-terrainH(xz+vec2(e,0.)),2.*e,terrainH(xz-vec2(0.,e))-terrainH(xz+vec2(0.,e))));
   sansGrain();
   vec4 pos; float dist, ang;
-  projette(P,2.3,pos,dist,ang);                              // au-delà, le sommet part derrière le plan lointain
+  // Un sommet hors de l'angle utile (derrière la caméra) ne se projette pas : projette() le pose au centre, derrière le plan
+  // lointain, et le découpage gardait de ses triangles un coin qui recouvrait le ciel (anneau brun en regardant vers le haut).
+  // Le fragment de tout triangle qui touche un tel sommet est jeté (vOk interpolé < 1) : ce sont des triangles hors de l'image.
+  vOk=projette(P,2.3,pos,dist,ang)?1.:0.;
   gl_Position=pos;
   vQ=P; vN=N; vCode=0.; vDist=dist;
 }

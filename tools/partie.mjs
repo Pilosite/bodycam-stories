@@ -2,10 +2,11 @@
 // en parlant au porteur par l'interface comme un joueur. Captures et trace dans out/meneur/.
 // Puis rejoue la trace dans Node (src/meneur.js) et vérifie que l'état final est le même.
 //
-// Usage : node tools/partie.mjs [demi-tour|retrouve|veille] [pixels internes]
+// Usage : node tools/partie.mjs [demi-tour|retrouve|veille] [pixels internes] [v3]
 //   demi-tour : après le sac, elle redescend (2 à 3 minutes)
 //   retrouve  : après la lueur, on la guide vers la lanterne (5 à 8 minutes)
 //   veille    : personne ne parle, fin par défaut à 14 minutes
+//   v3        : la partie jouée avec le moteur v3 (le semeur), qui doit tenir le passage à la nuit et la lampe ; captures préfixées v3-
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -13,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { rejouer } from '../src/meneur.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const [,, fin = 'demi-tour', px = '20000'] = process.argv;
+const [,, fin0 = 'demi-tour', px = '20000', moteur = ''] = process.argv;
+const v3 = moteur === 'v3', fin = fin0;
 const out = join(root, 'out/meneur');
 mkdirSync(out, { recursive: true });
 
@@ -22,14 +24,16 @@ const page = await browser.newPage({ viewport: { width: 300, height: 560 }, devi
 const erreurs = [];
 page.on('pageerror', e => erreurs.push(e.message));
 page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_/.test(m.text())) erreurs.push(m.text()); });
-await page.addInitScript(c => { window.__CFG = c; }, { histoire: 'avant-la-nuit', maxPx: +px, debug: true, still: true, graine: 7 });
+await page.addInitScript(c => { window.__CFG = c; }, { histoire: 'avant-la-nuit', maxPx: +px, debug: true, still: true, graine: 7, ...(v3 ? { v3: true } : {}) });
 await page.goto('file://' + join(root, 'dist/index.html'));
 
 const t0 = Date.now(), sec = () => ((Date.now() - t0) / 1000).toFixed(0).padStart(4);
 const attendre = ms => page.waitForTimeout(ms);
 const partie = () => page.evaluate(() => balade.partie());
 const passe = (p, id) => p.trame.passes.some(x => x.id === id);
-const capture = async nom => { await attendre(1500); await page.screenshot({ path: join(out, `${fin}-${nom}.png`) }); console.log(sec(), 'capture', nom); };
+const capture = async nom => { await attendre(1500); await page.screenshot({ path: join(out, `${v3 ? 'v3-' : ''}${fin}-${nom}.png`) });
+  const e = await page.evaluate(() => ({ v3: !!(window.__state && window.__state.v3), nuit: window.__state && window.__state.nuit, bouton: document.getElementById('v3') && document.getElementById('v3').textContent }));
+  console.log(sec(), 'capture', nom, JSON.stringify(e)); };
 async function dire(texte) {                                     // comme un joueur : « Lui parler », taper, envoyer
   await page.click('#parler');
   await page.fill('#msg', texte);
@@ -65,7 +69,7 @@ while ((Date.now() - t0) / 1000 < 22 * 60) {
 await page.waitForFunction(() => !document.getElementById('fin').hidden, null, { timeout: 60000 });
 await capture('fin');
 const trace = await page.evaluate(() => balade.trace());
-writeFileSync(join(out, `trace-${fin}.json`), JSON.stringify(trace));
+writeFileSync(join(out, `trace-${v3 ? 'v3-' : ''}${fin}.json`), JSON.stringify(trace));
 await browser.close();
 
 const histoire = JSON.parse(readFileSync(join(root, 'histoires/avant-la-nuit.json'), 'utf8'));

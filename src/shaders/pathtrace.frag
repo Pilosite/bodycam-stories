@@ -10,31 +10,9 @@ out vec4 outCol;
 float gT;                    // distance du premier impact, gardée pour la reprojection
 
 #include "monde.glsl"
-uniform vec2  uTerK;       // pas de marche sur le relief : partout, et près d'un bord de trajet raide (0 = inutile)
 uniform float uYTop;       // hauteur au-dessus du plan de pente au-delà de laquelle il n'y a plus rien
 uniform vec3  uSolAlb;     // couleur du sol vue par l'éclairage indirect
 
-float map(vec3 p){
-  float th=terrainH(p.xz);
-  float y=p.y-th;
-  float d=y*(uTerK.y>0. && abs(gAx-.5*(uCreux.y+uCreux.z))<abs(uCreux.y-uCreux.z)*.5+.3?uTerK.y:uTerK.x);   // pas réduit près d'un bord de trajet raide
-  vec4 nf;
-#if !NU
-  if(uKit==0){
-    if(y<19.) d=min(d,sdTreeA(p,th,nf)); else d=min(d,y-17.8);
-    if(y<12.) d=min(d,sdTreeB(p,th,nf)); else d=min(d,y-11.3);
-  }
-  if(uKitP.y>0.){ if(y<4.5) d=min(d,sdRock(p,th,nf)); else d=min(d,y-3.9); }
-#endif
-#if SEMIS
-  for(int k=0;k<uSemN;k++){                                  // une seule évaluation de semis, dans une boucle : le compilateur n'en déplie qu'une.
-    float tp=uSemTop[k];                                     // En rendu logiciel, ce code coûte même quand il ne s'exécute pas : d'où la variante SEMIS.
-    if(y<tp+1.){ vec4 si; d=min(d,sdSemis(p,k,nf,si)); } else d=min(d,y-tp);   // au-dessus de la couche : borne simple, jamais nulle
-  }
-#endif
-  if(uObjN>0) d=min(d,sdProps(p,nf));
-  return d;
-}
 int objId(vec3 p, out vec4 info){
   float th=terrainH(p.xz); float d=(p.y-th)*.88; int id=0; info=vec4(0.,0.,0.,th); vec4 nf;
   float d1;
@@ -263,10 +241,7 @@ vec3 render(vec3 ro, vec3 rd){
     }
     else if(id==3){ r0=uSurf.z; q=info.xyz; }
     else if(id>=4){ for(int i=0;i<(id>=4?1:0);i++) r0=matProp(p,gn,info,id==5,alb,n,spec,emis,q,nr0,rot); }   // garde en boucle : sautée en rendu logiciel quand aucun pixel n'est une forme
-    else if(id==1 && info.w>1.5){                            // cœur de feuillage d'un conifère
-      alb=leafCol(p,vnoise3(p*5.))*(.5+.6*vnoise3(p*vec3(8.,13.,8.))); spec=.02;
-      n=normalize(gn+(vec3(vnoise3(p*17.),vnoise3(p*17.+7.),vnoise3(p*17.+13.))-.5)*.9);
-    }
+    else if(id==1 && info.w>1.5) matCone(p,gn,alb,n,spec);   // cœur de feuillage d'un conifère
     else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz; hs=info.y; rot=id==1?RA:RB; }
     if(r0>=0){
       vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;

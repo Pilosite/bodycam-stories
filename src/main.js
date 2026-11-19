@@ -12,7 +12,7 @@ const FS_EXPO = __SHADER_FS_EXPO__;
 const FS_BLUR = __SHADER_FS_BLUR__;
 const FS_CAM = __SHADER_FS_CAM__;
 const VS_V2PTS = __SHADER_VS_V2PTS__, FS_V2PTS = __SHADER_FS_V2PTS__, FS_V2CIEL = __SHADER_FS_V2CIEL__, FS_V2TROUS = __SHADER_FS_V2TROUS__;
-const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRE = __SHADER_FS_V3OMBRE__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__, FS_V3TAPIS = __SHADER_FS_V3TAPIS__;
+const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRE = __SHADER_FS_V3OMBRE__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__, FS_V3TAPIS = __SHADER_FS_V3TAPIS__, FS_V3SONDE = __SHADER_FS_V3SONDE__, VS_V3PROCHES = __SHADER_VS_V3PROCHES__, FS_V3PROCHES = __SHADER_FS_V3PROCHES__;
 const FICHES = __SCENES__;                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
@@ -94,6 +94,17 @@ const ptEnCours=()=>{ const l=lances[varCourante()]; return !!(l&&l.marque&&!pro
 function progMonde(){ if(!compilerPT(varCourante(),true)) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
 if(!bureau && !PT_KO) compilerPT(0);                            // téléphone : compilé d'emblée, comme avant
 if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
+/* La sonde de collision peut avoir son propre petit programme (v3_sonde.frag : la distance au décor, map(), rien d'autre),
+   qui se compile là où le lanceur de rayons ne se compile pas. Il n'est compilé qu'avec l'option v3sonde : le porteur ne
+   bouge que sur ordre du récit. Sans lui ni lanceur de rayons, la sonde rend « rien » (aucun obstacle). */
+const SONDE={lance:null,p:null};
+function sondeProg(){                                           // option v3sonde : le joueur ne déplace jamais le porteur, elle n'est pas compilée par défaut
+  if(SONDE.p) return SONDE.p; if(!CFG.v3sonde) return null;
+  if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.lance=lancer(FS_V3SONDE); }
+  if(!fini(SONDE.lance)) return null;
+  SONDE.p=finir(SONDE.lance); SONDE.lance=null; etapeGL("  compilé : sonde de collision"); return SONDE.p;
+}
+const sondeDispo=()=>!!(sondeProg()||progs[varCourante()]);
 gl.bindVertexArray(gl.createVertexArray());
 
 function target(w,h,ifmt,filter){
@@ -193,7 +204,7 @@ function couleur(c){                                           // "#rrggbb" ou [
   return v.map(x=>Math.pow(x,2.2));
 }
 function buildShapes(f){
-  shapesData.fill(0); S.objN=0; S.objTop=0; S.vac=[]; let row=8;
+  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; let row=8;
   // seuls les objets visibles prennent une des 8 places (le meneur compte de même : un accessoire caché ne coûte rien)
   for(const o of (Array.isArray(f.objets)?f.objets:[]).filter(o=>o&&!(o.visible===false||cacheObj.has(o.id))).slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
@@ -217,7 +228,7 @@ function buildShapes(f){
       rad=Math.max(rad,Math.hypot(p[0],p[1],p[2])+Math.hypot(t[0],t[1],t[2]));
     });
     shapesData.set([x,y,z,rad, row,formes.length, clampN(o.degage,0,12,0), (o.visible===false||cacheObj.has(o.id))?0:1], i*16);
-    row+=formes.length; S.objN++;
+    row+=formes.length; S.objN++; S.objRows=row-8;
     S.objTop=Math.max(S.objTop,y+rad-S.rel[2]*z);
   }
   packSemis(f);
@@ -471,13 +482,15 @@ function recevoirDiff(L,dst){                                  // vrai si la lec
   return true;
 }
 const sondeL=lectureDiff();                                    // option sondeSync (OPT) : l'ancienne sonde bloquante, pour comparer
-function probeDessin(x,y,z,cible=probeT){                      // distance au décor en (x, y, z), calculée par le lanceur de rayons dans la cible
-  const u=common(4,1,lastPose||pose()); gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
-  gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev);
+function probeDessin(x,y,z,cible=probeT){                      // distance au décor en (x, y, z), calculée par la sonde (ou le lanceur de rayons) dans la cible
+  const P=sondeProg(); let u;
+  if(P){ u=P.u; gl.useProgram(P.p); v3Monde(u,4,1,lastPose||pose()); gl.uniform2fv(u.uTerK,S.terK); }
+  else { u=common(4,1,lastPose||pose()); gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev); }
+  gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
   gl.bindFramebuffer(gl.FRAMEBUFFER,cible.f); gl.viewport(0,0,4,1); draw();
 }
 function probe(x,y,z){                                         // distance au décor, lue sur le GPU (bloquant)
-  if(!progs[varCourante()]) return [9,9,9];                    // lanceur de rayons pas compilé (ordinateur en v3) : pas de collision pour l'instant
+  if(!sondeDispo()) return [9,9,9];                            // ni sonde ni lanceur de rayons encore compilés : pas de collision pour l'instant
   probeDessin(x,y,z);
   gl.readPixels(0,0,4,1,gl.RGBA,gl.UNSIGNED_BYTE,pb8);          // octets : le chemin de lecture rapide de toutes les puces
   const d=i=>(pb8[i]+pb8[i+1]/255)/255*9-1;
@@ -495,7 +508,7 @@ function moveBy(dist){
     const av=pres?(OPT.sondeSync?0:.12*Math.sign(dist||1)):a;    // différée : on sonde là où l'on sera quand la réponse arrivera
     const sx=nx+Math.sin(cam.yaw)*av, sz=nz+Math.cos(cam.yaw)*av;
     if(OPT.sondeSync){ [sonde.d,sonde.dx,sonde.dz]=probe(sx,terrainH(sx,sz)+.75,sz); sonde.loin=!(sonde.d<R+.25); }
-    else if(progs[varCourante()]){ probeDessin(sx,terrainH(sx,sz)+.75,sz); lireDiff(sondeL,probeT,4,1,16); } }
+    else if(sondeDispo()){ probeDessin(sx,terrainH(sx,sz)+.75,sz); lireDiff(sondeL,probeT,4,1,16); } }
   const d=sonde.loin?Math.max(sonde.d,R):sonde.d, dx=sonde.dx, dz=sonde.dz;
   if(d<R){ let gx=(dx-d)/.05, gz=(dz-d)/.05; const l=Math.hypot(gx,gz)||1; nx+=gx/l*(R-d); nz+=gz/l*(R-d); }
   cam.x=nx; cam.z=nz; walkDist+=Math.abs(dist);
@@ -780,7 +793,7 @@ function v2Basculer(on){
    v3k (recouvrement des grains), v3carte (largeur de la carte d'ombres), v3alpha (part d'image neuve en mouvement),
    v3max (images accumulées à l'arrêt), v3detail (chronomètre chaque passe : ajoute des synchronisations),
    v3net (soleil ponctuel, sans pénombre), v3pcf (flou de lecture de la carte, en texels), v3amb (niveau de l'ambiance,
-   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres),
+   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres, 6 élément de chaque pixel, magenta : rien de semé),
    v3prof (mise au point du coût de l'ombrage : 1 sans recette, 2 sans ambiance, 4 sans soleil, 8 sans pres(), 16 passe vide,
    64 sans recette au sol, 128 sans recette hors du sol).
    Optimisations de la qualité mobile (docs/moteur-v3.md, « Vers 30 images par seconde ») ; chacune se coupe pour comparer,
@@ -791,13 +804,16 @@ function v2Basculer(on){
 const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG.grainsOmbre||0, k:CFG.v3k||2.5,   // côté d'un grain = k × l'écart moyen : à 1,8 des grains ronds tirés au hasard laissaient 8 % de trous, à 2,5 moins de 1 %
    carte:CFG.v3carte||(QUAL.full?2048:1024),
   alpha:CFG.v3alpha||.18, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
-  n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
-  sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},
+  n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*SH_ROWS), maxPt:64, kf:CFG.v3kf||2.4,
+  sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},          // dmax : 150 m quand l'eau est à l'horizon (au-delà, le lanceur de rayons ne touche plus rien : c'est la mer)
   tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
-function v3Init(){                                             // rend vrai quand les cinq programmes sont prêts (compilation sans bloquer)
+function v3Init(){                                             // rend vrai quand tous les programmes sont prêts (compilation sans bloquer)
   if(V3.gp) return true;
-  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; etapeGL("compilation : moteur v3"+(V3.avecTapis?", avec tapis du sol":""));
-    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), sol:lancer(FS_V3GBUF,VS_V3SOL), ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombrage:lancer(V3.avecTapis?FS_V3OMBRAGE.replace("\n","\n#define TAPIS 1\n"):FS_V3OMBRAGE) };
+  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
+    const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
+    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), grainsF:lancer(F(FS_V3GBUF),F(VS_V3GRAINS)), sol:lancer(FS_V3GBUF,VS_V3SOL),
+      ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombreF:lancer(F(FS_V3OMBRE),F(VS_V3GRAINS)), proches:lancer(FS_V3PROCHES,VS_V3PROCHES),
+      ombrage:lancer(V3.avecTapis?FS_V3OMBRAGE.replace("\n","\n#define TAPIS 1\n"):FS_V3OMBRAGE) };
     if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
@@ -805,7 +821,7 @@ function v3Init(){                                             // rend vrai quan
   // et laissait voir à travers. Le plafond suit maintenant ce que la puce accepte, jusqu'à 320 pixels.
   V3.maxPt=Math.min(CFG.v3maxPt||320,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
   V3.tapVide=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,V3.tapVide); gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,1,1,1);
-  V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,72);
+  V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   return true;
 }
@@ -936,7 +952,8 @@ function aireForme(ty,s){                                      // aire approché
   return 8*(x*y+y*z+x*z);
 }
 /* Objets de la fiche : poids de chaque objet (vu de la caméra : taille apparente ; vu du soleil : taille), aire de chaque
-   forme. Rangés dans une petite texture lue par les grains. */
+   forme. Couches de semis : aire de l'élément (ligne de tête de la couche), aire cumulée de chaque forme. Rangés dans une
+   petite texture lue par les grains. */
 function v3Semis(nb,vue,p){
   const d=V3.semis; d.fill(0);
   const ws=[], ai=[]; let tot=0;
@@ -950,24 +967,68 @@ function v3Semis(nb,vue,p){
     for(let j=0;j<cn;j++){ const r=(row+j)*16, a=aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); c+=a;
       d[(row+j)*4]=c/ai[i]; d[(row+j)*4+1]=a; } }
   if(tot<=0) for(let i=0;i<S.objN;i++) d[i*4]=0;
-  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,1,72,gl.RGBA,gl.FLOAT,d);
+  for(let k=0;k<S.semN;k++){ const r0=SEM0+k*SEM_L, a=semisAire(k); let c=0;
+    d[r0*4]=a.tot; for(let j=0;j<a.formes.length;j++){ c+=a.formes[j]; d[(r0+4+j)*4]=c/a.tot; d[(r0+4+j)*4+1]=a.formes[j]; } }
+  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,1,SH_ROWS,gl.RGBA,gl.FLOAT,d);
   return tot>0;
+}
+function semisAire(k){                                         // aire des formes d'un élément de la couche k (repère de l'élément, arrondi compris)
+  const r0=SEM0+k*SEM_L, cn=shapesData[(r0+1)*16+6], formes=[];
+  for(let j=0;j<cn;j++){ const r=(r0+4+j)*16, ar=shapesData[r+13]; formes.push(aireForme(shapesData[r+3],[shapesData[r+4]+ar,shapesData[r+5]+ar,shapesData[r+6]+ar])); }
+  return {formes,tot:formes.reduce((a,b)=>a+b,0)||1};
 }
 /* Partage du budget entre les familles, au prorata de la surface apparente qu'elles demandent (aire de l'objet / aire de
    sa cellule) : le recouvrement de l'écran reste le même pour toutes. Les grains tombés dans une cellule vide sont perdus :
-   un monde plus dense en perd moins, il ne coûte pas plus. */
+   un monde plus dense en perd moins, il ne coûte pas plus. Une couche de semis demande la moitié de l'aire de son élément
+   (la face vue) par cellule, fois sa densité ; une rangée n'occupe qu'une bande de part et d'autre du trajet, comptée pour
+   la part d'une bande de 40 m qu'elle couvre. Le partage suit d'elle-même la fiche : une couche de plus, et chacun en reçoit moins. */
 function v3Partage(N,vue,p){
   const tr=S.kit===0&&S.kitP[0]>0, pe=tr&&S.houp[3]>0, bl=S.kitP[1]>0;
-  const w=[tr?6.8/36:0, pe?.95/10.9:0, bl?3.4/72.25:0];
+  const coeur=S.houp[0]>.5?.36*2*2.2*14:0;                     // cœur des conifères (rayon moyen × hauteur, en gros)
+  const w=[tr?(6.8+coeur)/36:0, pe?.95/10.9:0, bl?3.4/72.25:0];
+  const ws=[0,0,0,0], R=[0,0,0,0];
+  for(let k=0;k<S.semN;k++){ const o=(SEM0+k*SEM_L)*16, A=[shapesData[o],shapesData[o+1]], dens=shapesData[o+4], rg=shapesData[o+7]>.5;
+    const J=shapesData.subarray(o+16,o+32), sc=(J[2]+J[3])/2, sy=(J[4]+J[5])/2, a=semisAire(k).tot*sc*sc*(.3+.7*sy);
+    const cotes=shapesData[o+10]===0?2:1, bande=rg?Math.min(1,cotes*J[7]*A[0]/40):1;
+    ws[k]=.5*a*dens*(1-.5*shapesData[o+5])/(A[0]*A[1])*bande;
+    R[k]=Math.hypot(J[12],J[14])*J[3]+Math.hypot(J[8],J[10])*J[3]+Math.hypot(J[0],J[1]); }   // demi-étendue horizontale de l'élément, décalage compris
   const fF=vue===0&&S.kit===0&&S.kitP[2]>0?.28:0;
-  const ob=S.objN>0&&v3Semis(1,vue,p), fP=ob?(vue===0?.12:.1):0;
-  const sw=w[0]+w[1]+w[2], solide=N*(1-fF-fP);
-  const nA=sw>0?Math.round(solide*w[0]/sw):0, nB=sw>0?Math.round(solide*w[1]/sw):0, nR=sw>0?Math.round(solide*w[2]/sw):0;
+  const ob=S.objN>0&&v3Semis(1,vue,p), fP=ob?(vue===0?(v3Proches().on?0:.12):.1):0;   // vus de la caméra, les objets sont dessinés en boîtes (v3Proches)
+  if(!ob&&S.semN) v3Semis(1,vue,p);
+  const sw=w[0]+w[1]+w[2]+ws[0]+ws[1]+ws[2]+ws[3], solide=N*(1-fF-fP);
+  const n=x=>sw>0?Math.round(solide*x/sw):0;
+  const nA=n(w[0]), nB=n(w[1]), nR=n(w[2]), nS=ws.map(n);
   const nF=Math.round(N*fF), nP=ob?Math.round(N*fP):0;
   if(ob) v3Semis(nP,vue,p);
+  const fin=a=>{ const pS=[]; let c=a; for(let k=0;k<4;k++){ c+=nS[k]; pS.push(c); } return pS; };
   if(vue===1){ const traits=Math.round(nB*.35);               // vue du soleil : les perches en traits (voir semeBTrait)
-    return {nA,nB:0,nR,nF,nP,traits,part:[nA,nA,nA+nR,nA+nR+nF],total:nA+nR+nF+nP}; }
-  return {nA,nB,nR,nF,nP,traits:0,part:[nA,nA+nB,nA+nB+nR,nA+nB+nR+nF],total:nA+nB+nR+nF+nP};
+    const pO=nA+nR+nF+nP, pS=fin(pO);
+    return {nA,nB:0,nR,nF,nP,nS,R,traits,part:[nA,nA,nA+nR,nA+nR+nF],partO:pO,partS:pS,total:pS[3]}; }
+  const pO=nA+nB+nR+nF+nP, pS=fin(pO);
+  return {nA,nB,nR,nF,nP,nS,R,traits:0,part:[nA,nA+nB,nA+nB+nR,nA+nB+nR+nF],partO:pO,partS:pS,total:pS[3]};
+}
+/* Éléments proches (v3_proches.vert) : une fenêtre fixe d'emplacements autour de la caméra. Toutes les formes des objets
+   (64 au plus), 5 × 5 cellules de blocs, 3 × 3 cellules d'arbres (le tronc, et le cœur des conifères), 5 × 5 de perches, et pour chaque couche de semis la fenêtre de cellules qui couvre une dizaine de
+   mètres (au plus 2 cellules de part et d'autre, une ou deux rangées par rive). Option v3proches (false : tout en grains). */
+const PRX_VPS=6*5*5*6;                                          // sommets par emplacement (v3_proches.vert : NS = 5)
+function v3Proches(){
+  const on=CFG.v3proches!==false&&CFG.v3proches!==0;
+  const r={on,o:0,b:0,a:0,p:0,n:[0,0,0,0],fin:[0,0,0,0],total:0};
+  if(!on) return r;
+  r.o=S.objRows||0; r.b=S.kitP[1]>0?25:0;
+  r.a=S.kit===0&&S.kitP[0]>0?9:0; r.p=S.kit===0&&S.kitP[0]>0&&S.houp[3]>0?25:0;   // troncs (3 × 3 cellules), perches (5 × 5)
+  let c=r.o+r.b+r.a+r.p;
+  for(let k=0;k<4;k++){
+    if(k<S.semN){ const o=(SEM0+k*SEM_L)*16, rg=shapesData[o+7]>.5, A=[shapesData[o],shapesData[o+1]], cn=shapesData[(SEM0+k*SEM_L+1)*16+6];
+      const n=Math.max(0,Math.min(2,Math.ceil(10/(rg?A[1]:Math.max(A[0],A[1])))-0)), w=2*n+1;
+      const cells=rg?w*Math.min(2,shapesData[(SEM0+k*SEM_L+1)*16+7])*(shapesData[o+10]===0?2:1):w*w;
+      r.n[k]=n; c+=cells*cn; }
+    r.fin[k]=c; }
+  r.total=c; return r;
+}
+function v3Grains(u,ps){                                       // uniformes du partage, communs aux deux vues
+  gl.uniform4iv(u.uPart,ps.part); gl.uniform1i(u.uPartO,ps.partO); gl.uniform4iv(u.uPartS,ps.partS); gl.uniform1i(u.uTotal,ps.total);
+  gl.uniform4fv(u.uNbS,ps.nS); gl.uniform4fv(u.uSemR,ps.R); gl.uniform1f(u.uKf,V3.kf);
 }
 function v3Monde(u,w,h,p){                                    // uniformes de monde.glsl (mêmes valeurs que common())
   gl.uniform2f(u.uRes||null,w,h); gl.uniform3fv(u.uCamPos||null,p.pos); gl.uniformMatrix3fv(u.uCam||null,false,p.mat);
@@ -979,7 +1040,8 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
   if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP); }
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
-  gl.uniform1i(u.uSemN||null,0); gl.uniform1f(u.uNuit||null,S.lum);              // le semeur ne sème pas encore les couches de semis
+  gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
+  gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);
 }
 const px3=new Float32Array(4);
 /* Attendre la fin du calcul graphique d'UNE cible : sur une puce à tuiles (Mali), lire un pixel ne force que la cible lue.
@@ -1013,18 +1075,21 @@ function v3Image(p){
   let u;
   if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w};
   const Ns=V3.ombre||Math.round(V3.grains*.6);
-  u=G.ombre.u; gl.useProgram(G.ombre.p); v3Monde(u,W,H,p);
   const ps=v3Partage(Ns,1,p);
-  gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); gl.uniform4iv(u.uPart,ps.part); gl.uniform1i(u.uTotal,ps.total);
-  gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
-  gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
-  gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
-  gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.sm.f); gl.viewport(0,0,V3.sm.w,V3.sm.h);
   gl.clearBufferfv(gl.DEPTH,0,[1]); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
-  gl.uniform1i(u.uTrait,0);
-  if(ps.total>0) gl.drawArrays(gl.POINTS,0,ps.total);
-  if(ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
+  for(const P of [G.ombre,G.ombreF]){                          // deux variantes du semeur : arbres, perches, blocs ; puis formes (objets, semis)
+    const de=P===G.ombre?0:ps.part[3], a=P===G.ombre?ps.part[3]:ps.total; if(a<=de&&!(P===G.ombre&&ps.traits>0)) continue;
+    u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
+    gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); v3Grains(u,ps); gl.uniform1i(u.uPrx,0);
+    gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
+    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
+    gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
+    gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
+    gl.uniform1i(u.uTrait,0);
+    if(a>de) gl.drawArrays(gl.POINTS,de,a-de);
+    if(P===G.ombre&&ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
+  }
   }
   const SP=V3.smP; const note=V3.nImg<3?etapeGL:()=>{};
   note("v3 image "+V3.nImg+" : ombres faites ("+V3.sm.w+" × "+V3.sm.h+"), semis de "+V3.grains+" grains à "+W+" × "+H);
@@ -1032,7 +1097,7 @@ function v3Image(p){
   // (2) tampon G : le sol, puis les grains
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
-  const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol;
+  const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol; so.dmax=S.eau&&S.eau[3]>0?150:420;
   u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
   if(CFG.v3solPlein){                                         // l'ancien maillage : six sommets par quadrilatère, tout le tour
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,Math.PI,so.secteurs); gl.uniform1i(u.uSolIdx,0);
@@ -1045,16 +1110,25 @@ function v3Image(p){
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,demi,ns); gl.uniform1i(u.uSolIdx,1); gl.uniform1i(u.uSolR,so.anneaux);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,so.idx); so.tri=so.anneaux*ns*2; gl.drawElements(gl.TRIANGLES,so.anneaux*ns*6,gl.UNSIGNED_SHORT,0);
   }
+  // les éléments proches, en boîtes (v3_proches) : avant les grains, ils couvrent les grandes surfaces proches sans trou
+  const px=v3Proches();
+  if(px.total>0){ u=G.proches.u; gl.useProgram(G.proches.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
+    gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
+    gl.drawArrays(gl.TRIANGLES,0,px.total*PRX_VPS); }
   const pc=v3Partage(V3.grains,0,p); V3.parts=pc;
-  u=G.grains.u; gl.useProgram(G.grains.p); v3Monde(u,W,H,p);
-  gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); gl.uniform4iv(u.uPart,pc.part); gl.uniform1i(u.uTotal,pc.total);
-  gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
-  gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil,70,W*H);
-  gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
-  gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
-  { const cap=Math.atan2(fwd[0],fwd[1]), q=Math.PI/4;       // ancre des feuilles : la position arrondie à 4 m, le cap arrondi à 45°
-    gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
-  if(pc.total>0) gl.drawArrays(gl.POINTS,0,pc.total);
+  for(const P of [G.grains,G.grainsF]){
+    const de=P===G.grains?0:pc.part[3], a=P===G.grains?pc.part[3]:pc.total; if(a<=de) continue;
+    u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
+    gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); v3Grains(u,pc);
+    gl.uniform1i(u.uPrx,px.on?1:0); gl.uniform4iv(u.uPrxN,px.n);
+    gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
+    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
+    gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
+    gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
+    { const cap=Math.atan2(fwd[0],fwd[1]), q=Math.PI/4;       // ancre des feuilles : la position arrondie à 4 m, le cap arrondi à 45°
+      gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
+    gl.drawArrays(gl.POINTS,de,a-de);
+  }
   gl.disable(gl.DEPTH_TEST);
   if(V3.nImg<3){ v3Sync(g); note("  semis fait"); }
   chrono("tamponG",g);
@@ -1109,16 +1183,10 @@ function v3Basculer(on){
   if(on){ v3Init(); V3.hist=null; V3.n=0; } else { hist=null; v3Libere(false); }
   if(typeof W==="number"&&W>0&&!CFG.w) resize();                    // la résolution interne dépend du moteur
 }
-/* Ce que le semeur ne sait pas encore rendre (liste tenue dans docs/moteur-v3.md). Rend la raison, ou "" si la fiche est rendue. */
+/* Ce que le semeur ne sait pas encore rendre (docs/moteur-v3.md, « Le v3 rend tous les mondes »). Rend la raison, ou "" si la
+   fiche est rendue. La liste est vide : semis, kit nu, dunes, relief et trajet réglés, nuit à la lampe, conifères en cône et eau
+   à l'horizon sont semés. La fonction reste le point d'entrée (bouton « Moteur v3 · pas ici », repli sur le lanceur de rayons). */
 function v3Refus(){
-  if(S.semN>0) return "semis";
-  if(S.kit===1) return "dunes";
-  if(S.kit===2) return "monde nu";
-  const eg=(a,b)=>a.every((v,i)=>Math.abs(v-b[i])<1e-6);
-  if(!eg(S.rel,[1,1,0,0])||!eg(S.traj,[1,.85,.3,.5])||!eg(S.creux,[.10,1.8,.4,0])) return "relief ou trajet réglé";
-  if(S.nuit||S.torch>0) return "nuit, lampe";
-  if(S.houp[0]>.5) return "conifères en cône";
-  if(S.eau&&S.eau[3]>0) return "eau à l'horizon";
   return "";
 }
 function v3Bouton(){
@@ -1180,7 +1248,13 @@ function hud(now){
 }
 
 /* ------------------------------------------------------------------ commandes directes */
-$("lieu").onclick=()=>{ ficheIdx=(ficheIdx+1)%FICHES.length; applyFiche(FICHES[ficheIdx]); say(fiche.titre||"",true); };
+$("lieu").onclick=()=>{ fermerOutils(); atelier.basculer(); };   // la banque de scènes (constructeur de monde)
+/* « Plus » : les commandes de réglage et d'essai du moteur, rangées au-dessus de la rangée du bas pour qu'elle tienne au pouce. */
+function fermerOutils(){ $("outils").hidden=true; $("plus").setAttribute("aria-expanded","false"); }
+$("plus").onclick=()=>{ const on=$("outils").hidden; $("outils").hidden=!on; $("plus").setAttribute("aria-expanded",String(on)); if(on){ const b=[...$("outils").querySelectorAll("button")].find(x=>!x.hidden); if(b) b.focus(); } };
+$("outils").addEventListener("keydown",e=>{ if(e.key==="Escape"){ e.stopPropagation(); fermerOutils(); $("plus").focus(); } });
+$("outils").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b&&!b.hasAttribute("aria-pressed")) setTimeout(fermerOutils,0); });   // un interrupteur laisse le menu ouvert : on voit son nouvel état
+document.addEventListener("pointerdown",e=>{ if(!$("outils").hidden&&!e.target.closest("#outils,#plus")) fermerOutils(); });
 let dragId=null, px=0, py=0;
 canvas.addEventListener("pointerdown",e=>{ dragId=e.pointerId; px=e.clientX; py=e.clientY; canvas.setPointerCapture(e.pointerId); canvas.classList.add("drag"); });
 canvas.addEventListener("pointermove",e=>{ if(e.pointerId!==dragId) return;
@@ -1190,7 +1264,7 @@ canvas.addEventListener("pointermove",e=>{ if(e.pointerId!==dragId) return;
   px=e.clientX; py=e.clientY; $("hint").classList.add("off"); });
 const endDrag=e=>{ if(e.pointerId===dragId){ dragId=null; canvas.classList.remove("drag"); } };
 canvas.addEventListener("pointerup",endDrag); canvas.addEventListener("pointercancel",endDrag);
-addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT") return;
+addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
   if(e.key==="ArrowLeft") look.yaw-=.06; else if(e.key==="ArrowRight") look.yaw+=.06;
   else if(e.key==="ArrowUp") look.pitch=Math.min(1.4,look.pitch+.05); else if(e.key==="ArrowDown") look.pitch=Math.max(-1.3,look.pitch-.05); });
 addEventListener("resize",resize);
@@ -1241,7 +1315,7 @@ function say(text,bref){ const el=$("pensee"); el.textContent=text; el.classList
 const devant={L:[0,1,2].map(lectureDiff),T:null,v:null,b:new Float32Array(16)};
 function obstaclesDevant(){
   const pts=[1.5,3,5].map(d=>{ const x=cam.x+Math.sin(cam.yaw)*d, z=cam.z+Math.cos(cam.yaw)*d; return [x,terrainH(x,z)+.75,z]; });
-  if(OPT.sondeSync||!devant.v||!progs[varCourante()]){ devant.v=pts.map(q=>probe(...q)[0]); return devant.v; }
+  if(OPT.sondeSync||!devant.v||!sondeDispo()){ devant.v=pts.map(q=>probe(...q)[0]); return devant.v; }
   devant.L.forEach((L,i)=>{ if(recevoirDiff(L,devant.b)) devant.v[i]=devant.b[0]; });
   if(devant.L.every(L=>!L.sync)){
     if(!devant.T) devant.T=[0,1,2].map(()=>target(4,1,ACC_FMT,gl.NEAREST));
@@ -1335,71 +1409,7 @@ La voix dit : ${JSON.stringify(texte)}`;
 /* ------------------------------------------------------------------ décrire un monde
    Le joueur décrit un lieu, à la voix ou au clavier. Claude écrit une fiche de lieu ; le moteur la borne et la fabrique.
    Sans Claude, quelques mots-clés suffisent à composer une fiche. */
-const HEX=/^#[0-9a-f]{6}$/i, NOM=/^[a-z0-9_-]{1,30}$/;
-function validerForme(x){                                     // une forme d'objet ou d'élément de semis, bornée
-  const num3=(v,d)=>Array.isArray(v)?[0,1,2].map(i=>clampN(v[i],-40,40,d)):[d,d,d];
-  return {f:x.f,p:num3(x.p,0),taille:num3(x.taille,1),cap:clampN(x.cap,-360,360,0),
-    penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
-    couleur:x.couleur==="palette"||(typeof x.couleur==="string"&&HEX.test(x.couleur))?x.couleur:"#777777",
-    matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&NOM.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0), vacille:clampN(x.vacille,0,1,0)};
-}
-function validerSemis(L){                                     // couches de semis : 4 au plus, 6 formes par élément, tout borné
-  return (Array.isArray(L)?L:[]).filter(isObj).slice(0,4).map((c,i)=>{
-    const formes=(Array.isArray(c.formes)?c.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,6).map(validerForme);
-    if(!formes.length) return null;
-    const tr=isObj(c.trajet)?c.trajet:{}, cel=Array.isArray(c.cellule)?c.cellule:[c.cellule,c.cellule], pair=(v,a,b,d)=>Array.isArray(v)?[clampN(v[0],a,b,d),clampN(v[1],a,b,d)]:[d,d];
-    const o={ id:String(c.id||"semis"+i).slice(0,30), nom:String(c.nom||"").slice(0,60),
-      cellule:[clampN(cel[0],1.5,30,6),clampN(cel[1]!==undefined?cel[1]:cel[0],1.5,30,6)], rotation:clampN(c.rotation,-180,180,0),
-      densite:clampN(c.densite,0,1,.6), groupes:clampN(c.groupes,0,1,0), groupes_echelle:clampN(c.groupes_echelle,5,400,40),
-      trajet:{ rangee:tr.rangee===true, cote:["gauche","droite"].includes(tr.cote)?tr.cote:"deux" },
-      oriente:ORIENTS[c.oriente]!==undefined?c.oriente:undefined, cap:clampN(c.cap,-360,360,0), tourne:clampN(c.tourne,0,360,0),
-      echelle:pair(c.echelle,.2,4,1), hauteur:pair(c.hauteur,.3,3,1), penche:clampN(c.penche,0,25,0), teinte:clampN(c.teinte,0,1,0), desordre:clampN(c.desordre,0,1,1),
-      pose:c.pose==="pente"?"pente":undefined, formes };
-    if(tr.min!==undefined) o.trajet.min=clampN(tr.min,0,200,0);
-    if(tr.max!==undefined) o.trajet.max=clampN(tr.max,0,400,400);
-    const pal=(Array.isArray(c.palette)?c.palette:[]).filter(x=>typeof x==="string"&&HEX.test(x)).slice(0,8); if(pal.length) o.palette=pal;
-    return o;
-  }).filter(Boolean);
-}
-function validerFiche(f){                                     // ne garde que ce que le moteur sait lire, dans ses plages
-  const kit=f.kit==="dunes"?"dunes":f.kit==="foret"?"foret":f.kit==="nu"||Array.isArray(f.semis)?"nu":"foret", a=f.ambiance||{}, so=a.soleil||{};
-  const out={ version:0, id:"monde-"+Date.now(), titre:String(f.titre||"Monde sans nom").slice(0,80), inspiration:String(f.inspiration||"").slice(0,200),
-    graine:Math.round(clampN(f.graine,1,99999,1000+Math.floor(Math.random()*9000))), kit,
-    ambiance:{ saison:["ete","automne","hiver"].includes(a.saison)?a.saison:"automne", meteo:a.meteo==="voile"?"voile":"clair",
-      soleil:{azimut:clampN(so.azimut,-180,180,-33),hauteur:clampN(so.hauteur,-10,70,21)}, brume:clampN(a.brume,0,.06,.011) },
-    camera:{ profil:"bodycam-poitrine", hauteur:clampN(f.camera&&f.camera.hauteur,.9,1.9,1.36), champ:125 },
-    note:String(f.note||"").slice(0,180) };
-  if(typeof a.lampe==="boolean") out.ambiance.lampe=a.lampe;
-  if(kit==="foret"){ const fo=f.foret||{}; out.foret={densite:clampN(fo.densite,0,1,.7),rochers:clampN(fo.rochers,0,1.5,1),feuillage:clampN(fo.feuillage,0,1.5,1)};
-    if(fo.houppier==="cone"){ out.foret.houppier="cone"; out.foret.houppier_bas=clampN(fo.houppier_bas,.3,8,1.6); out.foret.houppier_rayon=clampN(fo.houppier_rayon,.8,3.2,2.5); }
-    if(fo.perches!==undefined) out.foret.perches=clampN(fo.perches,0,1,1); }
-  else if(kit==="dunes") out.dunes={rochers:clampN(f.dunes&&f.dunes.rochers,0,1.5,0)};
-  if(kit!=="dunes"){                                          // relief et trajet réglables (forêt et monde nu)
-    const re=isObj(f.relief)?f.relief:null, tr=isObj(f.trajet)?f.trajet:null;
-    if(re){ out.relief={amplitude:clampN(re.amplitude,0,12,kit==="nu"?.8:1.5),echelle:clampN(re.echelle,20,600,150),pente:clampN(re.pente,-.35,.35,0)};
-      if(typeof re.niveler==="boolean") out.relief.niveler=re.niveler; }
-    if(tr) out.trajet={sinuosite:clampN(tr.sinuosite,0,2,1),largeur:clampN(tr.largeur,.6,30,1.7),creux:clampN(tr.creux,0,.4,.1),bord:tr.bord==="net"?"net":"irregulier"};
-  }
-  const sem=validerSemis(f.semis); if(sem.length) out.semis=sem;
-  const obj=(Array.isArray(f.objets)?f.objets:[]).slice(0,8).map((o,i)=>o&&Array.isArray(o.formes)?{
-    id:String(o.id||"objet"+i).slice(0,30), nom:String(o.nom||"").slice(0,60), devant:clampN(o.devant,2,90,12), cote:clampN(o.cote,-20,20,3),
-    cap:o.cap===undefined?undefined:clampN(o.cap,-360,360,0), echelle:clampN(o.echelle,.1,5,1), degage:clampN(o.degage,0,12,0), visible:o.visible!==false,
-    formes:o.formes.filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24).map(validerForme)}:null).filter(o=>o&&o.formes.length);
-  if(obj.length) out.objets=obj;
-  if(isObj(f.lointain)&&clampN(f.lointain.hauteur,0,40,0)>0){ const l=f.lointain; out.lointain={hauteur:clampN(l.hauteur,0,40,0),decoupe:clampN(l.decoupe,0,1,.5),neige:clampN(l.neige,0,1,0)};
-    for(const k of ["couleur","couleur_bas"]) if(typeof l[k]==="string"&&HEX.test(l[k])) out.lointain[k]=l[k];
-    if(l.eau===true||(typeof l.eau==="string"&&HEX.test(l.eau))) out.lointain.eau=l.eau; }
-  const mats=validerRecettes(f.matieres); if(mats) out.matieres=mats;
-  if(isObj(f.surfaces)){ const s={}, fs=f.surfaces, nom=v=>typeof v==="string"&&NOM.test(v)?v:undefined;
-    for(const k of ["sol","trajet","rochers"]) if(nom(fs[k])) s[k]=nom(fs[k]);
-    for(const k of ["arbres","perches"]) if(isObj(fs[k])) s[k]={a:nom(fs[k].a),b:nom(fs[k].b),part:clampN(fs[k].part,0,1,.5)};
-    out.surfaces=s; }
-  const h=f.histoire;
-  if(h&&typeof h==="object"&&h.pitch) out.histoire={ pitch:String(h.pitch).slice(0,400),
-    temps:(Array.isArray(h.temps)?h.temps:[]).slice(0,4).filter(t=>t&&t.id).map(t=>({id:String(t.id).slice(0,30),quand:String(t.quand||"").slice(0,160),
-      ce_qui_se_passe:String(t.ce_qui_se_passe||"").slice(0,200),scene:t.scene&&typeof t.scene==="object"?t.scene:undefined})) };
-  return out;
-}
+const validerFiche=(f,o)=>CONSTRUCTEUR.validerFiche(f,o);       // bornes de la fiche : src/constructeur.js (constructeur de monde)
 /* Secours sans IA pour les lieux bâtis : quelques éléments de semis génériques, que le lexique assemble.
    Ce ne sont pas des objets en dur du moteur : ce sont des données de fiche, comme Claude en écrirait. */
 const LEX={
@@ -1425,8 +1435,10 @@ const LEX={
 };
 function mondeLexique(texte){                                 // secours sans IA
   const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-  const bati=/\bville|\brue|avenue|boulevard|quartier|immeuble|centre-ville|san francisco|new york|\bvillage|hameau|bourg|cimetiere/.test(t);
+  if(/interieur|entrepot|hangar|usine|couloir|\bsalle|\bhall\b|parking souterrain|\bcave\b|sous-sol|tunnel/.test(t)) return mondeInterieur(texte,t);
+  const bati=/\bville|\brue|ruelle|venelle|impasse|avenue|boulevard|quartier|immeuble|centre-ville|san francisco|new york|\bvillage|hameau|bourg|cimetiere/.test(t);
   if(bati) return mondeBati(texte,t);
+  if(/plage|bord de mer|littoral|ocean|\bmer\b|crique/.test(t)) return mondePlage(texte,t);
   const f={ titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:/desert|dune|sable|sahara|erg|plage/.test(t)?"dunes":"foret",
     ambiance:{soleil:{azimut:-33,hauteur:21}}, foret:{}, dunes:{} };
   const a=f.ambiance;
@@ -1443,8 +1455,31 @@ function mondeLexique(texte){                                 // secours sans IA
   if(/dense|epais|touffu|jungle|sombre/.test(t)){ f.foret.densite=.95; f.foret.feuillage=1.3; }
   else if(/clairsem|clairiere|ouvert|lande/.test(t)){ f.foret.densite=.3; f.foret.feuillage=.6; }
   if(/sans rocher/.test(t)){ f.foret.rochers=0; } else if(/rocher|roche|pierre|gres|chaos|caillou/.test(t)){ f.foret.rochers=1.4; f.dunes.rochers=1; }
-  f.note="Sans Claude, je ne lis que des mots-clés : désert, nuit, matin, soir, brume, saison, dense, rochers, ville, rue, village, cimetière. Les objets demandent Claude.";
+  f.note="Sans Claude, je ne lis que des mots-clés : désert, plage, montagne, nuit, matin, soir, brume, saison, dense, rochers, ville, rue, ruelle, village, cimetière, intérieur. Les objets demandent Claude.";
   return f;
+}
+function soleilLexique(t){ return /nuit|minuit|nocturne|obscur/.test(t)?{azimut:120,hauteur:-10}:/aube|matin|lever/.test(t)?{azimut:80,hauteur:6}:/soir|couch|crepuscule|apres-midi/.test(t)?{azimut:-100,hauteur:10}:{azimut:-30,hauteur:40}; }
+function mondePlage(texte,t){                                  // plage : sable, mer à l'horizon, parasols
+  const so=soleilLexique(t);
+  return { titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:"nu",
+    relief:{amplitude:.3,echelle:90,pente:-.14}, trajet:{sinuosite:.2,largeur:2.5,creux:.02,bord:"irregulier"},   // le sol descend vers la mer : sinon on ne la voit pas
+    matieres:{ "lex-sable":{base:"sable-dunes",couleur:"#d8c6a2",motif:{type:"rides",echelle:30,deformation:6,couleur:"#cbb893",opacite:.1,inclinaison:.04}} }, surfaces:{sol:"lex-sable",trajet:"lex-sable"},
+    lointain:{hauteur:.1,decoupe:0,couleur:"#6d8f99",couleur_bas:"#5d7f89",eau:"#3d6b78"},
+    ambiance:{saison:"ete",meteo:/gris|couvert|pluie|brume/.test(t)?"voile":"clair",soleil:so,brume:/brume|brouillard/.test(t)?.03:.005,lampe:so.hauteur<0},
+    semis:/hiver|nuit|desert|vide|sauvage/.test(t)?[]:[{ id:"parasols", nom:"parasols", cellule:[6,6], rotation:10, trajet:{min:3,max:16}, densite:.5, groupes:.4, tourne:30, penche:6,
+      palette:["#d23c32","#2f6fb0","#f0c43a","#ece6da"], formes:[ {f:"cylindre",p:[0,1.1,0],taille:[.06,2.2,.06],couleur:"#e8e4dc",matiere:"metal"}, {f:"cone",p:[0,2.25,0],taille:[2.2,.5,2.2],couleur:"palette",matiere:"tissu"} ] }],
+    note:"Sans Claude : du sable, la mer à l'horizon et des parasols. La vague et l'eau proche demandent Claude." };
+}
+function mondeInterieur(texte,t){                              // intérieur : murs en rangée, piliers, plafond posé au-dessus du trajet
+  const nuit=/nuit|obscur|noir|abandonn/.test(t);
+  return { titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:"nu",
+    relief:{amplitude:0,echelle:300,pente:0,niveler:true}, trajet:{sinuosite:0,largeur:4,creux:0,bord:"net"}, surfaces:{sol:"beton",trajet:"beton"},
+    ambiance:{saison:"automne",meteo:"voile",soleil:{azimut:120,hauteur:nuit?-10:30},lampe:true,brume:.004},
+    semis:[ { id:"murs", nom:"murs", cellule:[8,1], trajet:{rangee:true,min:7}, densite:1, formes:[ {f:"boite",p:[0,3.5,0],taille:[8,7,.8],couleur:"#6a4a3a",matiere:"brique"} ] },
+            { id:"piliers", nom:"piliers", cellule:[8,1], trajet:{rangee:true,min:2.6}, densite:1, formes:[ {f:"boite",p:[0,3.5,0],taille:[.5,7,.5],couleur:"#8a867e",matiere:"beton"} ] },
+            { id:"neons", nom:"néons", cellule:[12,1], trajet:{rangee:true,min:1.2,cote:"gauche"}, densite:.7, formes:[ {f:"boite",p:[0,6.4,0],taille:[1.6,.1,.18],couleur:"#dfeeff",matiere:"lumineux"} ] } ],
+    objets:[ { id:"plafond", nom:"plafond", devant:40, cote:0, oriente:"trajet", formes:[ {f:"boite",p:[-20,7.2,0],taille:[40,.4,16],couleur:"#3a3836",matiere:"beton"}, {f:"boite",p:[20,7.2,0],taille:[40,.4,16],couleur:"#3a3836",matiere:"beton"} ] } ],
+    note:"Sans Claude, un intérieur est une grande salle : murs, piliers, plafond et néons. Le mobilier demande Claude." };
 }
 function mondeBati(texte,t){                                  // ville, rue, village, cimetière : un monde nu composé de semis
   const nuit=/nuit|minuit|nocturne|obscur/.test(t), soir=/soir|couch|crepuscule|apres-midi/.test(t);
@@ -1453,7 +1488,11 @@ function mondeBati(texte,t){                                  // ville, rue, vil
       soleil:nuit?{azimut:120,hauteur:-10}:soir?{azimut:-110,hauteur:9}:{azimut:-40,hauteur:30}, brume:/brouillard|brume/.test(t)?.03:.008 },
     matieres:{ "lex-facade":LEX.facade }, semis:[] };
   const pente=/colline|pente|san francisco|montee|butte/.test(t);
-  if(/cimetiere/.test(t)){
+  if(/ruelle|venelle|impasse/.test(t)){                       // ruelle : façades hautes et serrées, pas de voitures
+    Object.assign(f,{ relief:{amplitude:.5,echelle:200,pente:pente?.12:.04,niveler:true}, trajet:{sinuosite:.25,largeur:3,creux:.03,bord:"net"}, surfaces:{sol:"paves",trajet:"paves"} });
+    const m=LEX.maison(6,12,false); m.trajet={rangee:true,min:1.9}; m.hauteur=[1,1.3]; m.palette=["#c98f52","#d6a35e","#b9734a","#d8b27a","#bfb2a0"]; f.semis.push(m);
+    f.semis.push(Object.assign({},LEX.lampadaire,{cellule:[14,1],trajet:{rangee:true,min:1.2,cote:"gauche"},formes:LEX.lampadaire.formes.map(x=>Object.assign({},x,{p:[x.p[0],x.p[1]-1,x.p[2]-.4]}))}));
+  } else if(/cimetiere/.test(t)){
     Object.assign(f,{ relief:{amplitude:1,echelle:120}, trajet:{sinuosite:.2,largeur:2.4,creux:.05,bord:"net"}, surfaces:{sol:"herbe",trajet:"gravier"} });
     f.semis.push(LEX.tombe); f.lointain={hauteur:4,decoupe:.3};
   } else if(/village|hameau|bourg/.test(t)){
@@ -1471,62 +1510,88 @@ function mondeBati(texte,t){                                  // ville, rue, vil
   f.note="Sans Claude, je compose ce lieu avec quelques éléments génériques : rue, maisons, voitures, lampadaires, tombes.";
   return f;
 }
-async function creerMonde(texte){
-  say("Je fabrique ce monde…");
-  let f=null;
-  if(sampler){
-    const consigne=`Tu écris la fiche de lieu d'un moteur de rendu qui filme un monde généré par code, en vue caméra-piéton (téléphone fatigué, crédibilité avant beauté). Le joueur décrit le lieu qu'il veut. Le moteur ne connaît aucun type de lieu : tu COMPOSES le lieu avec un vocabulaire générique (relief, trajet, sols, semis d'éléments répétés, objets uniques, horizon, lumière).
-Réponds uniquement par un objet JSON :
-{"titre": "court", "inspiration": "le lieu de référence en une phrase", "graine": 1..99999,
- "kit": "nu" (tout vient de la fiche ; à choisir pour tout ce qui n'est pas une forêt tempérée ou un désert) | "foret" (pins, chênes, grès, canopée en dur) | "dunes",
- "foret": {"densite": 0..1, "rochers": 0..1.5, "feuillage": 0..1.5, "houppier": "voute"|"cone", "perches": 0..1}, "dunes": {"rochers": 0..1.5},
- "relief": {"amplitude": 0..12 m (0 plat, 1 forêt, 3 à 6 collines), "echelle": 20..600 m (longueur d'onde), "pente": -0.35..0.35 (le long du trajet ; 0.28 = rue de San Francisco), "niveler": true (le trajet reste de niveau en travers)},
- "trajet": {"sinuosite": 0..2 (0 rue droite, 1 sentier), "largeur": 0.6..30 m, "creux": 0..0.4 m (0.15 = trottoir), "bord": "net"|"irregulier"},
- "surfaces": {"sol": "recette", "trajet": "recette"},
- "matieres": {"nom": {"base": "recette existante", "couleur": "#rrggbb" ou "forme", ...}},
- "semis": [ ... jusqu'à 4 couches ... ],
- "objets": [{"id", "nom", "devant": 2..90, "cote": -20..20, "cap", "degage": 0..12, "visible": true, "formes": [ ... 24 au plus ... ]}],
- "lointain": {"hauteur": 0..40 degrés, "decoupe": 0..1, "neige": 0..1, "couleur", "couleur_bas", "eau": "#rrggbb" (mer, baie ou lac sous l'horizon)},
- "ambiance": {"saison": "ete"|"automne"|"hiver", "meteo": "clair"|"voile", "soleil": {"azimut": -180..180, "hauteur": -10..70}, "lampe": true|false, "brume": 0..0.06},
- "histoire": {"pitch": "deux phrases", "temps": [{"id", "quand", "ce_qui_se_passe", "scene": {"brume", "lampe", "soleil", "montrer": ["id"], "cacher": ["id"]}}]},
- "note": "une phrase, seulement si une partie de la demande ne peut pas être montrée"}
-FORMES (objets et semis) : {"f": "boite"|"boule"|"cylindre"|"cone"|"capsule"|"toit", "p": [x, y, z] centre en mètres, "taille": [largeur, hauteur, profondeur] (cylindre, cône, capsule : [diamètre, hauteur, diamètre], debout ; toit : [longueur du faîtage, hauteur, largeur]), "cap": degrés, "penche": [autour de x, autour de z] (roue : [90, 0]), "couleur": "#rrggbb" ou "palette", "matiere": "mat"|"bois"|"pierre"|"metal"|"verre"|"tissu"|"tuile"|"lumineux" ou un nom de recette, "lisse": 0..0.5, "arrondi": 0..0.3}. Repère : y = 0 au sol (une boîte posée au sol descend d'elle-même sous terre sur une pente), +z = face avant. Portes, fenêtres isolées : boîtes minces 2 cm devant le mur.
-SEMIS : une couche répète un ÉLÉMENT (6 formes au plus) sur une grille, un élément par cellule ; c'est ainsi qu'on fait une rue d'immeubles, des voitures garées, des réverbères, des tombes, des arbres, des buissons, des poteaux.
- {"id", "nom", "cellule": [a, b] en mètres (1.5..30), "densite": 0..1, "groupes": 0..1 (regroupe en îlots), "groupes_echelle": m,
-  "trajet": {"rangee": true, "min": m, "max": m, "cote": "deux"|"gauche"|"droite"}, "rotation": degrés (grille libre),
-  "oriente": "trajet"|"aleatoire"|"fixe", "cap": degrés, "tourne": degrés d'aléa, "echelle": [min, max], "hauteur": [min, max] (étire en hauteur), "penche": 0..25, "teinte": 0..1, "desordre": 0..1, "pose": "pente" (l'élément suit le sol : voitures),
-  "palette": ["#rrggbb", ... 8 au plus] (chaque élément tire une couleur ; une forme y puise avec "couleur": "palette"), "formes": [ ... ]}
- Rangée ("rangee": true) : la grille suit le trajet ; "cellule" = [longueur le long du trajet, profondeur] ; la rangée commence à "min" mètres de l'axe et l'élément fait face au trajet : son +z regarde le trajet, son x court le long du trajet, son centre est au milieu de la cellule. Pour des immeubles mitoyens : longueur de cellule = largeur de façade, le moteur laisse 16 cm entre deux. Sans "rangee" : grille libre (forêt, buissons, tombes), "min"/"max" = écart permis à l'axe (par défaut, hors du trajet).
- L'élément doit tenir dans sa cellule (marge 8 cm) : sinon le moteur le réduit. Mets-le donc à l'échelle de la cellule.
-SOLS ET MATIÈRES : recettes prêtes : ${Object.keys(MAT_LIB.recettes).join(", ")}. "chaussee" = asphalte avec axe en tirets ; "facade" = enduit percé de fenêtres sur tous les étages. Une recette se dérive avec "base" et change ce qui diffère : "couleur" ("forme" = prend la couleur de la forme, utile avec une palette), "nuance", "taches", "mousse" {force}, "salissure" {force, hauteur}, "brillance", "motif" :
- {"type": "fenetres", "largeur", "hauteur", "pas" (entre deux fenêtres), "etage", "allege", "cadre", "rdc" (hauteur d'un rez-de-chaussée à vitrines, 0 = aucun), "allumees": 0..1 (la nuit), "couleur" (vitre), "cadre_couleur", "lumiere"},
- {"type": "marquage", "axe": "simple"|"double"|"aucun", "largeur", "tiret", "intervalle", "bords" (écart des lignes de rive), "passages" (période des passages piétons, m), "couleur"},
- {"type": "planches", "couchees": true (bardage)}, {"type": "paves", "echelle": [x, y, z] (briques : [4.4, 13, 4.4])}, "feuilles", "rides", "fissures".
-COMPOSER : une ville = relief + rue droite large ("largeur" 8 à 12, "creux" 0.15, "bord" "net", sol "dalles" pour les trottoirs, trajet "chaussee") + une rangée d'immeubles mitoyens face à la rue (façades en recette "fenetres", palette de couleurs) + une rangée de mobilier (réverbères, arbres d'alignement) + une rangée de voitures garées le long du trottoir + "lointain". Un village = rue étroite un peu sinueuse, maisons basses à toits, pavés. Un cimetière = grille libre de tombes, allée de gravier. Une forêt d'une autre essence = kit nu + semis d'arbres (tronc cylindre, houppier boule ou cône). Vise juste les mesures réelles (étage 3 m, voiture 4.4 × 1.8 m, réverbère 5 à 8 m).
-Repères : soleil négatif = nuit (lampe du téléphone allumée), rasant entre 4 et 15 ; brume 0.003 air sec, 0.011 matin, 0.03 épais. "lumineux" éclaire faiblement (fenêtre, lanterne) ; il n'existe pas encore de vraie source de lumière ponctuelle. Couleurs ternes et salies plutôt que franches.
-Le joueur dit : ${JSON.stringify(texte)}`;
-    try{ f=await sampler.json(consigne,{modelTier:"default",cache:false}); }
-    catch(e){ if(e&&e.code==="not_granted") sampler=null; }
-  }
-  if(!f||typeof f!=="object") f=mondeLexique(texte);
-  f=validerFiche(f);
-  FICHES.push(f); ficheIdx=FICHES.length-1; applyFiche(f);
-  try{ localStorage.setItem("bodycam-mondes",JSON.stringify(FICHES.filter(x=>String(x.id).startsWith("monde-")).slice(-6))); }catch(_){}
-  say(f.note?f.titre+". "+f.note:f.titre);
-  return f;
+/* ------------------------------------------------------------------ constructeur de monde (src/constructeur.js, src/atelier.js)
+   Une description part dans une chaîne en plusieurs temps : plan, fiche, contrôle sans image, relecture sur des vues
+   capturées ici, puis la banque de scènes. Elle tourne en tâche de fond : l'image n'est jamais figée, on peut l'arrêter.
+   Ici, seulement ce qui touche au moteur : appliquer une fiche, sa géométrie, et capturer des vues. Voir docs/constructeur-de-monde.md. */
+function attendreImage(passes,delai,signal){                  // attend que l'image soit posée (accumulation à l'arrêt), ou le délai
+  return new Promise((ok,ko)=>{ const t0=performance.now(); let n0=-1;
+    const tic=()=>{ if(signal&&signal.aborted) return ko({code:"cancelled",message:"arrêté"});
+      const k=V3.on?V3.n:n, prete=!sceneDirty&&!ptEnCours()&&(V3.on?!!V3.hist:!!hist);
+      if(prete&&n0<0) n0=k;                                     // première image après le déplacement (une image en mouvement compte pour plusieurs passes)
+      const voulu=V3.on?Math.min(passes,V3.max):passes;
+      if((prete&&k>=Math.min(n0+voulu,V3.on?V3.max:MAXS))||performance.now()-t0>delai) return ok(k);
+      setTimeout(tic,100); };
+    setTimeout(tic,100); });
 }
-try{ for(const f of JSON.parse(localStorage.getItem("bodycam-mondes")||"[]")) FICHES.push(validerFiche(f)); }catch(_){}
+/* Le canevas WebGL n'est lisible que dans l'image où il vient d'être dessiné (pas de preserveDrawingBuffer). frame() se
+   réinscrit en tête de chaque image : un rappel inscrit ensuite passe juste après lui, dans la même image, avant l'affichage. */
+function lireImage(largeur){
+  return new Promise(ok=>requestAnimationFrame(()=>{
+    const w=Math.max(16,Math.min(largeur,canvas.width)), h=Math.max(16,Math.round(canvas.height*w/canvas.width));
+    const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d"); x.drawImage(canvas,0,0,w,h);
+    const d=x.getImageData(0,0,w,h).data; let s=0,k=0; for(let i=0;i<d.length;i+=32){ s+=d[i]+d[i+1]+d[i+2]; k+=3; }
+    const vw=Math.min(120,w), v=document.createElement("canvas"); v.width=vw; v.height=Math.round(h*vw/w); v.getContext("2d").drawImage(c,0,0,v.width,v.height);
+    let vignette=v.toDataURL("image/jpeg",.62); if(vignette.length>CONSTRUCTEUR.BANQUE.vignetteMax) vignette=v.toDataURL("image/jpeg",.4);
+    c.toBlob(b=>ok({blob:b,url:b?URL.createObjectURL(b):"",vignette,moyenne:k?s/k:0,w,h}),"image/jpeg",.82);
+  }));
+}
+async function capturerVues(vues,o={}){                         // repérage : la caméra se pose sur chaque vue, attend l'image, la lit
+  const avant=hold, out=[]; hold=true; queue.length=0;
+  try{
+    for(const v of vues){
+      if(o.signal&&o.signal.aborted) throw {code:"cancelled",message:"arrêté"};
+      cam.x=v.x; cam.z=v.z; cam.yaw=v.yaw; cam.pitch=v.pitch!==undefined?v.pitch:-.03; look.yaw=0; look.pitch=0; sceneDirty=true;
+      await attendreImage(o.vite?Math.min(4,CFG.capPasses||10):CFG.capPasses||10,CFG.capDelai||9000,o.signal);
+      let im=await lireImage(CFG.capLargeur||384);
+      for(let k=0;k<2&&im.moyenne<2;k++) im=await lireImage(CFG.capLargeur||384);   // image noire : on relit à l'image suivante
+      out.push(Object.assign(im,{legende:v.legende}));
+    }
+  } finally {
+    hold=avant; cam.z=0; cam.x=S.kit!==1?pathX(0):0; cam.yaw=S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; sceneDirty=true;
+  }
+  return out;
+}
+let stockage=null; try{ localStorage.setItem("bodycam-essai","1"); localStorage.removeItem("bodycam-essai"); stockage=localStorage; }catch(_){}
+const capacite=nom=>window.claude&&window.claude.use?Promise.resolve().then(()=>window.claude.use(nom)).catch(()=>null):Promise.resolve(null);
+const atelier=ATELIER.creerAtelier({ C:CONSTRUCTEUR, embarquees:FICHES, stockage, db:capacite("db"), sansImages:!!CFG.sansImages,
+  moteur:{ appliquer:f=>applyFiche(CONSTRUCTEUR.resoudreFiche(f)), geo:()=>({pathX,terrainH,kit:S.kit}), recettes:Object.keys(MAT_LIB.recettes), capturer:capturerVues, lexique:t=>mondeLexique(t) },
+  sample:()=>sampler, oublierClaude:()=>{ sampler=null; },
+  appliquer:(f,d)=>{ if(d&&d.index!==undefined) ficheIdx=d.index; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); if(d&&d.lectureSeule&&!VIGN[d.id]) prendreVignette(d.id); },   // « oriente » des objets traduit en cap
+  vignettes:id=>VIGN[id]||"",
+  sceneVoulue:window.__CFG?null:(()=>{ try{ return localStorage.getItem("bodycam-scene"); }catch(_){ return null; } })(),
+  dire:(t,bref)=>say(t,bref),
+  dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
+  occupe:()=>{} });
+/* Vignettes des scènes du jeu (scenes/*.json) : prises une fois, quand on y passe, et gardées dans ce navigateur (8 × ~6 Ko). */
+const VIGN=(()=>{ try{ const v=JSON.parse(localStorage.getItem("bodycam-vignettes")||"{}"); return v&&typeof v==="object"?v:{}; }catch(_){ return {}; } })();
+let vignetteJeton=0;
+async function prendreVignette(id){
+  const k=++vignetteJeton;
+  try{ await attendreImage(4,20000); }catch(_){ return; }
+  if(k!==vignetteJeton||(atelier.job()&&!atelier.job().termine)) return;    // une autre scène entre-temps, ou une fabrication qui tient la caméra
+  const im=await lireImage(120); if(im.url) URL.revokeObjectURL(im.url);
+  if(k!==vignetteJeton||im.moyenne<3) return;
+  VIGN[id]=im.vignette; try{ localStorage.setItem("bodycam-vignettes",JSON.stringify(VIGN)); }catch(_){}
+  atelier.rafraichir();
+}
+function creerMonde(texte){                                     // « Décrire un monde » : la fabrication part en tâche de fond
+  if(!atelier.creer(texte)) return Promise.resolve(null);
+  say("Je fabrique ce monde. Tu peux suivre la fabrication en haut de l'écran.",true);
+  return atelier.attendre().then(j=>j&&j.doc?j.doc.fiche:null);
+}
 
 /* ------------------------------------------------------------------ panneau de parole : au clavier ou à la voix */
-let mode="parler", dict=null, listening=false, dictBase="";
+let mode="parler", dict=null, listening=false, dictBase="", dictEl=null;   // dictEl : champ qui reçoit la dictée (par défaut la barre de parole)
 if(window.claude && window.claude.use) window.claude.use("dictation").then(d=>{ if(!d) return; dict=d; $("mic").hidden=false;
-  d.onPartial(({text})=>{ $("msg").value=(dictBase+" "+text).trim(); });
-  d.onFinal(({text})=>{ dictBase=(dictBase+" "+text).trim(); $("msg").value=dictBase; });
-  d.onState(({state})=>{ listening=state==="listening"; $("mic").setAttribute("aria-pressed",String(listening)); $("mic").textContent=listening?"J'écoute":"Micro"; });
+  d.onPartial(({text})=>{ (dictEl||$("msg")).value=(dictBase+" "+text).trim(); });
+  d.onFinal(({text})=>{ dictBase=(dictBase+" "+text).trim(); (dictEl||$("msg")).value=dictBase; });
+  d.onState(({state})=>{ listening=state==="listening"; $("mic").setAttribute("aria-pressed",String(listening)); $("mic").textContent=listening?"J'écoute":"Micro";
+    if(dictEl){ atelier.dictee(listening); if(!listening) dictEl=null; } });
 }).catch(()=>{});
 function ecouter(){                                           // appelé directement depuis un clic, sans rien attendre avant
   if(!dict||listening) return;
-  dictBase=$("msg").value.trim();
+  dictBase=(dictEl||$("msg")).value.trim();
   dict.start().catch(e=>{ if(e&&e.code==="not_granted"){ dict=null; $("mic").hidden=true; } });
 }
 $("mic").onclick=()=>{ if(listening) dict.stop().catch(()=>{}); else ecouter(); };
@@ -1534,19 +1599,18 @@ function setFrozen(v,m){
   if(!v && listening && dict) dict.stop().catch(()=>{});
   frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v;
   $("parler").textContent=v&&mode==="parler"?"Reprendre":"Lui parler";
-  $("monde").textContent=v&&mode==="monde"?"Annuler":"Décrire un monde";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
   if(v){ $("msg").value=""; $("hint").classList.add("off"); setTimeout(()=>$("msg").focus(),50); }
 }
 // Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
 $("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
-$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); };
+$("monde").onclick=()=>{ fermerOutils(); if(frozen) setFrozen(false); atelier.ouvrir({nouvelle:true}); };   // la description se tape dans la banque de scènes
 $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
   const t=$("msg").value.trim(); if(!t) return;
   const m=mode; $("msg").value=""; $("msg").blur(); $("envoi").disabled=true;
-  try{ if(m==="monde") await creerMonde(t); else await entendre(t); } finally { $("envoi").disabled=false; setFrozen(false); } });
+  try{ if(m==="monde") creerMonde(t); else await entendre(t); } finally { $("envoi").disabled=false; setFrozen(false); } });
 
 /* ------------------------------------------------------------------ mesure sur l'appareil
    Dix mètres de marche puis l'arrêt : images par seconde, résolution choisie, temps d'une passe fixe.
@@ -1682,7 +1746,7 @@ async function mesurerV3(f,wait,med){
   const c4=OPT.capteur4; OPT.capteur4=true; const cap4=await chrono7(()=>{ display(src,tt,ec); v3Sync(ec); }); OPT.capteur4=c4;
   const halo=await chrono7(()=>{ postFX(src); v3Sync(bl1); });
   freeT(ec);
-  const sondeB=progs[varCourante()]?await chrono7(()=>probe(cam.x,terrainH(cam.x,cam.z)+.75,cam.z)):null;
+  const sondeB=sondeDispo()?await chrono7(()=>probe(cam.x,terrainH(cam.x,cam.z)+.75,cam.z)):null;
   hold=false;
   const ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
   const ips=f.length>1?(f.length-1)/((f[f.length-1].t-f[0].t)/1000):null;   // horloge réelle : dt est plafonné à 100 ms dans la boucle
@@ -1701,7 +1765,7 @@ async function mesurerV3(f,wait,med){
     ...(ab.length?["","EN MARCHE, UNE OPTIMISATION COUPÉE À LA FOIS (3 s chacune)",...ab]:[]),
     "",
     "BUDGET DE GRAINS",
-    "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+")",
+    "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+(gr.nS&&S.semN?", semis "+gr.nS.slice(0,S.semN).map(k).join(" + "):"")+")",
     "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.sm.w+" × "+V3.sm.h,
     "Sol              "+(V3.sol.tri||0)+" triangles dessinés ("+(CFG.v3solPlein?"tout le tour, sommets répétés":"cap utile, sommets partagés")+")",
     "Tapis du sol     "+(v3TapisActif()?T.L+" niveaux de "+T.N+" × "+T.N+", texel "+Math.round(T.s0*1000)/10+" cm à "+Math.round(T.s0*2**(T.L-1)*100)+" cm":"coupé"),
@@ -1715,7 +1779,7 @@ async function mesurerV3(f,wait,med){
     "Aller-retour     "+fx(vide,1)+" ms (une lecture quand rien n'est en file)",
     "Capteur          "+fx(cap-vide,1)+" ms à "+canvas.width+" × "+canvas.height+" (à 4 lectures/texel : "+fx(cap4-vide,1)+" ms)",
     "Halo, exposition "+fx(halo-vide,1)+" ms",
-    "Sonde bloquante  "+(sondeB!=null?fx(sondeB-vide,1)+" ms de calcul, "+fx(sondeB,1)+" ms d'attente (en marche : lecture différée, "+(OPT.sondeSync?"coupée":"active")+")":"lanceur de rayons pas compilé"),
+    "Sonde bloquante  "+(sondeB!=null?fx(sondeB-vide,1)+" ms de calcul, "+fx(sondeB,1)+" ms d'attente ("+(SONDE.p?"programme de sonde":"lanceur de rayons")+" ; en marche : lecture différée, "+(OPT.sondeSync?"coupée":"active")+")":"sonde pas encore compilée"),
     "",
     "COÛT RÉEL D'UNE IMAGE SELON LE BUDGET",
     ...essais,
@@ -1975,7 +2039,7 @@ function quitterLibre(){ if(meneurLibre&&meneur){ journal(); meneur=null; clearI
     if(meneurLibre) quitterLibre();
     else if(meneur) say(docile?"Mode debug : il prendra effet à la prochaine partie (Rejouer).":"Mode debug coupé à la prochaine partie.",true);
     dbgOn=docile; dbgEl.hidden=!dbgOn; if(!dbgOn) dbgEl.textContent=""; };
-  $("parler").parentNode.appendChild(b); maj(); setTimeout(()=>{ if(docile){ dbgOn=true; dbgEl.hidden=false; } },0); }
+  $("outils").appendChild(b); maj(); setTimeout(()=>{ if(docile){ dbgOn=true; dbgEl.hidden=false; } },0); }
 function jouerHistoire(id){
   const h=HIST.find(x=>x.id===id)||(id===undefined||id===true?HIST.find(x=>MENEUR.ficheDe(x)):null);
   if(!h){ console.warn("Histoire inconnue :",id,"— disponibles :",HIST.map(x=>x.id)); return null; }
@@ -2002,7 +2066,7 @@ const dbgEl=document.body.appendChild(document.createElement("div")); dbgEl.id="
   chip.addEventListener("pointerdown",()=>{ const now=performance.now(); n=now-t<450?n+1:1; t=now; if(n<3) return; n=0;
     dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=meneur&&dbgOn?meneur.debug():""; try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }); }
 if(HIST.some(x=>MENEUR.ficheDe(x))){ const b=document.createElement("button"); b.type="button"; b.id="histoire"; b.textContent="Jouer l'histoire";
-  $("monde").before(b); b.onclick=()=>jouerHistoire(); }
+  $("outils").prepend(b); b.onclick=()=>{ fermerOutils(); jouerHistoire(); }; }
 /* Journal de partie : ce que le joueur peut copier et envoyer. Chaque tour : ce qu'il a dit, le verdict du sas,
    la pensée, les actions, le délai de Claude ou le secours ; plus les temps et la fin. Lisible sans outil. */
 let dernierJournal="";
@@ -2052,6 +2116,8 @@ window.balade={
   agir(actions){ enqueue(actions); },
   dire(texte){ return entendre(texte); },
   monde(texte){ return creerMonde(texte); },
+  scenes:()=>atelier.docs().map(d=>({id:d.id,titre:d.titre,source:d.source,historique:d.historique.length})),   // banque de scènes (constructeur de monde)
+  atelier:()=>atelier,
   figer(v){ setFrozen(!!v); },
   percevoir:()=>meneur?percevoirMeneur():perception(),
   histoires:()=>HIST.map(h=>h.id),
@@ -2077,6 +2143,8 @@ if(CFG.histoire) jouerHistoire(CFG.histoire===true?undefined:CFG.histoire);   //
 if(CFG.seed){ setSeed(CFG.seed); cam.x=S.kit!==1?pathX(0):0; }
 if(CFG.z!==undefined){ cam.z=CFG.z; if(S.kit!==1){ cam.x=pathX(cam.z); cam.yaw=pathYaw(cam.z); } }
 if(CFG.yaw!==undefined) cam.yaw+=CFG.yaw;
+if(CFG.dx!==undefined) cam.x+=CFG.dx;                            // tests : écart au trajet (m) et cap absolu (radians, 0 = +z)
+if(CFG.cap!==undefined) cam.yaw=CFG.cap;
 if(CFG.pitch!==undefined) cam.pitch=CFG.pitch;
 if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
@@ -2089,4 +2157,5 @@ $("v3").onclick=()=>v3Basculer(!V3.on);
 if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
 if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();
+sondeProg();                                                     // option v3sonde : la sonde se compile dès le départ, sans bloquer
 requestAnimationFrame(frame);

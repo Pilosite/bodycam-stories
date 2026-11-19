@@ -40,6 +40,7 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 - `src/shaders/camera.frag` : le capteur (fisheye, exposition, grain, compression, coins sombres).
 - `src/main.js` : boucle de rendu, reprojection temporelle, porteur de la caméra, voix dans sa tête, API `window.balade`.
 - `src/meneur.js` : le meneur de jeu (`docs/meneur-de-jeu.md`), module pur sans DOM, testé par `npm test` (`tests/`). Le build l'embarque avec `histoires/*.json`. Essai sur artefact : `docs/essai-meneur.md`.
+- `src/constructeur.js` et `src/atelier.js` : constructeur de scènes (description → plan → fiche → contrôle → relecture en image → banque de scènes), voir `docs/constructeur.md`.
 - `src/matieres.json` : bibliothèque de recettes de matière (sol, sentier, grès, écorces…), évaluées par `recette()` dans le shader.
 - `ref/` : vues de référence gelées ; `tools/vues.mjs` et `tools/compare.mjs` pour rendre et comparer.
 - `scenes/*.json` : fiches de lieu embarquées dans la page, format décrit dans `docs/fiche-de-lieu.md`.
