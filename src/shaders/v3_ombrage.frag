@@ -17,7 +17,7 @@ uniform vec3  uSoleilC;
 uniform mat3  uSoleilM;
 uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
 uniform vec3  uSd;           // direction du soleil de cette image, tirée dans le disque solaire (pénombre par accumulation)
-uniform int   uVoir;         // mise au point (option v3voir) : 1 ombre du soleil seule, 2 albédo, 3 normale, 5 carte d'ombres, 6 élément par pixel (magenta : rien)
+uniform int   uVoir;         // mise au point (option v3voir) : 1 ombre du soleil seule, 2 albédo, 3 normale, 5 carte d'ombres, 6 élément par pixel (magenta : rien), 7 canopée vers le soleil
 uniform float uOccT;
 uniform float uPcf;
 uniform int   uProf;         // mise au point du coût (option v3prof) : 1 sans recette, 2 sans ambiance, 4 sans soleil, 8 sans pres()
@@ -89,6 +89,42 @@ float ombreSoleil(vec3 p, vec3 gn){                          // 1 = éclairé ; 
   return mix(v*.25,stat,bord);
 }
 
+/* Rais de lumière dans la brume (modèle atmosphère, qualité complète) : uAtmo2.z points tirés le long du rayon, jusqu'à 60 m,
+   chacun lit la carte d'ombres déjà semée depuis le soleil (une lecture, sans flou). Au-delà, et hors de la carte, l'ombre
+   statistique des troncs. Coût fixe par pixel, indépendant de la scène. Rend la part de soleil que voit la brume diffusante
+   le long du rayon, pondérée par ce que chaque tranche apporte à l'image. Sans pas (qualité mobile) : la statistique seule. */
+#ifndef ATMO
+#define ATMO 0               // 1 : la fiche demande le modèle atmosphère (brume basse éclairée, rebord) ; variante compilée à la demande
+#endif
+#ifndef RAIS
+#define RAIS 0               // pas des rais dans la carte d'ombres (qualité complète seulement) ; 0 : ombre statistique de la brume
+#endif
+#if ATMO
+float ombreBrume(vec3 p){
+  vec3 l=(p-uSoleilC)*uSoleilM;
+  vec2 uv=l.xy/uSoleilE.xy*.5+.5;
+  float st=brumeStat(p.y-uAtmo2.x);
+  if(abs(uv.x-.5)>.46 || abs(uv.y-.5)>.46) return st;
+  float z=(clamp(-l.z/uSoleilE.z,-1.,1.))*.5+.5;
+  return z<=textureLod(uOmbre,uv,0.).r?1.:0.;
+}
+float raisVis(vec3 rd, float t){
+  float hc=uCamPos.y-uAtmo2.x, st=brumeStat(hc);
+#if RAIS==0
+  return st;
+#else
+  float tm=min(t,60.), ds=tm/float(RAIS), j=rnd(), S=0., W=0.;
+  for(int i=0;i<RAIS;i++){
+    float s=(float(i)+j)*ds; vec3 p=uCamPos+rd*s;
+    float w=brumeDens(p)*exp(-brumeTau(uCamPos,rd,s));
+    S+=w*ombreBrume(p); W+=w;
+  }
+  float Tm=exp(-brumeTau(uCamPos,rd,tm)), Tt=exp(-brumeTau(uCamPos,rd,t)), tot=1.-Tt;
+  return tot>1e-5?((W>0.?S/W:st)*(1.-Tm)+st*(Tm-Tt))/tot:st;
+#endif
+}
+#endif
+
 /* Près d'un tronc, d'une perche ou d'un bloc, on voit moins de ciel. Distance à l'objet de la cellule, sans parcourir
    la scène : trois familles, une cellule chacune. Les objets de la fiche n'assombrissent pas (non fait). */
 float pres(vec3 p){
@@ -151,16 +187,24 @@ vec3 lampe(vec3 p, vec3 gn, vec3 n, vec3 alb){             // même cône et mê
   if(nl<=0. || cone<=0. || dot(gn,L)<=0.) return vec3(0.);
   return alb*vec3(1.,.97,.90)*uTorch*cone*nl*lampeOmbre(p+gn*(.004+.0015*dl),Lp)/(d2+.3);
 }
+float gTs=1.;                                                // transmittance de la canopée vers le soleil au dernier point ombré (reprise par la brume)
 vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float TsCuit){   // TsCuit < 0 : à calculer
   vec3 sd=uSd;
   vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
   float Ts=(uProf&4)!=0?1.:TsCuit>=0.?TsCuit:canopyT(po,uSunDir);                              // transmittance de la canopée vers le soleil (statistique)
+  gTs=Ts;
   vec3 col=vec3(0.);
   float ndl=max(dot(n,sd),0.);
-  if(ndl>0. && dot(gn,sd)>0.){
+  if((ndl>0. || ATMO>0) && dot(gn,sd)>(ATMO>0?-.35:0.)){
     float vis=(uProf&4)!=0?1.:ombreSoleil(p,gn)*Ts;
     vec3 h=normalize(sd-rd);
-    col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),28.));
+    if(ndl>0. && dot(gn,sd)>0.) col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),28.));
+    /* Rebord (modèle atmosphère) : en contre-jour, le bord d'une surface rugueuse (écorce, mousse, litière) que le soleil
+       effleure s'allume d'un liseré ; fibres et duvet diffusent vers l'avant. Rasance vue × soleil derrière × soleil effleuré. */
+#if ATMO
+    if(uAtmo2.y>0.){ float fr=1.-abs(dot(n,rd)); fr*=fr; fr*=fr;
+      col+=SUN*vis*uAtmo2.y*fr*smoothstep(-.1,.7,dot(rd,sd))*smoothstep(-.35,.25,dot(n,sd))*(alb*1.6+.025); }
+#endif
   }
   col+=(uProf&2)!=0?alb*.3:alb*ambiance(po,gn,n,Ts);
   if(uTorch>0.) col+=lampe(p,gn,n,alb);
@@ -184,6 +228,11 @@ void main(){
     t=1e4;
     col=rd.y>0.?skyCol(rd):uEau.w>0.?eauLoin(rd):fogCol(rd);
     if(uLoin.w>0. && rd.y>-.02) col=lointain(rd,col);
+#if ATMO
+    if(uAtmo.x>0.){ float Ts=RAIS>0?canopyT(uCamPos+rd*min(6.,(YC0-.5-uCamPos.y)/max(rd.y,.05)),uSunDir):.5;   // brume basse devant le ciel (la brume uniforme, elle, ne voile pas le ciel)
+      float T=exp(-(brumeTau(uCamPos,rd,400.)-uFog*400.));
+      col=col*T+(brumeAmb(rd)+brumeSoleil(rd)*raisVis(rd,400.)*Ts)*(1.-T); }
+#endif
     if(uTorch>0.) col+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.07;   // la lampe dans la brume
   } else {
     t=g1.w;
@@ -231,9 +280,13 @@ void main(){
       }
       col=lumiere(p,gn,n,alb,spec,rd,TsC)+alb*emis*8.;
       if(uVoir==1) col=vec3(ombreSoleil(p,gn));
+      else if(uVoir==7) col=vec3(gTs);                        // transmittance de la canopée vers le soleil
       else if(uVoir==2) col=alb*3.;
       else if(uVoir==3) col=n*.5+.5;
     }
+#if ATMO
+    if(uAtmo.x>0.) col=brumeMix(col,uCamPos,rd,t,raisVis(rd,t)*(id==5?.5:gTs)); else
+#endif
     col=mix(fogCol(rd),col,exp(-t*uFog));
     if(uTorch>0.) col+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.045*(1.667-1./max(t,.6));
   }

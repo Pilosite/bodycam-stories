@@ -132,7 +132,14 @@ function applyAmbiance(a){
   S.nuit=so.hauteur<-1;
   const el=S.nuit?38:Math.max(2,so.hauteur), az=so.azimut*Math.PI/180, e=el*Math.PI/180;
   S.sunDir=[Math.sin(az)*Math.cos(e),Math.sin(e),Math.cos(az)*Math.cos(e)];
+  S.atmo=[0,0,0,1]; S.atmoRebord=0;
+  const at=a.atmosphere, bb=isObj(a.brume_basse)?a.brume_basse:null;
   if(S.nuit){ S.sun=[.020,.027,.042]; S.sky=[.005,.007,.012]; }       // clair de lune
+  else if(at){                                                  // modèle atmosphère : voir soleilAtmo()
+    const tr=clampN(isObj(at)?at.trouble:undefined,0,1,.35), so2=soleilAtmo(Math.max(-1,so.hauteur),tr);
+    S.sun=so2.sun; S.sky=so2.sky; S.atmo[0]=1; S.atmo[1]=tr; S.atmoRebord=clampN(isObj(at)?at.rebord:undefined,0,2,1);
+    if(a.meteo==="voile"){ S.sun=S.sun.map(v=>v*.22); S.sky=S.sky.map((v,i)=>v*[.92,.86,.78][i]); }
+  }
   else {
     const k=Math.min(1,el/38), I=7*Math.min(1,.35+el/14);              // soleil bas : plus faible et plus chaud
     S.sun=[I,I*(.62+.33*k),I*(.30+.55*k)]; S.sky=[1,1,1];
@@ -141,9 +148,23 @@ function applyAmbiance(a){
   S.lum=S.nuit?1:so.hauteur<8?.35*(8-Math.max(0,so.hauteur))/8:0;   // fenêtres allumées : la nuit, un peu au crépuscule
   S.torch=(a.lampe!==undefined?a.lampe:S.nuit)?26:0;
   S.fog=a.brume!==undefined?a.brume:.011;
+  if(S.atmo[0]&&bb){ S.atmo[2]=clampN(bb.densite,0,.2,.04); S.atmo[3]=clampN(bb.hauteur,.3,30,3); }   // brume basse : dense au sol, s'amincit avec la hauteur
   if(S.kit===0) S.kitP[3]=a.saison==="ete"?0:1;
   sceneDirty=true;
   if(fiche) v3Fiche();                                          // une lampe allumée en cours d'histoire : le v3 laisse la place
+}
+/* Modèle atmosphère (fiche : ambiance.atmosphere) : la couleur et la force du soleil suivent sa hauteur, par la masse d'air
+   traversée (Kasten et Young) et une épaisseur optique par canal (Rayleigh + aérosols selon le trouble), adoucie de 30 % :
+   la balance des blancs d'un téléphone en garde la chaleur sans la pousser au rouge. Le ciel s'assombrit quand le soleil
+   descend, moins vite que le soleil lui-même : à l'aube, l'ombre est bleue et le soleil orangé. Aucune heure n'est réglée à
+   part : 3°, 8°, 15° ou 40° ne diffèrent que par la hauteur. À 21°, la même lumière que l'ancien réglage, à quelques % près. */
+function soleilAtmo(h,trouble){
+  const e=Math.max(-.5,h), m=1/(Math.sin(e*Math.PI/180)+.50572*Math.pow(e+6.07995,-1.6364));
+  const aer=.05+.16*trouble, tau=[.036+aer*.76,.097+aer,.235+aer*1.37].map(v=>v*.7);
+  const lever=Math.min(1,Math.max(0,(h+.5)/2.5));                // disque qui sort de l'horizon
+  const sun=tau.map(t=>8.6*Math.exp(-t*m)*lever);
+  const k=.22+.78*Math.min(1,Math.max(0,h/32));                 // le ciel baisse avec le soleil, un peu moins vite (diffus / direct : 0,3 à 8°)
+  return {sun,sky:[k,k,k]};
 }
 /* Kit : "foret" et "dunes" ont encore leurs arbres, rochers et canopée en dur ; "nu" n'a rien de prédéfini.
    Une fiche sans kit qui fournit ses semis est un monde nu. */
@@ -458,6 +479,7 @@ function common(w,h,p){
   gl.uniform1i(u.uKit,S.kit); gl.uniform4fv(u.uKitP,S.kitP); gl.uniform1i(u.uMode,0);
   gl.uniform4fv(u.uRel,S.rel); gl.uniform4fv(u.uTraj,S.traj); gl.uniform4fv(u.uCreux,S.creux); gl.uniform2fv(u.uTerK,S.terK); gl.uniform1f(u.uYTop,S.yTop);
   gl.uniform1i(u.uSemN,S.semN); gl.uniform4fv(u.uSemTop,S.semTop); gl.uniform3fv(u.uSolAlb,S.solAlb); gl.uniform1f(u.uNuit,S.lum);
+  atmoUniformes(u,p,0);
   return u;
 }
 const pb=new Float32Array(16), pb8=new Uint8Array(16);
@@ -673,6 +695,8 @@ function display(src,t,cible){
   gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
   bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff?0:1);
   gl.uniform1f(u.uExp,exposure); gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
+  gl.uniform1f(u.uFlare||null,QUAL.full&&S.atmo&&S.atmo[0]?(CFG.flare!==undefined?+CFG.flare:1):0);   // optique face au soleil : grand écran, modèle atmosphère
+  gl.uniform1f(u.uGrainPx||null,QUAL.full?Math.max(1,canvas.height/620):1);                          // grain d'une vidéo, pas d'un écran
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
   if(still) gl.uniform3f(u.uShake,0,0,0);                     // sinon : dérive de la main et balancement de la marche
   else gl.uniform3f(u.uShake,
@@ -815,13 +839,15 @@ const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},          // dmax : 150 m quand l'eau est à l'horizon (au-delà, le lanceur de rayons ne touche plus rien : c'est la mer)
   tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
 function v3Init(){                                             // rend vrai quand tous les programmes sont prêts (compilation sans bloquer)
+  const vAtmo=S.atmo&&S.atmo[0]?1:0, vRais=vAtmo&&QUAL.full?(CFG.rais!==undefined?Math.max(0,Math.min(16,CFG.rais|0)):10):0;   // variante de l'ombrage : atmosphère, et rais en qualité complète
+  if((V3.gp||V3.lance) && (V3.avecAtmo!==vAtmo||V3.avecRais!==vRais)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }
   if((V3.gp||V3.lance) && V3.avecSem!==(S.semN>0)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }   // la variante de l'ombrage dépend des semis de la fiche
   if(V3.gp) return true;
-  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; V3.avecSem=S.semN>0; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
+  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; V3.avecSem=S.semN>0; V3.avecAtmo=vAtmo; V3.avecRais=vRais; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
     const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
     V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), grainsF:lancer(F(FS_V3GBUF),F(VS_V3GRAINS)), sol:lancer(FS_V3GBUF,VS_V3SOL),
       ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombreF:lancer(F(FS_V3OMBRE),F(VS_V3GRAINS)), proches:lancer(FS_V3PROCHES,VS_V3PROCHES),
-      ombrage:lancer(FS_V3OMBRAGE.replace("\n","\n#define TAPIS "+(V3.avecTapis?1:0)+"\n#define SEMO "+(V3.avecSem?1:0)+"\n")) };
+      ombrage:lancer(FS_V3OMBRAGE.replace("\n","\n#define TAPIS "+(V3.avecTapis?1:0)+"\n#define SEMO "+(V3.avecSem?1:0)+"\n#define ATMO "+vAtmo+"\n#define RAIS "+vRais+"\n")) };
     if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
@@ -1050,6 +1076,17 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
   gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
   gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);
+  atmoUniformes(u,p,V3.avecRais||0);
+}
+/* Atmosphère : uAtmo (modèle, trouble, brume basse au sol, hauteur d'échelle) et uAtmo2 (sol de référence de la brume basse :
+   celui de la caméra ; force du rebord ; pas des rais dans la carte d'ombres, v3 en qualité complète seulement ; troncs par
+   mètre pour l'ombre statistique). Le nombre de pas est une constante de la variante compilée (#define RAIS) ; uAtmo2.z n'en est
+   que l'écho. Option rais : nombre de pas (0 : sans rais, 16 au plus). */
+function troncsParMetre(){ return S.kit===0?(S.kitP[0]>0?S.kitP[0]/36*.5:0)+(S.houp[3]>0?S.kitP[0]*.8*S.houp[3]/10.9*.14:0):0; }
+function atmoUniformes(u,p,rais){
+  if(!u.uAtmo) return;
+  gl.uniform4fv(u.uAtmo,S.atmo||[0,0,0,1]);
+  gl.uniform4f(u.uAtmo2||null,terrainH(p.pos[0],p.pos[2]),S.atmo&&S.atmo[0]?S.atmoRebord:0,S.atmo&&S.atmo[0]?rais:0,troncsParMetre());
 }
 const px3=new Float32Array(4);
 /* Attendre la fin du calcul graphique d'UNE cible : sur une puce à tuiles (Mali), lire un pixel ne force que la cible lue.
@@ -1148,7 +1185,7 @@ function v3Image(p){
   bindTex(0,g.t0,u.uG0); bindTex(1,g.t1,u.uG1); bindTex(2,V3.sm.t,u.uOmbre); bindTex(6,(V3.hist||dummy).t,u.uPrev);
   gl.uniform1ui(u.uFrame,f); gl.uniform2fv(u.uJitPx,jit);
   gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
-  const occ=S.kit===0?(S.kitP[0]>0?S.kitP[0]/36*.5:0)+(S.houp[3]>0?S.kitP[0]*.8*S.houp[3]/10.9*.14:0):0;   // troncs par mètre : densité × diamètre
+  const occ=troncsParMetre();                                   // troncs par mètre : densité × diamètre
   gl.uniform1f(u.uOccT,occ); gl.uniform1i(u.uVoir,CFG.v3voir|0); gl.uniform1i(u.uProf||null,CFG.v3prof|0); v3TapisUniformes(u); gl.uniform1f(u.uPcf,CFG.v3pcf!==undefined?CFG.v3pcf:1); gl.uniform1f(u.uAmb,CFG.v3amb||.65);   // flou de lecture de la carte, en texels
   const alpha=!V3.hist?1:bouge?V3.alpha:1/(V3.n+1);
   gl.uniform1f(u.uAlpha,alpha); gl.uniform1i(u.uReproj,bouge?1:0);

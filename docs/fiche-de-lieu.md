@@ -48,6 +48,8 @@ Les fiches vivent dans `scenes/*.json`. Le build les embarque toutes dans la pag
 | `ambiance.soleil` | oui | `azimut` et `hauteur` en degrés. Une hauteur négative donne la nuit. |
 | `ambiance.lampe` | oui | Lampe du téléphone. Allumée par défaut la nuit. |
 | `ambiance.brume` | oui | Densité de brume par mètre. 0,002 désert, 0,011 matin, 0,03 épais. |
+| `ambiance.atmosphere` | oui | `{ "trouble", "rebord" }` (ou `true`). Modèle atmosphère : couleur et force du soleil, ciel et brume suivent la hauteur du soleil. Voir plus bas. Sans ce champ, la lumière d'avant, inchangée. |
+| `ambiance.brume_basse` | oui, avec `atmosphere` | `{ "densite", "hauteur" }` : brume dense au sol qui s'amincit avec la hauteur, éclairée par le soleil. |
 | `camera.hauteur` | oui | Hauteur de la caméra en mètres. |
 | `camera.profil`, `camera.champ` | pas encore | Type de capteur et champ de vision. Aujourd'hui fixes : bodycam, 125°. |
 | `histoire` | transmis à l'IA | Récit attaché au lieu, voir `contrat-histoire.md`. |
@@ -159,6 +161,31 @@ Motif `fenetres` (faces verticales seulement) : une grille d'étages mesurée de
 Motif `marquage` (sol) : peinture mesurée depuis l'axe du trajet. `axe` (`simple`, `double`, `aucun`), `largeur` du trait, `tiret` et `intervalle` (0 = trait continu), `bords` (écart des deux lignes de rive), `passages` (période des passages piétons, en mètres), `couleur`. La peinture est usée par plaques.
 
 Le moteur borne chaque valeur avant usage. Limites : 24 recettes par lieu, 12 recettes dans une fiche.
+
+## Atmosphère : aube, soir, brume basse
+
+```json
+"ambiance": { "soleil": { "azimut": 35, "hauteur": 8 }, "brume": 0.005,
+  "atmosphere": { "trouble": 0.35 }, "brume_basse": { "densite": 0.035, "hauteur": 2.5 } }
+```
+
+Avec `atmosphere`, l'heure n'est que la hauteur du soleil : rien n'est réglé pour l'aube en particulier. Exemple complet : `scenes/09-champcueil-aube.json` (planche des heures : `node tools/aube.mjs out/aube`).
+
+| Champ | Plage | Sens |
+|---|---|---|
+| `atmosphere.trouble` | 0 à 1 (0,35) | Air pur (0) ou chargé (1) : soleil plus rouge près de l'horizon, halo plus large autour du soleil, horizon plus blanc. |
+| `atmosphere.rebord` | 0 à 2 (1) | Liseré de lumière sur le bord des surfaces rugueuses (écorce, mousse, litière) quand on filme à contre-jour. |
+| `brume_basse.densite` | 0 à 0,2 par mètre | Densité au sol. 0,03 à 0,06 : brume de matin d'automne. |
+| `brume_basse.hauteur` | 0,3 à 30 m | Hauteur d'échelle : la densité est divisée par e tous les `hauteur` mètres au-dessus du sol (celui de la caméra). |
+
+Ce que fait le moteur :
+
+- **Soleil** : sa couleur et sa force suivent la masse d'air traversée (un soleil à 3° est orange et faible, à 8° doré, à 15° presque blanc). Le **ciel** baisse moins vite que lui : à l'aube, les ombres sont bleues et le soleil chaud.
+- **Ciel d'aube** : horizon or du côté du soleil, rose à l'opposé, zénith d'un bleu froid ; il éclaire aussi la scène (ambiance).
+- **Brume** : la brume uniforme et la brume basse diffusent le soleil surtout vers l'avant : face au soleil, elle s'allume ; dos au soleil, elle reste grise et bleutée. Moteur v3 en qualité complète : **rais de lumière**, la brume lit la carte d'ombres déjà semée depuis le soleil en 10 points par pixel (option `rais`, 0 à 16) ; en qualité mobile et dans le lanceur de rayons, une ombre statistique des troncs, sans rais.
+- **Capteur** (qualité complète) : voile et reflets fantômes de l'optique quand une source vive est dans le champ ; l'exposition automatique baisse quand on se tourne vers le soleil.
+- Coût : les rais et l'atmosphère sont des variantes du shader d'ombrage, compilées seulement si la fiche demande `atmosphere` (et les rais en qualité complète) ; une fiche sans `atmosphere` garde le programme d'avant.
+- Ce que la brume ne sait pas : elle suit le sol de la caméra (pas les creux du relief), et la canopée y est statistique (pas de rais découpés par les feuilles, seulement par les troncs, perches et rochers de la carte d'ombres).
 
 ## Lointain : l'horizon
 

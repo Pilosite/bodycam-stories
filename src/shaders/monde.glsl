@@ -24,6 +24,9 @@ uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 ét�
 uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
 uniform vec2  uCan;        // tranche du feuillage : bas, haut
 uniform vec4  uHoup;       // houppier : forme (0 voûte commune, 1 cône par arbre), bas du cône, rayon au pied, part de perches
+/* Atmosphère (fiche : ambiance.atmosphere, ambiance.brume_basse). Sans elle (x = 0), ciel, brume et soleil d'avant, à l'identique. */
+uniform vec4  uAtmo;       // modèle atmosphère (0 ou 1), trouble de l'air (0 à 1), brume basse au sol (par mètre), hauteur d'échelle de la brume basse (m)
+uniform vec4  uAtmo2;      // sol de référence de la brume basse (m), force du rebord, nombre de pas des rais (0 : statistique), troncs par mètre (ombre statistique)
 #define YC0 uCan.x
 #define YC1 uCan.y
 const float CS=0.30;                // cellule de feuille
@@ -485,7 +488,27 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 }
 
 /* ---- ciel et brume */
+/* Ciel d'aube et de soir (modèle atmosphère) : soleil bas, l'horizon se colore, or du côté du soleil, rose à l'opposé
+   (ceinture de Vénus), le zénith reste d'un bleu froid et profond. Tout dépend de la hauteur du soleil : rien n'est réglé
+   pour une heure. Le halo autour du soleil grandit avec le trouble de l'air. */
+vec3 skyAtmo(vec3 rd){
+  float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
+  vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
+  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
+  vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
+  vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
+  vec3 hz=mix(hzJour,hzBas,bas);
+  float bande=mix(.45,.28+.12*ca,bas);                                  // l'horizon coloré est plus mince quand le soleil est bas
+  vec3 c=mix(hz,zen,mix(pow(y,bande),1.-exp(-y*7.),bas));
+  c+=vec3(.55,.30,.30)*bas*exp(-y*14.)*(1.-ca)*.35;                     // ceinture de Vénus, juste au-dessus de l'horizon opposé
+  c*=2.2*uSky;
+  float s=max(dot(rd,uSunDir),0.);
+  c+=uSun*vec3(.143,.129,.109)*(.9*pow(s,6.)+3.*pow(s,48.))*(1.+uAtmo.y)+uSun*.05*(.4+uAtmo.y)*pow(s,2.)*bas;
+  return c;
+}
 vec3 skyBase(vec3 rd){
+  if(uAtmo.x>0.) return skyAtmo(rd);
   float y=max(rd.y,0.);
   vec3 c=mix(vec3(.62,.72,.86),vec3(.16,.34,.78),pow(y,.45))*2.2*uSky;
   float s=max(dot(rd,uSunDir),0.);
@@ -527,6 +550,29 @@ vec3 lointain(vec3 rd, vec3 c){
   return c;
 }
 vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+/* Brume (modèle atmosphère) : brume uniforme (ambiance.brume) plus brume basse, dense au sol et qui s'amincit avec la hauteur
+   (exp(-h/H) au-dessus du sol de référence, celui de la caméra). Épaisseur optique le long d'un rayon : formule exacte, coût fixe.
+   La lumière qu'elle diffuse : l'ambiance (gris bleuté, froid à l'ombre) et le soleil, très en avant (Henyey-Greenstein) :
+   face au soleil bas, la brume s'allume. Ce que la brume voit du soleil (vSol) est donné par l'appelant : rais tracés dans
+   la carte d'ombres (moteur v3, qualité complète), ou ombre statistique des troncs et de la canopée. */
+float brumeTau(vec3 ro, vec3 rd, float t){
+  float H=max(uAtmo.w,.05), k=rd.y/H, y0=ro.y-uAtmo2.x;
+  float f=abs(k*t)<1e-3?t*(1.-.5*k*t):(1.-exp(-k*t))/k;
+  return uFog*t+uAtmo.z*exp(-y0/H)*f;
+}
+float brumeDens(vec3 p){ return uFog+uAtmo.z*exp(-(p.y-uAtmo2.x)/max(uAtmo.w,.05)); }
+float phaseHG(float mu, float g){ float d=1.+g*g-2.*g*mu; return (1.-g*g)/(d*sqrt(d)); }   // × 1/4π omis : 1 = isotrope
+vec3 brumeAmb(vec3 rd){ return mix(vec3(.17,.20,.27),vec3(.24,.26,.30),uAtmo.y)*uSky*(.8+.2*max(rd.y,0.)); }   // à l'ombre, la brume est d'un gris bleu
+vec3 brumeSoleil(vec3 rd){                                   // éclat du soleil diffusé, par unité de visibilité
+  float mu=dot(rd,uSunDir), g=.62+.1*uAtmo.y;
+  return uSun*(.70*phaseHG(mu,g)+.30*phaseHG(mu,.15))*.25;   // π/4π : un pinceau de soleil dans une brume blanche
+}
+/* Ombre statistique de la brume : part du soleil qui passe entre les troncs (hauteur sous la voûte, longueur du trajet rasant). */
+float brumeStat(float hSol){ float sy=max(uSunDir.y,.03); return exp(-uAtmo2.w*max(13.-hSol,0.)*length(uSunDir.xz)/sy); }
+vec3 brumeMix(vec3 col, vec3 ro, vec3 rd, float t, float vSol){
+  float T=exp(-brumeTau(ro,rd,t));
+  return col*T+(brumeAmb(rd)+brumeSoleil(rd)*vSol)*(1.-T);
+}
 uniform vec4 uEau;           // eau à l'horizon (mer, baie, lac) sous les rayons qui ne touchent rien : couleur, présence
 vec3 eauLoin(vec3 rd){
   vec2 w=rd.xz/max(-rd.y,.004);                              // vagues : la normale bouge, plus serrée vers l'horizon
