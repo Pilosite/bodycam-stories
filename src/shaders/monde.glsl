@@ -233,7 +233,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -241,6 +244,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -326,9 +337,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -338,7 +352,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){

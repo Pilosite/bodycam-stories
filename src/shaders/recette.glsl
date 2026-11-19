@@ -9,7 +9,16 @@ uniform float uNuit;         // 0 le jour, 1 la nuit : part des fenêtres allum�
 vec3 gQo; float gYo; vec3 gFormCol;   // décalage des motifs propre à chaque élément ; passage de la coordonnée locale à la hauteur au-dessus de la base ; couleur de la forme touchée, pour une recette « couleur de la forme »
 uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
 uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
-uniform vec2  uSurfP;        // part de l'écorce a, arbres et perches
+uniform vec4  uSurfP;        // part de l'écorce a, arbres et perches ; variété des troncs (fiche : foret.variete, 0 à 1)
+vec3 gTon;                   // teinte propre à l'arbre touché (1 hors des troncs)
+/* Variété des troncs : chaque arbre ou perche décale les motifs de son écorce (sinon tous les troncs d'une même recette
+   portent les mêmes fissures aux mêmes hauteurs) et prend sa teinte, plus claire ou plus sombre, plus chaude ou plus froide.
+   par : l'aléa de l'arbre (info.w). Sans variété (0, défaut) : rien ne change. */
+vec3 troncVar(float par){
+  vec3 h=h33(vec3(par*91.7,par*37.3,2.9)), v=vec3(uSurfP.z);
+  gTon=(1.+v*(h.z-.5)*.55)*(1.+v*(h.y-.5)*vec3(.16,0.,-.16));
+  return vec3(h.x*53.,0.,h.y*41.)*step(.001,uSurfP.z);
+}
 const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, celui où la mousse monte
 vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
 float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
@@ -53,6 +62,25 @@ float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 su
   cadre=smoothstep(.012,-.012,m)-g;
   return g;
 }
+/* Feuilles superposées (motif feuilles, champ forme > 0) : une feuille par cellule, tournée au hasard, de longueur taille
+   (en cellules), de largeur forme × longueur, plus large vers la base, lobée pour une part (lobes) ; parmi les feuilles
+   des neuf cellules voisines qui couvrent le point, celle du dessus l'emporte. Rend (aléa de la feuille, distance au bord,
+   1 si une feuille couvre) ; tl : pente en travers de la feuille (bords relevés). */
+vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
+  vec2 n=floor(x), f=fract(x); float best=-1., hc=0., ed=0.; tl=vec2(0.);
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g=vec2(float(i),float(j)), c=n+g; float hid=h21(c+.5);
+    if(fract(hid*5.31)>cov) continue;
+    vec2 rr=f-g-h22(c); float a=hid*43.7; vec2 cs=vec2(cos(a),sin(a));
+    vec2 l=vec2(dot(rr,cs),dot(rr,vec2(-cs.y,cs.x)));
+    float L=L0*(.7+.6*fract(hid*13.7)), u=l.x/L;
+    float w=L*el*max(1.-u*u,0.)*(1.+.35*u);
+    if(fract(hid*3.7)<lob) w*=.68+.5*abs(sin(u*9.4+hid*6.));
+    float z=fract(hid*7.3), m=w-abs(l.y);
+    if(m>0. && abs(u)<1. && z>best){ best=z; hc=hid; ed=min(m,(1.-abs(u))*L); tl=vec2(-cs.y,cs.x)*clamp(l.y/max(w,1e-3),-1.,1.); }
+  }
+  return vec3(hc,ed,best>=0.?1.:0.);
+}
 float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
   vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
   float a=rN(q,e.xyz,e.w,false,sol);
@@ -85,12 +113,19 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
     vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
-    vec3 v=voro(wp*e.x); float hc=v.y;
-    vec3 lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
-    lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
     float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
-    float on=step(1.-cov,fract(hc*7.3));
-    if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    float hc, on; vec3 lc;
+    if(p1.w>0.){                                             // feuilles superposées : de vraies feuilles qui se recouvrent
+      vec2 tc; vec3 fs=feuillesSup(wp*e.x,p1.w,rT(r,11).x,p1.z,cov,tc); hc=fs.x; on=fs.z;
+      lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)))*mix(1.-p0.z,1.,smoothstep(0.,.07,fs.y));
+      tilt+=vec3(tc.x,0.,tc.y)*.45*mo.z*on;                  // feuille creusée : les bords se relèvent
+    } else {                                                 // cellules de Voronoï jointives (litière d'origine)
+      vec3 v=voro(wp*e.x); hc=v.y;
+      lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
+      lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
+      on=step(1.-cov,fract(hc*7.3));
+      if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    }
     alb=mix(alb,lc,on*mo.y); mm=on;
     vec2 tl=h22(vec2(hc*37.,hc*91.))-.5;
     tilt+=vec3(tl.x,0.,tl.y)*(rel.z+mo.z*on);

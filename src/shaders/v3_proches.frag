@@ -39,7 +39,7 @@ void main(){
   vec3 n=normalize(k.xyy*gv.x+k.yyx*gv.y+k.yxy*gv.z+k.xxx*gv.w);
   vec3 q=p; float code;
   if(vK.x==0) code=4.+.5*(float(row)/128.);
-  else if(vK.x==1) code=6.+.125*float(vK.z);
+  else if(vK.x==1){ q=semisLocal(p,e); code=6.+(float(vK.z*6+row-SEM0-vK.z*SEML-4)+.5)/48.; }   // comme semeS : repère de l'élément, couche et forme
   else if(vK.x==2){ q=blocLocal(p,terrainH(p.xz),vId,B); code=3.; }
   else { vec4 inf; if(vK.x==3){ sdTreeA(p,terrainH(p.xz),inf); code=1.+.5*(fract(inf.w)*.999+(inf.w>1.5?1.:0.)); }   // mêmes codes que les grains (v3_grains.vert)
     else { sdTreeB(p,terrainH(p.xz),inf); code=2.+.5*inf.w; } q=inf.xyz; }

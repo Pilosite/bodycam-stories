@@ -237,7 +237,7 @@ vec3 render(vec3 ro, vec3 rd){
     vec3 gn=calcN(p,t);
     vec3 alb; vec3 n=gn; float spec; float emis=0.;
     // Quelle recette pour cette surface ? Un seul appel à recette() plus bas : le shader reste compact.
-    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
+    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn; gTon=vec3(1.);
     if(id==0){                                               // sol, et trajet par-dessus
       r0=uSurf.x; hs=0.;
       if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(p.x-pathX(p.z))+(uTraj.w>0.?uTraj.w*(fbm(p.xz*.8+3.)-.5):0.)); r1=uSurf.y;
@@ -246,7 +246,7 @@ vec3 render(vec3 ro, vec3 rd){
     else if(id==3){ r0=uSurf.z; q=info.xyz; }
     else if(id>=4){ for(int i=0;i<(id>=4?1:0);i++) r0=matProp(p,gn,info,id==5,alb,n,spec,emis,q,nr0,rot); }   // garde en boucle : sautée en rendu logiciel quand aucun pixel n'est une forme
     else if(id==1 && info.w>1.5) matCone(p,gn,alb,n,spec);   // cœur de feuillage d'un conifère
-    else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz; hs=info.y; rot=id==1?RA:RB; }
+    else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz+troncVar(info.w); hs=info.y; rot=id==1?RA:RB; }
     if(r0>=0){
       vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
       for(int k=0;k<2;k++){
@@ -255,7 +255,7 @@ vec3 render(vec3 ro, vec3 rd){
         float wk=nr==1?1.:(k==0?1.-w:w);
         A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
       }
-      alb=A; n=normalize(gn+T); spec=SP; emis=EM;
+      alb=A*gTon; n=normalize(gn+T); spec=SP; emis=EM;
     }
     col=lightSurf(p,gn,n,alb,spec,rd)+alb*emis*8.;
   }

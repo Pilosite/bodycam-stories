@@ -2190,7 +2190,8 @@ function validerForme(x) {
     penche: Array.isArray(x.penche) ? [clampN(x.penche[0], -90, 90, 0), clampN(x.penche[1], -90, 90, 0)] : [0, 0],
     couleur: x.couleur === 'palette' || (typeof x.couleur === 'string' && HEX.test(x.couleur)) ? x.couleur : '#777777',
     matiere: MATIERES_BASE.includes(x.matiere) || (typeof x.matiere === 'string' && NOM.test(x.matiere)) ? x.matiere : 'mat',
-    lisse: clampN(x.lisse, 0, 0.5, 0), arrondi: clampN(x.arrondi, 0, 0.3, 0), vacille: clampN(x.vacille, 0, 1, 0) };
+    lisse: clampN(x.lisse, 0, 0.5, 0), arrondi: clampN(x.arrondi, 0, 0.3, 0), vacille: clampN(x.vacille, 0, 1, 0),
+    dents: Math.round(clampN(x.dents, 0, 60, 0)) };
 }
 const formeOk = x => isObj(x) && FORMES_NOMS.includes(x.f);
 function validerSemis(L, ids) {
@@ -2236,7 +2237,8 @@ function validerFiche(f, opts = {}) {
   }
   if (kit === 'foret') { const fo = isObj(f.foret) ? f.foret : {}; out.foret = { densite: clampN(fo.densite, 0, 1, 0.7), rochers: clampN(fo.rochers, 0, 1.5, 1), feuillage: clampN(fo.feuillage, 0, 1.5, 1) };
     if (fo.houppier === 'cone') { out.foret.houppier = 'cone'; out.foret.houppier_bas = clampN(fo.houppier_bas, 0.3, 8, 1.6); out.foret.houppier_rayon = clampN(fo.houppier_rayon, 0.8, 3.2, 2.5); }
-    if (fo.perches !== undefined) out.foret.perches = clampN(fo.perches, 0, 1, 1); }
+    if (fo.perches !== undefined) out.foret.perches = clampN(fo.perches, 0, 1, 1);
+    if (fo.variete !== undefined) out.foret.variete = clampN(fo.variete, 0, 1, 0); }
   else if (kit === 'dunes') out.dunes = { rochers: clampN(f.dunes && f.dunes.rochers, 0, 1.5, 0) };
   if (kit !== 'dunes') {                                          // relief et trajet réglables (forêt et monde nu)
     const re = isObj(f.relief) ? f.relief : null, tr = isObj(f.trajet) ? f.trajet : null;
@@ -3885,7 +3887,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -3893,6 +3898,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -3978,9 +3991,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -3990,7 +4006,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -4420,7 +4436,16 @@ uniform float uNuit;         // 0 le jour, 1 la nuit : part des fenêtres allum�
 vec3 gQo; float gYo; vec3 gFormCol;   // décalage des motifs propre à chaque élément ; passage de la coordonnée locale à la hauteur au-dessus de la base ; couleur de la forme touchée, pour une recette « couleur de la forme »
 uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
 uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
-uniform vec2  uSurfP;        // part de l'écorce a, arbres et perches
+uniform vec4  uSurfP;        // part de l'écorce a, arbres et perches ; variété des troncs (fiche : foret.variete, 0 à 1)
+vec3 gTon;                   // teinte propre à l'arbre touché (1 hors des troncs)
+/* Variété des troncs : chaque arbre ou perche décale les motifs de son écorce (sinon tous les troncs d'une même recette
+   portent les mêmes fissures aux mêmes hauteurs) et prend sa teinte, plus claire ou plus sombre, plus chaude ou plus froide.
+   par : l'aléa de l'arbre (info.w). Sans variété (0, défaut) : rien ne change. */
+vec3 troncVar(float par){
+  vec3 h=h33(vec3(par*91.7,par*37.3,2.9)), v=vec3(uSurfP.z);
+  gTon=(1.+v*(h.z-.5)*.55)*(1.+v*(h.y-.5)*vec3(.16,0.,-.16));
+  return vec3(h.x*53.,0.,h.y*41.)*step(.001,uSurfP.z);
+}
 const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, celui où la mousse monte
 vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
 float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
@@ -4464,6 +4489,25 @@ float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 su
   cadre=smoothstep(.012,-.012,m)-g;
   return g;
 }
+/* Feuilles superposées (motif feuilles, champ forme > 0) : une feuille par cellule, tournée au hasard, de longueur taille
+   (en cellules), de largeur forme × longueur, plus large vers la base, lobée pour une part (lobes) ; parmi les feuilles
+   des neuf cellules voisines qui couvrent le point, celle du dessus l'emporte. Rend (aléa de la feuille, distance au bord,
+   1 si une feuille couvre) ; tl : pente en travers de la feuille (bords relevés). */
+vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
+  vec2 n=floor(x), f=fract(x); float best=-1., hc=0., ed=0.; tl=vec2(0.);
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g=vec2(float(i),float(j)), c=n+g; float hid=h21(c+.5);
+    if(fract(hid*5.31)>cov) continue;
+    vec2 rr=f-g-h22(c); float a=hid*43.7; vec2 cs=vec2(cos(a),sin(a));
+    vec2 l=vec2(dot(rr,cs),dot(rr,vec2(-cs.y,cs.x)));
+    float L=L0*(.7+.6*fract(hid*13.7)), u=l.x/L;
+    float w=L*el*max(1.-u*u,0.)*(1.+.35*u);
+    if(fract(hid*3.7)<lob) w*=.68+.5*abs(sin(u*9.4+hid*6.));
+    float z=fract(hid*7.3), m=w-abs(l.y);
+    if(m>0. && abs(u)<1. && z>best){ best=z; hc=hid; ed=min(m,(1.-abs(u))*L); tl=vec2(-cs.y,cs.x)*clamp(l.y/max(w,1e-3),-1.,1.); }
+  }
+  return vec3(hc,ed,best>=0.?1.:0.);
+}
 float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
   vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
   float a=rN(q,e.xyz,e.w,false,sol);
@@ -4496,12 +4540,19 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
     vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
-    vec3 v=voro(wp*e.x); float hc=v.y;
-    vec3 lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
-    lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
     float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
-    float on=step(1.-cov,fract(hc*7.3));
-    if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    float hc, on; vec3 lc;
+    if(p1.w>0.){                                             // feuilles superposées : de vraies feuilles qui se recouvrent
+      vec2 tc; vec3 fs=feuillesSup(wp*e.x,p1.w,rT(r,11).x,p1.z,cov,tc); hc=fs.x; on=fs.z;
+      lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)))*mix(1.-p0.z,1.,smoothstep(0.,.07,fs.y));
+      tilt+=vec3(tc.x,0.,tc.y)*.45*mo.z*on;                  // feuille creusée : les bords se relèvent
+    } else {                                                 // cellules de Voronoï jointives (litière d'origine)
+      vec3 v=voro(wp*e.x); hc=v.y;
+      lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
+      lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
+      on=step(1.-cov,fract(hc*7.3));
+      if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    }
     alb=mix(alb,lc,on*mo.y); mm=on;
     vec2 tl=h22(vec2(hc*37.,hc*91.))-.5;
     tilt+=vec3(tl.x,0.,tl.y)*(rel.z+mo.z*on);
@@ -4728,7 +4779,7 @@ vec3 render(vec3 ro, vec3 rd){
     vec3 gn=calcN(p,t);
     vec3 alb; vec3 n=gn; float spec; float emis=0.;
     // Quelle recette pour cette surface ? Un seul appel à recette() plus bas : le shader reste compact.
-    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
+    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn; gTon=vec3(1.);
     if(id==0){                                               // sol, et trajet par-dessus
       r0=uSurf.x; hs=0.;
       if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(p.x-pathX(p.z))+(uTraj.w>0.?uTraj.w*(fbm(p.xz*.8+3.)-.5):0.)); r1=uSurf.y;
@@ -4737,7 +4788,7 @@ vec3 render(vec3 ro, vec3 rd){
     else if(id==3){ r0=uSurf.z; q=info.xyz; }
     else if(id>=4){ for(int i=0;i<(id>=4?1:0);i++) r0=matProp(p,gn,info,id==5,alb,n,spec,emis,q,nr0,rot); }   // garde en boucle : sautée en rendu logiciel quand aucun pixel n'est une forme
     else if(id==1 && info.w>1.5) matCone(p,gn,alb,n,spec);   // cœur de feuillage d'un conifère
-    else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz; hs=info.y; rot=id==1?RA:RB; }
+    else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz+troncVar(info.w); hs=info.y; rot=id==1?RA:RB; }
     if(r0>=0){
       vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
       for(int k=0;k<2;k++){
@@ -4746,7 +4797,7 @@ vec3 render(vec3 ro, vec3 rd){
         float wk=nr==1?1.:(k==0?1.-w:w);
         A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
       }
-      alb=A; n=normalize(gn+T); spec=SP; emis=EM;
+      alb=A*gTon; n=normalize(gn+T); spec=SP; emis=EM;
     }
     col=lightSurf(p,gn,n,alb,spec,rd)+alb*emis*8.;
   }
@@ -5222,7 +5273,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -5230,6 +5284,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -5315,9 +5377,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -5327,7 +5392,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -5904,7 +5969,7 @@ bool semeP(out Grain g){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 V=uVue==0?primLocal(uCamPos,row):primLocal(a.xyz+uSd,row);
   vec3 lq, ln;
-  if(!surfForme(a.w,b.xyz,e.y,V,uVue==0,lq,ln)) return false;
+  if(!surfForme(mod(a.w,8.),b.xyz,e.y,V,uVue==0,lq,ln)) return false;
   g.P=primMonde(lq,row,false); g.N=normalize(primMonde(ln,row,true));
   g.q=g.P; g.code=4.+.5*(float(row)/128.); g.rot=mat2(1.);
   g.row=row; g.sem=false; g.ech=1.;
@@ -5915,7 +5980,8 @@ bool semeP(out Grain g){
 /* ---- éléments des couches de semis (sdSemis) : le grain tire un point du sol (cap élargi du rayon de l'élément), prend
    l'élément de la cellule avec les tirages de semisElem, une forme selon son aire, un point sur la partie de la forme
    tournée vers la vue, et le ramène dans le monde (semisMonde). Le tampon G garde le point du monde : la passe de matière
-   retrouve l'élément par sdSemis, comme le lanceur de rayons. */
+   garde le point dans le repère de l'élément, la couche et la forme : la passe de matière n'a plus qu'à retrouver les
+   tirages de la cellule (semisPix, v3_ombrage.frag), sans déplier sdSemis (trop lourd à compiler sur Direct3D). */
 bool semeS(int k, out Grain g){
   float Rk=k==0?uSemR.x:k==1?uSemR.y:k==2?uSemR.z:uSemR.w, Nk=k==0?uNbS.x:k==1?uNbS.y:k==2?uNbS.z:uNbS.w;
   vec2 xz=tireSolR(Rk);
@@ -5928,12 +5994,12 @@ bool semeS(int k, out Grain g){
   vec3 C=semisMonde(vec3(0.),e);
   vec3 V=uVue==0?primLocal(semisLocal(uCamPos,e),row):primLocal(a.xyz+normalize(semisLocal(C+uSd,e)-semisLocal(C,e)),row);
   vec3 lq, ln;
-  if(!surfForme(a.w,b.xyz,ee.y,V,uVue==0,lq,ln)) return false;
+  if(!surfForme(mod(a.w,8.),b.xyz,ee.y,V,uVue==0,lq,ln)) return false;
   g.P=semisMonde(primMonde(lq,row,false),e);
   vec3 t1=normalize(cross(ln,abs(ln.y)<.9?vec3(0.,1.,0.):vec3(1.,0.,0.))), t2=cross(ln,t1);
   const float ep=.02;                                        // normale : la transformation (échelle, pente, rangée courbe) n'est pas une rotation
   g.N=normalize(cross(semisMonde(primMonde(lq+t1*ep,row,false),e)-g.P,semisMonde(primMonde(lq+t2*ep,row,false),e)-g.P));
-  g.q=g.P; g.code=6.+.125*float(k); g.rot=mat2(1.);
+  g.q=g.P; g.code=6.+(float(k*6+row-r0-4)+.5)/48.; g.rot=mat2(1.);   // couche et forme touchée : l'ombrage n'a plus à les chercher (semisPix)
   g.row=row; g.sem=true; g.e=e; g.ech=1./(e.s*sqrt(e.sy));
   float nE=parM2R(C.xz,Nk,Rk)*e.A.x*e.A.y;       // grains attendus sur cet élément à chaque image
   float aE=texelFetch(uSemis,ivec2(0,r0),0).x*e.s*e.s*mix(1.,e.sy,.7);
@@ -6058,13 +6124,16 @@ void main(){
     vL=versForme(g,g.P); vLx=versForme(g,g.P+ex)-vL; vLy=versForme(g,g.P+ey)-vL;
     vB=vec4(b.xyz,e.y);
     float pl=m*g.ech;                                        // un pixel (ou un texel), en mètres du repère de la forme
-    vT=vec2(ty,(ty<.5||ty>4.5)?.7*pl:.7*pl+.3*s*g.ech);       // faces planes : découpe au pixel ; formes courbes : un peu de marge
+    float t8=mod(ty,8.); vT=vec2(ty,(t8<.5||t8>4.5)?.7*pl:.7*pl+.3*s*g.ech);       // faces planes : découpe au pixel ; formes courbes : un peu de marge
   }
 #endif
   if(uVue==1){ vDd=-vec2(dot(ex,uSd),dot(ey,uSd))/(2.*uSoleilE.z); return; }   // profondeur vue du soleil, par texel
   vec2 rx=g.rot*ex.xz, ry=g.rot*ey.xz;
   vQ=g.q; vN=g.N; vCode=g.code; vDist=dist;
   vDx=vec3(rx.x,ex.y,rx.y); vDy=vec3(ry.x,ey.y,ry.y); vDd=vec2(dot(ex,dv),dot(ey,dv));
+#if FORMES
+  if(g.sem){ vQ=primMonde(vL,g.row,false); vDx=primMonde(vLx,g.row,true); vDy=primMonde(vLy,g.row,true); }   // élément de semis : point et variation dans le repère de l'élément (voir semeS)
+#endif
 }`, VS_V3SOL = `#version 300 es
 // Moteur v3 (essai) : le sol, un maillage polaire centré sur la caméra qui suit terrainH. Anneaux de plus en plus
 // espacés (pas logarithmique) : dense près de la caméra, sans trou. Aucun tampon de sommets : gl_VertexID suffit.
@@ -6309,7 +6378,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -6317,6 +6389,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -6402,9 +6482,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -6414,7 +6497,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -7011,7 +7094,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -7019,6 +7105,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -7104,9 +7198,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -7116,7 +7213,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -7650,7 +7747,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -7658,6 +7758,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -7743,9 +7851,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -7755,7 +7866,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -8278,7 +8389,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -8286,6 +8400,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -8371,9 +8493,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -8383,7 +8508,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -8666,7 +8791,16 @@ uniform float uNuit;         // 0 le jour, 1 la nuit : part des fenêtres allum�
 vec3 gQo; float gYo; vec3 gFormCol;   // décalage des motifs propre à chaque élément ; passage de la coordonnée locale à la hauteur au-dessus de la base ; couleur de la forme touchée, pour une recette « couleur de la forme »
 uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
 uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
-uniform vec2  uSurfP;        // part de l'écorce a, arbres et perches
+uniform vec4  uSurfP;        // part de l'écorce a, arbres et perches ; variété des troncs (fiche : foret.variete, 0 à 1)
+vec3 gTon;                   // teinte propre à l'arbre touché (1 hors des troncs)
+/* Variété des troncs : chaque arbre ou perche décale les motifs de son écorce (sinon tous les troncs d'une même recette
+   portent les mêmes fissures aux mêmes hauteurs) et prend sa teinte, plus claire ou plus sombre, plus chaude ou plus froide.
+   par : l'aléa de l'arbre (info.w). Sans variété (0, défaut) : rien ne change. */
+vec3 troncVar(float par){
+  vec3 h=h33(vec3(par*91.7,par*37.3,2.9)), v=vec3(uSurfP.z);
+  gTon=(1.+v*(h.z-.5)*.55)*(1.+v*(h.y-.5)*vec3(.16,0.,-.16));
+  return vec3(h.x*53.,0.,h.y*41.)*step(.001,uSurfP.z);
+}
 const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, celui où la mousse monte
 vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
 float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
@@ -8710,6 +8844,25 @@ float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 su
   cadre=smoothstep(.012,-.012,m)-g;
   return g;
 }
+/* Feuilles superposées (motif feuilles, champ forme > 0) : une feuille par cellule, tournée au hasard, de longueur taille
+   (en cellules), de largeur forme × longueur, plus large vers la base, lobée pour une part (lobes) ; parmi les feuilles
+   des neuf cellules voisines qui couvrent le point, celle du dessus l'emporte. Rend (aléa de la feuille, distance au bord,
+   1 si une feuille couvre) ; tl : pente en travers de la feuille (bords relevés). */
+vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
+  vec2 n=floor(x), f=fract(x); float best=-1., hc=0., ed=0.; tl=vec2(0.);
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g=vec2(float(i),float(j)), c=n+g; float hid=h21(c+.5);
+    if(fract(hid*5.31)>cov) continue;
+    vec2 rr=f-g-h22(c); float a=hid*43.7; vec2 cs=vec2(cos(a),sin(a));
+    vec2 l=vec2(dot(rr,cs),dot(rr,vec2(-cs.y,cs.x)));
+    float L=L0*(.7+.6*fract(hid*13.7)), u=l.x/L;
+    float w=L*el*max(1.-u*u,0.)*(1.+.35*u);
+    if(fract(hid*3.7)<lob) w*=.68+.5*abs(sin(u*9.4+hid*6.));
+    float z=fract(hid*7.3), m=w-abs(l.y);
+    if(m>0. && abs(u)<1. && z>best){ best=z; hc=hid; ed=min(m,(1.-abs(u))*L); tl=vec2(-cs.y,cs.x)*clamp(l.y/max(w,1e-3),-1.,1.); }
+  }
+  return vec3(hc,ed,best>=0.?1.:0.);
+}
 float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
   vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
   float a=rN(q,e.xyz,e.w,false,sol);
@@ -8742,12 +8895,19 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
     vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
-    vec3 v=voro(wp*e.x); float hc=v.y;
-    vec3 lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
-    lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
     float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
-    float on=step(1.-cov,fract(hc*7.3));
-    if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    float hc, on; vec3 lc;
+    if(p1.w>0.){                                             // feuilles superposées : de vraies feuilles qui se recouvrent
+      vec2 tc; vec3 fs=feuillesSup(wp*e.x,p1.w,rT(r,11).x,p1.z,cov,tc); hc=fs.x; on=fs.z;
+      lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)))*mix(1.-p0.z,1.,smoothstep(0.,.07,fs.y));
+      tilt+=vec3(tc.x,0.,tc.y)*.45*mo.z*on;                  // feuille creusée : les bords se relèvent
+    } else {                                                 // cellules de Voronoï jointives (litière d'origine)
+      vec3 v=voro(wp*e.x); hc=v.y;
+      lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
+      lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
+      on=step(1.-cov,fract(hc*7.3));
+      if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    }
     alb=mix(alb,lc,on*mo.y); mm=on;
     vec2 tl=h22(vec2(hc*37.,hc*91.))-.5;
     tilt+=vec3(tl.x,0.,tl.y)*(rel.z+mo.z*on);
@@ -8959,6 +9119,18 @@ bool tapis(vec2 xz, float lod, out vec4 a, out vec4 b){
 #endif
           // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
 out vec4 outCol;
+#if SEMO
+/* Élément de semis d'un pixel. Le tampon G porte déjà le point dans le repère de l'élément (lp) et la forme touchée
+   (par = (6 × couche + forme + 0,5) / 24, écrit par semeS et par v3_proches.frag) : il ne reste qu'à retrouver la cellule et
+   ses tirages (échelle, étirement, aléa), sans parcourir les formes ni déplier sdSemis. Rend info comme sdSemis. */
+vec4 semisPix(vec2 xz, float par, vec3 lp){
+  int c=int(par*24.), k=c/6, j=c-k*6;
+  ElemS e; vec2 id, f; semisGrille(xz,k,e,id,f);
+  vec4 h2=semisH2(k,id,semisH(k,id,e.side),e.side), J=texelFetch(uShapes,ivec2(0,SEM0+k*SEML+1),0);
+  gInst=vec4(0.,mix(J.z,J.w,h2.x),mix(e.K.x,e.K.y,h2.y),h2.w);
+  return vec4(lp,float(SEM0+k*SEML+4+j)+.9*h2.w);
+}
+#endif
 
 uint hu(uint x){ x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u; return (x>>22u)^x; }
 
@@ -9136,7 +9308,7 @@ void main(){
       // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
       vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
       int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
-      vec4 ta, tb; float TsC=-1.;
+      vec4 ta, tb; float TsC=-1.; gTon=vec3(1.);
 #if TAPIS
       if(id==0 && uTapL>0 && (uProf&1)==0 && tapis(q.xz,log2(t*uFish/uRes.y/sqrt(max(abs(dot(rd,gn)),.05))/uTapS0)+uTapBias,ta,tb)){
         alb=ta.rgb*ta.rgb; spec=ta.w; emis=tb.z;             // sol cuit : deux lectures (quatre au fondu) au lieu de recette()
@@ -9153,10 +9325,10 @@ void main(){
       else if(id==4 || id==6){                               // objet, ou élément de semis (retrouvé à partir du point du monde, comme objId()) ; un seul appel à matProp
         vec4 info=vec4(0.,0.,0.,floor(par*128.+.5));
 #if SEMO
-        if(id==6){ vec4 inst; gTol=.002; sdSemis(q,int(par*4.+.5),info,inst); gInst=inst; }
+        if(id==6) info=semisPix(p.xz,par,q);
 #endif
         vec3 qr; r0=matProp(q,gn,info,id==6,alb,n,spec,emis,qr,nr0,rot); q=qr; }
-      else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
+      else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; q+=troncVar(par); rot=id==1?RA:RB; }
       if(r0>=0 && (uProf&1)==0 && !((uProf&64)!=0 && id==0) && !((uProf&128)!=0 && id!=0)){
         vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
         for(int k=0;k<2;k++){
@@ -9165,7 +9337,7 @@ void main(){
           float wk=nr==1?1.:(k==0?1.-w:w);
           A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
         }
-        alb=A; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
+        alb=A*gTon; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
       }
       col=lumiere(p,gn,n,alb,spec,rd,TsC)+alb*emis*8.;
       if(uVoir==1) col=vec3(ombreSoleil(p,gn));
@@ -9428,7 +9600,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -9436,6 +9611,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -9521,9 +9704,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -9533,7 +9719,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -9816,7 +10002,16 @@ uniform float uNuit;         // 0 le jour, 1 la nuit : part des fenêtres allum�
 vec3 gQo; float gYo; vec3 gFormCol;   // décalage des motifs propre à chaque élément ; passage de la coordonnée locale à la hauteur au-dessus de la base ; couleur de la forme touchée, pour une recette « couleur de la forme »
 uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
 uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
-uniform vec2  uSurfP;        // part de l'écorce a, arbres et perches
+uniform vec4  uSurfP;        // part de l'écorce a, arbres et perches ; variété des troncs (fiche : foret.variete, 0 à 1)
+vec3 gTon;                   // teinte propre à l'arbre touché (1 hors des troncs)
+/* Variété des troncs : chaque arbre ou perche décale les motifs de son écorce (sinon tous les troncs d'une même recette
+   portent les mêmes fissures aux mêmes hauteurs) et prend sa teinte, plus claire ou plus sombre, plus chaude ou plus froide.
+   par : l'aléa de l'arbre (info.w). Sans variété (0, défaut) : rien ne change. */
+vec3 troncVar(float par){
+  vec3 h=h33(vec3(par*91.7,par*37.3,2.9)), v=vec3(uSurfP.z);
+  gTon=(1.+v*(h.z-.5)*.55)*(1.+v*(h.y-.5)*vec3(.16,0.,-.16));
+  return vec3(h.x*53.,0.,h.y*41.)*step(.001,uSurfP.z);
+}
 const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, celui où la mousse monte
 vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
 float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
@@ -9860,6 +10055,25 @@ float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 su
   cadre=smoothstep(.012,-.012,m)-g;
   return g;
 }
+/* Feuilles superposées (motif feuilles, champ forme > 0) : une feuille par cellule, tournée au hasard, de longueur taille
+   (en cellules), de largeur forme × longueur, plus large vers la base, lobée pour une part (lobes) ; parmi les feuilles
+   des neuf cellules voisines qui couvrent le point, celle du dessus l'emporte. Rend (aléa de la feuille, distance au bord,
+   1 si une feuille couvre) ; tl : pente en travers de la feuille (bords relevés). */
+vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
+  vec2 n=floor(x), f=fract(x); float best=-1., hc=0., ed=0.; tl=vec2(0.);
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g=vec2(float(i),float(j)), c=n+g; float hid=h21(c+.5);
+    if(fract(hid*5.31)>cov) continue;
+    vec2 rr=f-g-h22(c); float a=hid*43.7; vec2 cs=vec2(cos(a),sin(a));
+    vec2 l=vec2(dot(rr,cs),dot(rr,vec2(-cs.y,cs.x)));
+    float L=L0*(.7+.6*fract(hid*13.7)), u=l.x/L;
+    float w=L*el*max(1.-u*u,0.)*(1.+.35*u);
+    if(fract(hid*3.7)<lob) w*=.68+.5*abs(sin(u*9.4+hid*6.));
+    float z=fract(hid*7.3), m=w-abs(l.y);
+    if(m>0. && abs(u)<1. && z>best){ best=z; hc=hid; ed=min(m,(1.-abs(u))*L); tl=vec2(-cs.y,cs.x)*clamp(l.y/max(w,1e-3),-1.,1.); }
+  }
+  return vec3(hc,ed,best>=0.?1.:0.);
+}
 float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
   vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
   float a=rN(q,e.xyz,e.w,false,sol);
@@ -9892,12 +10106,19 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
     vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
-    vec3 v=voro(wp*e.x); float hc=v.y;
-    vec3 lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
-    lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
     float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
-    float on=step(1.-cov,fract(hc*7.3));
-    if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    float hc, on; vec3 lc;
+    if(p1.w>0.){                                             // feuilles superposées : de vraies feuilles qui se recouvrent
+      vec2 tc; vec3 fs=feuillesSup(wp*e.x,p1.w,rT(r,11).x,p1.z,cov,tc); hc=fs.x; on=fs.z;
+      lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)))*mix(1.-p0.z,1.,smoothstep(0.,.07,fs.y));
+      tilt+=vec3(tc.x,0.,tc.y)*.45*mo.z*on;                  // feuille creusée : les bords se relèvent
+    } else {                                                 // cellules de Voronoï jointives (litière d'origine)
+      vec3 v=voro(wp*e.x); hc=v.y;
+      lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
+      lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
+      on=step(1.-cov,fract(hc*7.3));
+      if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    }
     alb=mix(alb,lc,on*mo.y); mm=on;
     vec2 tl=h22(vec2(hc*37.,hc*91.))-.5;
     tilt+=vec3(tl.x,0.,tl.y)*(rel.z+mo.z*on);
@@ -10278,7 +10499,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -10286,6 +10510,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -10371,9 +10603,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -10383,7 +10618,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -10906,7 +11141,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -10914,6 +11152,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -10999,9 +11245,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -11011,7 +11260,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -11356,6 +11605,7 @@ vec3 coin(vec3 u, vec3 hb, vec3 cl){
   return r;
 }
 vec3 boite(float ty, vec3 b, float ar){                       // demi-tailles de la boîte englobante d'une forme (repère de la forme)
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
   if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
   return b+ar;
 }
@@ -11675,7 +11925,10 @@ float sdRock(vec3 p, float th, out vec4 info){
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
-float sdPrim(vec3 q, float ty, vec3 s){
+/* Type de forme : 0 boîte, 1 boule, 2 cylindre, 3 cône, 4 capsule, 5 toit ; + 8 × dents : la forme est découpée en peigne
+   le long de son axe x (fente de part et d'autre d'une nervure centrale, dents penchées vers le bout) : fronde de fougère,
+   palme, grille, clôture ajourée. Une forme sans dents ne paie qu'un test. */
+float sdPrim0(vec3 q, float ty, vec3 s){
   if(ty<.5) return sdBox(q,s);                                                   // boîte
   if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
   if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
@@ -11683,6 +11936,14 @@ float sdPrim(vec3 q, float ty, vec3 s){
   if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
   vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
   return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+float sdPrim(vec3 q, float ty, vec3 s){
+  float dn=floor(ty*.125+.01), d=sdPrim0(q,ty-8.*dn,s);
+  if(dn>0.){                                                 // peigne : dn dents sur la longueur 2 s.x, contour en fuseau (pointu aux deux bouts)
+    float P=2.*s.x/dn, u=q.x+.45*abs(q.z), f=(fract(u/P)-.5)*P, x=q.x/s.x;
+    d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
+  }
+  return d;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -11768,9 +12029,12 @@ float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   return -1.;
 }
 // L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+// Tirages de la cellule id de la couche k (rive side) : h (présence, décalage), puis h2 (échelle, étirement, cap, aléa).
+vec4 semisH(int k, vec2 id, float side){ return h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.))); }
+vec4 semisH2(int k, vec2 id, vec4 h, float side){ return h42(id*1.37+h.yz*91.+float(k)*3.1+side); }
 bool semisElem(int k, vec2 id, inout ElemS e){
   int r0=SEM0+k*SEML;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  vec4 h=semisH(k,id,e.side);
   float dens=e.B.x;
   if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
   if(h.x>=dens) return false;
@@ -11780,7 +12044,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   float dx=0.;
   if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
   if(cleared(w)) return false;
-  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  e.h2=semisH2(k,id,h,e.side);
   float yaw=e.D.x;                                           // cap dans le repère de la grille
   if(e.T.w<.5) yaw=e.h2.z*6.2832;
   else if(e.T.w<1.5){
@@ -12086,14 +12350,14 @@ void main(){
   vec3 n=normalize(k.xyy*gv.x+k.yyx*gv.y+k.yxy*gv.z+k.xxx*gv.w);
   vec3 q=p; float code;
   if(vK.x==0) code=4.+.5*(float(row)/128.);
-  else if(vK.x==1) code=6.+.125*float(vK.z);
+  else if(vK.x==1){ q=semisLocal(p,e); code=6.+(float(vK.z*6+row-SEM0-vK.z*SEML-4)+.5)/48.; }   // comme semeS : repère de l'élément, couche et forme
   else if(vK.x==2){ q=blocLocal(p,terrainH(p.xz),vId,B); code=3.; }
   else { vec4 inf; if(vK.x==3){ sdTreeA(p,terrainH(p.xz),inf); code=1.+.5*(fract(inf.w)*.999+(inf.w>1.5?1.:0.)); }   // mêmes codes que les grains (v3_grains.vert)
     else { sdTreeB(p,terrainH(p.xz),inf); code=2.+.5*inf.w; } q=inf.xyz; }
   gl_FragDepth=clamp(t/400.,0.,1.);
   g0=vec4(q,code); g1=vec4(n,t);
 }`;
-const FICHES = [{"version":0,"id":"grands-avaux-sentier","titre":"Sentier entre les grès, fin d'automne","inspiration":"Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux","graine":4821,"kit":"foret","ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-33,"hauteur":21},"brume":0.011},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]},{"version":0,"id":"grands-avaux-nuit","titre":"Le même sentier, de nuit, à la lampe du téléphone","inspiration":"Forêt des Grands Avaux, Champcueil, après la tombée du jour","graine":4821,"kit":"foret","ambiance":{"saison":"automne","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.012},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"histoire":{"pitch":"Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.","protagonistes":[{"id":"sam","role":"porteur de la caméra","trait":"prudent, se parle pour se rassurer"}],"temps":[{"id":"bruit","quand":"après quelques dizaines de mètres ou si la voix parle d'un bruit","ce_qui_se_passe":"un craquement sur la gauche, Sam se fige","scene":{"brume":0.03}},{"id":"panne","quand":"plus tard, si Sam s'éloigne du sentier","ce_qui_se_passe":"la lampe faiblit puis s'éteint","scene":{"lampe":false}}]}},{"version":0,"id":"sous-bois-voile","titre":"Sous-bois d'été, ciel voilé, brume épaisse","inspiration":"Futaie dense par temps laiteux, sans ombres nettes","graine":7313,"kit":"foret","foret":{"densite":0.85,"rochers":0.5,"feuillage":1.3},"ambiance":{"saison":"ete","meteo":"voile","soleil":{"azimut":40,"hauteur":34},"brume":0.028},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"dunes-soir","titre":"Dunes en fin de journée","inspiration":"Erg saharien, soleil rasant, rides de vent sur le sable","graine":2207,"kit":"dunes","ambiance":{"soleil":{"azimut":-60,"hauteur":11},"brume":0.0025},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"maison-lapin","titre":"Une maison dans les bois, un lapin devant","inspiration":"Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur","graine":3170,"kit":"foret","foret":{"densite":0.7,"rochers":0.6,"feuillage":1},"ambiance":{"saison":"automne","soleil":{"azimut":-33,"hauteur":24},"brume":0.009},"objets":[{"id":"maison","nom":"petite maison en bois","devant":14,"cote":5.5,"degage":4.5,"formes":[{"f":"boite","p":[0,1.15,0],"taille":[4,2.6,3],"couleur":"#8a765f","matiere":"bois"},{"f":"toit","p":[0,2.95,0],"taille":[4.5,1.3,3.7],"couleur":"#4a4440","matiere":"tuile"},{"f":"boite","p":[1.2,3.4,0.4],"taille":[0.4,1,0.4],"couleur":"#8b4a38","matiere":"pierre"},{"f":"boite","p":[-0.5,0.98,1.51],"taille":[0.9,1.95,0.04],"couleur":"#3c2f25","matiere":"bois"},{"f":"boite","p":[1.05,1.35,1.51],"taille":[0.8,0.7,0.04],"couleur":"#2a3038","matiere":"verre"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.86,0.05,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.05,0.76,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[-0.5,0.06,1.8],"taille":[1.2,0.12,0.6],"couleur":"#7d7a74","matiere":"pierre"}]},{"id":"lapin","nom":"lapin de garenne assis","devant":10.5,"cote":2.2,"cap":70,"formes":[{"f":"boule","p":[0,0.11,0],"taille":[0.18,0.22,0.3],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.09,-0.09],"taille":[0.2,0.2,0.2],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.21,0.13],"taille":[0.11,0.12,0.13],"couleur":"#8f7a64","matiere":"pelage","lisse":0.04},{"f":"capsule","p":[0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,6],"couleur":"#7d6955","matiere":"pelage"},{"f":"capsule","p":[-0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,-6],"couleur":"#7d6955","matiere":"pelage"},{"f":"boule","p":[0,0.1,-0.19],"taille":[0.07,0.07,0.07],"couleur":"#e6e1d8","matiere":"pelage"}]}],"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"essai-san-francisco","titre":"Rue en pente, San Francisco, fin d'après-midi","inspiration":"Une rue raide de Russian Hill qui descend vers la baie, bordée de maisons victoriennes colorées et mitoyennes","graine":1906,"kit":"nu","relief":{"amplitude":2.5,"echelle":260,"pente":-0.28,"niveler":true},"trajet":{"sinuosite":0,"largeur":9,"creux":0.16,"bord":"net"},"matieres":{"victorienne":{"base":"facade","couleur":"forme","motif":{"type":"fenetres","largeur":0.95,"hauteur":1.9,"pas":2.1,"etage":3.3,"allege":0.75,"cadre":0.11,"rdc":2.9,"allumees":0.3,"couleur":"#1d2328","cadre_couleur":"#eee9dc","lumiere":"#ffcf8a","opacite":1},"taches":[{"couleur":"#000000","force":0.2,"echelle":[0.5,9,0.5],"seuils":[0.4,0.75]}],"salissure":{"force":0.3,"hauteur":0.6}},"chaussee-sf":{"base":"chaussee","couleur":"#55524e","motif":{"type":"marquage","axe":"double","largeur":0.12,"couleur":"#c7a83c","bords":4.2}}},"surfaces":{"sol":"dalles","trajet":"chaussee-sf"},"ambiance":{"saison":"ete","meteo":"clair","soleil":{"azimut":-115,"hauteur":13},"brume":0.008},"lointain":{"hauteur":3,"decoupe":0.25,"neige":0,"couleur":"#7f8c86","couleur_bas":"#5d6b5e","eau":"#2f4b57"},"semis":[{"id":"maisons","nom":"maisons victoriennes mitoyennes","cellule":[6.6,12],"trajet":{"rangee":true,"min":6,"cote":"deux"},"densite":1,"hauteur":[0.85,1.3],"teinte":0.12,"palette":["#d8bf72","#94b2c6","#c4826f","#e6dfcc","#8ea585","#a98fb8"],"formes":[{"f":"boite","p":[0,4.6,-0.65],"taille":[6.4,9.2,10.5],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[1.1,5.7,5],"taille":[2.4,5.6,1],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[0,9.45,-0.4],"taille":[6.5,0.5,11],"couleur":"#ebe6da","matiere":"mat"},{"f":"boite","p":[-1.5,1.15,4.66],"taille":[2.6,2.3,0.1],"couleur":"#4a4038","matiere":"planches"},{"f":"boite","p":[1.7,0.45,5.25],"taille":[1.6,0.9,1.2],"couleur":"#8c877c","matiere":"beton"}]},{"id":"voitures","nom":"voitures garées le long du trottoir","cellule":[5.8,2.6],"trajet":{"rangee":true,"min":2.15},"densite":0.7,"pose":"pente","tourne":3,"teinte":0.1,"palette":["#9a9fa5","#c8c8c2","#e3e3df","#7a2a26","#3b5274","#8a8676","#2e3136"],"formes":[{"f":"boite","p":[0,0.68,0],"taille":[4.4,0.78,1.78],"couleur":"palette","matiere":"metal","arrondi":0.12},{"f":"boite","p":[-0.25,1.35,0],"taille":[2.3,0.62,1.58],"couleur":"#1b1e22","matiere":"verre","arrondi":0.14},{"f":"cylindre","p":[1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"},{"f":"cylindre","p":[-1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"}]},{"id":"reverberes","nom":"réverbères au bord du trottoir","cellule":[21,3.8],"trajet":{"rangee":true,"min":3.1},"densite":1,"formes":[{"f":"cylindre","p":[0,3.6,0.1],"taille":[0.16,7.2,0.16],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,7.05,0.85],"taille":[0.1,0.1,1.5],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,6.95,1.55],"taille":[0.3,0.16,0.45],"couleur":"#fff1d0","matiere":"lumineux"}]}],"histoire":{"pitch":"Sam descend la rue vers la baie en cherchant le numéro d'une maison bleue.","temps":[]}},{"version":0,"id":"essai-village-nuit","titre":"Rue de village, la nuit","inspiration":"La grand-rue pavée d'un village français, tard, quelques fenêtres encore allumées","graine":5120,"kit":"nu","relief":{"amplitude":1.2,"echelle":160,"pente":0.04},"trajet":{"sinuosite":0.35,"largeur":5.5,"creux":0.1,"bord":"net"},"surfaces":{"sol":"dalles","trajet":"paves"},"matieres":{"maison":{"base":"crepi","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":2.3,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.3,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}},"volets":{"base":"maison","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":6,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.45,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}}},"ambiance":{"saison":"hiver","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.016},"lointain":{"hauteur":4,"decoupe":0.3,"couleur":"#2a2d2a","couleur_bas":"#1d211c"},"semis":[{"id":"maisons","nom":"maisons de village mitoyennes","cellule":[7.5,9],"trajet":{"rangee":true,"min":3.9,"cote":"deux"},"densite":0.92,"hauteur":[0.85,1.25],"teinte":0.1,"palette":["#c9bba3","#b9ad9a","#d4c6aa","#a8a090","#c4ae8c","#bdb6a6"],"formes":[{"f":"boite","p":[0,2.9,-0.2],"taille":[7.3,5.8,8.2],"couleur":"palette","matiere":"maison"},{"f":"toit","p":[0,6.6,-0.2],"taille":[7.34,1.6,8.7],"couleur":"#5f4034","matiere":"tuile"},{"f":"boite","p":[-1.15,1.05,3.92],"taille":[1.1,2.1,0.08],"couleur":"#3b2e24","matiere":"planches"},{"f":"boite","p":[2.3,1.6,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[-2.3,4.4,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[2.4,7,-1.5],"taille":[0.55,1.4,0.55],"couleur":"#7a4a3a","matiere":"brique"}]},{"id":"lampadaires","nom":"lanternes murales","cellule":[16,2],"trajet":{"rangee":true,"min":2.15,"cote":"gauche"},"densite":1,"formes":[{"f":"cylindre","p":[0,2,0],"taille":[0.1,4,0.1],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.95,0.3],"taille":[0.06,0.06,0.6],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.75,0.6],"taille":[0.24,0.32,0.24],"couleur":"#ffcf8a","matiere":"lumineux"}]},{"id":"bornes","nom":"bornes de pierre au bord du trottoir","cellule":[4.5,1.5],"trajet":{"rangee":true,"min":2.35},"densite":0.5,"teinte":0.15,"formes":[{"f":"cylindre","p":[0,0.35,0],"taille":[0.3,0.7,0.3],"couleur":"#8a857a","matiere":"pierre","arrondi":0.04}]}],"objets":[{"id":"eglise","nom":"clocher au bout de la rue","devant":46,"cote":0,"degage":6,"formes":[{"f":"boite","p":[0,7,0],"taille":[4.5,14,4.5],"couleur":"#a39a88","matiere":"pierre"},{"f":"cone","p":[0,16.5,0],"taille":[5.2,5,5.2],"couleur":"#3a3d42","matiere":"tuile"},{"f":"boite","p":[0,11.5,2.26],"taille":[1,2,0.05],"couleur":"#15171a","matiere":"mat"},{"f":"boule","p":[0,8,2.27],"taille":[1.1,1.1,0.06],"couleur":"#e8dcc0","matiere":"lumineux"}]}]},{"version":0,"id":"essai-cimetiere","titre":"Cimetière de campagne, au crépuscule","inspiration":"Un cimetière de village sur un coteau, allée de gravier, cyprès, mur de pierre, brume du soir","graine":731,"kit":"nu","relief":{"amplitude":1.4,"echelle":110,"pente":0.05},"trajet":{"sinuosite":0.15,"largeur":2.6,"creux":0.04,"bord":"net"},"surfaces":{"sol":"herbe","trajet":"gravier"},"matieres":{"granit":{"base":"beton","couleur":"forme","grain":{"echelle":160,"force":0.4},"brillance":0.2,"taches":[{"couleur":"#3b4630","force":0.5,"echelle":[3,1,3],"seuils":[0.6,0.8],"fbm":true,"hauteur":[0.6,0],"biais":0.3}]},"moellons":{"base":"brique","couleur":"#8b8577","motif":{"type":"paves","echelle":[2.2,4,2.2],"joint":0.12,"decalage_rangs":0.5,"eclat":0.6,"bombe":0.8,"couleur":"#4d4a42"},"mousse":{"couleur":"#3e4a2a","force":0.7,"echelle":1.5,"seuils":[0.5,0.7],"fbm":true,"dessus":[0.3,0.8]}}},"ambiance":{"saison":"automne","meteo":"voile","soleil":{"azimut":-80,"hauteur":4},"brume":0.03},"lointain":{"hauteur":3,"decoupe":0.2,"couleur":"#4a4f4a","couleur_bas":"#3a4236"},"semis":[{"id":"tombes","nom":"tombes en rangs serrés","cellule":[2.3,3],"rotation":0,"trajet":{"min":2.6,"max":13},"densite":0.85,"oriente":"fixe","cap":180,"tourne":5,"penche":3,"teinte":0.35,"desordre":0.12,"groupes":0.3,"groupes_echelle":25,"palette":["#8e8b84","#6f6c66","#a39f95","#4d4c4a","#7d766a"],"formes":[{"f":"boite","p":[0,0.5,-1],"taille":[0.8,1,0.16],"couleur":"palette","matiere":"granit","arrondi":0.03},{"f":"boite","p":[0,0.13,0],"taille":[0.95,0.26,1.9],"couleur":"palette","matiere":"granit"},{"f":"boite","p":[0,1.2,-1],"taille":[0.1,0.5,0.08],"couleur":"#3f3d3a","matiere":"metal"},{"f":"boite","p":[0,1.3,-1],"taille":[0.34,0.08,0.08],"couleur":"#3f3d3a","matiere":"metal"}]},{"id":"cypres","nom":"cyprès sombres","cellule":[7,7],"rotation":20,"trajet":{"min":4},"densite":0.25,"groupes":0.7,"groupes_echelle":30,"hauteur":[0.8,1.4],"teinte":0.2,"penche":2,"formes":[{"f":"cylindre","p":[0,0.6,0],"taille":[0.3,1.2,0.3],"couleur":"#3a2e24","matiere":"bois"},{"f":"capsule","p":[0,3.4,0],"taille":[1.7,4.2,1.7],"couleur":"#142016","matiere":"tissu"},{"f":"cone","p":[0,7.2,0],"taille":[1.5,3.2,1.5],"couleur":"#142016","matiere":"tissu"}]},{"id":"mur","nom":"mur d'enceinte en pierre sèche","cellule":[5,1.5],"trajet":{"rangee":true,"min":14,"cote":"deux"},"densite":1,"teinte":0.1,"formes":[{"f":"boite","p":[0,0.8,0],"taille":[4.84,1.6,0.6],"couleur":"#8b8577","matiere":"moellons"}]}]},{"version":0,"id":"champcueil-aube","titre":"Grands Avaux, le soleil se lève entre les pins","inspiration":"Forêt départementale des Grands Avaux, Champcueil (Essonne), début novembre, une quarantaine de minutes après le lever du soleil : lumière rasante entre les troncs, brume basse sur le sentier","graine":4821,"kit":"foret","foret":{"densite":0.7,"rochers":1,"feuillage":0.45},"ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":35,"hauteur":8},"brume":0.005,"atmosphere":{"trouble":0.35},"brume_basse":{"densite":0.035,"hauteur":2.5}},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]}];                      // fiches de lieu embarquées (scenes/*.json)
+const FICHES = [{"version":0,"id":"grands-avaux-sentier","titre":"Sentier entre les grès, fin d'automne","inspiration":"Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux","graine":4821,"kit":"foret","ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-33,"hauteur":21},"brume":0.011},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]},{"version":0,"id":"grands-avaux-nuit","titre":"Le même sentier, de nuit, à la lampe du téléphone","inspiration":"Forêt des Grands Avaux, Champcueil, après la tombée du jour","graine":4821,"kit":"foret","ambiance":{"saison":"automne","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.012},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"histoire":{"pitch":"Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.","protagonistes":[{"id":"sam","role":"porteur de la caméra","trait":"prudent, se parle pour se rassurer"}],"temps":[{"id":"bruit","quand":"après quelques dizaines de mètres ou si la voix parle d'un bruit","ce_qui_se_passe":"un craquement sur la gauche, Sam se fige","scene":{"brume":0.03}},{"id":"panne","quand":"plus tard, si Sam s'éloigne du sentier","ce_qui_se_passe":"la lampe faiblit puis s'éteint","scene":{"lampe":false}}]}},{"version":0,"id":"sous-bois-voile","titre":"Sous-bois d'été, ciel voilé, brume épaisse","inspiration":"Futaie dense par temps laiteux, sans ombres nettes","graine":7313,"kit":"foret","foret":{"densite":0.85,"rochers":0.5,"feuillage":1.3},"ambiance":{"saison":"ete","meteo":"voile","soleil":{"azimut":40,"hauteur":34},"brume":0.028},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"dunes-soir","titre":"Dunes en fin de journée","inspiration":"Erg saharien, soleil rasant, rides de vent sur le sable","graine":2207,"kit":"dunes","ambiance":{"soleil":{"azimut":-60,"hauteur":11},"brume":0.0025},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"maison-lapin","titre":"Une maison dans les bois, un lapin devant","inspiration":"Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur","graine":3170,"kit":"foret","foret":{"densite":0.7,"rochers":0.6,"feuillage":1},"ambiance":{"saison":"automne","soleil":{"azimut":-33,"hauteur":24},"brume":0.009},"objets":[{"id":"maison","nom":"petite maison en bois","devant":14,"cote":5.5,"degage":4.5,"formes":[{"f":"boite","p":[0,1.15,0],"taille":[4,2.6,3],"couleur":"#8a765f","matiere":"bois"},{"f":"toit","p":[0,2.95,0],"taille":[4.5,1.3,3.7],"couleur":"#4a4440","matiere":"tuile"},{"f":"boite","p":[1.2,3.4,0.4],"taille":[0.4,1,0.4],"couleur":"#8b4a38","matiere":"pierre"},{"f":"boite","p":[-0.5,0.98,1.51],"taille":[0.9,1.95,0.04],"couleur":"#3c2f25","matiere":"bois"},{"f":"boite","p":[1.05,1.35,1.51],"taille":[0.8,0.7,0.04],"couleur":"#2a3038","matiere":"verre"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.86,0.05,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.05,0.76,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[-0.5,0.06,1.8],"taille":[1.2,0.12,0.6],"couleur":"#7d7a74","matiere":"pierre"}]},{"id":"lapin","nom":"lapin de garenne assis","devant":10.5,"cote":2.2,"cap":70,"formes":[{"f":"boule","p":[0,0.11,0],"taille":[0.18,0.22,0.3],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.09,-0.09],"taille":[0.2,0.2,0.2],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.21,0.13],"taille":[0.11,0.12,0.13],"couleur":"#8f7a64","matiere":"pelage","lisse":0.04},{"f":"capsule","p":[0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,6],"couleur":"#7d6955","matiere":"pelage"},{"f":"capsule","p":[-0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,-6],"couleur":"#7d6955","matiere":"pelage"},{"f":"boule","p":[0,0.1,-0.19],"taille":[0.07,0.07,0.07],"couleur":"#e6e1d8","matiere":"pelage"}]}],"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"essai-san-francisco","titre":"Rue en pente, San Francisco, fin d'après-midi","inspiration":"Une rue raide de Russian Hill qui descend vers la baie, bordée de maisons victoriennes colorées et mitoyennes","graine":1906,"kit":"nu","relief":{"amplitude":2.5,"echelle":260,"pente":-0.28,"niveler":true},"trajet":{"sinuosite":0,"largeur":9,"creux":0.16,"bord":"net"},"matieres":{"victorienne":{"base":"facade","couleur":"forme","motif":{"type":"fenetres","largeur":0.95,"hauteur":1.9,"pas":2.1,"etage":3.3,"allege":0.75,"cadre":0.11,"rdc":2.9,"allumees":0.3,"couleur":"#1d2328","cadre_couleur":"#eee9dc","lumiere":"#ffcf8a","opacite":1},"taches":[{"couleur":"#000000","force":0.2,"echelle":[0.5,9,0.5],"seuils":[0.4,0.75]}],"salissure":{"force":0.3,"hauteur":0.6}},"chaussee-sf":{"base":"chaussee","couleur":"#55524e","motif":{"type":"marquage","axe":"double","largeur":0.12,"couleur":"#c7a83c","bords":4.2}}},"surfaces":{"sol":"dalles","trajet":"chaussee-sf"},"ambiance":{"saison":"ete","meteo":"clair","soleil":{"azimut":-115,"hauteur":13},"brume":0.008},"lointain":{"hauteur":3,"decoupe":0.25,"neige":0,"couleur":"#7f8c86","couleur_bas":"#5d6b5e","eau":"#2f4b57"},"semis":[{"id":"maisons","nom":"maisons victoriennes mitoyennes","cellule":[6.6,12],"trajet":{"rangee":true,"min":6,"cote":"deux"},"densite":1,"hauteur":[0.85,1.3],"teinte":0.12,"palette":["#d8bf72","#94b2c6","#c4826f","#e6dfcc","#8ea585","#a98fb8"],"formes":[{"f":"boite","p":[0,4.6,-0.65],"taille":[6.4,9.2,10.5],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[1.1,5.7,5],"taille":[2.4,5.6,1],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[0,9.45,-0.4],"taille":[6.5,0.5,11],"couleur":"#ebe6da","matiere":"mat"},{"f":"boite","p":[-1.5,1.15,4.66],"taille":[2.6,2.3,0.1],"couleur":"#4a4038","matiere":"planches"},{"f":"boite","p":[1.7,0.45,5.25],"taille":[1.6,0.9,1.2],"couleur":"#8c877c","matiere":"beton"}]},{"id":"voitures","nom":"voitures garées le long du trottoir","cellule":[5.8,2.6],"trajet":{"rangee":true,"min":2.15},"densite":0.7,"pose":"pente","tourne":3,"teinte":0.1,"palette":["#9a9fa5","#c8c8c2","#e3e3df","#7a2a26","#3b5274","#8a8676","#2e3136"],"formes":[{"f":"boite","p":[0,0.68,0],"taille":[4.4,0.78,1.78],"couleur":"palette","matiere":"metal","arrondi":0.12},{"f":"boite","p":[-0.25,1.35,0],"taille":[2.3,0.62,1.58],"couleur":"#1b1e22","matiere":"verre","arrondi":0.14},{"f":"cylindre","p":[1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"},{"f":"cylindre","p":[-1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"}]},{"id":"reverberes","nom":"réverbères au bord du trottoir","cellule":[21,3.8],"trajet":{"rangee":true,"min":3.1},"densite":1,"formes":[{"f":"cylindre","p":[0,3.6,0.1],"taille":[0.16,7.2,0.16],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,7.05,0.85],"taille":[0.1,0.1,1.5],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,6.95,1.55],"taille":[0.3,0.16,0.45],"couleur":"#fff1d0","matiere":"lumineux"}]}],"histoire":{"pitch":"Sam descend la rue vers la baie en cherchant le numéro d'une maison bleue.","temps":[]}},{"version":0,"id":"essai-village-nuit","titre":"Rue de village, la nuit","inspiration":"La grand-rue pavée d'un village français, tard, quelques fenêtres encore allumées","graine":5120,"kit":"nu","relief":{"amplitude":1.2,"echelle":160,"pente":0.04},"trajet":{"sinuosite":0.35,"largeur":5.5,"creux":0.1,"bord":"net"},"surfaces":{"sol":"dalles","trajet":"paves"},"matieres":{"maison":{"base":"crepi","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":2.3,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.3,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}},"volets":{"base":"maison","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":6,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.45,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}}},"ambiance":{"saison":"hiver","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.016},"lointain":{"hauteur":4,"decoupe":0.3,"couleur":"#2a2d2a","couleur_bas":"#1d211c"},"semis":[{"id":"maisons","nom":"maisons de village mitoyennes","cellule":[7.5,9],"trajet":{"rangee":true,"min":3.9,"cote":"deux"},"densite":0.92,"hauteur":[0.85,1.25],"teinte":0.1,"palette":["#c9bba3","#b9ad9a","#d4c6aa","#a8a090","#c4ae8c","#bdb6a6"],"formes":[{"f":"boite","p":[0,2.9,-0.2],"taille":[7.3,5.8,8.2],"couleur":"palette","matiere":"maison"},{"f":"toit","p":[0,6.6,-0.2],"taille":[7.34,1.6,8.7],"couleur":"#5f4034","matiere":"tuile"},{"f":"boite","p":[-1.15,1.05,3.92],"taille":[1.1,2.1,0.08],"couleur":"#3b2e24","matiere":"planches"},{"f":"boite","p":[2.3,1.6,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[-2.3,4.4,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[2.4,7,-1.5],"taille":[0.55,1.4,0.55],"couleur":"#7a4a3a","matiere":"brique"}]},{"id":"lampadaires","nom":"lanternes murales","cellule":[16,2],"trajet":{"rangee":true,"min":2.15,"cote":"gauche"},"densite":1,"formes":[{"f":"cylindre","p":[0,2,0],"taille":[0.1,4,0.1],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.95,0.3],"taille":[0.06,0.06,0.6],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.75,0.6],"taille":[0.24,0.32,0.24],"couleur":"#ffcf8a","matiere":"lumineux"}]},{"id":"bornes","nom":"bornes de pierre au bord du trottoir","cellule":[4.5,1.5],"trajet":{"rangee":true,"min":2.35},"densite":0.5,"teinte":0.15,"formes":[{"f":"cylindre","p":[0,0.35,0],"taille":[0.3,0.7,0.3],"couleur":"#8a857a","matiere":"pierre","arrondi":0.04}]}],"objets":[{"id":"eglise","nom":"clocher au bout de la rue","devant":46,"cote":0,"degage":6,"formes":[{"f":"boite","p":[0,7,0],"taille":[4.5,14,4.5],"couleur":"#a39a88","matiere":"pierre"},{"f":"cone","p":[0,16.5,0],"taille":[5.2,5,5.2],"couleur":"#3a3d42","matiere":"tuile"},{"f":"boite","p":[0,11.5,2.26],"taille":[1,2,0.05],"couleur":"#15171a","matiere":"mat"},{"f":"boule","p":[0,8,2.27],"taille":[1.1,1.1,0.06],"couleur":"#e8dcc0","matiere":"lumineux"}]}]},{"version":0,"id":"essai-cimetiere","titre":"Cimetière de campagne, au crépuscule","inspiration":"Un cimetière de village sur un coteau, allée de gravier, cyprès, mur de pierre, brume du soir","graine":731,"kit":"nu","relief":{"amplitude":1.4,"echelle":110,"pente":0.05},"trajet":{"sinuosite":0.15,"largeur":2.6,"creux":0.04,"bord":"net"},"surfaces":{"sol":"herbe","trajet":"gravier"},"matieres":{"granit":{"base":"beton","couleur":"forme","grain":{"echelle":160,"force":0.4},"brillance":0.2,"taches":[{"couleur":"#3b4630","force":0.5,"echelle":[3,1,3],"seuils":[0.6,0.8],"fbm":true,"hauteur":[0.6,0],"biais":0.3}]},"moellons":{"base":"brique","couleur":"#8b8577","motif":{"type":"paves","echelle":[2.2,4,2.2],"joint":0.12,"decalage_rangs":0.5,"eclat":0.6,"bombe":0.8,"couleur":"#4d4a42"},"mousse":{"couleur":"#3e4a2a","force":0.7,"echelle":1.5,"seuils":[0.5,0.7],"fbm":true,"dessus":[0.3,0.8]}}},"ambiance":{"saison":"automne","meteo":"voile","soleil":{"azimut":-80,"hauteur":4},"brume":0.03},"lointain":{"hauteur":3,"decoupe":0.2,"couleur":"#4a4f4a","couleur_bas":"#3a4236"},"semis":[{"id":"tombes","nom":"tombes en rangs serrés","cellule":[2.3,3],"rotation":0,"trajet":{"min":2.6,"max":13},"densite":0.85,"oriente":"fixe","cap":180,"tourne":5,"penche":3,"teinte":0.35,"desordre":0.12,"groupes":0.3,"groupes_echelle":25,"palette":["#8e8b84","#6f6c66","#a39f95","#4d4c4a","#7d766a"],"formes":[{"f":"boite","p":[0,0.5,-1],"taille":[0.8,1,0.16],"couleur":"palette","matiere":"granit","arrondi":0.03},{"f":"boite","p":[0,0.13,0],"taille":[0.95,0.26,1.9],"couleur":"palette","matiere":"granit"},{"f":"boite","p":[0,1.2,-1],"taille":[0.1,0.5,0.08],"couleur":"#3f3d3a","matiere":"metal"},{"f":"boite","p":[0,1.3,-1],"taille":[0.34,0.08,0.08],"couleur":"#3f3d3a","matiere":"metal"}]},{"id":"cypres","nom":"cyprès sombres","cellule":[7,7],"rotation":20,"trajet":{"min":4},"densite":0.25,"groupes":0.7,"groupes_echelle":30,"hauteur":[0.8,1.4],"teinte":0.2,"penche":2,"formes":[{"f":"cylindre","p":[0,0.6,0],"taille":[0.3,1.2,0.3],"couleur":"#3a2e24","matiere":"bois"},{"f":"capsule","p":[0,3.4,0],"taille":[1.7,4.2,1.7],"couleur":"#142016","matiere":"tissu"},{"f":"cone","p":[0,7.2,0],"taille":[1.5,3.2,1.5],"couleur":"#142016","matiere":"tissu"}]},{"id":"mur","nom":"mur d'enceinte en pierre sèche","cellule":[5,1.5],"trajet":{"rangee":true,"min":14,"cote":"deux"},"densite":1,"teinte":0.1,"formes":[{"f":"boite","p":[0,0.8,0],"taille":[4.84,1.6,0.6],"couleur":"#8b8577","matiere":"moellons"}]}]},{"version":0,"id":"champcueil-aube","titre":"Grands Avaux, le soleil se lève entre les pins","inspiration":"Forêt départementale des Grands Avaux, Champcueil (Essonne), début novembre, une quarantaine de minutes après le lever du soleil : lumière rasante entre les troncs, brume basse sur le sentier","graine":4821,"kit":"foret","foret":{"densite":0.7,"rochers":1,"feuillage":0.45,"variete":1},"ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":35,"hauteur":8},"brume":0.005,"atmosphere":{"trouble":0.35},"brume_basse":{"densite":0.035,"hauteur":2.5}},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[],"surfaces":{"sol":"litiere-automne","trajet":"sable-blanc","rochers":"gres-fontainebleau","arbres":{"a":"ecorce-pin-sylvestre","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau-verruqueux","b":"ecorce-chataignier","part":0.55}},"semis":[{"id":"bois-mort","nom":"branches mortes tombées","cellule":[4.5,4.5],"rotation":8,"trajet":{"min":1.2},"densite":0.45,"echelle":[0.6,1.3],"teinte":0.3,"desordre":1,"formes":[{"f":"capsule","p":[0,0.05,0],"taille":[0.1,2.2,0.1],"penche":[87,0],"matiere":"bois-mort"},{"f":"capsule","p":[0.45,0.06,0.28],"taille":[0.055,0.9,0.055],"cap":35,"penche":[84,0],"matiere":"bois-mort"},{"f":"capsule","p":[-0.55,0.09,-0.12],"taille":[0.035,0.6,0.035],"cap":-40,"penche":[76,12],"matiere":"bois-mort"},{"f":"capsule","p":[0.2,0.03,-0.6],"taille":[0.05,1.1,0.05],"cap":100,"penche":[89,0],"matiere":"bois-mort"}]},{"id":"cailloux","nom":"éclats et cailloux de grès à demi enterrés","cellule":[2,2],"rotation":53,"trajet":{"min":0.5,"max":12},"densite":0.32,"groupes":0.6,"groupes_echelle":9,"echelle":[0.6,1.4],"desordre":1,"formes":[{"f":"boule","p":[0,-0.01,0],"taille":[0.3,0.1,0.22],"cap":20,"matiere":"gres-eclat"},{"f":"boule","p":[0.32,-0.005,0.18],"taille":[0.15,0.06,0.11],"cap":70,"matiere":"gres-eclat"},{"f":"boule","p":[-0.25,-0.005,0.3],"taille":[0.1,0.045,0.08],"matiere":"gres-eclat"},{"f":"boule","p":[-0.1,-0.01,-0.35],"taille":[0.2,0.08,0.13],"cap":-30,"matiere":"gres-eclat"}]}]}];                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
 const canvas = $("view");
@@ -12179,7 +12443,7 @@ if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lanc
    bouge que sur ordre du récit. Sans lui ni lanceur de rayons, la sonde rend « rien » (aucun obstacle). */
 const SONDE={lance:null,p:null};
 function sondeProg(){                                           // moteur v3 (ou option v3sonde) : compilée au départ, sans bloquer
-  if(SONDE.p) return SONDE.p; if(!CFG.v3sonde&&!(V3.on&&S.semN>0)) return null;   // forêt : troncs et blocs sont connus en JS (obstaclesConnus), on épargne ce gros programme à Direct3D ;   // en v3, le lanceur de rayons n'est pas compilé : la sonde garde le porteur hors des surfaces (§16)
+  if(SONDE.p) return SONDE.p; if(!CFG.v3sonde&&!(V3.on&&S.semN>0&&S.kit===2)) return null;   // forêt : troncs et blocs sont connus en JS (obstaclesConnus), on épargne ce gros programme à Direct3D ;   // en v3, le lanceur de rayons n'est pas compilé : la sonde garde le porteur hors des surfaces (§16)
   if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.lance=lancer(FS_V3SONDE); }
   if(!fini(SONDE.lance)) return null;
   SONDE.p=finir(SONDE.lance); SONDE.lance=null; etapeGL("  compilé : sonde de collision"); return SONDE.p;
@@ -12293,6 +12557,7 @@ function applyFiche(f){
 
 /* Objets : la fiche les décrit en formes de base, on les range dans une texture de données lue par le shader. */
 const FORMES={boite:0,boule:1,cylindre:2,cone:3,capsule:4,toit:5};
+const dentsDe=fo=>Math.round(clampN(fo.dents,0,60,0));       // découpe en peigne le long de x (sdPrim, monde.glsl)
 const MATIERES={mat:0,bois:1,pierre:2,metal:3,verre:4,pelage:5,tissu:5,tuile:6,lumineux:7};
 const SEM0=72, SEM_L=10, SH_ROWS=SEM0+4*SEM_L, shapesData=new Float32Array(4*4*SH_ROWS), cacheObj=new Set();
 const shapesT=gl.createTexture();
@@ -12321,7 +12586,7 @@ function buildShapes(f){
       const t=(Array.isArray(fo.taille)?fo.taille:[1,1,1]).map(v=>clampN(v,.01,40,1)*ech*.5);
       const pe=Array.isArray(fo.penche)?fo.penche:[0,0], col=couleur(fo.couleur), r=(row+k)*16;
       ancrer(fo.f,p,t,pe,2);
-      shapesData.set([x+c*p[0]+sn*p[2], y+p[1], z-sn*p[0]+c*p[2], FORMES[fo.f],
+      shapesData.set([x+c*p[0]+sn*p[2], y+p[1], z-sn*p[0]+c*p[2], FORMES[fo.f]+8*dentsDe(fo),
                       t[0],t[1],t[2], yaw+clampN(fo.cap,-360,360,0)*Math.PI/180,
                       col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
                       clampN(fo.lisse,0,.5,0)*ech, clampN(fo.arrondi,0,.3,0)*ech, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
@@ -12377,7 +12642,7 @@ function packSemis(f){
       if(pe[0]||pe[1]){ const R=Math.hypot(...t)+(fo.f==="capsule"?t[0]:0); e=[R,R,R]; }
       for(let i=0;i<3;i++){ mn[i]=Math.min(mn[i],p[i]-e[i]-ar); mx[i]=Math.max(mx[i],p[i]+e[i]+ar); }
       const col=fo.couleur==="palette"&&pal.length?[-1,-1,-1]:couleur(fo.couleur);
-      shapesData.set([p[0],p[1],p[2],FORMES[fo.f], t[0],t[1],t[2],fc,
+      shapesData.set([p[0],p[1],p[2],FORMES[fo.f]+8*dentsDe(fo), t[0],t[1],t[2],fc,
                       col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
                       clampN(fo.lisse,0,.5,0), ar, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], (r0+4+j)*16);
     });
@@ -12413,7 +12678,7 @@ function packSemis(f){
    on les range dans une texture de données lue par recette.glsl (fonction recette), une ligne par recette.
    Texels d'une ligne : 0 couleur, espace | 1 variation | 2 grain | 3-5 nuance et brillance | 6-11 motif | 12-16 palette
    | 17-32 quatre taches | 33-38 mousse | 39-40 salissure et relief | 41-44 deux bosses. */
-const MAT_LIB={"recettes":{"litiere":{"nom":"litière de feuilles mortes, mousse par plaques","espace":"sol","couleur":"#8d6f4c","motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":1,"taille":1,"opacite":1},"taches":[{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11}],"grain":{"echelle":60,"force":0.4},"mousse":{"couleur":"#3a4927","force":1,"echelle":0.42,"seuils":[0.6,0.72],"fbm":true,"decalage":20,"grain":{"echelle":45,"force":0.8},"adoucit":0.6},"relief":{"inclinaison":0.12,"grain":{"echelle":30,"force":0.25}},"brillance":0.22},"sentier-sable":{"nom":"sable tassé du sentier, feuilles éparses","espace":"sol","couleur":"#b4a997","variation":{"echelle":3,"force":0.3784},"taches":[{"couleur":"#000000","force":0.38,"echelle":0.6,"seuils":[0.45,0.75],"fbm":true,"decalage":5,"sous_motif":true},{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11,"sur_motif":true}],"motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":0.1,"couverture_bruit":0.35,"taille":0.32,"opacite":0.92},"grain":{"echelle":90,"force":0.2},"relief":{"inclinaison":0.1,"grain":{"echelle":30,"force":0.25}},"brillance":0.04},"gres":{"nom":"grès de Fontainebleau, lichen, mousse côté humide","espace":"volume","couleur":"#a09d96","variation":{"echelle":1.1,"force":0.6},"nuance":{"couleur":"#aca08d","force":0.35,"echelle":4.3,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":60,"force":0.3},"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31}],"mousse":{"couleur":"#4c6530","force":0.9,"echelle":0.8,"seuils":[0.38,0.6],"fbm":true,"decalage":3,"dessus":[0.25,0.8],"pente_bruit":0.7,"pente_echelle":4.3,"pente_decalage":5,"cote":[0.3,0.9],"cote_force":0.8,"adoucit":0.5,"grain":{"echelle":50,"force":0.9}},"salissure":{"force":0.5,"hauteur":0.45},"relief":{"bosses":[{"echelle":4.3,"fbm":true,"decalage":5,"force":0.018},{"echelle":18,"force":0.0075}]},"brillance":0.04},"sable-dunes":{"nom":"sable de dune, rides de vent","espace":"sol","couleur":"#c6ac8a","variation":{"echelle":2,"force":0.2083},"grain":{"echelle":160,"force":0.14},"motif":{"type":"rides","echelle":26,"deformation":6,"masque":{"echelle":0.25,"seuils":[0.25,0.6]},"couleur":"#bda07d","opacite":0.3,"inclinaison":0.22},"relief":{"grain":{"echelle":120,"force":0.12}},"brillance":0.1},"ecorce-chene":{"nom":"écorce de chêne, fissures profondes","espace":"volume","couleur":"#726c65","motif":{"type":"fissures","echelle":[26,2.6,26],"seuils":[0.7,0.97],"profondeur":0.9,"couleur":"#34312d","fines":{"echelle":[60,7,60],"decalage":4,"seuils":[0.8,0.97],"profondeur":0.25}},"grain":{"echelle":[6,1,6],"force":0.5},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-pin":{"nom":"écorce de pin sylvestre, plaques, haut du tronc orangé","espace":"volume","couleur":"#786c65","nuance":{"couleur":"#947865","force":1,"echelle":[9,2,9],"seuils":[0,1],"decalage":0},"taches":[{"couleur":"#ba885a","force":1,"echelle":0,"seuils":[0,1],"biais":1,"hauteur":[5,8.5],"sous_motif":true}],"motif":{"type":"fissures","echelle":[14,3,14],"decalage":2,"seuils":[0.78,0.96],"profondeur":1,"assombrit":0.8},"grain":{"echelle":50,"force":0.4},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-bouleau":{"nom":"écorce de bouleau, lenticelles, pied noirci","espace":"volume","couleur":"#d0cdc6","grain":{"echelle":[20,3,20],"force":0.3},"taches":[{"couleur":"#5a5551","force":0.7,"echelle":[12,55,12],"seuils":[0.72,0.8],"creux":0.2},{"couleur":"#383534","force":1,"echelle":[7,1.4,7],"decalage":2,"seuils":[0.6,0.7],"biais":0.35,"hauteur":[1.4,0],"creux":0.8}],"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.004},"brillance":0.06},"ecorce-chataignier":{"nom":"écorce de châtaignier, fibres verticales","espace":"volume","couleur":"#6f6a61","nuance":{"couleur":"#5a6541","force":0.5,"echelle":[4,0.7,4],"seuils":[0.4,0.7],"decalage":5},"grain":{"echelle":[30,2,30],"force":0.8},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"bosses":[{"echelle":[30,2,30],"force":0.012}]},"brillance":0.06},"gres-patine":{"nom":"grès patiné par le sable, sans mousse","base":"gres","mousse":null,"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31},{"couleur":"#baa488","force":0.5,"echelle":0,"seuils":[-1,0]}]},"planches":{"nom":"planches de bois grisé, joints sombres","espace":"volume","couleur":"#8a7a66","motif":{"type":"planches","echelle":7,"joint":0.08,"longueur":2.4,"eclat":0.5,"couleur":"#2a231c","opacite":1},"grain":{"echelle":[40,4,40],"force":0.35},"salissure":{"force":0.35,"hauteur":0.6},"relief":{"motif":0.006},"brillance":0.05},"paves":{"nom":"pavés de grès, joints terreux","espace":"sol","couleur":"#8d8577","motif":{"type":"paves","echelle":6,"joint":0.1,"decalage_rangs":0.5,"eclat":0.45,"bombe":0.6,"couleur":"#3a342c","opacite":1},"variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":70,"force":0.25},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.4,"seuils":[0.45,0.75],"fbm":true,"decalage":7}],"mousse":{"couleur":"#3b4c2b","force":0.7,"echelle":0.5,"seuils":[0.55,0.75],"fbm":true,"decalage":13},"relief":{"motif":0.01,"grain":{"echelle":40,"force":0.08}},"brillance":0.12},"crepi":{"nom":"crépi de façade, salissures en pied","espace":"volume","couleur":"#c9bba3","variation":{"echelle":0.7,"force":0.25},"grain":{"echelle":90,"force":0.3},"taches":[{"couleur":"#6d6458","force":0.4,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.45,"hauteur":0.8},"relief":{"bosses":[{"echelle":60,"force":0.002}]},"brillance":0.03},"herbe":{"nom":"herbe rase de prairie, plaques plus sèches","espace":"sol","couleur":"#6f8442","variation":{"echelle":0.35,"force":0.5},"nuance":{"couleur":"#9a9455","force":0.6,"echelle":0.9,"seuils":[0.45,0.7],"fbm":true,"decalage":5},"motif":{"type":"fissures","echelle":[55,1,7],"seuils":[0.55,0.95],"profondeur":0.8,"assombrit":0.45},"grain":{"echelle":140,"force":0.5},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.25,"seuils":[0.45,0.75],"fbm":true,"decalage":3},{"couleur":"#7a6a4a","force":0.6,"echelle":3,"seuils":[0.72,0.8]}],"relief":{"motif":0.004,"grain":{"echelle":50,"force":0.3}},"brillance":0.06},"neige":{"nom":"neige tassée, ombres bleutées","espace":"sol","couleur":"#e9edf2","variation":{"echelle":0.4,"force":0.12},"nuance":{"couleur":"#cfd9e6","force":0.5,"echelle":1.2,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":180,"force":0.08},"relief":{"bosses":[{"echelle":1.5,"fbm":true,"force":0.02}],"grain":{"echelle":90,"force":0.06}},"brillance":0.3},"asphalte":{"nom":"asphalte usé, rapiéçages et fissures","espace":"sol","couleur":"#4b4b4c","variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":150,"force":0.45},"motif":{"type":"fissures","echelle":[1.4,1,1.4],"seuils":[0.92,0.99],"profondeur":1,"couleur":"#252524"},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.35,"seuils":[0.5,0.75],"fbm":true},{"couleur":"#5d5c58","force":0.5,"echelle":[0.25,1,0.08],"seuils":[0.62,0.7],"decalage":4}],"relief":{"motif":0.004,"grain":{"echelle":60,"force":0.06}},"brillance":0.15},"chaussee":{"nom":"chaussée marquée : axe en tirets, lignes de rive","base":"asphalte","motif":{"type":"marquage","largeur":0.14,"tiret":3,"intervalle":4.5,"axe":"simple","bords":0,"couleur":"#c9c4b4","opacite":0.9}},"dalles":{"nom":"trottoir en dalles de béton","espace":"sol","couleur":"#8d8a83","motif":{"type":"paves","echelle":0.7,"joint":0.04,"decalage_rangs":0,"eclat":0.25,"bombe":0,"couleur":"#4e4c47","opacite":0.8},"variation":{"echelle":0.4,"force":0.25},"grain":{"echelle":120,"force":0.3},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.6,"seuils":[0.5,0.78],"fbm":true,"decalage":2}],"relief":{"motif":0.003,"grain":{"echelle":50,"force":0.05}},"brillance":0.08},"beton":{"nom":"béton brut, coulures","espace":"volume","couleur":"#9a968d","variation":{"echelle":0.6,"force":0.3},"grain":{"echelle":110,"force":0.3},"taches":[{"couleur":"#4a4740","force":0.45,"echelle":[2,0.35,2],"seuils":[0.55,0.8],"fbm":true,"decalage":5}],"salissure":{"force":0.4,"hauteur":0.6},"brillance":0.05},"brique":{"nom":"brique rouge, joints clairs","espace":"volume","couleur":"#8a4a36","motif":{"type":"paves","echelle":[4.4,13,4.4],"joint":0.08,"decalage_rangs":0.5,"eclat":0.35,"bombe":0,"couleur":"#a39b8c","opacite":1},"grain":{"echelle":90,"force":0.3},"salissure":{"force":0.4,"hauteur":0.8},"relief":{"motif":0.003},"brillance":0.04},"bardage":{"nom":"bardage de planches couchées, peinture","espace":"volume","couleur":"#c8c0ad","motif":{"type":"planches","couchees":true,"echelle":6,"joint":0.12,"longueur":20,"eclat":0.12,"couleur":"#5f5a50","opacite":0.8},"variation":{"echelle":0.6,"force":0.15},"grain":{"echelle":70,"force":0.15},"salissure":{"force":0.35,"hauteur":0.5},"relief":{"motif":0.004},"brillance":0.06},"facade":{"nom":"façade enduite percée de fenêtres sur tous les étages","espace":"volume","couleur":"#c4b8a2","variation":{"echelle":0.6,"force":0.2},"grain":{"echelle":90,"force":0.25},"motif":{"type":"fenetres","largeur":1,"hauteur":1.5,"pas":2.6,"etage":3,"allege":0.9,"cadre":0.08,"rdc":0,"allumees":0.4,"couleur":"#20262c","cadre_couleur":"#e2ddd2","lumiere":"#ffc27a","opacite":1},"taches":[{"couleur":"#5e564b","force":0.35,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.35,"hauteur":0.8},"relief":{"motif":0.03},"brillance":0.04},"terre":{"nom":"terre battue, cailloux","espace":"sol","couleur":"#7a654c","variation":{"echelle":0.4,"force":0.35},"grain":{"echelle":160,"force":0.55},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.5,"seuils":[0.45,0.75],"fbm":true},{"couleur":"#a39780","force":0.5,"echelle":11,"seuils":[0.74,0.8]}],"relief":{"grain":{"echelle":40,"force":0.12}},"brillance":0.04},"gravier":{"nom":"gravier clair d'allée","espace":"sol","couleur":"#a59d8c","variation":{"echelle":0.5,"force":0.2},"grain":{"echelle":260,"force":0.8},"taches":[{"couleur":"#5e574a","force":0.45,"echelle":30,"seuils":[0.6,0.75]}],"relief":{"grain":{"echelle":120,"force":0.25}},"brillance":0.05},"pate-organique":{"nom":"pâte organique humide (excrément, boue grasse, terre mouillée pétrie) : brun sombre, marbré, luisant, finement bosselé","espace":"volume","couleur":"forme","variation":{"echelle":22,"force":0.45},"nuance":{"couleur":"#24160b","force":0.55,"echelle":55,"seuils":[0.45,0.78],"fbm":true,"decalage":3},"grain":{"echelle":420,"force":0.28},"taches":[{"couleur":"#6e4c2b","force":0.3,"echelle":120,"seuils":[0.62,0.78],"decalage":7}],"relief":{"bosses":[{"echelle":70,"fbm":true,"decalage":2,"force":0.0022},{"echelle":260,"force":0.0005}]},"brillance":0.6}},"surfaces":{"foret":{"sol":"litiere","trajet":"sentier-sable","rochers":"gres","arbres":{"a":"ecorce-pin","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau","b":"ecorce-chataignier","part":0.5}},"dunes":{"sol":"sable-dunes","trajet":"sable-dunes","rochers":"gres-patine"},"nu":{"sol":"herbe","trajet":"asphalte","rochers":"gres"}}};
+const MAT_LIB={"recettes":{"litiere":{"nom":"litière de feuilles mortes, mousse par plaques","espace":"sol","couleur":"#8d6f4c","motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":1,"taille":1,"opacite":1},"taches":[{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11}],"grain":{"echelle":60,"force":0.4},"mousse":{"couleur":"#3a4927","force":1,"echelle":0.42,"seuils":[0.6,0.72],"fbm":true,"decalage":20,"grain":{"echelle":45,"force":0.8},"adoucit":0.6},"relief":{"inclinaison":0.12,"grain":{"echelle":30,"force":0.25}},"brillance":0.22},"sentier-sable":{"nom":"sable tassé du sentier, feuilles éparses","espace":"sol","couleur":"#b4a997","variation":{"echelle":3,"force":0.3784},"taches":[{"couleur":"#000000","force":0.38,"echelle":0.6,"seuils":[0.45,0.75],"fbm":true,"decalage":5,"sous_motif":true},{"couleur":"#000000","force":0.4,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11,"sur_motif":true}],"motif":{"type":"feuilles","echelle":15,"deformation":0.12,"eclat":0.5,"bord":0.55,"recouvre":0.8,"inclinaison":0.5,"palette":[{"couleur":"#72533b","part":0.3},{"couleur":"#9a7247","part":0.25},{"couleur":"#b08d55","part":0.2},{"couleur":"#8d7d65","part":0.15},{"couleur":"#4c4138","part":0.1}],"couverture":0.1,"couverture_bruit":0.35,"taille":0.32,"opacite":0.92},"grain":{"echelle":90,"force":0.2},"relief":{"inclinaison":0.1,"grain":{"echelle":30,"force":0.25}},"brillance":0.04},"gres":{"nom":"grès de Fontainebleau, lichen, mousse côté humide","espace":"volume","couleur":"#a09d96","variation":{"echelle":1.1,"force":0.6},"nuance":{"couleur":"#aca08d","force":0.35,"echelle":4.3,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":60,"force":0.3},"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31}],"mousse":{"couleur":"#4c6530","force":0.9,"echelle":0.8,"seuils":[0.38,0.6],"fbm":true,"decalage":3,"dessus":[0.25,0.8],"pente_bruit":0.7,"pente_echelle":4.3,"pente_decalage":5,"cote":[0.3,0.9],"cote_force":0.8,"adoucit":0.5,"grain":{"echelle":50,"force":0.9}},"salissure":{"force":0.5,"hauteur":0.45},"relief":{"bosses":[{"echelle":4.3,"fbm":true,"decalage":5,"force":0.018},{"echelle":18,"force":0.0075}]},"brillance":0.04},"sable-dunes":{"nom":"sable de dune, rides de vent","espace":"sol","couleur":"#c6ac8a","variation":{"echelle":2,"force":0.2083},"grain":{"echelle":160,"force":0.14},"motif":{"type":"rides","echelle":26,"deformation":6,"masque":{"echelle":0.25,"seuils":[0.25,0.6]},"couleur":"#bda07d","opacite":0.3,"inclinaison":0.22},"relief":{"grain":{"echelle":120,"force":0.12}},"brillance":0.1},"ecorce-chene":{"nom":"écorce de chêne, fissures profondes","espace":"volume","couleur":"#726c65","motif":{"type":"fissures","echelle":[26,2.6,26],"seuils":[0.7,0.97],"profondeur":0.9,"couleur":"#34312d","fines":{"echelle":[60,7,60],"decalage":4,"seuils":[0.8,0.97],"profondeur":0.25}},"grain":{"echelle":[6,1,6],"force":0.5},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-pin":{"nom":"écorce de pin sylvestre, plaques, haut du tronc orangé","espace":"volume","couleur":"#786c65","nuance":{"couleur":"#947865","force":1,"echelle":[9,2,9],"seuils":[0,1],"decalage":0},"taches":[{"couleur":"#ba885a","force":1,"echelle":0,"seuils":[0,1],"biais":1,"hauteur":[5,8.5],"sous_motif":true}],"motif":{"type":"fissures","echelle":[14,3,14],"decalage":2,"seuils":[0.78,0.96],"profondeur":1,"assombrit":0.8},"grain":{"echelle":50,"force":0.4},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.012},"brillance":0.06},"ecorce-bouleau":{"nom":"écorce de bouleau, lenticelles, pied noirci","espace":"volume","couleur":"#d0cdc6","grain":{"echelle":[20,3,20],"force":0.3},"taches":[{"couleur":"#5a5551","force":0.7,"echelle":[12,55,12],"seuils":[0.72,0.8],"creux":0.2},{"couleur":"#383534","force":1,"echelle":[7,1.4,7],"decalage":2,"seuils":[0.6,0.7],"biais":0.35,"hauteur":[1.4,0],"creux":0.8}],"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"motif":0.004},"brillance":0.06},"ecorce-chataignier":{"nom":"écorce de châtaignier, fibres verticales","espace":"volume","couleur":"#6f6a61","nuance":{"couleur":"#5a6541","force":0.5,"echelle":[4,0.7,4],"seuils":[0.4,0.7],"decalage":5},"grain":{"echelle":[30,2,30],"force":0.8},"mousse":{"couleur":"#536338","force":0.75,"echelle":[6,2,6],"seuils":[0.35,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[3.2,0.3]},"relief":{"bosses":[{"echelle":[30,2,30],"force":0.012}]},"brillance":0.06},"gres-patine":{"nom":"grès patiné par le sable, sans mousse","base":"gres","mousse":null,"taches":[{"couleur":"#000000","force":0.38,"echelle":[3,0.5,3],"seuils":[0.55,0.8],"decalage":3},{"couleur":"#babdb0","force":0.7,"echelle":7,"seuils":[0.66,0.72],"decalage":11},{"couleur":"#474744","force":0.6,"echelle":5,"seuils":[0.7,0.76],"decalage":31},{"couleur":"#baa488","force":0.5,"echelle":0,"seuils":[-1,0]}]},"planches":{"nom":"planches de bois grisé, joints sombres","espace":"volume","couleur":"#8a7a66","motif":{"type":"planches","echelle":7,"joint":0.08,"longueur":2.4,"eclat":0.5,"couleur":"#2a231c","opacite":1},"grain":{"echelle":[40,4,40],"force":0.35},"salissure":{"force":0.35,"hauteur":0.6},"relief":{"motif":0.006},"brillance":0.05},"paves":{"nom":"pavés de grès, joints terreux","espace":"sol","couleur":"#8d8577","motif":{"type":"paves","echelle":6,"joint":0.1,"decalage_rangs":0.5,"eclat":0.45,"bombe":0.6,"couleur":"#3a342c","opacite":1},"variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":70,"force":0.25},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.4,"seuils":[0.45,0.75],"fbm":true,"decalage":7}],"mousse":{"couleur":"#3b4c2b","force":0.7,"echelle":0.5,"seuils":[0.55,0.75],"fbm":true,"decalage":13},"relief":{"motif":0.01,"grain":{"echelle":40,"force":0.08}},"brillance":0.12},"crepi":{"nom":"crépi de façade, salissures en pied","espace":"volume","couleur":"#c9bba3","variation":{"echelle":0.7,"force":0.25},"grain":{"echelle":90,"force":0.3},"taches":[{"couleur":"#6d6458","force":0.4,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.45,"hauteur":0.8},"relief":{"bosses":[{"echelle":60,"force":0.002}]},"brillance":0.03},"herbe":{"nom":"herbe rase de prairie, plaques plus sèches","espace":"sol","couleur":"#6f8442","variation":{"echelle":0.35,"force":0.5},"nuance":{"couleur":"#9a9455","force":0.6,"echelle":0.9,"seuils":[0.45,0.7],"fbm":true,"decalage":5},"motif":{"type":"fissures","echelle":[55,1,7],"seuils":[0.55,0.95],"profondeur":0.8,"assombrit":0.45},"grain":{"echelle":140,"force":0.5},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.25,"seuils":[0.45,0.75],"fbm":true,"decalage":3},{"couleur":"#7a6a4a","force":0.6,"echelle":3,"seuils":[0.72,0.8]}],"relief":{"motif":0.004,"grain":{"echelle":50,"force":0.3}},"brillance":0.06},"neige":{"nom":"neige tassée, ombres bleutées","espace":"sol","couleur":"#e9edf2","variation":{"echelle":0.4,"force":0.12},"nuance":{"couleur":"#cfd9e6","force":0.5,"echelle":1.2,"seuils":[0.4,0.7],"fbm":true,"decalage":5},"grain":{"echelle":180,"force":0.08},"relief":{"bosses":[{"echelle":1.5,"fbm":true,"force":0.02}],"grain":{"echelle":90,"force":0.06}},"brillance":0.3},"asphalte":{"nom":"asphalte usé, rapiéçages et fissures","espace":"sol","couleur":"#4b4b4c","variation":{"echelle":0.5,"force":0.3},"grain":{"echelle":150,"force":0.45},"motif":{"type":"fissures","echelle":[1.4,1,1.4],"seuils":[0.92,0.99],"profondeur":1,"couleur":"#252524"},"taches":[{"couleur":"#000000","force":0.35,"echelle":0.35,"seuils":[0.5,0.75],"fbm":true},{"couleur":"#5d5c58","force":0.5,"echelle":[0.25,1,0.08],"seuils":[0.62,0.7],"decalage":4}],"relief":{"motif":0.004,"grain":{"echelle":60,"force":0.06}},"brillance":0.15},"chaussee":{"nom":"chaussée marquée : axe en tirets, lignes de rive","base":"asphalte","motif":{"type":"marquage","largeur":0.14,"tiret":3,"intervalle":4.5,"axe":"simple","bords":0,"couleur":"#c9c4b4","opacite":0.9}},"dalles":{"nom":"trottoir en dalles de béton","espace":"sol","couleur":"#8d8a83","motif":{"type":"paves","echelle":0.7,"joint":0.04,"decalage_rangs":0,"eclat":0.25,"bombe":0,"couleur":"#4e4c47","opacite":0.8},"variation":{"echelle":0.4,"force":0.25},"grain":{"echelle":120,"force":0.3},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.6,"seuils":[0.5,0.78],"fbm":true,"decalage":2}],"relief":{"motif":0.003,"grain":{"echelle":50,"force":0.05}},"brillance":0.08},"beton":{"nom":"béton brut, coulures","espace":"volume","couleur":"#9a968d","variation":{"echelle":0.6,"force":0.3},"grain":{"echelle":110,"force":0.3},"taches":[{"couleur":"#4a4740","force":0.45,"echelle":[2,0.35,2],"seuils":[0.55,0.8],"fbm":true,"decalage":5}],"salissure":{"force":0.4,"hauteur":0.6},"brillance":0.05},"brique":{"nom":"brique rouge, joints clairs","espace":"volume","couleur":"#8a4a36","motif":{"type":"paves","echelle":[4.4,13,4.4],"joint":0.08,"decalage_rangs":0.5,"eclat":0.35,"bombe":0,"couleur":"#a39b8c","opacite":1},"grain":{"echelle":90,"force":0.3},"salissure":{"force":0.4,"hauteur":0.8},"relief":{"motif":0.003},"brillance":0.04},"bardage":{"nom":"bardage de planches couchées, peinture","espace":"volume","couleur":"#c8c0ad","motif":{"type":"planches","couchees":true,"echelle":6,"joint":0.12,"longueur":20,"eclat":0.12,"couleur":"#5f5a50","opacite":0.8},"variation":{"echelle":0.6,"force":0.15},"grain":{"echelle":70,"force":0.15},"salissure":{"force":0.35,"hauteur":0.5},"relief":{"motif":0.004},"brillance":0.06},"facade":{"nom":"façade enduite percée de fenêtres sur tous les étages","espace":"volume","couleur":"#c4b8a2","variation":{"echelle":0.6,"force":0.2},"grain":{"echelle":90,"force":0.25},"motif":{"type":"fenetres","largeur":1,"hauteur":1.5,"pas":2.6,"etage":3,"allege":0.9,"cadre":0.08,"rdc":0,"allumees":0.4,"couleur":"#20262c","cadre_couleur":"#e2ddd2","lumiere":"#ffc27a","opacite":1},"taches":[{"couleur":"#5e564b","force":0.35,"echelle":[1.5,0.4,1.5],"seuils":[0.55,0.8],"fbm":true,"decalage":3}],"salissure":{"force":0.35,"hauteur":0.8},"relief":{"motif":0.03},"brillance":0.04},"terre":{"nom":"terre battue, cailloux","espace":"sol","couleur":"#7a654c","variation":{"echelle":0.4,"force":0.35},"grain":{"echelle":160,"force":0.55},"taches":[{"couleur":"#000000","force":0.3,"echelle":0.5,"seuils":[0.45,0.75],"fbm":true},{"couleur":"#a39780","force":0.5,"echelle":11,"seuils":[0.74,0.8]}],"relief":{"grain":{"echelle":40,"force":0.12}},"brillance":0.04},"gravier":{"nom":"gravier clair d'allée","espace":"sol","couleur":"#a59d8c","variation":{"echelle":0.5,"force":0.2},"grain":{"echelle":260,"force":0.8},"taches":[{"couleur":"#5e574a","force":0.45,"echelle":30,"seuils":[0.6,0.75]}],"relief":{"grain":{"echelle":120,"force":0.25}},"brillance":0.05},"gres-fontainebleau":{"nom":"grès de Fontainebleau de près : grain de sable, patine sombre en croûte, lichens pâles en rosettes, algue verte côté humide, bosselé","espace":"volume","couleur":"#aaa69c","variation":{"echelle":0.9,"force":0.45},"nuance":{"couleur":"#bcae94","force":0.5,"echelle":2.2,"seuils":[0.45,0.75],"fbm":true,"decalage":7},"grain":{"echelle":150,"force":0.35},"taches":[{"couleur":"#000000","force":0.6,"echelle":[1.6,0.6,1.6],"seuils":[0.48,0.8],"fbm":true,"decalage":3,"biais":0.25,"hauteur":[0.1,1.6]},{"couleur":"#dcdccd","force":0.8,"echelle":14,"seuils":[0.63,0.69],"fbm":true,"decalage":11},{"couleur":"#929d70","force":0.55,"echelle":7,"seuils":[0.6,0.74],"fbm":true,"decalage":17},{"couleur":"#3e3c37","force":0.4,"echelle":26,"seuils":[0.76,0.8],"decalage":23}],"mousse":{"couleur":"#4a6229","force":0.9,"echelle":0.9,"seuils":[0.42,0.62],"fbm":true,"decalage":3,"dessus":[0.3,0.85],"pente_bruit":0.7,"pente_echelle":4.3,"pente_decalage":5,"cote":[0.3,0.9],"cote_force":0.8,"adoucit":0.6,"grain":{"echelle":80,"force":1}},"salissure":{"force":0.55,"hauteur":0.35},"relief":{"bosses":[{"echelle":2.6,"fbm":true,"decalage":5,"force":0.045},{"echelle":11,"decalage":9,"force":0.014}],"grain":{"echelle":110,"force":0.32}},"brillance":0.05},"litiere-automne":{"nom":"litière d'automne de près : feuilles de chêne et de châtaignier rousses, bouleau jaune, aiguilles, terre noire, bosselée","espace":"sol","couleur":"#5b4532","motif":{"type":"feuilles","echelle":21,"deformation":0.15,"eclat":0.6,"bord":0.6,"recouvre":0.75,"inclinaison":0.8,"palette":[{"couleur":"#7b4a26","part":0.3},{"couleur":"#a26a35","part":0.22},{"couleur":"#c49a48","part":0.12},{"couleur":"#5e4a36","part":0.2},{"couleur":"#6d5a45","part":0.16}],"couverture":0.97,"couverture_bruit":0,"taille":0.95,"opacite":1,"forme":0.42,"lobes":0.35},"taches":[{"couleur":"#000000","force":0.45,"echelle":0.35,"seuils":[0.35,0.72],"fbm":true,"decalage":11},{"couleur":"#a2582c","force":0.18,"echelle":[70,1,9],"seuils":[0.72,0.8],"decalage":41,"sous_motif":true},{"couleur":"#2c241c","force":0.6,"echelle":3,"seuils":[0.62,0.8],"fbm":true,"decalage":29,"creux":0.6,"sur_motif":true}],"grain":{"echelle":70,"force":0.4},"mousse":{"couleur":"#3a4b22","force":1,"echelle":0.42,"seuils":[0.62,0.73],"fbm":true,"decalage":20,"grain":{"echelle":55,"force":0.9},"adoucit":0.5},"relief":{"motif":0.01,"inclinaison":0.22,"bosses":[{"echelle":4,"fbm":true,"decalage":3,"force":0.03},{"echelle":17,"decalage":7,"force":0.008}],"grain":{"echelle":40,"force":0.3}},"brillance":0.2},"sable-blanc":{"nom":"sentier de sable blanc de Fontainebleau, tassé, piétiné, humus en bordure, quelques feuilles","espace":"sol","couleur":"#cdc4b1","variation":{"echelle":2.4,"force":0.3},"taches":[{"couleur":"#000000","force":0.32,"echelle":0.55,"seuils":[0.5,0.8],"fbm":true,"decalage":5,"sous_motif":true},{"couleur":"#e4ded0","force":0.4,"echelle":[1.5,1,4],"seuils":[0.55,0.75],"fbm":true,"decalage":13,"sous_motif":true},{"couleur":"#000000","force":0.35,"echelle":0.35,"seuils":[0.35,0.7],"fbm":true,"decalage":11,"sur_motif":true}],"motif":{"type":"feuilles","echelle":16,"deformation":0.18,"eclat":0.55,"bord":0.6,"recouvre":0.8,"inclinaison":0.6,"palette":[{"couleur":"#7b4a26","part":0.3},{"couleur":"#a26a35","part":0.25},{"couleur":"#c49a48","part":0.2},{"couleur":"#5e4a36","part":0.25}],"couverture":0.08,"couverture_bruit":0.35,"taille":0.7,"opacite":0.95,"forme":0.45,"lobes":0.3},"grain":{"echelle":220,"force":0.35},"relief":{"inclinaison":0.1,"bosses":[{"echelle":2.2,"fbm":true,"decalage":4,"force":0.035},{"echelle":9,"decalage":6,"force":0.008}],"grain":{"echelle":90,"force":0.22}},"brillance":0.03},"ecorce-pin-sylvestre":{"nom":"pin sylvestre : bas gris-brun en grosses plaques séparées de crevasses profondes, haut orangé en fines écailles","espace":"volume","couleur":"#6f6157","nuance":{"couleur":"#8a7464","force":0.9,"echelle":[7,1.5,7],"seuils":[0.2,0.9],"decalage":0},"taches":[{"couleur":"#c47e4a","force":1,"echelle":[3,0.5,3],"seuils":[0.95,1.45],"fbm":true,"biais":1,"hauteur":[3.5,7.5],"sous_motif":true},{"couleur":"#9a8f84","force":0.45,"echelle":[5,1.2,5],"seuils":[0.55,0.8],"decalage":7,"sous_motif":true},{"couleur":"#000000","force":0.35,"echelle":[3,6,3],"seuils":[0.5,0.85],"fbm":true,"decalage":19}],"motif":{"type":"fissures","echelle":[16,1.6,16],"decalage":2,"seuils":[0.7,0.95],"profondeur":1,"couleur":"#2e2622","fines":{"echelle":[40,5,40],"decalage":4,"seuils":[0.82,0.96],"profondeur":0.35}},"grain":{"echelle":[60,25,60],"force":0.4},"mousse":{"couleur":"#6f7a45","force":0.7,"echelle":[5,2,5],"seuils":[0.4,0.62],"decalage":9,"cote":[-0.1,0.7],"cote_force":1,"hauteur":[1.6,0.2]},"relief":{"motif":0.03,"grain":{"echelle":70,"force":0.2}},"brillance":0.05},"ecorce-bouleau-verruqueux":{"nom":"bouleau verruqueux : blanc crayeux, lenticelles en tirets horizontaux, taches noires, pied noir et crevassé","espace":"volume","couleur":"#dcd8cf","nuance":{"couleur":"#c9bcae","force":0.5,"echelle":[3,1.2,3],"seuils":[0.45,0.8],"fbm":true,"decalage":3},"grain":{"echelle":[24,4,24],"force":0.22},"taches":[{"couleur":"#4f4a46","force":0.75,"echelle":[14,60,14],"seuils":[0.74,0.8],"creux":0.25},{"couleur":"#272422","force":0.95,"echelle":[5,2.2,5],"seuils":[0.7,0.76],"fbm":true,"decalage":12,"creux":0.4},{"couleur":"#26221f","force":1,"echelle":[6,1.4,6],"decalage":2,"seuils":[0.62,0.72],"fbm":true,"biais":0.42,"hauteur":[0.9,0.05],"creux":0.9},{"couleur":"#000000","force":0.3,"echelle":[2,0.4,2],"seuils":[0.4,0.9],"fbm":true,"decalage":31}],"mousse":{"couleur":"#5d6b3a","force":0.45,"echelle":[6,2,6],"seuils":[0.4,0.6],"decalage":9,"cote":[-0.2,0.7],"cote_force":1,"hauteur":[0.5,0.05]},"relief":{"motif":0.012,"grain":{"echelle":60,"force":0.12}},"brillance":0.08},"fougere-rousse":{"nom":"fougère aigle en automne : frondes rousses à brun tabac, nervure claire, pointes desséchées","espace":"volume","couleur":"forme","nuance":{"couleur":"#5c3a1f","force":0.6,"echelle":[3,3,3],"seuils":[0.4,0.8],"fbm":true,"decalage":4},"taches":[{"couleur":"#c79a5a","force":0.55,"echelle":[1,20,30],"seuils":[0.62,0.78],"decalage":8},{"couleur":"#000000","force":0.4,"echelle":[40,4,4],"seuils":[0.5,0.8],"decalage":13}],"grain":{"echelle":60,"force":0.3},"relief":{"grain":{"echelle":45,"force":0.35}},"brillance":0.04},"callune":{"nom":"callune (bruyère) en automne : rameaux serrés vert sombre, fleurs fanées rousses et grises","espace":"volume","couleur":"#3a3b2a","nuance":{"couleur":"#6e4c3c","force":0.5,"echelle":6,"seuils":[0.5,0.75],"fbm":true,"decalage":6},"taches":[{"couleur":"#000000","force":0.6,"echelle":22,"seuils":[0.45,0.75],"decalage":21}],"grain":{"echelle":110,"force":0.7},"salissure":{"force":0.5,"hauteur":0.2},"relief":{"grain":{"echelle":70,"force":0.5}},"brillance":0.02},"bois-mort":{"nom":"branche morte au sol : bois gris délavé, écorce brune par lambeaux, mousse dessus","espace":"volume","couleur":"#4f463c","nuance":{"couleur":"#7a7266","force":0.5,"echelle":[3,9,3],"seuils":[0.4,0.7],"decalage":5},"taches":[{"couleur":"#3a2c22","force":0.6,"echelle":[6,1.5,6],"seuils":[0.55,0.7],"fbm":true,"decalage":15}],"grain":{"echelle":[50,6,50],"force":0.4},"mousse":{"couleur":"#4a5a2a","force":0.8,"echelle":3,"seuils":[0.45,0.65],"fbm":true,"dessus":[0.2,0.8]},"relief":{"grain":{"echelle":[60,10,60],"force":0.3}},"brillance":0.03},"gres-eclat":{"nom":"éclats et cailloux de grès : le grès de Fontainebleau sans la mousse, plus clair","base":"gres-fontainebleau","couleur":"#b3aea3","mousse":null,"salissure":{"force":0.4,"hauteur":0.06}},"pate-organique":{"nom":"pâte organique humide (excrément, boue grasse, terre mouillée pétrie) : brun sombre, marbré, luisant, finement bosselé","espace":"volume","couleur":"forme","variation":{"echelle":22,"force":0.45},"nuance":{"couleur":"#24160b","force":0.55,"echelle":55,"seuils":[0.45,0.78],"fbm":true,"decalage":3},"grain":{"echelle":420,"force":0.28},"taches":[{"couleur":"#6e4c2b","force":0.3,"echelle":120,"seuils":[0.62,0.78],"decalage":7}],"relief":{"bosses":[{"echelle":70,"fbm":true,"decalage":2,"force":0.0022},{"echelle":260,"force":0.0005}]},"brillance":0.6}},"surfaces":{"foret":{"sol":"litiere","trajet":"sentier-sable","rochers":"gres","arbres":{"a":"ecorce-pin","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau","b":"ecorce-chataignier","part":0.5}},"dunes":{"sol":"sable-dunes","trajet":"sable-dunes","rochers":"gres-patine"},"nu":{"sol":"herbe","trajet":"asphalte","rochers":"gres"}}};
 const RT_W=48, RT_MAX=24, matData=new Float32Array(RT_W*RT_MAX*4);
 const matT=gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D,matT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,RT_W,RT_MAX);
@@ -12449,7 +12714,8 @@ function packRecette(r,row){
   put(7,[...ech(mo.echelle,ty===1?15:ty===2?26:ty===4?7:ty===5?5:ty>=6?1:[20,3,20]),N(mo.decalage,-100,100,0)]);
   if(mo.couleur!==undefined) put(8,[...couleur(mo.couleur),0]);
   if(ty===1){ put(9,[N(mo.deformation,0,.5,.12),N(mo.eclat,0,1.5,.5),N(mo.bord,0,1,.55),N(mo.recouvre,0,1,.8)]);
-    put(10,[N(mo.couverture,0,1,1),N(mo.couverture_bruit,0,1,0),N(mo.taille,.05,1,1),0]); }
+    put(10,[N(mo.couverture,0,1,1),N(mo.couverture_bruit,0,1,0),N(mo.taille,.05,mo.forme>0?1.2:1,1),N(mo.forme,0,1,0)]);   // forme > 0 : feuilles superposées (feuillesSup), largeur / longueur
+    put(11,[N(mo.lobes,0,1,0),0,0,0]); }
   if(ty===2){ const mk=Ob(mo.masque), ms=seuils(mk.seuils,.25,.6);
     put(9,[N(mo.deformation,0,20,6),N(mk.echelle,0,5,.25),ms[0],ms[1]]); put(10,[N(mo.cap,-180,180,0)*Math.PI/180,0,0,0]); }
   if(ty===3){ const s=seuils(mo.seuils,.7,.97), fi=Ob(mo.fines), s2=seuils(fi.seuils,.8,.97);
@@ -12497,7 +12763,7 @@ function buildMats(f){
   const d=MAT_LIB.surfaces[kit], ar=sf.arbres||d.arbres||{}, pe=sf.perches||d.perches||{};
   S.surf=[ok(sf.sol,d.sol),ok(sf.trajet,d.trajet),ok(sf.rochers,d.rochers),0];
   S.surfT=[ok(ar.a,"ecorce-pin"),ok(ar.b,"ecorce-chene"),ok(pe.a,"ecorce-bouleau"),ok(pe.b,"ecorce-chataignier")];
-  S.surfP=[clampN(ar.part,0,1,.45),clampN(pe.part,0,1,.5)];
+  S.surfP=[clampN(ar.part,0,1,.45),clampN(pe.part,0,1,.5),kitDe(f)===0&&isObj(f.foret)?clampN(f.foret.variete,0,1,0):0,0];   // variété des troncs (troncVar, recette.glsl)
   for(const o of [...(Array.isArray(f.objets)?f.objets:[]),...(Array.isArray(f.semis)?f.semis:[])]) for(const fo of (o&&Array.isArray(o.formes))?o.formes:[])   // formes qui nomment une recette
     if(fo&&typeof fo.matiere==="string"&&isObj(lib[fo.matiere])) use(fo.matiere);
   const rs=resoudre(sf.sol,lib)||resoudre(d.sol,lib);            // couleur du sol vue par la lumière indirecte
@@ -12555,7 +12821,7 @@ function common(w,h,p){
   bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
   gl.uniform2fv(u.uCan,S.can); gl.uniform4fv(u.uHoup,S.houp);
   gl.uniform4fv(u.uLoin,S.loin); gl.uniform4fv(u.uEau,S.eau||[0,0,0,0]); gl.uniform3fv(u.uLoinCol,S.loinCol); gl.uniform3fv(u.uLoinBas,S.loinBas);
-  bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP);
+  bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP);
   gl.uniform1i(u.uKit,S.kit); gl.uniform4fv(u.uKitP,S.kitP); gl.uniform1i(u.uMode,0);
   gl.uniform4fv(u.uRel,S.rel); gl.uniform4fv(u.uTraj,S.traj); gl.uniform4fv(u.uCreux,S.creux); gl.uniform2fv(u.uTerK,S.terK); gl.uniform1f(u.uYTop,S.yTop);
   gl.uniform1i(u.uSemN,S.semN); gl.uniform4fv(u.uSemTop,S.semTop); gl.uniform3fv(u.uSolAlb,S.solAlb); gl.uniform1f(u.uNuit,S.lum);
@@ -13058,7 +13324,7 @@ function v3Cap(p){
   return {cap,demi:Math.min(Math.PI,loin+.3),pres:pole?Math.PI:Math.min(Math.PI,tout+.3)};
 }
 function aireForme(ty,s){                                      // aire approchée d'une forme de base (demi-tailles s)
-  const [x,y,z]=s;
+  const [x,y,z]=s; ty%=8;                                         // dents du peigne : même aire, à peu près
   if(ty===1){ const p=1.6; return 4*Math.PI*Math.pow((Math.pow(x*y,p)+Math.pow(x*z,p)+Math.pow(y*z,p))/3,1/p); }
   if(ty===2) return 2*Math.PI*x*2*y+2*Math.PI*x*x;
   if(ty===3) return Math.PI*x*(x+Math.hypot(x,2*y));
@@ -13152,7 +13418,7 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   gl.uniform2fv(u.uCan||null,S.can); gl.uniform4fv(u.uHoup||null,S.houp);
   gl.uniform4fv(u.uLoin||null,S.loin); gl.uniform3fv(u.uLoinCol||null,S.loinCol); gl.uniform3fv(u.uLoinBas||null,S.loinBas);
   if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
-  if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP); }
+  if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP); }
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
   gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
   gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);

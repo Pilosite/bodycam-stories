@@ -30,6 +30,7 @@ vec3 coin(vec3 u, vec3 hb, vec3 cl){
   return r;
 }
 vec3 boite(float ty, vec3 b, float ar){                       // demi-tailles de la boîte englobante d'une forme (repère de la forme)
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
   if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
   return b+ar;
 }
