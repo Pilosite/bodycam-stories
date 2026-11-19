@@ -12,7 +12,7 @@
   "ambiance": { "saison": "automne", "meteo": "voile", "soleil": { "azimut": -80, "hauteur": 4 }, "brume": 0.03 },
   "lointain": { "hauteur": 3, "decoupe": 0.2, "couleur": "#4a4f4a", "couleur_bas": "#3a4236" },
   "semis": [
-    { "id": "tombes", "nom": "tombes en rangs serrés", "cellule": [2.3, 3.0], "rotation": 0, "trajet": { "min": 2.6, "max": 22 },
+    { "id": "tombes", "nom": "tombes en rangs serrés", "cellule": [2.3, 3.0], "rotation": 0, "trajet": { "min": 2.6, "max": 13 },
       "densite": 0.85, "oriente": "fixe", "cap": 180, "tourne": 5, "penche": 3, "teinte": 0.35, "desordre": 0.12, "groupes": 0.3, "groupes_echelle": 25,
       "palette": ["#8e8b84", "#6f6c66", "#a39f95", "#4d4c4a", "#7d766a"],
       "formes": [
@@ -24,8 +24,9 @@
       "densite": 0.25, "groupes": 0.7, "groupes_echelle": 30, "hauteur": [0.8, 1.4], "teinte": 0.2, "penche": 2,
       "formes": [
         { "f": "cylindre", "p": [0, 0.6, 0], "taille": [0.3, 1.2, 0.3], "couleur": "#3a2e24", "matiere": "bois" },
-        { "f": "capsule", "p": [0, 4.2, 0], "taille": [1.6, 5.4, 1.6], "couleur": "#1c2a1a", "matiere": "tissu" } ] },
-    { "id": "mur", "nom": "mur d'enceinte en pierre sèche", "cellule": [5, 1.5], "trajet": { "rangee": true, "min": 23, "cote": "deux" },
+        { "f": "capsule", "p": [0, 3.4, 0], "taille": [1.7, 4.2, 1.7], "couleur": "#142016", "matiere": "tissu" },
+        { "f": "cone", "p": [0, 7.2, 0], "taille": [1.5, 3.2, 1.5], "couleur": "#142016", "matiere": "tissu" } ] },
+    { "id": "mur", "nom": "mur d'enceinte en pierre sèche", "cellule": [5, 1.5], "trajet": { "rangee": true, "min": 14, "cote": "deux" },
       "densite": 1, "teinte": 0.1,
       "formes": [ { "f": "boite", "p": [0, 0.8, 0], "taille": [4.84, 1.6, 0.6], "couleur": "#8b8577", "matiere": "moellons" } ] }
   ] }

@@ -37,19 +37,20 @@ function finir(x){
   for(let i=0;i<n;i++){ const a=gl.getActiveUniform(p,i); u[a.name.replace("[0]","")]=gl.getUniformLocation(p,a.name); }
   return {p,u}; }
 const prog=fs=>finir(lancer(fs));
-/* Deux variantes fixes du même shader : sans semis (forêt, dunes) et avec. En rendu logiciel, le code des semis coûte
-   à chaque pas de rayon même quand aucune couche n'est active ; la variante sans lui garde la forêt à son coût d'origine.
-   La seconde se compile une fois, en tâche de fond si le navigateur le permet : jamais de code généré par monde. */
-const FS_PT_SEMIS=FS_PT.replace("\n","\n#define SEMIS 1\n");
+/* Variantes fixes du même shader, choisies par #define. En rendu logiciel, le code présent coûte à chaque pas de rayon même
+   quand il ne s'exécute pas : la forêt garde un programme sans semis, un monde nu un programme sans arbres. Chaque variante se
+   compile une fois (en tâche de fond si le navigateur le permet), à la première fiche qui la demande : jamais de code généré par monde.
+   Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis. */
+const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+(v>>1)+"\n"):FS_PT;
 const P_PT=prog(FS_PT), P_DOWN=prog(FS_DOWN), P_BLUR=prog(FS_BLUR), P_CAM=prog(FS_CAM);
 const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
-let P_SEM=null, P_SEM_LANCE=null;
+const progs=[P_PT,null,null,null], lances=[];
 function progMonde(){                                           // le programme qui sait dessiner le monde courant
-  if(!S.semN) return P_PT;
-  if(!P_SEM){ P_SEM=finir(P_SEM_LANCE||lancer(FS_PT_SEMIS)); P_SEM_LANCE=null; }
-  return P_SEM;
+  const v=(S.semN?1:0)+(S.kit===2?2:0);
+  if(!progs[v]){ progs[v]=finir(lances[v]||lancer(variante(v))); lances[v]=null; }
+  return progs[v];
 }
-if(parallele) setTimeout(()=>{ if(!P_SEM&&!P_SEM_LANCE) P_SEM_LANCE=lancer(FS_PT_SEMIS); },4000);
+if(parallele) setTimeout(()=>{ if(!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
 gl.bindVertexArray(gl.createVertexArray());
 
 function target(w,h,ifmt,filter){

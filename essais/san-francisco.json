@@ -26,7 +26,7 @@
         { "f": "boite", "p": [1.7, 0.45, 5.25], "taille": [1.6, 0.9, 1.2], "couleur": "#8c877c", "matiere": "beton" } ] },
     { "id": "voitures", "nom": "voitures garées le long du trottoir", "cellule": [5.8, 2.6], "trajet": { "rangee": true, "min": 2.15 },
       "densite": 0.7, "pose": "pente", "tourne": 3, "teinte": 0.1,
-      "palette": ["#2b2e33", "#8b9096", "#e3e3df", "#5a2424", "#2f3d52", "#6d6a5f"],
+      "palette": ["#9a9fa5", "#c8c8c2", "#e3e3df", "#7a2a26", "#3b5274", "#8a8676", "#2e3136"],
       "formes": [
         { "f": "boite", "p": [0, 0.68, 0], "taille": [4.4, 0.78, 1.78], "couleur": "palette", "matiere": "metal", "arrondi": 0.12 },
         { "f": "boite", "p": [-0.25, 1.35, 0], "taille": [2.3, 0.62, 1.58], "couleur": "#1b1e22", "matiere": "verre", "arrondi": 0.14 },

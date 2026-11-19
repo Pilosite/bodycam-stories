@@ -3,7 +3,10 @@ precision highp float;
 precision highp int;
 precision highp sampler2D;
 #ifndef SEMIS
-#define SEMIS 0              // src/main.js compile deux variantes fixes : sans semis (forêt, dunes) et avec. Jamais de code généré par monde.
+#define SEMIS 0              // variantes fixes compilées par src/main.js (progMonde) : avec ou sans semis, avec ou sans arbres. Jamais de code généré par monde.
+#endif
+#ifndef NU
+#define NU 0                 // monde nu : ni arbres, ni rochers, ni canopée dans le code
 #endif
 
 uniform sampler2D uPrev;
@@ -339,11 +342,13 @@ float map(vec3 p){
   float y=p.y-th;
   float d=y*(uTerK.y>0. && abs(gAx-.5*(uCreux.y+uCreux.z))<abs(uCreux.y-uCreux.z)*.5+.3?uTerK.y:uTerK.x);   // pas réduit près d'un bord de trajet raide
   vec4 nf;
+#if !NU
   if(uKit==0){
     if(y<19.) d=min(d,sdTreeA(p,th,nf)); else d=min(d,y-17.8);
     if(y<12.) d=min(d,sdTreeB(p,th,nf)); else d=min(d,y-11.3);
   }
   if(uKitP.y>0.){ if(y<4.5) d=min(d,sdRock(p,th,nf)); else d=min(d,y-3.9); }
+#endif
 #if SEMIS
   for(int k=0;k<uSemN;k++){                                  // une seule évaluation de semis, dans une boucle : le compilateur n'en déplie qu'une.
     float tp=uSemTop[k];                                     // En rendu logiciel, ce code coûte même quand il ne s'exécute pas : d'où la variante SEMIS.
@@ -356,11 +361,13 @@ float map(vec3 p){
 int objId(vec3 p, out vec4 info){
   float th=terrainH(p.xz); float d=(p.y-th)*.88; int id=0; info=vec4(0.,0.,0.,th); vec4 nf;
   float d1;
+#if !NU
   if(uKit==0){
     d1=sdTreeA(p,th,nf); if(d1<d){ d=d1; id=1; info=nf; }
     d1=sdTreeB(p,th,nf); if(d1<d){ d=d1; id=2; info=nf; }
   }
   if(uKitP.y>0.){ d1=sdRock(p,th,nf); if(d1<d){ d=d1; id=3; info=nf; } }
+#endif
 #if SEMIS
   for(int k=0;k<uSemN;k++){
     vec4 si; d1=sdSemis(p,k,nf,si); if(d1<d){ d=d1; id=5; info=nf; gInst=si; }
@@ -428,6 +435,9 @@ float canopyDens(vec3 c){
   return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
 }
 float canopyT(vec3 ro, vec3 rd){
+#if NU
+  return 1.;
+#endif
   if(uKitP.z<=0. || uKit!=0) return 1.;
   float ry=abs(rd.y)<1e-4?1e-4:rd.y;
   float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
@@ -872,7 +882,11 @@ vec3 render(vec3 ro, vec3 rd){
   float tS=march(ro,rd,150.,uQ==0?90:130);
   float tmax=tS<0.?400.:tS;
   float tl; vec3 ln; vec3 la;
+#if NU
+  int kind=0; tl=0.; ln=vec3(0.); la=vec3(0.);
+#else
   int kind=foliage(ro,rd,tmax,tl,ln,la);
+#endif
   vec3 col; float t;
   if(kind==1){
     t=tl; col=shadeLeaf(ro+rd*t,ln,la,rd);
