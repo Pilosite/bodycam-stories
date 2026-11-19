@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "id": "avant-la-nuit",
+  "titre": "Avant la nuit",
+  "pitch": "Malo campe seul en forêt depuis trois jours et ne répond plus au téléphone depuis hier. Sa sœur Lina remonte le sentier en fin d'après-midi pour le trouver avant que la nuit tombe.",
+  "ton": "inquiet, concret, tendre à la fin. Rien de surnaturel, rien de spectaculaire : une forêt, la lumière qui baisse, quelqu'un qui s'inquiète.",
+  "duree_minutes": 13,
+
+  "porteur": {
+    "id": "lina",
+    "nom": "Lina",
+    "trait": "pratique, têtue, parle pour ne pas entendre le silence ; se moque d'elle-même quand elle a peur",
+    "veut": "trouver son frère, ou au moins savoir qu'il va bien",
+    "craint": ["quitter le sentier de nuit", "tomber sur quelque chose de grave", "le noir quand la lampe s'éteint"],
+    "refuse": ["rentrer avant d'avoir au moins vu le camp de Malo", "courir dans le noir", "fouiller la tente sans y être poussée par une vraie raison"],
+    "sait": ["Malo campe près du sentier, à une demi-heure du parking", "il a un sac à dos orange", "il n'a pas répondu depuis hier midi", "le soleil se couche dans moins d'une heure"],
+    "ignore": ["où est Malo", "pourquoi il ne répond pas"],
+    "depart": { "peur": 1, "confiance": 2, "agacement": 0 }
+  },
+
+  "voix": {
+    "nature": "une intuition qu'elle a depuis l'enfance et qu'elle n'écoute qu'à moitié ; elle la tutoie et ne cherche pas à l'expliquer",
+    "gagne_la_confiance": ["ce qu'elle annonce se vérifie", "elle rassure avant de demander", "elle laisse Lina décider"],
+    "perd_la_confiance": ["elle envoie Lina vers rien", "elle se moque de sa peur", "elle répète un ordre que Lina vient de refuser"]
+  },
+
+  "monde": {
+    "epoque": "De nos jours, fin octobre, une forêt de grès et de pins à une demi-heure à pied d'un parking. Monde ordinaire.",
+    "existe": ["la forêt, le sentier, les rochers, la nuit qui tombe, la brume", "du matériel de camping et de randonnée", "des animaux qu'on entend sans les voir", "le téléphone de Lina : lampe et caméra seulement, aucun réseau ici", "ce que Lina a sur elle : veste, clés de voiture, une barre de céréales"],
+    "n_existe_pas": ["le réseau téléphonique ou internet sur le sentier", "armes, véhicules, drones, bâtiments", "d'autres personnes sur le sentier ce soir", "magie, pouvoirs, fantômes, créatures", "tout ce qui n'est pas d'aujourd'hui ou pas d'ici"],
+    "possible": ["marcher, s'arrêter, regarder, éclairer, fouiller ce qui est à Malo, appeler Malo à voix haute, quitter le sentier, faire demi-tour"],
+    "impossible": ["voler, se téléporter, voir dans le noir sans lampe, savoir d'avance où est Malo", "faire apparaître quelque chose par la parole", "courir longtemps ou grimper aux arbres : Lina est une marcheuse ordinaire"],
+    "hors_jeu": "Lina prend ça pour son intuition qui déraille : elle ne comprend pas, s'en moque à mi-voix ou s'en inquiète, puis revient à Malo. Elle ne parle jamais de jeu, d'histoire ni de règles."
+  },
+
+  "secrets": [
+    "Malo va très bien. La batterie de son téléphone est morte hier.",
+    "Des randonneurs bruyants passaient sur le sentier : il a déplacé son camp à l'écart, sur la gauche, en deux voyages.",
+    "Il a laissé son sac au bord du sentier pour le second voyage, puis s'est endormi dans son hamac, sa lanterne allumée.",
+    "Le craquement dans les bois est un chevreuil. On ne le voit jamais."
+  ],
+
+  "jamais": [
+    "Malo mort, blessé ou en danger",
+    "une créature, une silhouette ou une présence montrée ou confirmée",
+    "du surnaturel",
+    "de la violence",
+    "expliquer ce qu'est la voix",
+    "révéler un secret avant le temps qui le porte",
+    "Lina qui obéit sans réagir à un ordre qui lui fait peur"
+  ],
+
+  "lieux": [
+    {
+      "id": "sentier",
+      "role": "unique",
+      "fiche": {
+        "version": 0,
+        "id": "avant-la-nuit-sentier",
+        "titre": "Un sentier de forêt, en fin d'après-midi",
+        "inspiration": "Forêt de grès et de pins, fin octobre, une heure avant la nuit",
+        "graine": 6037,
+        "kit": "foret",
+        "foret": { "densite": 0.75, "rochers": 0.8, "feuillage": 1 },
+        "ambiance": { "saison": "automne", "meteo": "clair", "soleil": { "azimut": -70, "hauteur": 7 }, "lampe": false, "brume": 0.009 },
+        "camera": { "profil": "bodycam-poitrine", "hauteur": 1.32, "champ": 125 },
+        "objets": [
+          { "id": "sac", "nom": "sac à dos orange posé au bord du sentier", "devant": 22, "cote": 1.7, "cap": 25, "formes": [
+            { "f": "boite", "p": [0, 0.28, 0], "taille": [0.34, 0.52, 0.22], "penche": [-12, 0], "couleur": "#b5622a", "matiere": "tissu", "arrondi": 0.08 },
+            { "f": "boite", "p": [0, 0.20, 0.13], "taille": [0.26, 0.22, 0.08], "penche": [-12, 0], "couleur": "#9a5325", "matiere": "tissu", "arrondi": 0.04 },
+            { "f": "boite", "p": [0, 0.55, -0.03], "taille": [0.36, 0.10, 0.26], "penche": [-12, 0], "couleur": "#8d4a22", "matiere": "tissu", "arrondi": 0.05 },
+            { "f": "cylindre", "p": [0, 0.67, -0.04], "taille": [0.14, 0.42, 0.14], "penche": [0, 90], "couleur": "#4a5a4e", "matiere": "tissu" }
+          ] },
+          { "id": "feu", "nom": "foyer éteint, cercle de pierres", "devant": 43.5, "cote": 2.8, "degage": 1.5, "formes": [
+            { "f": "cylindre", "p": [0, 0.02, 0], "taille": [0.70, 0.04, 0.70], "couleur": "#2b2927", "matiere": "mat" },
+            { "f": "boule", "p": [0.40, 0.07, 0.00], "taille": [0.22, 0.16, 0.20], "couleur": "#7b756c", "matiere": "pierre" },
+            { "f": "boule", "p": [0.20, 0.07, 0.35], "taille": [0.20, 0.15, 0.24], "couleur": "#6f6a62", "matiere": "pierre" },
+            { "f": "boule", "p": [-0.21, 0.07, 0.34], "taille": [0.24, 0.17, 0.20], "couleur": "#7b756c", "matiere": "pierre" },
+            { "f": "boule", "p": [-0.40, 0.07, -0.02], "taille": [0.20, 0.15, 0.22], "couleur": "#68635c", "matiere": "pierre" },
+            { "f": "boule", "p": [-0.19, 0.07, -0.35], "taille": [0.23, 0.16, 0.20], "couleur": "#7b756c", "matiere": "pierre" },
+            { "f": "boule", "p": [0.21, 0.07, -0.34], "taille": [0.20, 0.15, 0.23], "couleur": "#6f6a62", "matiere": "pierre" },
+            { "f": "cylindre", "p": [0.04, 0.09, 0.02], "taille": [0.09, 0.50, 0.09], "penche": [0, 90], "cap": 30, "couleur": "#1c1a18", "matiere": "bois" },
+            { "f": "cylindre", "p": [-0.05, 0.12, -0.03], "taille": [0.08, 0.44, 0.08], "penche": [0, 78], "cap": -50, "couleur": "#252220", "matiere": "bois" }
+          ] },
+          { "id": "tente", "nom": "petite tente kaki, ouverte, vide", "devant": 46.5, "cote": 4.6, "cap": -65, "degage": 3, "formes": [
+            { "f": "boite", "p": [0, 0.015, 0], "taille": [2.3, 0.03, 1.7], "couleur": "#33362f", "matiere": "tissu" },
+            { "f": "toit", "p": [0, 0.56, 0], "taille": [2.1, 1.06, 1.5], "couleur": "#5d6b4a", "matiere": "tissu" },
+            { "f": "boite", "p": [1.06, 0.36, 0], "taille": [0.04, 0.66, 0.50], "couleur": "#12120f", "matiere": "mat" },
+            { "f": "boite", "p": [1.30, 0.06, 0.45], "taille": [0.22, 0.12, 0.16], "couleur": "#8a8f93", "matiere": "metal", "arrondi": 0.03 }
+          ] },
+          { "id": "lanterne", "nom": "lanterne allumée, accrochée à un piquet", "devant": 67, "cote": -12.5, "degage": 2, "visible": false, "formes": [
+            { "f": "capsule", "p": [0, 0.65, 0], "taille": [0.04, 1.30, 0.04], "couleur": "#4a3f33", "matiere": "bois" },
+            { "f": "cylindre", "p": [0, 1.16, 0.09], "taille": [0.15, 0.22, 0.15], "couleur": "#ffd49a", "matiere": "lumineux" },
+            { "f": "cone", "p": [0, 1.28, 0.09], "taille": [0.16, 0.07, 0.16], "couleur": "#3a3d3f", "matiere": "metal" },
+            { "f": "cylindre", "p": [0, 1.06, 0.09], "taille": [0.13, 0.03, 0.13], "couleur": "#3a3d3f", "matiere": "metal" }
+          ] },
+          { "id": "hamac", "nom": "hamac tendu entre deux troncs, un duvet gonflé dedans, des chaussures au pied", "devant": 69, "cote": -14.5, "cap": 20, "degage": 2.5, "visible": false, "formes": [
+            { "f": "cylindre", "p": [-1.75, 2.5, 0], "taille": [0.30, 5.0, 0.30], "couleur": "#5a4a3c", "matiere": "ecorce-pin" },
+            { "f": "cylindre", "p": [1.75, 2.5, 0], "taille": [0.26, 5.0, 0.26], "couleur": "#5a4a3c", "matiere": "ecorce-pin" },
+            { "f": "boite", "p": [0, 0.66, 0], "taille": [3.2, 0.05, 0.75], "couleur": "#6a6a58", "matiere": "tissu", "arrondi": 0.02 },
+            { "f": "capsule", "p": [0.05, 0.84, 0], "taille": [0.50, 1.95, 0.50], "penche": [0, 90], "couleur": "#3f4a5a", "matiere": "tissu" },
+            { "f": "boule", "p": [-0.92, 0.90, 0], "taille": [0.30, 0.26, 0.30], "couleur": "#39414e", "matiere": "tissu", "lisse": 0.05 },
+            { "f": "boite", "p": [0.30, 0.06, 0.55], "taille": [0.11, 0.12, 0.28], "cap": 12, "couleur": "#2d2a26", "matiere": "mat", "arrondi": 0.03 },
+            { "f": "boite", "p": [0.48, 0.05, 0.50], "taille": [0.11, 0.10, 0.28], "cap": -30, "penche": [0, 40], "couleur": "#2d2a26", "matiere": "mat", "arrondi": 0.03 }
+          ] },
+          { "id": "ruban", "nom": "bout de tissu rouge noué à une branche plantée", "devant": 58, "cote": -4, "visible": false, "formes": [
+            { "f": "capsule", "p": [0, 0.75, 0], "taille": [0.03, 1.5, 0.03], "penche": [4, -3], "couleur": "#4a3f33", "matiere": "bois" },
+            { "f": "boite", "p": [0.02, 1.32, 0.02], "taille": [0.05, 0.30, 0.02], "penche": [10, 6], "couleur": "#a8322b", "matiere": "tissu" },
+            { "f": "boule", "p": [0, 1.47, 0], "taille": [0.06, 0.06, 0.06], "couleur": "#a8322b", "matiere": "tissu" }
+          ] }
+        ]
+      }
+    }
+  ],
+
+  "accessoires": [
+    { "objet": "ruban", "usage": "une trace de Malo que le meneur peut montrer une fois pour remettre Lina sur la piste de la lueur", "mobile": true, "apres": ["camp"] }
+  ],
+
+  "temps": [
+    {
+      "id": "depart",
+      "role": "obligatoire",
+      "tension": 1,
+      "des_que": [ { "minutes": 0 } ],
+      "ce_qui_se_passe": "Lina remonte le sentier. Le soleil est bas, la lumière est orange dans les troncs. Elle se dit pourquoi elle est là et remarque que la voix est revenue.",
+      "replique": "Bon. Une demi-heure de marche, il a dit. Si je le trouve en train de lire tranquille, je le tue. … Tiens. T'es là, toi."
+    },
+    {
+      "id": "sac",
+      "role": "obligatoire",
+      "apres": ["depart"],
+      "tension": 2,
+      "quand": "Lina voit le sac orange au bord du sentier et s'en approche",
+      "des_que": [ { "pres_de": { "objet": "sac", "m": 4 } } ],
+      "au_plus_tard_min": 3,
+      "ce_qui_se_passe": "Le sac de Malo est posé seul au bord du sentier, fermé, un tapis de sol roulé dessus. Dedans, son téléphone, éteint. Le soleil touche l'horizon.",
+      "replique": "C'est son sac. C'est SON sac. Qu'est-ce qu'il fait là, tout seul… Son téléphone est dedans. Éteint.",
+      "revele": ["le sac de Malo est au bord du sentier, à vingt mètres du départ", "son téléphone est dans le sac, éteint : c'est pour ça qu'il ne répond pas"],
+      "scene": { "soleil": { "azimut": -74, "hauteur": 2 }, "brume": 0.011 },
+      "indices": ["une tache orange, plus haut, au bord du chemin", "Lina se rappelle que le sac de Malo est orange"]
+    },
+    {
+      "id": "camp",
+      "role": "obligatoire",
+      "apres": ["sac"],
+      "tension": 3,
+      "quand": "Lina arrive à la tente ou au foyer",
+      "des_que": [ { "pres_de": { "objet": "tente", "m": 7 } }, { "pres_de": { "objet": "feu", "m": 4 } } ],
+      "au_plus_tard_min": 6.5,
+      "ce_qui_se_passe": "Le camp de Malo, à droite du sentier : une tente ouverte, vide, sans duvet ; un foyer froid depuis longtemps. La nuit tombe pour de bon, Lina allume la lampe de son téléphone.",
+      "replique": "La tente. Ouverte. Y a personne. Et le feu est froid, froid d'hier. Bon… on n'y voit plus rien, j'allume.",
+      "revele": ["la tente de Malo est vide, son duvet n'y est pas", "le foyer est froid depuis au moins hier"],
+      "scene": { "soleil": { "azimut": -80, "hauteur": -4 }, "lampe": true, "brume": 0.015 },
+      "indices": ["une forme claire entre les troncs, à droite, plus haut", "une odeur de feu froid"]
+    },
+    {
+      "id": "craquement",
+      "role": "facultatif",
+      "apres": ["camp"],
+      "tension": 4,
+      "quand": "Lina s'attarde au camp, ou la voix parle d'un bruit, d'une présence, ou la pousse à fouiller",
+      "ce_qui_se_passe": "Un craquement net dans les bois, à gauche. Lina se fige, éclaire, ne voit que des troncs. Elle ne saura pas ce que c'était.",
+      "replique": "Chut. … T'as entendu ? À gauche. Dis-moi que t'as entendu.",
+      "scene": { "brume": 0.022 }
+    },
+    {
+      "id": "lueur",
+      "role": "obligatoire",
+      "apres": ["camp"],
+      "tension": 3,
+      "quand": "Lina repart du camp et continue sur le sentier, ou regarde vers la gauche du sentier",
+      "des_que": [ { "avance_m": 56 } ],
+      "au_plus_tard_min": 9.5,
+      "ce_qui_se_passe": "Une petite lumière chaude, immobile, loin entre les troncs à gauche du sentier. Il faut quitter le chemin pour y aller. Lina hésite : c'est le choix de l'histoire.",
+      "replique": "Attends. Là-bas, à gauche. Y a une lumière. Une vraie, elle bouge pas. … C'est hors du chemin, ça.",
+      "revele": ["une lumière fixe brille dans les bois, à gauche du sentier, plus haut que le camp"],
+      "scene": { "montrer": ["lanterne", "hamac"], "brume": 0.018 },
+      "indices": ["un reflet chaud sur un tronc, sur la gauche", "le ruban rouge, s'il a été montré, pointe vers la gauche"]
+    },
+    {
+      "id": "lampe-morte",
+      "role": "facultatif",
+      "apres": ["lueur"],
+      "tension": 5,
+      "quand": "Lina est hors du sentier depuis un moment sans aller vers la lueur, ou tourne en rond",
+      "si": { "hors_sentier": true },
+      "ce_qui_se_passe": "La lampe du téléphone faiblit et s'éteint. Il ne reste que la lueur au loin, si elle est en vue.",
+      "replique": "Non non non. Pas maintenant. … Plus de lampe. D'accord. D'accord. Je respire.",
+      "revele": ["la lampe de Lina est morte"],
+      "scene": { "lampe": false }
+    }
+  ],
+
+  "fins": [
+    {
+      "id": "retrouve",
+      "titre": "Il dort",
+      "apres": ["lueur"],
+      "quand": "Lina arrive à la lanterne",
+      "des_que": [ { "pres_de": { "objet": "hamac", "m": 4.5 } } ],
+      "ce_qui_se_passe": "Un hamac entre deux pins, un duvet gonflé, des chaussures au pied, la lanterne à côté. Malo dort. Il a juste déplacé son camp. Lina ne le réveille pas tout de suite.",
+      "replique": "… Il dort. Il DORT. Trois jours que je… Regarde-le. Bon. Je vais m'asseoir là deux minutes. Après je le réveille, et après je l'engueule.",
+      "variantes": [
+        { "si": { "jauge": { "confiance": ">=4" } }, "replique": "Il dort. … T'avais raison, toi. Depuis le début. Je vais m'asseoir là. Reste un peu." },
+        { "si": { "jauge": { "confiance": "<=1" } }, "replique": "Il dort. Voilà. Je l'ai trouvé toute seule, finalement. … Bon. Presque toute seule." }
+      ],
+      "scene": { "brume": 0.012 }
+    },
+    {
+      "id": "demi-tour",
+      "titre": "Demain, avec du monde",
+      "apres": ["sac"],
+      "quand": "Lina décide de rentrer et redescend jusqu'au départ du sentier",
+      "des_que": [ { "retour_m": 4 } ],
+      "ce_qui_se_passe": "Lina redescend avec ce qu'elle sait. Elle appellera de l'aide du parking et reviendra au jour. Elle ne sait pas, et le dit.",
+      "replique": "Je rentre. J'appelle du parking, et demain je reviens avec des gens, de jour. C'est pas lâche. C'est pas lâche, hein ?",
+      "variantes": [
+        { "si": { "apres": ["lueur"] }, "replique": "Je rentre. Cette lumière, là-haut… je la note. Demain, de jour, avec des gens. Elle sera toujours là demain." }
+      ]
+    },
+    {
+      "id": "veille",
+      "titre": "Jusqu'au jour",
+      "par_defaut": true,
+      "quand": "le temps de l'histoire est écoulé, ou Lina est dans le noir sans lampe et ne veut plus bouger",
+      "des_que": [ { "minutes": 14 }, { "apres": ["lampe-morte"], "jauge": { "peur": ">=5" } } ],
+      "ce_qui_se_passe": "Lina s'adosse à un rocher et attend. Le noir, puis le petit jour gris dans la brume. On entend quelqu'un qui l'appelle, de loin : c'est la voix de Malo. On ne le voit pas.",
+      "replique": "Je bouge plus. J'attends le jour, ici. Parle-moi, toi. … … Tu entends ? Quelqu'un appelle. C'est lui. C'EST LUI.",
+      "scenes": [
+        { "scene": { "lampe": false }, "secondes": 6 },
+        { "scene": { "soleil": { "azimut": 80, "hauteur": 5 }, "brume": 0.03 }, "secondes": 8 }
+      ]
+    }
+  ],
+
+  "improvisation": {
+    "ambiance": { "brume": [0.008, 0.03] },
+    "objets_nouveaux": 1,
+    "permis": ["petites traces de passage (branche cassée, emballage, empreinte)", "bruits de forêt décrits dans la pensée", "souvenirs d'enfance de Lina et Malo"],
+    "interdit": ["tout objet qui prouve où est Malo avant le temps lueur", "tout véhicule, bâtiment ou autre personne"]
+  },
+
+  "limites": { "duree_minutes": 14, "interdits": ["violence montrée", "personnes réelles"] }
+}

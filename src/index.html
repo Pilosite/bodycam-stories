@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Balade en forêt procédurale</title>
+<title>Bodycam procédurale</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -24,9 +24,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;background:var(--bg)}
 #view.drag{cursor:grabbing}
-.hud{position:fixed;left:0;right:0;display:flex;gap:10px;padding:14px 16px;pointer-events:none;align-items:center}
-.hud.top{top:0;justify-content:space-between}
-.hud.bottom{bottom:0;flex-direction:column;padding-bottom:20px;gap:12px}
+.hud{position:fixed;left:0;right:0;display:flex;gap:10px;padding:14px max(16px,env(safe-area-inset-right,0px)) 14px max(16px,env(safe-area-inset-left,0px));pointer-events:none;align-items:center}
+.hud.top{top:0;padding-top:calc(14px + env(safe-area-inset-top,0px));justify-content:space-between}
+.hud.bottom{bottom:0;flex-direction:column;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));gap:12px}
 .chip{font-family:var(--f-mono);font-size:12px;letter-spacing:.02em;font-variant-numeric:tabular-nums;
   background:var(--scrim);border-radius:999px;padding:6px 11px;display:flex;align-items:center;gap:7px;
   -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
@@ -56,6 +56,10 @@ button{font:600 15px/1 var(--f-ui);color:var(--ink);background:var(--scrim);bord
 button.ghost{min-width:0;font-weight:500;color:var(--ink-dim)}
 button:active{background:rgba(243,240,232,.2)}
 button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#mesure[hidden]{display:none}
+#mesure{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
+  padding:calc(24px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:rgba(12,15,11,.86)}
+#mesure pre{margin:0;max-width:100%;overflow:auto;font:400 12.5px/1.6 var(--f-mono);white-space:pre-wrap;-webkit-user-select:text;user-select:text;font-variant-numeric:tabular-nums}
 #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:left;
   background:var(--bg);font-family:var(--f-mono);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow:auto}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
@@ -79,7 +83,12 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
     <button id="parler" type="button">Lui parler</button>
     <button id="monde" type="button">Décrire un monde</button>
     <button id="lieu" type="button" class="ghost">Lieu suivant</button>
+    <button id="mesurer" type="button" class="ghost">Mesurer</button>
   </div>
+</div>
+<div id="mesure" hidden>
+  <pre id="mesure-txt"></pre>
+  <div class="row"><button id="mesure-copier" type="button">Copier</button><button id="mesure-fermer" type="button" class="ghost">Fermer</button></div>
 </div>
 <div id="err"></div>
 

@@ -229,7 +229,7 @@ function terrainH(x,z){
 const cam={ x:0, z:0, yaw:0, pitch:-.03 };         // le corps du porteur : seul le récit le déplace
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
-let frozen=false, walkDist=0, walking=false;
+let frozen=false, hold=false, walkDist=0, walking=false;
 function pose(){
   const bob=walking?.022*Math.sin(walkDist*8.4):0;
   const yw=cam.yaw+look.yaw, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch));
@@ -277,7 +277,7 @@ function flaner(){                                            // sans consigne, 
   if(Math.random()<.4) queue.push({type:"regarder",pitch:(Math.random()-.35)*.5},{type:"attendre",rest:2},{type:"regarder",pitch:-.03});
 }
 function simulate(dt){
-  walking=false; if(frozen) return;
+  walking=false; if(frozen||hold) return;
   let v=0;
   if(!queue.length){ idle+=dt; if(idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
   const a=queue[0];
@@ -331,7 +331,7 @@ function renderPass(dst,y0,rows,o,p){
 function motionFrame(p){
   const P=pairAt(mLevel), dst=hist===P.a?P.b:P.a, t0=performance.now();
   renderPass(dst,0,dst.h,{q:0,alpha:sceneDirty?1:.14,reproj:1,jit:0},p);
-  msMotion=msMotion*.8+(performance.now()-t0)*.2;
+  lastMotionMs=performance.now()-t0; msMotion=msMotion*.8+lastMotionMs*.2;
   hist=dst; histPose=p; n=mLevel===0?6:2; row=0; sceneDirty=false; frames++;
   if(CFG.level===undefined){
     if(msMotion>85 && mLevel<LEVELS.length-1){ mLevel++; msMotion=50; }       // une vidéo saccadée reste crédible, une vidéo pixelisée non
@@ -386,14 +386,14 @@ function display(src,t){
 }
 
 /* ------------------------------------------------------------------ boucle */
-let lastT=0; const startT=performance.now();
+let lastT=0, bench=null, lastMotionMs=0; const startT=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.1,(now-lastT)/1000); lastT=now;
   simulate(dt);
   walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
   const p=pose(); lastPose=p;
-  if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); }
+  if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
   else if(n<MAXS){
     const t0=performance.now(); let done=false;
     do{ done=staticRows(p); } while(!done && performance.now()-t0<20);
@@ -626,6 +626,50 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   const t=$("msg").value.trim(); if(!t) return;
   const m=mode; $("msg").value=""; $("msg").blur(); $("envoi").disabled=true;
   try{ if(m==="monde") await creerMonde(t); else await entendre(t); } finally { $("envoi").disabled=false; setFrozen(false); } });
+
+/* ------------------------------------------------------------------ mesure sur l'appareil
+   Dix mètres de marche puis l'arrêt : images par seconde, résolution choisie, temps d'une passe fixe.
+   La dernière ligne estime le « tournage » d'un panoramique du moteur v2 (docs/moteur-v2.md). */
+async function mesurer(){
+  const out=$("mesure-txt"), wait=ms=>new Promise(r=>setTimeout(r,ms)), med=a=>{ a=a.slice().sort((x,y)=>x-y); return a.length?a[a.length>>1]:0; };
+  $("mesure").hidden=false; $("mesure-copier").disabled=true;
+  out.textContent="Mesure en cours, une vingtaine de secondes.\nNe touche pas l'écran…";
+  setFrozen(false); hold=false; queue.length=0; look.yaw=0; look.pitch=0; cam.pitch=-.03;
+  await wait(600);
+  bench=[]; queue.push({type:"marcher",rest:11}); await wait(8000);
+  const f=bench.slice(Math.min(10,bench.length>>2)); bench=null; queue.length=0; hold=true;
+  await wait(400);
+  const n0=n, t0=performance.now(); let n1=n0, t1=t0;
+  while(performance.now()-t0<14000 && n<n0+6){ await wait(100); if(n!==n1){ n1=n; t1=performance.now(); } }
+  hold=false;
+  const sPass=n1>n0?(t1-t0)/1000/(n1-n0):null, lv=med(f.map(x=>x.lvl)), P=pairAt(lv).a, dt=med(f.map(x=>x.dt)), ms=med(f.map(x=>x.ms));
+  const dbg=gl.getExtension("WEBGL_debug_renderer_info"), gpu=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"inconnu";
+  const fx=(v,d=1)=>v==null?"non mesuré":v.toFixed(d).replace(".",",");
+  out.textContent=[
+    "MESURE · "+(fiche.titre||fiche.id),
+    "",
+    "Écran            "+canvas.width+" × "+canvas.height+" (×"+(window.devicePixelRatio||1).toFixed(2)+")",
+    "Puce graphique   "+gpu,
+    "",
+    "EN MARCHE ("+f.length+" images)",
+    "Images/seconde   "+(dt?fx(1000/dt):"non mesuré"),
+    "Calcul par image "+fx(ms,0)+" ms",
+    "Résolution       "+P.w+" × "+P.h+" (niveau "+(lv+1)+" sur "+LEVELS.length+")",
+    "",
+    "À L'ARRÊT",
+    "Résolution       "+W+" × "+H,
+    "Une passe        "+(sPass==null?"plus de 14 s":fx(sPass,2)+" s"),
+    "",
+    "MOTEUR V2, ESTIMATION",
+    "Un panoramique   "+(sPass==null?"non mesuré":fx(sPass/(W*H)*5e5*4,1)+" s (500 000 points, 4 passes)"),
+  ].join("\n");
+  $("mesure-copier").disabled=false;
+}
+$("mesurer").onclick=()=>{ mesurer().catch(e=>{ hold=false; bench=null; $("mesure-txt").textContent="La mesure a échoué : "+(e&&e.message||e); }); };
+$("mesure-fermer").onclick=()=>{ $("mesure").hidden=true; };
+$("mesure-copier").onclick=()=>{ const t=$("mesure-txt"), b=$("mesure-copier"), ok=()=>{ b.textContent="Copié"; setTimeout(()=>b.textContent="Copier",1500); };
+  const sel=()=>{ const r=document.createRange(); r.selectNodeContents(t); const s=getSelection(); s.removeAllRanges(); s.addRange(r); };
+  try{ navigator.clipboard.writeText(t.textContent).then(ok,sel); }catch(_){ sel(); } };
 
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
