@@ -875,6 +875,347 @@
     }
    },
    "brillance": 0.3
+  },
+  "asphalte": {
+   "nom": "asphalte usé, rapiéçages et fissures",
+   "espace": "sol",
+   "couleur": "#4b4b4c",
+   "variation": {
+    "echelle": 0.5,
+    "force": 0.3
+   },
+   "grain": {
+    "echelle": 150,
+    "force": 0.45
+   },
+   "motif": {
+    "type": "fissures",
+    "echelle": [
+     1.4,
+     1,
+     1.4
+    ],
+    "seuils": [
+     0.92,
+     0.99
+    ],
+    "profondeur": 1,
+    "couleur": "#252524"
+   },
+   "taches": [
+    {
+     "couleur": "#000000",
+     "force": 0.35,
+     "echelle": 0.35,
+     "seuils": [
+      0.5,
+      0.75
+     ],
+     "fbm": true
+    },
+    {
+     "couleur": "#5d5c58",
+     "force": 0.5,
+     "echelle": [
+      0.25,
+      1,
+      0.08
+     ],
+     "seuils": [
+      0.62,
+      0.7
+     ],
+     "decalage": 4
+    }
+   ],
+   "relief": {
+    "motif": 0.004,
+    "grain": {
+     "echelle": 60,
+     "force": 0.06
+    }
+   },
+   "brillance": 0.15
+  },
+  "chaussee": {
+   "nom": "chaussée marquée : axe en tirets, lignes de rive",
+   "base": "asphalte",
+   "motif": {
+    "type": "marquage",
+    "largeur": 0.14,
+    "tiret": 3,
+    "intervalle": 4.5,
+    "axe": "simple",
+    "bords": 0,
+    "couleur": "#c9c4b4",
+    "opacite": 0.9
+   }
+  },
+  "dalles": {
+   "nom": "trottoir en dalles de béton",
+   "espace": "sol",
+   "couleur": "#8d8a83",
+   "motif": {
+    "type": "paves",
+    "echelle": 0.7,
+    "joint": 0.04,
+    "decalage_rangs": 0,
+    "eclat": 0.25,
+    "bombe": 0,
+    "couleur": "#4e4c47",
+    "opacite": 0.8
+   },
+   "variation": {
+    "echelle": 0.4,
+    "force": 0.25
+   },
+   "grain": {
+    "echelle": 120,
+    "force": 0.3
+   },
+   "taches": [
+    {
+     "couleur": "#000000",
+     "force": 0.3,
+     "echelle": 0.6,
+     "seuils": [
+      0.5,
+      0.78
+     ],
+     "fbm": true,
+     "decalage": 2
+    }
+   ],
+   "relief": {
+    "motif": 0.003,
+    "grain": {
+     "echelle": 50,
+     "force": 0.05
+    }
+   },
+   "brillance": 0.08
+  },
+  "beton": {
+   "nom": "béton brut, coulures",
+   "espace": "volume",
+   "couleur": "#9a968d",
+   "variation": {
+    "echelle": 0.6,
+    "force": 0.3
+   },
+   "grain": {
+    "echelle": 110,
+    "force": 0.3
+   },
+   "taches": [
+    {
+     "couleur": "#4a4740",
+     "force": 0.45,
+     "echelle": [
+      2,
+      0.35,
+      2
+     ],
+     "seuils": [
+      0.55,
+      0.8
+     ],
+     "fbm": true,
+     "decalage": 5
+    }
+   ],
+   "salissure": {
+    "force": 0.4,
+    "hauteur": 0.6
+   },
+   "brillance": 0.05
+  },
+  "brique": {
+   "nom": "brique rouge, joints clairs",
+   "espace": "volume",
+   "couleur": "#8a4a36",
+   "motif": {
+    "type": "paves",
+    "echelle": [
+     4.4,
+     13,
+     4.4
+    ],
+    "joint": 0.08,
+    "decalage_rangs": 0.5,
+    "eclat": 0.35,
+    "bombe": 0,
+    "couleur": "#a39b8c",
+    "opacite": 1
+   },
+   "grain": {
+    "echelle": 90,
+    "force": 0.3
+   },
+   "salissure": {
+    "force": 0.4,
+    "hauteur": 0.8
+   },
+   "relief": {
+    "motif": 0.003
+   },
+   "brillance": 0.04
+  },
+  "bardage": {
+   "nom": "bardage de planches couchées, peinture",
+   "espace": "volume",
+   "couleur": "#c8c0ad",
+   "motif": {
+    "type": "planches",
+    "couchees": true,
+    "echelle": 6,
+    "joint": 0.12,
+    "longueur": 20,
+    "eclat": 0.12,
+    "couleur": "#5f5a50",
+    "opacite": 0.8
+   },
+   "variation": {
+    "echelle": 0.6,
+    "force": 0.15
+   },
+   "grain": {
+    "echelle": 70,
+    "force": 0.15
+   },
+   "salissure": {
+    "force": 0.35,
+    "hauteur": 0.5
+   },
+   "relief": {
+    "motif": 0.004
+   },
+   "brillance": 0.06
+  },
+  "facade": {
+   "nom": "façade enduite percée de fenêtres sur tous les étages",
+   "espace": "volume",
+   "couleur": "#c4b8a2",
+   "variation": {
+    "echelle": 0.6,
+    "force": 0.2
+   },
+   "grain": {
+    "echelle": 90,
+    "force": 0.25
+   },
+   "motif": {
+    "type": "fenetres",
+    "largeur": 1.0,
+    "hauteur": 1.5,
+    "pas": 2.6,
+    "etage": 3.0,
+    "allege": 0.9,
+    "cadre": 0.08,
+    "rdc": 0,
+    "allumees": 0.4,
+    "couleur": "#20262c",
+    "cadre_couleur": "#e2ddd2",
+    "lumiere": "#ffc27a",
+    "opacite": 1
+   },
+   "taches": [
+    {
+     "couleur": "#5e564b",
+     "force": 0.35,
+     "echelle": [
+      1.5,
+      0.4,
+      1.5
+     ],
+     "seuils": [
+      0.55,
+      0.8
+     ],
+     "fbm": true,
+     "decalage": 3
+    }
+   ],
+   "salissure": {
+    "force": 0.35,
+    "hauteur": 0.8
+   },
+   "relief": {
+    "motif": 0.03
+   },
+   "brillance": 0.04
+  },
+  "terre": {
+   "nom": "terre battue, cailloux",
+   "espace": "sol",
+   "couleur": "#7a654c",
+   "variation": {
+    "echelle": 0.4,
+    "force": 0.35
+   },
+   "grain": {
+    "echelle": 160,
+    "force": 0.55
+   },
+   "taches": [
+    {
+     "couleur": "#000000",
+     "force": 0.3,
+     "echelle": 0.5,
+     "seuils": [
+      0.45,
+      0.75
+     ],
+     "fbm": true
+    },
+    {
+     "couleur": "#a39780",
+     "force": 0.5,
+     "echelle": 11,
+     "seuils": [
+      0.74,
+      0.8
+     ]
+    }
+   ],
+   "relief": {
+    "grain": {
+     "echelle": 40,
+     "force": 0.12
+    }
+   },
+   "brillance": 0.04
+  },
+  "gravier": {
+   "nom": "gravier clair d'allée",
+   "espace": "sol",
+   "couleur": "#a59d8c",
+   "variation": {
+    "echelle": 0.5,
+    "force": 0.2
+   },
+   "grain": {
+    "echelle": 260,
+    "force": 0.8
+   },
+   "taches": [
+    {
+     "couleur": "#5e574a",
+     "force": 0.45,
+     "echelle": 30,
+     "seuils": [
+      0.6,
+      0.75
+     ]
+    }
+   ],
+   "relief": {
+    "grain": {
+     "echelle": 120,
+     "force": 0.25
+    }
+   },
+   "brillance": 0.05
   }
  },
  "surfaces": {
@@ -897,6 +1238,11 @@
    "sol": "sable-dunes",
    "trajet": "sable-dunes",
    "rochers": "gres-patine"
+  },
+  "nu": {
+   "sol": "herbe",
+   "trajet": "asphalte",
+   "rochers": "gres"
   }
  }
 }

@@ -36,7 +36,8 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 ## Conventions
 
 - Les formules de terrain et de sentier existent en double, en GLSL et en JS (`terrainH`, `pathX`). Toute modification se fait des deux côtés.
-- Un objet par cellule de grille (arbres, perches, rochers). Chaque objet reste à l'intérieur de sa cellule avec une marge, sinon le lancer de rayons saute par-dessus.
+- Un objet par cellule de grille (arbres, perches, rochers, éléments de semis). Chaque objet reste à l'intérieur de sa cellule avec une marge, sinon le lancer de rayons saute par-dessus.
+- En rendu logiciel, tout code présent dans `map()` coûte à chaque pas de rayon, même jamais exécuté. Ce qui ne sert qu'à certains mondes passe par une variante fixe du shader (`#define SEMIS`), jamais par du code généré.
 - Pas d'accent grave ni de `${` dans les shaders : le build les insère dans des gabarits JS.
 - Les champs des fiches sont en français, sans accents dans les clés.
 - Tout aléa du monde dérive de la graine. Même fiche, même monde.
@@ -49,8 +50,8 @@ Fait : forêt (sentier, grès, pins, chênes, bouleaux, canopée), dunes, jour, 
 
 Non vérifié : les performances sur un vrai téléphone. Tous les tests ont tourné en rendu logiciel. La seule mesure réelle est une capture de Toine sur son Samsung, avec l'ancienne version.
 
-Faiblesses connues : sol proche de la caméra, pas de sous-bois, rochers trop lisses de près, feuilles de canopée en disques, pas de kit urbain ni d'intérieur, pas de son.
+Faiblesses connues : sol proche de la caméra, pas de sous-bois, rochers trop lisses de près, feuilles de canopée en disques, pas d'intérieur, pas de lumière ponctuelle, pas de son.
 
-Chantier en cours : `docs/refonte-monde-generique.md`. Étapes 1 (référence gelée) et 2 (matières en recettes) faites ; prochaine : semis génériques. Les kits `foret` et `dunes` et les objets en formes sont des étapes, pas la cible : la cible est un vocabulaire générique (relief, semis, matières, volumes) dans lequel la forêt elle-même n'est qu'une fiche.
+Chantier en cours : `docs/refonte-monde-generique.md`. Étapes 1 (référence gelée) et 2 (matières en recettes) faites ; étape 3 commencée : semis génériques, relief et trajet réglables, kit `nu`, motifs `fenetres` et `marquage` (essais : `essais/san-francisco.json`, `village-nuit.json`, `cimetiere.json`). Reste : réécrire arbres et rochers en semis. Les kits `foret` et `dunes` et les objets en formes sont des étapes, pas la cible : la cible est un vocabulaire générique (relief, semis, matières, volumes) dans lequel la forêt elle-même n'est qu'une fiche.
 
 Autres pistes : `docs/rendu.md` et `docs/contrat-histoire.md`.

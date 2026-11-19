@@ -2,6 +2,9 @@
 precision highp float;
 precision highp int;
 precision highp sampler2D;
+#ifndef SEMIS
+#define SEMIS 0              // src/main.js compile deux variantes fixes : sans semis (forêt, dunes) et avec. Jamais de code généré par monde.
+#endif
 
 uniform sampler2D uPrev;
 uniform vec2  uRes;
@@ -16,7 +19,7 @@ uniform vec3  uSunDir;
 uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
 uniform vec3  uSky;        // teinte et niveau du ciel
 uniform float uTorch;      // lampe du téléphone, 0 = éteinte
-uniform int   uKit;        // 0 forêt, 1 dunes
+uniform int   uKit;        // 0 forêt, 1 dunes, 2 nu (rien de prédéfini : tout vient de la fiche)
 uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
 uniform vec3  uPrevPos;    // reprojection temporelle : pose de l'image précédente
 uniform mat3  uPrevCam;
@@ -60,15 +63,26 @@ vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
-/* ---- terrain et sentier */
-float pathX(float z){ return 3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.); }
+/* ---- relief et trajet, réglés par la fiche (mêmes formules dans src/main.js : à modifier des deux côtés).
+   Valeurs de la forêt d'origine : uRel (1, 1, 0, 0), uTraj (1, .85, .3, .5), uCreux (.10, 1.8, .4, 0). */
+uniform vec4  uRel;        // ondulation : amplitude (1 = forêt), fréquence (1 = forêt, longueur d'onde 150 m), pente le long de z, demi-largeur nivelée en travers du trajet
+uniform vec4  uTraj;       // trajet : sinuosité (1 = sentier de forêt, 0 = droit), demi-largeur, fondu du bord, irrégularité du bord
+uniform vec4  uCreux;      // creux du trajet : profondeur, bord haut, bord bas (distances au centre)
+uniform vec2  uTerK;       // pas de marche sur le relief : partout, et près d'un bord de trajet raide (0 = inutile)
+uniform float uYTop;       // hauteur au-dessus du plan de pente au-delà de laquelle il n'y a plus rien
+float gAx;                   // écart au trajet du dernier point évalué par terrainH
+float pathX(float z){ return uTraj.x*(3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.)); }
+float ondul(vec2 p){ vec2 q=p*uRel.y;
+  return uRel.x*(1.5*sin(q.x*.041+.6+uSeed.z)*cos(q.y*.035+1.1)+.65*sin(q.x*.097+q.y*.071+2.)+.22*sin(q.x*.29-q.y*.21+uSeed.z*3.)); }
 float terrainH(vec2 p){
   if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
     float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
     return 3.2*(1.-abs(sin(a)))*(.62+.38*sin(p.y*.03+2.+uSeed.z))+.5*sin(p.x*.11+p.y*.08);
   }
-  float h=1.5*sin(p.x*.041+.6+uSeed.z)*cos(p.y*.035+1.1)+.65*sin(p.x*.097+p.y*.071+2.)+.22*sin(p.x*.29-p.y*.21+uSeed.z*3.);
-  h-=.10*smoothstep(1.8,.4,abs(p.x-pathX(p.y)));
+  float px=pathX(p.y); gAx=abs(p.x-px);
+  float h=ondul(vec2(uRel.w>0.?mix(p.x,px,smoothstep(uRel.w+5.,uRel.w,gAx)):p.x,p.y));   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe (un seul appel)
+  h+=uRel.z*p.y;
+  h-=uCreux.x*smoothstep(uCreux.y,uCreux.z,gAx);
   return h;
 }
 
@@ -227,16 +241,115 @@ float sdProps(vec3 p, out vec4 info){
   }
   return d;
 }
+/* ---- semis : la fiche décrit un élément (jusqu'à 6 formes), le moteur le répète sur une grille, un élément par cellule.
+   Aucune famille d'objets n'est écrite ici : immeubles, réverbères, voitures, tombes sont des données.
+   Couche k : lignes SEM0+10k à SEM0+10k+9 de uShapes.
+   ligne 0 : (cellule x, cellule z, cos, sin de la rotation) (densité, groupes, fréquence des groupes, rangée le long du trajet)
+             (écart au trajet min, max, côté -1/0/1, orientation 0 aléatoire 1 face au trajet 2 fixe) (cap, cap aléatoire, penche, teinte)
+   ligne 1 : (jeu x, jeu z, échelle min, max) (hauteur min, max, nombre de formes, rangées) (centre de la boîte englobante, couleurs de palette)
+             (demi-tailles de la boîte englobante, suit la pente)
+   lignes 2 et 3 : palette, 8 couleurs.   lignes 4 à 9 : les formes, comme celles des objets, dans le repère de l'élément. */
+const int SEM0=72, SEML=10;
+uniform int   uSemN;       // nombre de couches de semis
+uniform vec4  uSemTop;     // hauteur au-dessus du sol au-delà de laquelle une couche n'a plus rien
+float gTol;                  // tolérance de la marche en cours : au loin, la marge des cellules s'élargit d'autant
+vec4 gInst;                  // élément touché : cap, échelle, étirement, aléa (écrit par objId)
+vec2 semMonde(vec2 g, float side, float t0, vec4 A, bool rg){   // repère de la grille -> monde
+  return rg?vec2(pathX(g.y)+side*(g.x+t0),g.y):g*mat2(A.z,A.w,-A.w,A.z);
+}
+float sdSemis(vec3 p, int k, out vec4 info, out vec4 inst){
+  int r0=SEM0+k*SEML;
+  vec4 A=texelFetch(uShapes,ivec2(0,r0),0), B=texelFetch(uShapes,ivec2(1,r0),0), T=texelFetch(uShapes,ivec2(2,r0),0);
+  info=vec4(0.); inst=vec4(0.);
+  bool rg=B.w>.5; float side=1.; vec2 g;
+  vec4 K=texelFetch(uShapes,ivec2(1,r0+1),0);
+  float marge=max(.08,1.5*gTol)+(uMode==1?50.:0.);          // jamais sous la tolérance de la marche : pas de faux impact sur une limite de cellule
+  if(rg){                                                    // rangée : la grille suit le trajet, les deux rives en miroir
+    float u=p.x-pathX(p.z); side=u<0.?-1.:1.;
+    if(T.z*side<-.5) return abs(u)+T.x+marge;                // rive exclue
+    g=vec2(abs(u)-T.x,p.z);
+    if(g.x<0.) return -g.x+marge;
+    float far=g.x-K.w*A.x; if(far>0.) return far+marge;
+  } else g=mat2(A.z,A.w,-A.w,A.z)*p.xz;
+  vec2 id=floor(g/A.xy), f=g-(id+.5)*A.xy;
+  float dOut=min(.5*A.x-abs(f.x),.5*A.y-abs(f.y))+marge;
+  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.)));
+  float dens=B.x;
+  if(B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*B.z+uSeed.xy+float(k)*17.)),B.y);
+  if(h.x>=dens) return dOut;
+  vec4 J=texelFetch(uShapes,ivec2(0,r0+1),0), D=texelFetch(uShapes,ivec2(3,r0),0);
+  vec2 o=(h.yz-.5)*2.*J.xy;
+  vec2 gc=(id+.5)*A.xy+o;
+  vec2 w=semMonde(gc,side,T.x,A,rg);
+  float dx=0.;
+  if(!rg){ dx=w.x-pathX(w.y); if(abs(dx)<T.x || abs(dx)>T.y || dx*T.z<0.) return dOut; }
+  if(cleared(w)) return dOut;
+  vec4 h2=h42(id*1.37+h.yz*91.+float(k)*3.1+side);
+  float yaw=D.x;                                             // cap dans le repère de la grille
+  if(T.w<.5) yaw=h2.z*6.2832;
+  else if(T.w<1.5){
+    if(rg) yaw=-1.5708;
+    else { float sg=dx<0.?-1.:1., z=w.y, sl=uTraj.x*(.1504*cos(z*.047+uSeed.z)+.1808*cos(z*.113+1.7+uSeed.z*2.)); yaw=atan(-sg,sg*sl)-atan(A.w,A.z); }
+  }
+  yaw+=(h2.w-.5)*D.y;
+  vec4 E=texelFetch(uShapes,ivec2(3,r0+1),0);
+  vec3 th=vec3(0.);
+  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+    th[i]=terrainH(i==0?w:semMonde(gc+(i==1?vec2(1.,0.):vec2(0.,1.)),side,T.x,A,rg));
+    if(E.w<.5) break;
+  }
+  vec3 lp=vec3(f.x-o.x,p.y-th.x,f.y-o.y);
+  float sh=1.;
+  if(E.w>.5){                                                // suit la pente : cisaillé selon le sol sous l'élément
+    vec2 sl=th.yz-th.x;
+    lp.y-=dot(sl,lp.xz); sh=inversesqrt(1.+dot(sl,sl));
+  }
+  float c=cos(yaw), sn=sin(yaw); lp.xz=vec2(c*lp.x-sn*lp.z,sn*lp.x+c*lp.z);
+  if(rg && side<0.) lp.x=-lp.x;                              // l'autre rive : on défait le miroir
+  if(D.z>0.){ vec2 pa=(fract(h2.zw*17.31)-.5)*2.*D.z; float c1=cos(pa.x), s1=sin(pa.x), c2=cos(pa.y), s2=sin(pa.y);
+    lp.xy=vec2(c1*lp.x+s1*lp.y,-s1*lp.x+c1*lp.y); lp.zy=vec2(c2*lp.z+s2*lp.y,-s2*lp.z+c2*lp.y); }
+  float s=mix(J.z,J.w,h2.x), sy=mix(K.x,K.y,h2.y);
+  lp/=s; lp.y/=sy;
+  float sc=s*min(1.,sy)*sh;
+  vec4 bc=texelFetch(uShapes,ivec2(2,r0+1),0);
+  float bb=sdBox(lp-bc.xyz,E.xyz);                           // boîte englobante : on ne détaille que de près
+  if(bb>.3) return min(bb*sc*.9,dOut);
+  float od=1e5, best=1e5, brow=0.; int cn=int(K.z);
+  for(int j=0;j<cn;j++){
+    int row=r0+4+j;
+    vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+    float dd=sdPrim(primLocal(lp,row),a.w,b.xyz)-e.y;
+    if(dd<best){ best=dd; brow=float(row); }
+    od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+  }
+  info=vec4(lp,brow+.9*h2.w);
+  inst=vec4(yaw,s,sy,h2.w);
+  return min(od*sc*.85,dOut);
+}
+vec3 formeCol(int row, float hv){                            // couleur d'une forme ; "palette" : une couleur par élément
+  vec4 cm=texelFetch(uShapes,ivec2(2,row),0);
+  if(cm.r>=0.) return cm.rgb;
+  int r0=SEM0+((row-SEM0)/SEML)*SEML;
+  float np=texelFetch(uShapes,ivec2(2,r0+1),0).w;
+  int i=int(min(floor(fract(hv*7.13)*np),np-1.));
+  return texelFetch(uShapes,ivec2(i&3,r0+2+(i>>2)),0).rgb;
+}
 float map(vec3 p){
   float th=terrainH(p.xz);
   float y=p.y-th;
-  float d=y*.88;
+  float d=y*(uTerK.y>0. && abs(gAx-.5*(uCreux.y+uCreux.z))<abs(uCreux.y-uCreux.z)*.5+.3?uTerK.y:uTerK.x);   // pas réduit près d'un bord de trajet raide
   vec4 nf;
   if(uKit==0){
     if(y<19.) d=min(d,sdTreeA(p,th,nf)); else d=min(d,y-17.8);
     if(y<12.) d=min(d,sdTreeB(p,th,nf)); else d=min(d,y-11.3);
   }
   if(uKitP.y>0.){ if(y<4.5) d=min(d,sdRock(p,th,nf)); else d=min(d,y-3.9); }
+#if SEMIS
+  for(int k=0;k<uSemN;k++){                                  // une seule évaluation de semis, dans une boucle : le compilateur n'en déplie qu'une.
+    float tp=uSemTop[k];                                     // En rendu logiciel, ce code coûte même quand il ne s'exécute pas : d'où la variante SEMIS.
+    if(y<tp+1.){ vec4 si; d=min(d,sdSemis(p,k,nf,si)); } else d=min(d,y-tp);   // au-dessus de la couche : borne simple, jamais nulle
+  }
+#endif
   if(uObjN>0) d=min(d,sdProps(p,nf));
   return d;
 }
@@ -248,18 +361,26 @@ int objId(vec3 p, out vec4 info){
     d1=sdTreeB(p,th,nf); if(d1<d){ d=d1; id=2; info=nf; }
   }
   if(uKitP.y>0.){ d1=sdRock(p,th,nf); if(d1<d){ d=d1; id=3; info=nf; } }
+#if SEMIS
+  for(int k=0;k<uSemN;k++){
+    vec4 si; d1=sdSemis(p,k,nf,si); if(d1<d){ d=d1; id=5; info=nf; gInst=si; }
+  }
+#endif
   if(uObjN>0){ d1=sdProps(p,nf); if(d1<d){ d=d1; id=4; info=nf; } }
   return id;
 }
-vec3 calcN(vec3 p, float t){ vec2 e=vec2(1.,-1.)*(.0006*t+.0008);
-  return normalize(e.xyy*map(p+e.xyy)+e.yyx*map(p+e.yyx)+e.yxy*map(p+e.yxy)+e.xxx*map(p+e.xxx)); }
+vec3 calcN(vec3 p, float t){ vec2 e=vec2(1.,-1.)*(.0006*t+.0008); vec3 n=vec3(0.);
+  for(int i=0;i<4;i++){                                      // un seul appel à map dans la boucle : le compilateur n'en déplie pas quatre copies
+    vec3 o=i==0?e.xyy:i==1?e.yyx:i==2?e.yxy:e.xxx; n+=o*map(p+o); }
+  return normalize(n); }
 
 float march(vec3 ro, vec3 rd, float tmax, int steps){
   float t=.02;
   for(int i=0;i<130;i++){
     if(i>=steps) break;
     vec3 p=ro+rd*t;
-    if(rd.y>0. && p.y>23.) return -1.;
+    if(rd.y>0. && p.y-uRel.z*p.z>uYTop) return -1.;
+    gTol=.0012*t+.0008;
     float d=map(p);
     if(d<.0012*t+.0008) return t;
     t+=d;
@@ -272,7 +393,8 @@ float shadow(vec3 ro, vec3 rd, float tmax, int steps){
   for(int i=0;i<56;i++){
     if(i>=steps) break;
     vec3 p=ro+rd*t;
-    if(rd.y>0. && p.y>23.) break;
+    if(rd.y>0. && p.y-uRel.z*p.z>uYTop) break;
+    gTol=.002*t+.001;
     float d=map(p);
     if(d<.002*t+.001) return 0.;
     t+=max(d,.03);
@@ -459,12 +581,24 @@ vec3 lointain(vec3 rd, vec3 c){
   return c;
 }
 vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+uniform vec4 uEau;           // eau à l'horizon (mer, baie, lac) sous les rayons qui ne touchent rien : couleur, présence
+vec3 eauLoin(vec3 rd){
+  vec2 w=rd.xz/max(-rd.y,.004);                              // vagues : la normale bouge, plus serrée vers l'horizon
+  vec3 n=normalize(vec3((vnoise(w*.9+uSeed.xy)-.5)*.12,1.,(vnoise(w*.9+uSeed.xy+7.)-.5)*.12));
+  vec3 rr=reflect(rd,n); rr.y=abs(rr.y);
+  float fr=.02+.98*pow(1.-max(dot(-rd,n),0.),5.);
+  vec3 c=mix(uEau.rgb*(uSun*.05+uSky*.35),min(skyCol(rr),vec3(40.)),fr);
+  return mix(c,fogCol(rd),.25*smoothstep(-.08,0.,rd.y));
+}
 
 /* ---- matières : une recette par surface, lue dans une texture de données.
    Aucune matière n'est écrite ici : sol, sentier, grès, écorces sont des recettes de src/matieres.json ou de la fiche.
    Une recette s'évalue une fois par impact, dans cet ordre : couleur, nuance, taches sous le motif, motif,
    variation, grain, taches, relief, mousse, salissure. Disposition des texels : voir packRecette dans src/main.js. */
 uniform sampler2D uMats;
+uniform vec3  uSolAlb;       // couleur du sol vue par l'éclairage indirect
+uniform float uNuit;         // 0 le jour, 1 la nuit : part des fenêtres allumées qui éclairent
+vec3 gQo; float gYo; vec3 gFormCol;   // gFormCol : couleur de la forme touchée, pour une recette « couleur de la forme »          // décalage des motifs propre à chaque élément ; passage de la coordonnée locale à la hauteur au-dessus de la base
 uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
 uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
 uniform vec2  uSurfP;        // part de l'écorce a, arbres et perches
@@ -485,17 +619,31 @@ vec3 palette(int r, float h){
   return vec3(0.);
 }
 vec2 motifUV(vec3 q, vec3 n, bool sol){ if(sol || abs(n.y)>.7) return q.xz; return abs(n.x)>abs(n.z)?q.zy:q.xy; }
-float planches(vec2 uv, float e, vec4 P, out vec2 id){       // 1 sur la planche, 0 dans le joint
+float planches(vec2 uv, float e, vec4 P, out vec2 id){       // 1 sur la planche, 0 dans le joint ; P.w : planches couchées (bardage)
+  if(P.w>.5) uv=uv.yx;
   float u=uv.x*e, i=floor(u), L=max(P.y,.2);
   float v=uv.y/L+h21(vec2(i,7.)), j=floor(v);
   id=vec2(i,j);
   return smoothstep(0.,P.x,min(fract(u),1.-fract(u)))*smoothstep(0.,P.x/(e*L),min(fract(v),1.-fract(v)));
 }
-float paves(vec2 uv, float e, vec4 P, out vec2 id){          // 1 au sommet du pavé, 0 dans le joint
+float paves(vec2 uv, vec2 e, vec4 P, out vec2 id){           // 1 au sommet du pavé, 0 dans le joint ; e : échelle en largeur et en hauteur (briques)
   vec2 x=uv*e; x.x+=P.y*floor(x.y); id=floor(x);
   vec2 f=fract(x)-.5+(h22(id)-.5)*.08;
   float m=min(.5-abs(f.x),.5-abs(f.y));
   return smoothstep(0.,P.x,m)*(1.-P.w*dot(f,f));
+}
+float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 sur la vitre, 0 sur le mur ; uv : (le long de la façade, hauteur au-dessus de la base)
+  // P : largeur, hauteur, pas, étage ; Q : allège, cadre, rez-de-chaussée (0 = comme les étages), part allumée
+  float W=P.x, Hh=P.y, al=Q.x, y=uv.y, fl;
+  if(Q.z>0. && y<Q.z){ fl=-1.; W=P.z*.8; Hh=Q.z-.6; al=.3; }   // rez-de-chaussée : vitrine ou porte large
+  else { y-=Q.z; fl=floor(y/P.w); y-=fl*P.w; }
+  float u=uv.x/P.z+.5, uf=(fract(u)-.5)*P.z;
+  id=vec2(floor(u),fl);
+  float m=max(abs(uf)-.5*W,abs(y-al-.5*Hh)-.5*Hh);          // < 0 dans l'embrasure
+  float g=smoothstep(-Q.y+.012,-Q.y-.012,m);
+  if(W>.9) g*=smoothstep(.3*Q.y,.3*Q.y+.012,abs(uf));         // meneau
+  cadre=smoothstep(.012,-.012,m)-g;
+  return g;
 }
 float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
   vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
@@ -510,17 +658,18 @@ float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relie
     int ty=int(mo.x+.5); float mh=1.; vec2 id;
     if(ty==3) mh=fissH(r,q,sol);
     else if(ty==4) mh=planches(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
-    else if(ty==5) mh=paves(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
+    else if(ty==5) mh=paves(motifUV(q,n,sol),sol?rT(r,7).xz:rT(r,7).xy,rT(r,9),id);
+    else if(ty==6) for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){ vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; float fr; mh=1.-fenetres(uv,rT(r,9),rT(r,10),id,fr); }
     for(int k=0;k<4;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,q,hs,sol); }
     H+=mo.w*mh;
   }
   for(int k=0;k<2;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.){ vec4 b=rT(r,42+k*2); H+=a.w*rN(q,a.xyz,b.y,b.x>.5,sol); } }
   return H;
 }
-void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec){
+void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec, out float em){
   vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39);
-  bool sol=c0.w<.5;
-  alb=c0.rgb; tilt=vec3(0.); spec=nup.w;
+  bool sol=mod(c0.w,2.)<.5;
+  alb=c0.w>1.5?gFormCol:c0.rgb; tilt=vec3(0.); spec=nup.w; em=0.;
   vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
   if(nc.w>0.){ vec4 ns=rT(r,4); alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,rN(q,ns.xyz,nup.z,ns.w>.5,sol))); }
   for(int k=0;k<4;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
@@ -552,10 +701,32 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     alb=mix(alb,as>0.?alb*(1.-as):rT(r,8).rgb,(1.-h)*mo.y);
   } else if(ty==4 || ty==5){                                 // planches, pavés : éléments répétés et joints
     vec4 e=rT(r,7), P=rT(r,9); vec2 id;
-    float s=ty==4?planches(motifUV(q,n,sol),e.x,P,id):paves(motifUV(q,n,sol),e.x,P,id);
+    float s=ty==4?planches(motifUV(q,n,sol),e.x,P,id):paves(motifUV(q,n,sol),sol?e.xz:e.xy,P,id);
     if(rT(r,12).w>0.) alb=palette(r,h21(id+.5));
     alb*=1.-.5*P.z+P.z*h21(id+3.7);
     alb=mix(alb,rT(r,8).rgb,mo.y*(1.-smoothstep(.0,.6,s)));
+  } else if(ty==6){                                          // fenêtres : grille d'étages sur les faces verticales
+    for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){
+      vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; vec2 id; float fr;
+      vec4 Q=rT(r,10);
+      float g=fenetres(uv,rT(r,9),Q,id,fr)*mo.y;
+      float lit=step(h21(id+gQo.xz*.37+3.1),Q.w)*uNuit;
+      vec3 vit=mix(rT(r,8).rgb*(.6+.8*h21(id+gQo.xz)),rT(r,12).rgb*(.5+.5*h21(id*1.7+gQo.xz)),lit);
+      alb=mix(alb,rT(r,11).rgb,fr*mo.y); alb=mix(alb,vit,g);
+      spec=mix(spec,.6*(1.-lit),g); em=g*lit; mm=g;
+    }
+  } else if(ty==7){                                          // marquage au sol, mesuré depuis l'axe du trajet
+    for(int i=0;i<(ty==7?1:0);i++){
+    vec4 P=rT(r,9), Q=rT(r,10);                              // P : largeur du trait, tiret, intervalle, écart des lignes de bord ; Q : axe (0, 1 simple, 2 double), période des passages piétons
+    float dx=q.x-pathX(q.z), lw=.5*P.x, m=0.;
+    float dash=P.y>0.?step(fract(q.z/(P.y+P.z)),P.y/(P.y+P.z)):1.;
+    if(Q.x>1.5) m=smoothstep(lw+.01,lw-.01,abs(abs(dx)-lw*2.5));
+    else if(Q.x>.5) m=smoothstep(lw+.01,lw-.01,abs(dx))*dash;
+    if(P.w>0.) m=max(m,smoothstep(lw+.01,lw-.01,abs(abs(dx)-P.w)));
+    if(Q.y>0.) m=max(m,step(fract(q.z/Q.y)*Q.y,3.)*step(.5,fract(dx*1.6))*step(abs(dx),P.w>0.?P.w-.3:3.5));
+    m*=1.-.7*smoothstep(.45,.75,fbm(q.xz*vec2(1.2,.5)+7.));   // usure
+    alb=mix(alb,rT(r,8).rgb,m*mo.y); mm=m;
+    }
   }
   vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*rN(q,va.xyz,0.,true,sol);
   vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*rN(q,gr.xyz,0.,false,sol);
@@ -591,11 +762,23 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   if(!sol && rel.x>0.) alb*=mix(1.-rel.x,1.,smoothstep(0.,rel.y,hs));   // salissure : le pied s'assombrit
 }
 
-int matProp(vec3 p, vec3 n, vec4 info, out vec3 alb, out vec3 nn, out float spec, out float emis, out vec3 qr){   // rend une recette, ou -1
-  int row=int(info.w);
-  vec3 q=primLocal(p,row);
-  vec4 b=texelFetch(uShapes,ivec2(1,row),0), cm=texelFetch(uShapes,ivec2(2,row),0);
-  alb=cm.rgb; nn=n; spec=.05; emis=0.;
+int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out float spec, out float emis, out vec3 qr, out vec3 nl, out mat2 rot){   // rend une recette, ou -1
+  int row=int(info.w); float hv=fract(info.w)/.9;           // forme touchée, aléa de l'élément de semis
+  vec3 q=primLocal(sem?info.xyz:p,row);
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), cm=texelFetch(uShapes,ivec2(2,row),0);
+  { vec4 hd=vec4(0.);                                        // normale dans le repère de la forme : c'est elle qui oriente les motifs
+    for(int i=0;i<4;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
+    nl=normalize(hd.yzw-hd.x+1e-6); }
+  float an=abs(nl.y)<.9&&abs(n.y)<.9?atan(n.z,n.x)-atan(nl.z,nl.x):0.;
+  rot=mat2(cos(an),-sin(an),sin(an),cos(an));               // repère de la forme -> monde, pour le relief des recettes
+  alb=formeCol(row,hv); nn=n; spec=.05; emis=0.;
+  if(sem){                                                   // élément de semis : motifs en mètres, propres à l'élément, teinte variée
+    float te=texelFetch(uShapes,ivec2(3,SEM0+((row-SEM0)/SEML)*SEML),0).w;
+    alb*=max(vec3(0.),1.+te*(h33(vec3(hv*91.7,hv*37.3,5.1))-.5)*1.6);
+    q*=vec3(gInst.y,gInst.y*gInst.z,gInst.y);
+    gQo=vec3(hv*61.3,0.,hv*17.9); gYo=info.y*gInst.y*gInst.z-q.y;
+  } else { gQo=vec3(0.); gYo=p.y-terrainH(p.xz)-q.y; }
+  q+=gQo; gFormCol=alb;
   float m=cm.a;
   qr=q;
   if(m>15.5) return int(m-16.);                              // la forme nomme une recette de la fiche
@@ -628,7 +811,8 @@ vec3 Li(vec3 ro, vec3 rd){
   }
   vec3 p=ro+rd*t; vec4 info; int id=objId(p,info);
   vec3 n=calcN(p,t);
-  vec3 alb=id==0?vec3(.24,.15,.07):id==3?vec3(.34,.33,.29):id==4?texelFetch(uShapes,ivec2(2,int(info.w)),0).rgb*(texelFetch(uShapes,ivec2(2,int(info.w)),0).a>6.5?9.:1.):vec3(.11,.095,.08);
+  float ma=id>=4?texelFetch(uShapes,ivec2(2,int(info.w)),0).a:0.;
+  vec3 alb=id==0?uSolAlb:id==3?vec3(.34,.33,.29):id>=4?formeCol(int(info.w),fract(info.w)/.9)*(ma>6.5&&ma<7.5?9.:1.):vec3(.11,.095,.08);
   vec3 c=alb*vec3(.20,.21,.20)*uSky;
   float ndl=max(dot(n,uSunDir),0.);
   if(ndl>0.){ vec3 po=p+n*.02; float vis=shadow(po,uSunDir,50.,30); if(vis>0.) c+=alb*SUN*ndl*vis*canopyT(po,uSunDir); }
@@ -696,7 +880,7 @@ vec3 render(vec3 ro, vec3 rd){
     t=tl; if(dot(ln,rd)>0.) ln=-ln; col=lightSurf(ro+rd*t,ln,ln,la,.05,rd);
   } else if(tS<0.){
     gT=1e4;
-    vec3 c=rd.y>0.?skyCol(rd):fogCol(rd);
+    vec3 c=rd.y>0.?skyCol(rd):uEau.w>0.?eauLoin(rd):fogCol(rd);
     if(uLoin.w>0. && rd.y>-.02) c=lointain(rd,c);
     if(uTorch>0.) c+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.07;
     return c;
@@ -706,28 +890,28 @@ vec3 render(vec3 ro, vec3 rd){
     vec3 gn=calcN(p,t);
     vec3 alb; vec3 n=gn; float spec; float emis=0.;
     // Quelle recette pour cette surface ? Un seul appel à recette() plus bas : le shader reste compact.
-    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.);
+    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
     if(id==0){                                               // sol, et trajet par-dessus
       r0=uSurf.x; hs=0.;
-      if(uSurf.y!=uSurf.x){ w=smoothstep(1.15,.55,abs(p.x-pathX(p.z))+.5*(fbm(p.xz*.8+3.)-.5)); r1=uSurf.y;
+      if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(p.x-pathX(p.z))+(uTraj.w>0.?uTraj.w*(fbm(p.xz*.8+3.)-.5):0.)); r1=uSurf.y;
         if(w>=1.) r0=r1; else if(w>0.) nr=2; }
     }
     else if(id==3){ r0=uSurf.z; q=info.xyz; }
-    else if(id==4) r0=matProp(p,gn,info,alb,n,spec,emis,q);
+    else if(id>=4){ for(int i=0;i<(id>=4?1:0);i++) r0=matProp(p,gn,info,id==5,alb,n,spec,emis,q,nr0,rot); }   // garde en boucle : sautée en rendu logiciel quand aucun pixel n'est une forme
     else if(id==1 && info.w>1.5){                            // cœur de feuillage d'un conifère
       alb=leafCol(p,vnoise3(p*5.))*(.5+.6*vnoise3(p*vec3(8.,13.,8.))); spec=.02;
       n=normalize(gn+(vec3(vnoise3(p*17.),vnoise3(p*17.+7.),vnoise3(p*17.+13.))-.5)*.9);
     }
     else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz; hs=info.y; rot=id==1?RA:RB; }
     if(r0>=0){
-      vec3 A=vec3(0.), T=vec3(0.); float SP=0.;
+      vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
       for(int k=0;k<2;k++){
         if(k>=nr) break;
-        vec3 a, tt; float sp; recette(k==0?r0:r1,q,gn,hs,rot,a,tt,sp);
+        vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,nr0,hs,rot,a,tt,sp,em);
         float wk=nr==1?1.:(k==0?1.-w:w);
-        A+=a*wk; T+=tt*wk; SP+=sp*wk;
+        A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
       }
-      alb=A; n=normalize(gn+T); spec=SP;
+      alb=A; n=normalize(gn+T); spec=SP; emis=EM;
     }
     col=lightSurf(p,gn,n,alb,spec,rd)+alb*emis*8.;
   }

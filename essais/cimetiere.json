@@ -1,0 +1,31 @@
+{ "version": 0, "id": "essai-cimetiere", "titre": "Cimetière de campagne, au crépuscule", "inspiration": "Un cimetière de village sur un coteau, allée de gravier, cyprès, mur de pierre, brume du soir",
+  "graine": 731, "kit": "nu",
+  "relief": { "amplitude": 1.4, "echelle": 110, "pente": 0.05 },
+  "trajet": { "sinuosite": 0.15, "largeur": 2.6, "creux": 0.04, "bord": "net" },
+  "surfaces": { "sol": "herbe", "trajet": "gravier" },
+  "matieres": {
+    "granit": { "base": "beton", "couleur": "forme", "grain": { "echelle": 160, "force": 0.4 }, "brillance": 0.2,
+      "taches": [ { "couleur": "#3b4630", "force": 0.5, "echelle": [3, 1, 3], "seuils": [0.6, 0.8], "fbm": true, "hauteur": [0.6, 0], "biais": 0.3 } ] },
+    "moellons": { "base": "brique", "couleur": "#8b8577", "motif": { "type": "paves", "echelle": [2.2, 4, 2.2], "joint": 0.12, "decalage_rangs": 0.5, "eclat": 0.6, "bombe": 0.8, "couleur": "#4d4a42" },
+      "mousse": { "couleur": "#3e4a2a", "force": 0.7, "echelle": 1.5, "seuils": [0.5, 0.7], "fbm": true, "dessus": [0.3, 0.8] } }
+  },
+  "ambiance": { "saison": "automne", "meteo": "voile", "soleil": { "azimut": -80, "hauteur": 4 }, "brume": 0.03 },
+  "lointain": { "hauteur": 3, "decoupe": 0.2, "couleur": "#4a4f4a", "couleur_bas": "#3a4236" },
+  "semis": [
+    { "id": "tombes", "nom": "tombes en rangs serrés", "cellule": [2.3, 3.0], "rotation": 0, "trajet": { "min": 2.6, "max": 22 },
+      "densite": 0.85, "oriente": "fixe", "cap": 180, "tourne": 5, "penche": 3, "teinte": 0.35, "desordre": 0.12, "groupes": 0.3, "groupes_echelle": 25,
+      "palette": ["#8e8b84", "#6f6c66", "#a39f95", "#4d4c4a", "#7d766a"],
+      "formes": [
+        { "f": "boite", "p": [0, 0.5, -1.0], "taille": [0.8, 1.0, 0.16], "couleur": "palette", "matiere": "granit", "arrondi": 0.03 },
+        { "f": "boite", "p": [0, 0.13, 0.0], "taille": [0.95, 0.26, 1.9], "couleur": "palette", "matiere": "granit" },
+        { "f": "boite", "p": [0, 1.2, -1.0], "taille": [0.1, 0.5, 0.08], "couleur": "#3f3d3a", "matiere": "metal" },
+        { "f": "boite", "p": [0, 1.3, -1.0], "taille": [0.34, 0.08, 0.08], "couleur": "#3f3d3a", "matiere": "metal" } ] },
+    { "id": "cypres", "nom": "cyprès sombres", "cellule": [7, 7], "rotation": 20, "trajet": { "min": 4 },
+      "densite": 0.25, "groupes": 0.7, "groupes_echelle": 30, "hauteur": [0.8, 1.4], "teinte": 0.2, "penche": 2,
+      "formes": [
+        { "f": "cylindre", "p": [0, 0.6, 0], "taille": [0.3, 1.2, 0.3], "couleur": "#3a2e24", "matiere": "bois" },
+        { "f": "capsule", "p": [0, 4.2, 0], "taille": [1.6, 5.4, 1.6], "couleur": "#1c2a1a", "matiere": "tissu" } ] },
+    { "id": "mur", "nom": "mur d'enceinte en pierre sèche", "cellule": [5, 1.5], "trajet": { "rangee": true, "min": 23, "cote": "deux" },
+      "densite": 1, "teinte": 0.1,
+      "formes": [ { "f": "boite", "p": [0, 0.8, 0], "taille": [4.84, 1.6, 0.6], "couleur": "#8b8577", "matiere": "moellons" } ] }
+  ] }
