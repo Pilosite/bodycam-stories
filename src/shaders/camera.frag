@@ -3,9 +3,11 @@ precision highp float; precision highp sampler2D;
 uniform sampler2D uTex; uniform sampler2D uBloom;
 uniform vec2 uSrcRes; uniform vec2 uOutRes;
 uniform float uExp; uniform float uTime; uniform vec3 uShake; uniform float uSoft; uniform float uGain;
+uniform int uLin;            // 1 = source filtrable (RGBA16F, LINEAR) : une lecture filtrée par la puce au lieu de quatre texelFetch
 out vec4 o;
 float h12(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
 vec3 smp(vec2 uv){
+  if(uLin==1) return texture(uTex,uv).rgb;
   vec2 p=uv*uSrcRes-.5; vec2 i=floor(p), f=p-i; ivec2 m=ivec2(uSrcRes)-1;
   ivec2 a=clamp(ivec2(i),ivec2(0),m), b=clamp(ivec2(i)+1,ivec2(0),m);
   return mix(mix(texelFetch(uTex,a,0).rgb,texelFetch(uTex,ivec2(b.x,a.y),0).rgb,f.x),

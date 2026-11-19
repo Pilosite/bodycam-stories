@@ -11,12 +11,18 @@ const FS_DOWN = __SHADER_FS_DOWN__;
 const FS_BLUR = __SHADER_FS_BLUR__;
 const FS_CAM = __SHADER_FS_CAM__;
 const VS_V2PTS = __SHADER_VS_V2PTS__, FS_V2PTS = __SHADER_FS_V2PTS__, FS_V2CIEL = __SHADER_FS_V2CIEL__, FS_V2TROUS = __SHADER_FS_V2TROUS__;
-const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRE = __SHADER_FS_V3OMBRE__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__;
+const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRE = __SHADER_FS_V3OMBRE__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__, FS_V3TAPIS = __SHADER_FS_V3TAPIS__;
 const FICHES = __SCENES__;                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
 const canvas = $("view");
-const CFG = window.__CFG || {};                 // réglages de test injectés par tools/shot.mjs
+const CFG = Object.assign({}, window.__CFG || {});   // réglages de test injectés par tools/shot.mjs
+// Sur le téléphone, les mêmes réglages s'écrivent après # dans l'adresse : page.html#v3&v3tapis=0&v3damier=0
+try{ for(const kv of location.hash.slice(1).split("&")){ if(!kv) continue; const i=kv.indexOf("="), k=decodeURIComponent(i<0?kv:kv.slice(0,i)), v=i<0?"true":decodeURIComponent(kv.slice(i+1));
+  if(/^[A-Za-z0-9_]{1,24}$/.test(k)&&!(k in CFG)){ let x=v; try{ x=JSON.parse(v); }catch(_){} CFG[k]=x; } } }catch(_){}   // 0 vaut « non »
+/* Optimisations du moteur v3 en qualité mobile (docs/moteur-v3.md, « Vers 30 images par seconde »), modifiables pendant la
+   marche par le bouton Mesurer pour les comparer : undefined = choix automatique (mobile oui, complète non). */
+const OPT={ tapis:CFG.v3tapis, damier:CFG.v3damier, sondeSync:!!CFG.sondeSync, expoSync:!!CFG.expoSync, v3sync:!!CFG.v3sync, capteur4:!!CFG.capteur4 };
 function fail(msg){ const e=$("err"); e.style.display="flex"; e.style.userSelect="text"; e.style.webkitUserSelect="text"; e.textContent=msg+(typeof diag==="function"&&typeof gl!=="undefined"&&gl?diag():""); throw new Error(msg); }
 
 /* ------------------------------------------------------------------ WebGL */
@@ -295,6 +301,7 @@ const matT=gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D,matT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,RT_W,RT_MAX);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
 const MOTIFS={aucun:0,feuilles:1,rides:2,fissures:3,planches:4,paves:5,fenetres:6,marquage:7};
+let matVersion=0;
 const matIdx=new Map();                                         // nom de recette -> ligne de la texture
 const isObj=v=>v&&typeof v==="object"&&!Array.isArray(v);
 function recettesDe(f){ return Object.assign({},MAT_LIB.recettes,isObj(f.matieres)?f.matieres:{}); }
@@ -378,7 +385,7 @@ function buildMats(f){
   const rs=resoudre(sf.sol,lib)||resoudre(d.sol,lib);            // couleur du sol vue par la lumière indirecte
   S.solAlb=kitDe(f)===0?[.24,.15,.07]:couleur(rs&&rs.couleur||"#555555").map(v=>v*.9);
   gl.bindTexture(gl.TEXTURE_2D,matT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,RT_W,RT_MAX,gl.RGBA,gl.FLOAT,matData);
-  sceneDirty=true;
+  sceneDirty=true; matVersion++;                                 // le tapis du sol (moteur v3) est à recuire
 }
 function validerRecettes(m){                                    // la fiche ne garde que des recettes de taille raisonnable
   if(!isObj(m)) return undefined; const out={};
@@ -455,7 +462,7 @@ function recevoirDiff(L,dst){                                  // vrai si la lec
   gl.bindBuffer(gl.PIXEL_PACK_BUFFER,L.buf); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER,0,dst,0,dst.length); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
   return true;
 }
-const sondeL=lectureDiff(), SONDE_SYNC=!!CFG.sondeSync;       // option sondeSync : l'ancienne sonde bloquante, pour comparer
+const sondeL=lectureDiff();                                    // option sondeSync (OPT) : l'ancienne sonde bloquante, pour comparer
 function probeDessin(x,y,z,cible=probeT){                      // distance au décor en (x, y, z), calculée par le lanceur de rayons dans la cible
   const u=common(4,1,lastPose||pose()); gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
   gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev);
@@ -473,12 +480,12 @@ function moveBy(dist){
   // (16 cm de marche), un demi-mètre devant ; près d'un obstacle, à chaque image. Par défaut la lecture est différée :
   // le résultat arrive une à trois images plus tard (moins de 10 cm de marche), ce que couvre le demi-mètre d'avance.
   const R=.42, now=performance.now();
-  if(!SONDE_SYNC&&recevoirDiff(sondeL,pb)){ sonde.d=pb[0]; sonde.dx=pb[4]; sonde.dz=pb[8]; sonde.loin=!(sonde.d<R+.25); }
+  if(!OPT.sondeSync&&recevoirDiff(sondeL,pb)){ sonde.d=pb[0]; sonde.dx=pb[4]; sonde.dz=pb[8]; sonde.loin=!(sonde.d<R+.25); }
   const pres=sonde.d<R+.25;
-  if((now-sonde.t>120||pres)&&(SONDE_SYNC||!sondeL.sync)){ const a=.5*Math.sign(dist||1); sonde.t=now;
-    const av=pres?(SONDE_SYNC?0:.12*Math.sign(dist||1)):a;    // différée : on sonde là où l'on sera quand la réponse arrivera
+  if((now-sonde.t>120||pres)&&(OPT.sondeSync||!sondeL.sync)){ const a=.5*Math.sign(dist||1); sonde.t=now;
+    const av=pres?(OPT.sondeSync?0:.12*Math.sign(dist||1)):a;    // différée : on sonde là où l'on sera quand la réponse arrivera
     const sx=nx+Math.sin(cam.yaw)*av, sz=nz+Math.cos(cam.yaw)*av;
-    if(SONDE_SYNC){ [sonde.d,sonde.dx,sonde.dz]=probe(sx,terrainH(sx,sz)+.75,sz); sonde.loin=!(sonde.d<R+.25); }
+    if(OPT.sondeSync){ [sonde.d,sonde.dx,sonde.dz]=probe(sx,terrainH(sx,sz)+.75,sz); sonde.loin=!(sonde.d<R+.25); }
     else if(progs[varCourante()]){ probeDessin(sx,terrainH(sx,sz)+.75,sz); lireDiff(sondeL,probeT,4,1,16); } }
   const d=sonde.loin?Math.max(sonde.d,R):sonde.d, dx=sonde.dx, dz=sonde.dz;
   if(d<R){ let gx=(dx-d)/.05, gz=(dz-d)/.05; const l=Math.hypot(gx,gz)||1; nx+=gx/l*(R-d); nz+=gz/l*(R-d); }
@@ -588,7 +595,7 @@ function postFX(src){
   // l'ancienne lecture bloquante) : sur une puce à tuiles, une lecture bloquante attend toute l'image en cours.
   if(!blBuf||blBuf.length!==bl1.w*bl1.h*4) blBuf=new Float32Array(bl1.w*bl1.h*4);
   let lu=false;
-  if(CFG.expoSync){ if(now-lastExpRead>180){ lastExpRead=now; gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf); lu=true; } }
+  if(OPT.expoSync){ if(now-lastExpRead>180){ lastExpRead=now; gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf); lu=true; } }
   else { lu=recevoirDiff(expoL,blBuf); if(!expoL.sync&&now-lastExpRead>180){ lastExpRead=now; lireDiff(expoL,bl1,bl1.w,bl1.h,bl1.w*bl1.h*4); } }
   if(lu){
     let s=0,ws=0,any=false;
@@ -604,18 +611,18 @@ function postFX(src){
 }
 const still=matchMedia("(prefers-reduced-motion:reduce)").matches || !!CFG.still;
 let walkAmt=0;
-function display(src,t){
+function display(src,t,cible){
   const u=P_CAM.u; gl.useProgram(P_CAM.p);
   bindTex(0,src.t,u.uTex); bindTex(1,bl1.t,u.uBloom);
   gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
-  gl.uniform1f(u.uExp,exposure); gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0);
+  gl.uniform1f(u.uExp,exposure); gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
   if(still) gl.uniform3f(u.uShake,0,0,0);                     // sinon : dérive de la main et balancement de la marche
   else gl.uniform3f(u.uShake,
     .0030*(Math.sin(t*1.31)+.6*Math.sin(t*2.9+1)+.25*Math.sin(t*7.1))+.005*walkAmt*Math.sin(walkDist*4.2),
     .0036*(Math.sin(t*1.07+2)+.5*Math.sin(t*3.3)+.25*Math.sin(t*6.3+4)),
     .0040*(Math.sin(t*.83+2)+.5*Math.sin(t*2.3))+.010*walkAmt*Math.sin(walkDist*4.2+1));
-  gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,canvas.width,canvas.height); draw();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,cible?cible.f:null); gl.viewport(0,0,canvas.width,canvas.height); draw();
 }
 
 /* ------------------------------------------------------------------ moteur v2 (essai) : tourner, puis projeter
@@ -740,14 +747,16 @@ function v2Basculer(on){
 const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||(QUAL.full?2048:1024),
   alpha:CFG.v3alpha||.18, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
   n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
-  sol:{r0:.3, anneaux:96, secteurs:192, dmax:420} };
-function v3Init(){                                             // rend vrai quand les quatre programmes sont prêts (compilation sans bloquer)
+  sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},
+  tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
+function v3Init(){                                             // rend vrai quand les cinq programmes sont prêts (compilation sans bloquer)
   if(V3.gp) return true;
   if(!V3.lance){ etapeGL("compilation : moteur v3 (4 programmes)");
-    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), sol:lancer(FS_V3GBUF,VS_V3SOL), ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombrage:lancer(FS_V3OMBRAGE) }; }
+    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), sol:lancer(FS_V3GBUF,VS_V3SOL), ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombrage:lancer(FS_V3OMBRAGE), tapis:lancer(FS_V3TAPIS) }; }
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
   V3.maxPt=Math.min(64,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
+  V3.tapVide=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,V3.tapVide); gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,1,1,1);
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,72);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   return true;
@@ -766,7 +775,11 @@ function v3Cibles(){                                          // tampon G (2 tex
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,g.rb);
     gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
     if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail("Moteur v3 : tampon G incomplet.");
-    V3.gb=g; V3.A=target(W,H,ACC_FMT,gl.NEAREST); V3.B=target(W,H,ACC_FMT,gl.NEAREST); V3.hist=null; V3.n=0;
+    // Qualité mobile : accumulation en RGBA16F filtrable (moitié moins d'octets à lire et écrire ; le capteur la lit en une
+    // lecture filtrée au lieu de quatre). Option v3acc32 : l'ancienne accumulation en RGBA32F.
+    const a16=!QUAL.full&&!CFG.v3acc32, fa=a16?gl.RGBA16F:ACC_FMT, fl=a16?gl.LINEAR:gl.NEAREST;
+    V3.gb=g; V3.A=target(W,H,fa,fl); V3.B=target(W,H,fa,fl); V3.A.lin=V3.B.lin=a16;
+    if(!V3.A.ok){ freeT(V3.A); freeT(V3.B); V3.A=target(W,H,ACC_FMT,gl.NEAREST); V3.B=target(W,H,ACC_FMT,gl.NEAREST); } V3.hist=null; V3.n=0;
   }
   const smH=Math.round(V3.carte*v3CarteH()/55);               // texels carrés : la carte est moins haute que large quand le soleil est bas
   if(!V3.sm||V3.sm.w!==V3.carte||V3.sm.h!==smH){
@@ -786,6 +799,68 @@ function v3Libere(seulementEcran){
   const g=V3.gb; if(g){ gl.deleteTexture(g.t0); gl.deleteTexture(g.t1); gl.deleteRenderbuffer(g.rb); gl.deleteFramebuffer(g.f); }
   freeT(V3.A); freeT(V3.B); V3.gb=V3.A=V3.B=V3.hist=null; V3.n=0;
   if(!seulementEcran&&V3.sm){ gl.deleteTexture(V3.sm.t); gl.deleteFramebuffer(V3.sm.f); V3.sm=null; V3.smP=null; }
+  if(!seulementEcran&&V3.tap.t0){ const T=V3.tap; gl.deleteTexture(T.t0); gl.deleteTexture(T.t1); T.f.forEach(f=>gl.deleteFramebuffer(f)); T.t0=T.t1=null; T.f=[]; T.lv=[]; }
+}
+/* Tapis du sol (v3_tapis.frag) : la matière du sol cuite dans des textures ancrées au monde, L niveaux de N × N texels,
+   texel de s0 au niveau 0 et doublé à chaque niveau (1 cm, 2 cm… 64 cm : de ±2,5 m à ±160 m autour de la caméra).
+   Chaque niveau est un tore : quand la caméra avance, on ne cuit que les bandes de 16 texels qui entrent dans sa fenêtre.
+   Au premier remplissage (ou après un saut), un niveau se cuit par tranches de lignes, dans un budget de texels par image :
+   tant qu'il n'est pas prêt, l'ombrage revient à recette() pour ces pixels. Mémoire : 2 × L × N² × 4 octets (14,7 Mo par défaut).
+   Options : v3tapis (false le coupe ; par défaut en qualité mobile seulement), v3tapisN, v3tapisL, v3tapisS0 (m),
+   v3tapisBudget (texels cuits par image au plus), v3tapisBias (niveau choisi : négatif = plus fin). */
+function v3TapisActif(){ return OPT.tapis!==undefined?!!OPT.tapis:!QUAL.full; }
+function v3Tapis(p){
+  const T=V3.tap; T.cuits=0;
+  if(!v3TapisActif()) return false;
+  const N=T.N, L=T.L, PAS=16;
+  if(!T.t0){
+    const arr=()=>{ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,t); gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,N,N,L);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.REPEAT); return t; };
+    T.t0=arr(); T.t1=arr(); T.f=[]; T.lv=[];
+    for(let k=0;k<L;k++){ const f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+      gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,T.t0,0,k); gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,T.t1,0,k);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
+      if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE){ etapeGL("tapis du sol : cible incomplète, coupé"); T.panne=true; }
+      T.f.push(f); T.lv.push({O:[0,0],pret:false,fill:-1}); }
+  }
+  if(T.panne) return false;
+  const cle=JSON.stringify([seed,S.surf,S.traj,S.rel,S.creux,S.kit,matVersion,S.sunDir,S.kitP,S.can,S.houp]);   // tout ce dont dépend la cuisson
+  if(cle!==T.cle){ T.cle=cle; T.lv.forEach(l=>{ l.pret=false; l.fill=-1; }); }
+  const G=V3.gp.tapis, u=G.u; gl.useProgram(G.p); v3Monde(u,N,N,p); gl.uniform1i(u.uTapN,N);
+  gl.viewport(0,0,N,N); gl.enable(gl.SCISSOR_TEST);
+  let budget=T.budget;
+  const md=v=>((v%N)+N)%N;
+  const cuire=(k,O,x,y,w,h)=>{ gl.bindFramebuffer(gl.FRAMEBUFFER,T.f[k]); gl.uniform2i(u.uTapO,O[0],O[1]); gl.uniform1f(u.uTapS,T.s0*2**k);
+    gl.scissor(x,y,w,h); draw(); budget-=w*h; T.cuits+=w*h; T.dernier=k; };
+  const bande=(k,O,axe,a,n)=>{ const c0=md(a), n1=Math.min(n,N-c0);   // n colonnes (axe 0) ou lignes (axe 1) du monde à partir de a, rangées en tore
+    for(const [c,m] of [[c0,n1],[0,n-n1]]) if(m>0){ if(axe===0) cuire(k,O,c,0,m,N); else cuire(k,O,0,c,N,m); } };
+  for(let k=0;k<L&&budget>0;k++){
+    const sk=T.s0*2**k, l=T.lv[k];
+    const veut=[Math.round((Math.floor(p.pos[0]/sk)-N/2)/PAS)*PAS,Math.round((Math.floor(p.pos[2]/sk)-N/2)/PAS)*PAS];
+    if(l.pret&&(Math.abs(veut[0]-l.O[0])>=N/2||Math.abs(veut[1]-l.O[1])>=N/2)){ l.pret=false; l.fill=-1; }   // saut : on recommence ce niveau
+    if(!l.pret){
+      if(l.fill<0){ l.O=veut; l.fill=0; }
+      const rows=Math.min(N-l.fill,Math.floor(budget/N)); if(rows<=0) break;
+      cuire(k,l.O,0,l.fill,N,rows); l.fill+=rows; if(l.fill>=N) l.pret=true;
+      continue;
+    }
+    for(let axe=0;axe<2;axe++) while(budget>0&&veut[axe]!==l.O[axe]){   // la fenêtre glisse, bande par bande
+      const d=Math.max(-PAS,Math.min(PAS,veut[axe]-l.O[axe])), O=l.O.slice(); O[axe]+=d;
+      bande(k,O,axe,d>0?l.O[axe]+N:O[axe],Math.abs(d)); l.O=O;
+    }
+  }
+  gl.disable(gl.SCISSOR_TEST);
+  return T.lv.some(l=>l.pret);
+}
+const tapO=new Int32Array(16);
+function v3TapisUniformes(u){
+  const T=V3.tap; let pret=0;
+  if(v3TapisActif()&&!T.panne&&T.t0){ T.lv.forEach((l,k)=>{ if(l.pret) pret|=1<<k; tapO[2*k]=l.O[0]; tapO[2*k+1]=l.O[1]; }); }
+  gl.uniform1i(u.uTapL,pret?T.L:0); gl.uniform1i(u.uTapPret,pret);
+  if(pret){ gl.uniform2iv(u.uTapO,tapO); gl.uniform1f(u.uTapS0,T.s0); gl.uniform1i(u.uTapN,T.N); gl.uniform1f(u.uTapBias,T.bias); }
+  gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D_ARRAY,T.t0||V3.tapVide); gl.uniform1i(u.uTap0,7);
+  gl.activeTexture(gl.TEXTURE8); gl.bindTexture(gl.TEXTURE_2D_ARRAY,T.t1||V3.tapVide); gl.uniform1i(u.uTap1,8);
 }
 /* Demi-ouverture du cap à semer. Au loin : le plus grand écart de cap parmi les directions du bord de l'image proches de
    l'horizon, plus une marge. Tout près : tout le tour si l'image contient le nadir ou le zénith (regard vers les pieds). */
@@ -864,7 +939,8 @@ const px3=new Float32Array(4);
 const u8s=new Uint8Array(4);
 function v3Sync(t){
   if(t===null){ gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,u8s); return; }
-  gl.bindFramebuffer(gl.FRAMEBUFFER,(t||dummy).f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,(t||dummy).f);
+  if(t&&t.u8) gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,u8s); else gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3);   // une cible RGBA8 ne se lit qu'en octets
 }
 function v3Image(p){
   v3Cibles();
@@ -934,23 +1010,27 @@ function v3Image(p){
   gl.disable(gl.DEPTH_TEST);
   if(V3.nImg<3){ v3Sync(g); note("  semis fait"); }
   chrono("tamponG",g);
-  // (3) matière, lumière, ciel, accumulation
+  // (3) tapis du sol : les bandes qui entrent dans les fenêtres, par tranches
+  v3Tapis(p); if(V3.tap.cuits) chrono("tapis",{f:V3.tap.f[V3.tap.dernier],u8:true}); else chrono("tapis");
+  // (4) matière, lumière, ciel, accumulation
   const dst=V3.hist===V3.A?V3.B:V3.A;
   u=G.ombrage.u; gl.useProgram(G.ombrage.p); v3Monde(u,W,H,p);
   bindTex(0,g.t0,u.uG0); bindTex(1,g.t1,u.uG1); bindTex(2,V3.sm.t,u.uOmbre); bindTex(6,(V3.hist||dummy).t,u.uPrev);
   gl.uniform1ui(u.uFrame,f); gl.uniform2fv(u.uJitPx,jit);
   gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
   const occ=S.kit===0?(S.kitP[0]>0?S.kitP[0]/36*.5:0)+(S.houp[3]>0?S.kitP[0]*.8*S.houp[3]/10.9*.14:0):0;   // troncs par mètre : densité × diamètre
-  gl.uniform1f(u.uOccT,occ); gl.uniform1i(u.uVoir,CFG.v3voir|0); gl.uniform1i(u.uProf||null,CFG.v3prof|0); gl.uniform1f(u.uPcf,CFG.v3pcf!==undefined?CFG.v3pcf:1); gl.uniform1f(u.uAmb,CFG.v3amb||.65);   // flou de lecture de la carte, en texels
+  gl.uniform1f(u.uOccT,occ); gl.uniform1i(u.uVoir,CFG.v3voir|0); gl.uniform1i(u.uProf||null,CFG.v3prof|0); v3TapisUniformes(u); gl.uniform1f(u.uPcf,CFG.v3pcf!==undefined?CFG.v3pcf:1); gl.uniform1f(u.uAmb,CFG.v3amb||.65);   // flou de lecture de la carte, en texels
   const alpha=!V3.hist?1:bouge?V3.alpha:1/(V3.n+1);
   gl.uniform1f(u.uAlpha,alpha); gl.uniform1i(u.uReproj,bouge?1:0);
+  const damier=bouge&&!!V3.hist&&(OPT.damier!==undefined?!!OPT.damier:!QUAL.full);   // en marche, qualité mobile
+  gl.uniform1i(u.uDamier,damier?1:0); gl.uniform1f(u.uAlphaD,1-(1-alpha)*(1-alpha));
   if(V3.hist){ gl.uniform3fv(u.uPrevPos,V3.histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,V3.histPose.mat); }
   gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,W,H); draw();
   if(V3.nImg<3){ v3Sync(dst); note("  matière et lumière faites"); }
   chrono("ombrage",dst);
   // Plus d'attente de la puce à chaque image (option v3sync pour la remettre) : elle empêchait le processeur de préparer
   // l'image suivante pendant que la puce finit celle-ci. Sans elle, V3.ms est l'intervalle entre deux images v3.
-  if(V3.detail||CFG.v3sync){ v3Sync(dst); V3.ms=performance.now()-t0; }
+  if(V3.detail||OPT.v3sync){ v3Sync(dst); V3.ms=performance.now()-t0; }
   else { V3.ms=V3.tPrec&&t0-V3.tPrec<250?t0-V3.tPrec:performance.now()-t0; V3.tPrec=t0; } V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; V3.nImg++;
   V3.hist=dst; V3.histPose=p; V3.n++;
 }
@@ -959,7 +1039,7 @@ function v3Frame(p,dt){
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
   v3Image(p); frames++;
-  if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,t:performance.now()});
+  if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,cuits:V3.tap.cuits,t:performance.now()});
   postFX(V3.hist);
 }
 function qualite(full){                                        // bascule mobile / complète : tout se réalloue à la nouvelle taille
@@ -1042,7 +1122,7 @@ function hud(now){
   $("stat").textContent=V3.on&&!V3.gp?"V3 · PRÉPARATION…":!V3.on&&ptEnCours()?"PRÉPARATION…":V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS":V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
   window.__state={n:CFG.auto?frames:V2.on?v2Prets():V3.on?V3.n:n,
-    v3:V3.on?{ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
+    v3:V3.on?{ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),tapis:V3.tap.lv.map(l=>l.pret?1:0).join(''),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
     v2:V2.on?{msProj:+V2.msProj.toFixed(1),msProjMoy:+V2.msProjAvg.toFixed(1),points:V2.pts,dessines:V2.dessines,faits:V2.faits.slice(),msParLigne:+V2.msPerRow.toFixed(2)}:undefined,W,H,mLevel,msMotion:+msMotion.toFixed(1),msImage:+lastMotionMs.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
 }
 
@@ -1108,7 +1188,7 @@ function say(text,bref){ const el=$("pensee"); el.textContent=text; el.classList
 const devant={L:[0,1,2].map(lectureDiff),T:null,v:null,b:new Float32Array(16)};
 function obstaclesDevant(){
   const pts=[1.5,3,5].map(d=>{ const x=cam.x+Math.sin(cam.yaw)*d, z=cam.z+Math.cos(cam.yaw)*d; return [x,terrainH(x,z)+.75,z]; });
-  if(SONDE_SYNC||!devant.v||!progs[varCourante()]){ devant.v=pts.map(q=>probe(...q)[0]); return devant.v; }
+  if(OPT.sondeSync||!devant.v||!progs[varCourante()]){ devant.v=pts.map(q=>probe(...q)[0]); return devant.v; }
   devant.L.forEach((L,i)=>{ if(recevoirDiff(L,devant.b)) devant.v[i]=devant.b[0]; });
   if(devant.L.every(L=>!L.sync)){
     if(!devant.T) devant.T=[0,1,2].map(()=>target(4,1,ACC_FMT,gl.NEAREST));
@@ -1484,13 +1564,45 @@ async function mesurerV2(f,wait,med){
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
-/* Moteur v3 : en marche, chaque image sème le budget de grains entier ; à l'arrêt, on chronomètre aussi chaque passe. */
+/* Moteur v3 : en marche, chaque image sème le budget de grains entier ; à l'arrêt, on chronomètre aussi chaque passe.
+   Puis chaque optimisation de la qualité mobile est coupée tour à tour pendant quelques mètres de marche (images/s sur
+   l'horloge réelle), et les passes qui ne se voient pas dans la marche sont chronométrées seules : cuisson du tapis,
+   capteur, sonde. Chaque attente lit un pixel de la cible concernée (sur puce à tuiles, lire une autre cible ne mesure rien),
+   et l'aller-retour d'une lecture quand rien n'est en file est mesuré à part, pour être retranché. */
 async function mesurerV3(f,wait,med){
-  const out=$("mesure-txt"), fx=(v,d=1)=>v==null?"non mesuré":v.toFixed(d).replace(".",",");
+  const out=$("mesure-txt"), fx=(v,d=1)=>v==null||!isFinite(v)?"non mesuré":v.toFixed(d).replace(".",",");
+  const ipsDe=b=>{ b=b.slice(3); return b.length>2?(b.length-1)/((b[b.length-1].t-b[0].t)/1000):null; };
+  // (1) marche : chaque optimisation coupée tour à tour
+  const opt0=Object.assign({},OPT), variantes=[
+    ["toutes les optimisations",{}],
+    ["sans damier",{damier:false}],
+    ["capteur à 4 lectures/texel",{capteur4:true}],
+    ["sonde bloquante",{sondeSync:true}],
+    ["exposition bloquante",{expoSync:true}],
+    ["attente à chaque image",{v3sync:true}],
+    ["sans tapis du sol",{tapis:false}],
+    ["aucune (comme avant)",{tapis:false,damier:false,capteur4:true,sondeSync:true,expoSync:true,v3sync:true}]], ab=[];
+  if(V3.on&&!QUAL.full){
+    for(const [nom,o] of variantes){
+      out.textContent="Marche : "+nom+"…";
+      Object.assign(OPT,opt0,o); hold=false; bench=[]; queue.length=0; queue.push({type:"marcher",rest:6}); await wait(3200);
+      const b=bench; bench=null; queue.length=0;
+      ab.push(nom.padEnd(30)+fx(ipsDe(b))+" images/s"+(b.length? ", tapis "+fx(b.reduce((a,x)=>a+(x.cuits||0),0)/b.length/1000)+" k texels cuits/image":""));
+    }
+    Object.assign(OPT,opt0); hold=true; await wait(500);
+  }
   out.textContent="Marche mesurée. Détail des passes à l'arrêt…";
   const det=V3.detail; V3.detail=true; V3.passes={}; V3.n=0; V3.max=Math.max(V3.max,1);
   const k0=V3.nImg; while(V3.nImg<k0+12) { V3.n=0; await wait(60); }
   const pa=Object.assign({},V3.passes);
+  // (2) l'ombrage sans le tapis (même image), puis la cuisson du tapis : niveaux recuits de zéro, par tranches
+  let sansTap=null, cuisson=null;
+  if(v3TapisActif()&&V3.tap.t0){
+    const t0=OPT.tapis; OPT.tapis=false; V3.passes={}; { const k1=V3.nImg; while(V3.nImg<k1+10){ V3.n=0; await wait(40); } } sansTap=V3.passes.ombrage; OPT.tapis=t0;
+    V3.tap.cle=null; let ms=0, tx=0; const k1=V3.nImg, t9=performance.now();
+    while(V3.nImg<k1+12&&performance.now()-t9<8000){ const i=V3.nImg; V3.passes={}; V3.n=0; await wait(40); if(V3.nImg>i&&V3.tap.cuits){ ms+=V3.passes.tapis||0; tx+=V3.tap.cuits; } }
+    cuisson=tx?{ms:ms/tx*1e4,tx}:null;
+  }
   const g0=V3.grains, essais=[];                              // le coût réel d'une image selon le budget de grains
   for(const g of [1000,150000,300000,700000]){
     out.textContent="Coût réel avec "+Math.round(g/1000)+" k grains…";
@@ -1500,29 +1612,50 @@ async function mesurerV3(f,wait,med){
   V3.grains=g0; V3.passes={}; V3.sansOmbre=true;               // la même image sans refaire la carte d'ombres : sa part du coût
   { const k1=V3.nImg, t9=performance.now(); while(V3.nImg<k1+10 && performance.now()-t9<6000){ V3.n=0; await wait(40); } }
   essais.push("sans refaire les ombres : semis "+fx(V3.passes.tamponG||0,0)+" + lumière "+fx(V3.passes.ombrage||0,0)+" ms"); V3.sansOmbre=false;
-  V3.grains=g0; V3.n=0; V3.detail=det; hold=false;
+  V3.grains=g0; V3.n=0; V3.detail=det;
+  // (3) passes seules : aller-retour à vide, capteur, halo, sonde (médiane de 7)
+  out.textContent="Capteur et sonde, seuls…";
+  const chrono7=async fn=>{ const t=[]; for(let i=0;i<7;i++){ await wait(30); v3Sync(dummy); const a=performance.now(); fn(); t.push(performance.now()-a); } return med(t); };
+  const vide=await chrono7(()=>v3Sync(dummy));
+  const ec=Object.assign(target(canvas.width,canvas.height,gl.RGBA8,gl.NEAREST),{u8:true}), src=V3.hist||dummy, tt=(performance.now()-startT)/1000;
+  const cap=await chrono7(()=>{ display(src,tt,ec); v3Sync(ec); });
+  const c4=OPT.capteur4; OPT.capteur4=true; const cap4=await chrono7(()=>{ display(src,tt,ec); v3Sync(ec); }); OPT.capteur4=c4;
+  const halo=await chrono7(()=>{ postFX(src); v3Sync(bl1); });
+  freeT(ec);
+  const sondeB=progs[varCourante()]?await chrono7(()=>probe(cam.x,terrainH(cam.x,cam.z)+.75,cam.z)):null;
+  hold=false;
   const ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
   const ips=f.length>1?(f.length-1)/((f[f.length-1].t-f[0].t)/1000):null;   // horloge réelle : dt est plafonné à 100 ms dans la boucle
   const dbg=gl.getExtension("WEBGL_debug_renderer_info"), gpu=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"inconnu";
-  const k=v=>Math.round((v||0)/1000)+" k";
+  const k=v=>Math.round((v||0)/1000)+" k", T=V3.tap;
   out.textContent=[
     "MESURE · MOTEUR V3 · "+(fiche.titre||fiche.id),
     "",
     "Écran            "+canvas.width+" × "+canvas.height+" (×"+(window.devicePixelRatio||1).toFixed(2)+")",
     "Puce graphique   "+gpu,
+    "Qualité          "+(QUAL.full?"complète":"mobile")+", accumulation "+(V3.A&&V3.A.lin?"RGBA16F filtrée":"RGBA32F"),
     "",
     "EN MARCHE ("+f.length+" images)",
-    "Images/seconde   "+(ips?fx(ips):"non mesuré"),
+    "Images/seconde   "+fx(ips),
     "Résolution       "+W+" × "+H,
+    ...(ab.length?["","EN MARCHE, UNE OPTIMISATION COUPÉE À LA FOIS (3 s chacune)",...ab]:[]),
     "",
     "BUDGET DE GRAINS",
     "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+")",
     "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.sm.w+" × "+V3.sm.h,
     "Sol              "+(V3.sol.tri||0)+" triangles dessinés ("+(CFG.v3solPlein?"tout le tour, sommets répétés":"cap utile, sommets partagés")+")",
+    "Tapis du sol     "+(v3TapisActif()?T.L+" niveaux de "+T.N+" × "+T.N+", texel "+Math.round(T.s0*1000)/10+" cm à "+Math.round(T.s0*2**(T.L-1)*100)+" cm":"coupé"),
     "",
     "PAR PASSE (à l'arrêt, attente réelle de la puce)",
     "Semis des grains "+fx(pa.tamponG,1)+" ms",
-    "Ombres, matière, lumière "+fx(pa.ombrage,1)+" ms",
+    "Ombres, matière, lumière "+fx(pa.ombrage,1)+" ms"+(sansTap!=null?" (sans tapis : "+fx(sansTap,1)+" ms)":""),
+    "Cuisson du tapis "+(cuisson?fx(cuisson.ms,2)+" ms pour 10 k texels ("+k(cuisson.tx)+" cuits)":"non mesurée"),
+    "",
+    "PASSES SEULES (médiane de 7, aller-retour à vide retranché)",
+    "Aller-retour     "+fx(vide,1)+" ms (une lecture quand rien n'est en file)",
+    "Capteur          "+fx(cap-vide,1)+" ms à "+canvas.width+" × "+canvas.height+" (à 4 lectures/texel : "+fx(cap4-vide,1)+" ms)",
+    "Halo, exposition "+fx(halo-vide,1)+" ms",
+    "Sonde bloquante  "+(sondeB!=null?fx(sondeB-vide,1)+" ms de calcul, "+fx(sondeB,1)+" ms d'attente (en marche : lecture différée, "+(OPT.sondeSync?"coupée":"active")+")":"lanceur de rayons pas compilé"),
     "",
     "COÛT RÉEL D'UNE IMAGE SELON LE BUDGET",
     ...essais,

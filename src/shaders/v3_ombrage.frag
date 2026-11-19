@@ -20,7 +20,41 @@ uniform int   uVoir;         // mise au point (option v3voir) : 1 ombre du solei
 uniform float uOccT;
 uniform float uPcf;
 uniform int   uProf;         // mise au point du coût (option v3prof) : 1 sans recette, 2 sans ambiance, 4 sans soleil, 8 sans pres()
-uniform float uAmb;          // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
+uniform float uAmb;
+/* Damier (en marche, qualité mobile, option v3damier) : les troncs, perches, rochers et objets ne sont ombrés qu'une image
+   sur deux, par blocs de 8 × 8 pixels en damier alterné ; l'autre image relit l'historique reprojeté. La part d'image
+   neuve de ces pixels passe à uAlphaD = 1 - (1 - a)² : même réponse dans le temps, deux fois moins de calcul.
+   Les blocs ont la taille des macroblocs de la compression vidéo du capteur : ce qui en reste passe pour elle. */
+uniform int   uDamier;
+uniform float uAlphaD;
+/* Tapis du sol (v3_tapis.frag) : la matière du sol, cuite dans des textures ancrées au monde. Niveau choisi selon la taille
+   du pixel au sol (comme un niveau de mipmap), fondu entre deux niveaux. Hors des fenêtres prêtes : recette() comme avant. */
+uniform highp sampler2DArray uTap0, uTap1;
+uniform int   uTapL;         // nombre de niveaux (0 = tapis coupé)
+uniform int   uTapPret;      // niveaux prêts (un bit par niveau)
+uniform ivec2 uTapO[8];      // origine de la fenêtre de chaque niveau (indice de texel du monde)
+uniform float uTapS0;        // côté d'un texel du niveau 0, en mètres
+uniform int   uTapN;
+uniform float uTapBias;      // décalage du niveau choisi (négatif : plus fin)
+bool tapisDans(int k, vec2 xz){
+  vec2 u=xz/(uTapS0*exp2(float(k)))-.5; ivec2 b=ivec2(floor(u)), o=uTapO[k];
+  return b.x>=o.x+1 && b.y>=o.y+1 && b.x+2<=o.x+uTapN-1 && b.y+2<=o.y+uTapN-1;
+}
+bool tapis(vec2 xz, float lod, out vec4 a, out vec4 b){
+  float l0=floor(lod); int k0=-1;
+  for(int k=0;k<8;k++){ if(k>=uTapL) break;
+    if(((uTapPret>>k)&1)==1 && (float(k)>=l0 || k==uTapL-1) && tapisDans(k,xz)){ k0=k; break; } }
+  if(k0<0) return false;
+  float s=uTapS0*exp2(float(k0)), f=float(k0)==l0?fract(lod):0.;
+  vec3 c=vec3(xz/(s*float(uTapN)),float(k0));
+  a=texture(uTap0,c); b=texture(uTap1,c);
+  int k1=k0+1;
+  if(f>0. && k1<uTapL && ((uTapPret>>k1)&1)==1 && tapisDans(k1,xz)){
+    vec3 c1=vec3(c.xy*.5,float(k1));
+    a=mix(a,texture(uTap0,c1),f); b=mix(b,texture(uTap1,c1),f);
+  }
+  return true;
+}          // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
 out vec4 outCol;
 
 uint hu(uint x){ x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u; return (x>>22u)^x; }
@@ -76,10 +110,10 @@ vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts){
   return L*clamp(1.-occ,.25,1.)*uAmb;
 }
 
-vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd){
+vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float TsCuit){   // TsCuit < 0 : à calculer
   vec3 sd=uSd;
   vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
-  float Ts=(uProf&4)!=0?1.:canopyT(po,uSunDir);                              // transmittance de la canopée vers le soleil (statistique)
+  float Ts=(uProf&4)!=0?1.:TsCuit>=0.?TsCuit:canopyT(po,uSunDir);                              // transmittance de la canopée vers le soleil (statistique)
   vec3 col=vec3(0.);
   float ndl=max(dot(n,sd),0.);
   if(ndl>0. && dot(gn,sd)>0.){
@@ -100,6 +134,8 @@ void main(){
   float rr=length(uv), ang=rr*uFish;
   vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
   vec4 g0=texelFetch(uG0,ip,0), g1=texelFetch(uG1,ip,0);
+  float idD=floor(g0.w); bool dam=uDamier>0 && idD>=1. && idD<=4.;
+  if(dam && (((ip.x>>3)+(ip.y>>3)+int(uFrame))&1)==1){ vec3 h; if(histoireReproj(uCamPos+rd*g1.w,h)){ outCol=vec4(h,g1.w); return; } }
   vec3 col; float t;
   if(g0.w<0.){                                               // rien de semé : ciel, brume, lointain
     t=1e4;
@@ -117,7 +153,12 @@ void main(){
       // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
       vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
       int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
-      if(id==0){                                             // sol, et trajet par-dessus
+      vec4 ta, tb; float TsC=-1.;
+      if(id==0 && uTapL>0 && (uProf&1)==0 && tapis(q.xz,log2(t*uFish/uRes.y/sqrt(max(abs(dot(rd,gn)),.05))/uTapS0)+uTapBias,ta,tb)){
+        alb=ta.rgb*ta.rgb; spec=ta.w; emis=tb.z;             // sol cuit : deux lectures (quatre au fondu) au lieu de recette()
+        vec2 ti=tb.xy*4.-2.; n=normalize(gn+vec3(ti.x,0.,ti.y)); TsC=tb.w;
+      }
+      else if(id==0){                                        // sol, et trajet par-dessus
         r0=uSurf.x; hs=0.;
         if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(q.x-pathX(q.z))+(uTraj.w>0.?uTraj.w*(fbm(q.xz*.8+3.)-.5):0.)); r1=uSurf.y;
           if(w>=1.) r0=r1; else if(w>0.) nr=2; }
@@ -135,7 +176,7 @@ void main(){
         }
         alb=A; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
       }
-      col=lumiere(p,gn,n,alb,spec,rd)+alb*emis*8.;
+      col=lumiere(p,gn,n,alb,spec,rd,TsC)+alb*emis*8.;
       if(uVoir==1) col=vec3(ombreSoleil(p,gn));
       else if(uVoir==2) col=alb*3.;
       else if(uVoir==3) col=n*.5+.5;
@@ -145,5 +186,5 @@ void main(){
   col=min(max(col,vec3(0.)),vec3(60.));
   if(col.x!=col.x||col.y!=col.y||col.z!=col.z) col=vec3(0.);
   if(uVoir==5){ float z=texture(uOmbre,gl_FragCoord.xy/uRes).r; col=vec3(z<1.?1.:0.); }   // la carte d'ombres elle-même
-  outCol=vec4(melangeHistoire(col,uCamPos+rd*t,ip),t);
+  outCol=vec4(melangeHistoireA(col,uCamPos+rd*t,ip,dam?uAlphaD:uAlpha),t);
 }

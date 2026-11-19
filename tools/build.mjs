@@ -22,6 +22,7 @@ const shaders = {
   FS_V3GBUF: 'v3_gbuf.frag',
   FS_V3OMBRE: 'v3_ombre.frag',
   FS_V3OMBRAGE: 'v3_ombrage.frag',
+  FS_V3TAPIS: 'v3_tapis.frag',     // moteur v3 : le tapis du sol (matière cuite)
 };
 
 // Code GLSL partagé : une ligne #include "fichier.glsl" est remplacée par le fichier (src/shaders/), une seule fois par shader.
