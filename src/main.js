@@ -12,7 +12,7 @@ const FS_EXPO = __SHADER_FS_EXPO__;
 const FS_BLUR = __SHADER_FS_BLUR__;
 const FS_CAM = __SHADER_FS_CAM__;
 const VS_V2PTS = __SHADER_VS_V2PTS__, FS_V2PTS = __SHADER_FS_V2PTS__, FS_V2CIEL = __SHADER_FS_V2CIEL__, FS_V2TROUS = __SHADER_FS_V2TROUS__;
-const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRE = __SHADER_FS_V3OMBRE__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__, FS_V3TAPIS = __SHADER_FS_V3TAPIS__;
+const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRE = __SHADER_FS_V3OMBRE__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__, FS_V3TAPIS = __SHADER_FS_V3TAPIS__, FS_V3SONDE = __SHADER_FS_V3SONDE__, VS_V3PROCHES = __SHADER_VS_V3PROCHES__, FS_V3PROCHES = __SHADER_FS_V3PROCHES__;
 const FICHES = __SCENES__;                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
@@ -94,6 +94,17 @@ const ptEnCours=()=>{ const l=lances[varCourante()]; return !!(l&&l.marque&&!pro
 function progMonde(){ if(!compilerPT(varCourante(),true)) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
 if(!bureau && !PT_KO) compilerPT(0);                            // téléphone : compilé d'emblée, comme avant
 if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
+/* La sonde de collision peut avoir son propre petit programme (v3_sonde.frag : la distance au décor, map(), rien d'autre),
+   qui se compile là où le lanceur de rayons ne se compile pas. Il n'est compilé qu'avec l'option v3sonde : le porteur ne
+   bouge que sur ordre du récit. Sans lui ni lanceur de rayons, la sonde rend « rien » (aucun obstacle). */
+const SONDE={lance:null,p:null};
+function sondeProg(){                                           // option v3sonde : le joueur ne déplace jamais le porteur, elle n'est pas compilée par défaut
+  if(SONDE.p) return SONDE.p; if(!CFG.v3sonde) return null;
+  if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.lance=lancer(FS_V3SONDE); }
+  if(!fini(SONDE.lance)) return null;
+  SONDE.p=finir(SONDE.lance); SONDE.lance=null; etapeGL("  compilé : sonde de collision"); return SONDE.p;
+}
+const sondeDispo=()=>!!(sondeProg()||progs[varCourante()]);
 gl.bindVertexArray(gl.createVertexArray());
 
 function target(w,h,ifmt,filter){
@@ -193,7 +204,7 @@ function couleur(c){                                           // "#rrggbb" ou [
   return v.map(x=>Math.pow(x,2.2));
 }
 function buildShapes(f){
-  shapesData.fill(0); S.objN=0; S.objTop=0; S.vac=[]; let row=8;
+  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; let row=8;
   for(const o of (Array.isArray(f.objets)?f.objets:[]).slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
     if(!formes.length || row+formes.length>SH_ROWS) continue;
@@ -216,7 +227,7 @@ function buildShapes(f){
       rad=Math.max(rad,Math.hypot(p[0],p[1],p[2])+Math.hypot(t[0],t[1],t[2]));
     });
     shapesData.set([x,y,z,rad, row,formes.length, clampN(o.degage,0,12,0), (o.visible===false||cacheObj.has(o.id))?0:1], i*16);
-    row+=formes.length; S.objN++;
+    row+=formes.length; S.objN++; S.objRows=row-8;
     S.objTop=Math.max(S.objTop,y+rad-S.rel[2]*z);
   }
   packSemis(f);
@@ -468,13 +479,15 @@ function recevoirDiff(L,dst){                                  // vrai si la lec
   return true;
 }
 const sondeL=lectureDiff();                                    // option sondeSync (OPT) : l'ancienne sonde bloquante, pour comparer
-function probeDessin(x,y,z,cible=probeT){                      // distance au décor en (x, y, z), calculée par le lanceur de rayons dans la cible
-  const u=common(4,1,lastPose||pose()); gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
-  gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev);
+function probeDessin(x,y,z,cible=probeT){                      // distance au décor en (x, y, z), calculée par la sonde (ou le lanceur de rayons) dans la cible
+  const P=sondeProg(); let u;
+  if(P){ u=P.u; gl.useProgram(P.p); v3Monde(u,4,1,lastPose||pose()); gl.uniform2fv(u.uTerK,S.terK); }
+  else { u=common(4,1,lastPose||pose()); gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev); }
+  gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
   gl.bindFramebuffer(gl.FRAMEBUFFER,cible.f); gl.viewport(0,0,4,1); draw();
 }
 function probe(x,y,z){                                         // distance au décor, lue sur le GPU (bloquant)
-  if(!progs[varCourante()]) return [9,9,9];                    // lanceur de rayons pas compilé (ordinateur en v3) : pas de collision pour l'instant
+  if(!sondeDispo()) return [9,9,9];                            // ni sonde ni lanceur de rayons encore compilés : pas de collision pour l'instant
   probeDessin(x,y,z);
   gl.readPixels(0,0,4,1,gl.RGBA,gl.UNSIGNED_BYTE,pb8);          // octets : le chemin de lecture rapide de toutes les puces
   const d=i=>(pb8[i]+pb8[i+1]/255)/255*9-1;
@@ -492,7 +505,7 @@ function moveBy(dist){
     const av=pres?(OPT.sondeSync?0:.12*Math.sign(dist||1)):a;    // différée : on sonde là où l'on sera quand la réponse arrivera
     const sx=nx+Math.sin(cam.yaw)*av, sz=nz+Math.cos(cam.yaw)*av;
     if(OPT.sondeSync){ [sonde.d,sonde.dx,sonde.dz]=probe(sx,terrainH(sx,sz)+.75,sz); sonde.loin=!(sonde.d<R+.25); }
-    else if(progs[varCourante()]){ probeDessin(sx,terrainH(sx,sz)+.75,sz); lireDiff(sondeL,probeT,4,1,16); } }
+    else if(sondeDispo()){ probeDessin(sx,terrainH(sx,sz)+.75,sz); lireDiff(sondeL,probeT,4,1,16); } }
   const d=sonde.loin?Math.max(sonde.d,R):sonde.d, dx=sonde.dx, dz=sonde.dz;
   if(d<R){ let gx=(dx-d)/.05, gz=(dz-d)/.05; const l=Math.hypot(gx,gz)||1; nx+=gx/l*(R-d); nz+=gz/l*(R-d); }
   cam.x=nx; cam.z=nz; walkDist+=Math.abs(dist);
@@ -766,7 +779,7 @@ function v2Basculer(on){
    v3k (recouvrement des grains), v3carte (largeur de la carte d'ombres), v3alpha (part d'image neuve en mouvement),
    v3max (images accumulées à l'arrêt), v3detail (chronomètre chaque passe : ajoute des synchronisations),
    v3net (soleil ponctuel, sans pénombre), v3pcf (flou de lecture de la carte, en texels), v3amb (niveau de l'ambiance,
-   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres),
+   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres, 6 élément de chaque pixel, magenta : rien de semé),
    v3prof (mise au point du coût de l'ombrage : 1 sans recette, 2 sans ambiance, 4 sans soleil, 8 sans pres(), 16 passe vide,
    64 sans recette au sol, 128 sans recette hors du sol).
    Optimisations de la qualité mobile (docs/moteur-v3.md, « Vers 30 images par seconde ») ; chacune se coupe pour comparer,
@@ -777,13 +790,16 @@ function v2Basculer(on){
 const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG.grainsOmbre||0, k:CFG.v3k||2.5,   // côté d'un grain = k × l'écart moyen : à 1,8 des grains ronds tirés au hasard laissaient 8 % de trous, à 2,5 moins de 1 %
    carte:CFG.v3carte||(QUAL.full?2048:1024),
   alpha:CFG.v3alpha||.18, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
-  n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
-  sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},
+  n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*SH_ROWS), maxPt:64, kf:CFG.v3kf||2.4,
+  sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},          // dmax : 150 m quand l'eau est à l'horizon (au-delà, le lanceur de rayons ne touche plus rien : c'est la mer)
   tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
-function v3Init(){                                             // rend vrai quand les cinq programmes sont prêts (compilation sans bloquer)
+function v3Init(){                                             // rend vrai quand tous les programmes sont prêts (compilation sans bloquer)
   if(V3.gp) return true;
-  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; etapeGL("compilation : moteur v3"+(V3.avecTapis?", avec tapis du sol":""));
-    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), sol:lancer(FS_V3GBUF,VS_V3SOL), ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombrage:lancer(V3.avecTapis?FS_V3OMBRAGE.replace("\n","\n#define TAPIS 1\n"):FS_V3OMBRAGE) };
+  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
+    const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
+    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), grainsF:lancer(F(FS_V3GBUF),F(VS_V3GRAINS)), sol:lancer(FS_V3GBUF,VS_V3SOL),
+      ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombreF:lancer(F(FS_V3OMBRE),F(VS_V3GRAINS)), proches:lancer(FS_V3PROCHES,VS_V3PROCHES),
+      ombrage:lancer(V3.avecTapis?FS_V3OMBRAGE.replace("\n","\n#define TAPIS 1\n"):FS_V3OMBRAGE) };
     if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
@@ -791,7 +807,7 @@ function v3Init(){                                             // rend vrai quan
   // et laissait voir à travers. Le plafond suit maintenant ce que la puce accepte, jusqu'à 320 pixels.
   V3.maxPt=Math.min(CFG.v3maxPt||320,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
   V3.tapVide=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,V3.tapVide); gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,1,1,1);
-  V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,72);
+  V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   return true;
 }
@@ -922,7 +938,8 @@ function aireForme(ty,s){                                      // aire approché
   return 8*(x*y+y*z+x*z);
 }
 /* Objets de la fiche : poids de chaque objet (vu de la caméra : taille apparente ; vu du soleil : taille), aire de chaque
-   forme. Rangés dans une petite texture lue par les grains. */
+   forme. Couches de semis : aire de l'élément (ligne de tête de la couche), aire cumulée de chaque forme. Rangés dans une
+   petite texture lue par les grains. */
 function v3Semis(nb,vue,p){
   const d=V3.semis; d.fill(0);
   const ws=[], ai=[]; let tot=0;
@@ -936,24 +953,68 @@ function v3Semis(nb,vue,p){
     for(let j=0;j<cn;j++){ const r=(row+j)*16, a=aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); c+=a;
       d[(row+j)*4]=c/ai[i]; d[(row+j)*4+1]=a; } }
   if(tot<=0) for(let i=0;i<S.objN;i++) d[i*4]=0;
-  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,1,72,gl.RGBA,gl.FLOAT,d);
+  for(let k=0;k<S.semN;k++){ const r0=SEM0+k*SEM_L, a=semisAire(k); let c=0;
+    d[r0*4]=a.tot; for(let j=0;j<a.formes.length;j++){ c+=a.formes[j]; d[(r0+4+j)*4]=c/a.tot; d[(r0+4+j)*4+1]=a.formes[j]; } }
+  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,1,SH_ROWS,gl.RGBA,gl.FLOAT,d);
   return tot>0;
+}
+function semisAire(k){                                         // aire des formes d'un élément de la couche k (repère de l'élément, arrondi compris)
+  const r0=SEM0+k*SEM_L, cn=shapesData[(r0+1)*16+6], formes=[];
+  for(let j=0;j<cn;j++){ const r=(r0+4+j)*16, ar=shapesData[r+13]; formes.push(aireForme(shapesData[r+3],[shapesData[r+4]+ar,shapesData[r+5]+ar,shapesData[r+6]+ar])); }
+  return {formes,tot:formes.reduce((a,b)=>a+b,0)||1};
 }
 /* Partage du budget entre les familles, au prorata de la surface apparente qu'elles demandent (aire de l'objet / aire de
    sa cellule) : le recouvrement de l'écran reste le même pour toutes. Les grains tombés dans une cellule vide sont perdus :
-   un monde plus dense en perd moins, il ne coûte pas plus. */
+   un monde plus dense en perd moins, il ne coûte pas plus. Une couche de semis demande la moitié de l'aire de son élément
+   (la face vue) par cellule, fois sa densité ; une rangée n'occupe qu'une bande de part et d'autre du trajet, comptée pour
+   la part d'une bande de 40 m qu'elle couvre. Le partage suit d'elle-même la fiche : une couche de plus, et chacun en reçoit moins. */
 function v3Partage(N,vue,p){
   const tr=S.kit===0&&S.kitP[0]>0, pe=tr&&S.houp[3]>0, bl=S.kitP[1]>0;
-  const w=[tr?6.8/36:0, pe?.95/10.9:0, bl?3.4/72.25:0];
+  const coeur=S.houp[0]>.5?.36*2*2.2*14:0;                     // cœur des conifères (rayon moyen × hauteur, en gros)
+  const w=[tr?(6.8+coeur)/36:0, pe?.95/10.9:0, bl?3.4/72.25:0];
+  const ws=[0,0,0,0], R=[0,0,0,0];
+  for(let k=0;k<S.semN;k++){ const o=(SEM0+k*SEM_L)*16, A=[shapesData[o],shapesData[o+1]], dens=shapesData[o+4], rg=shapesData[o+7]>.5;
+    const J=shapesData.subarray(o+16,o+32), sc=(J[2]+J[3])/2, sy=(J[4]+J[5])/2, a=semisAire(k).tot*sc*sc*(.3+.7*sy);
+    const cotes=shapesData[o+10]===0?2:1, bande=rg?Math.min(1,cotes*J[7]*A[0]/40):1;
+    ws[k]=.5*a*dens*(1-.5*shapesData[o+5])/(A[0]*A[1])*bande;
+    R[k]=Math.hypot(J[12],J[14])*J[3]+Math.hypot(J[8],J[10])*J[3]+Math.hypot(J[0],J[1]); }   // demi-étendue horizontale de l'élément, décalage compris
   const fF=vue===0&&S.kit===0&&S.kitP[2]>0?.28:0;
-  const ob=S.objN>0&&v3Semis(1,vue,p), fP=ob?(vue===0?.12:.1):0;
-  const sw=w[0]+w[1]+w[2], solide=N*(1-fF-fP);
-  const nA=sw>0?Math.round(solide*w[0]/sw):0, nB=sw>0?Math.round(solide*w[1]/sw):0, nR=sw>0?Math.round(solide*w[2]/sw):0;
+  const ob=S.objN>0&&v3Semis(1,vue,p), fP=ob?(vue===0?(v3Proches().on?0:.12):.1):0;   // vus de la caméra, les objets sont dessinés en boîtes (v3Proches)
+  if(!ob&&S.semN) v3Semis(1,vue,p);
+  const sw=w[0]+w[1]+w[2]+ws[0]+ws[1]+ws[2]+ws[3], solide=N*(1-fF-fP);
+  const n=x=>sw>0?Math.round(solide*x/sw):0;
+  const nA=n(w[0]), nB=n(w[1]), nR=n(w[2]), nS=ws.map(n);
   const nF=Math.round(N*fF), nP=ob?Math.round(N*fP):0;
   if(ob) v3Semis(nP,vue,p);
+  const fin=a=>{ const pS=[]; let c=a; for(let k=0;k<4;k++){ c+=nS[k]; pS.push(c); } return pS; };
   if(vue===1){ const traits=Math.round(nB*.35);               // vue du soleil : les perches en traits (voir semeBTrait)
-    return {nA,nB:0,nR,nF,nP,traits,part:[nA,nA,nA+nR,nA+nR+nF],total:nA+nR+nF+nP}; }
-  return {nA,nB,nR,nF,nP,traits:0,part:[nA,nA+nB,nA+nB+nR,nA+nB+nR+nF],total:nA+nB+nR+nF+nP};
+    const pO=nA+nR+nF+nP, pS=fin(pO);
+    return {nA,nB:0,nR,nF,nP,nS,R,traits,part:[nA,nA,nA+nR,nA+nR+nF],partO:pO,partS:pS,total:pS[3]}; }
+  const pO=nA+nB+nR+nF+nP, pS=fin(pO);
+  return {nA,nB,nR,nF,nP,nS,R,traits:0,part:[nA,nA+nB,nA+nB+nR,nA+nB+nR+nF],partO:pO,partS:pS,total:pS[3]};
+}
+/* Éléments proches (v3_proches.vert) : une fenêtre fixe d'emplacements autour de la caméra. Toutes les formes des objets
+   (64 au plus), 5 × 5 cellules de blocs, 3 × 3 cellules d'arbres (le tronc, et le cœur des conifères), 5 × 5 de perches, et pour chaque couche de semis la fenêtre de cellules qui couvre une dizaine de
+   mètres (au plus 2 cellules de part et d'autre, une ou deux rangées par rive). Option v3proches (false : tout en grains). */
+const PRX_VPS=6*5*5*6;                                          // sommets par emplacement (v3_proches.vert : NS = 5)
+function v3Proches(){
+  const on=CFG.v3proches!==false&&CFG.v3proches!==0;
+  const r={on,o:0,b:0,a:0,p:0,n:[0,0,0,0],fin:[0,0,0,0],total:0};
+  if(!on) return r;
+  r.o=S.objRows||0; r.b=S.kitP[1]>0?25:0;
+  r.a=S.kit===0&&S.kitP[0]>0?9:0; r.p=S.kit===0&&S.kitP[0]>0&&S.houp[3]>0?25:0;   // troncs (3 × 3 cellules), perches (5 × 5)
+  let c=r.o+r.b+r.a+r.p;
+  for(let k=0;k<4;k++){
+    if(k<S.semN){ const o=(SEM0+k*SEM_L)*16, rg=shapesData[o+7]>.5, A=[shapesData[o],shapesData[o+1]], cn=shapesData[(SEM0+k*SEM_L+1)*16+6];
+      const n=Math.max(0,Math.min(2,Math.ceil(10/(rg?A[1]:Math.max(A[0],A[1])))-0)), w=2*n+1;
+      const cells=rg?w*Math.min(2,shapesData[(SEM0+k*SEM_L+1)*16+7])*(shapesData[o+10]===0?2:1):w*w;
+      r.n[k]=n; c+=cells*cn; }
+    r.fin[k]=c; }
+  r.total=c; return r;
+}
+function v3Grains(u,ps){                                       // uniformes du partage, communs aux deux vues
+  gl.uniform4iv(u.uPart,ps.part); gl.uniform1i(u.uPartO,ps.partO); gl.uniform4iv(u.uPartS,ps.partS); gl.uniform1i(u.uTotal,ps.total);
+  gl.uniform4fv(u.uNbS,ps.nS); gl.uniform4fv(u.uSemR,ps.R); gl.uniform1f(u.uKf,V3.kf);
 }
 function v3Monde(u,w,h,p){                                    // uniformes de monde.glsl (mêmes valeurs que common())
   gl.uniform2f(u.uRes||null,w,h); gl.uniform3fv(u.uCamPos||null,p.pos); gl.uniformMatrix3fv(u.uCam||null,false,p.mat);
@@ -965,7 +1026,8 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
   if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP); }
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
-  gl.uniform1i(u.uSemN||null,0); gl.uniform1f(u.uNuit||null,S.lum);              // le semeur ne sème pas encore les couches de semis
+  gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
+  gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);
 }
 const px3=new Float32Array(4);
 /* Attendre la fin du calcul graphique d'UNE cible : sur une puce à tuiles (Mali), lire un pixel ne force que la cible lue.
@@ -999,18 +1061,21 @@ function v3Image(p){
   let u;
   if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w};
   const Ns=V3.ombre||Math.round(V3.grains*.6);
-  u=G.ombre.u; gl.useProgram(G.ombre.p); v3Monde(u,W,H,p);
   const ps=v3Partage(Ns,1,p);
-  gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); gl.uniform4iv(u.uPart,ps.part); gl.uniform1i(u.uTotal,ps.total);
-  gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
-  gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
-  gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
-  gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.sm.f); gl.viewport(0,0,V3.sm.w,V3.sm.h);
   gl.clearBufferfv(gl.DEPTH,0,[1]); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
-  gl.uniform1i(u.uTrait,0);
-  if(ps.total>0) gl.drawArrays(gl.POINTS,0,ps.total);
-  if(ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
+  for(const P of [G.ombre,G.ombreF]){                          // deux variantes du semeur : arbres, perches, blocs ; puis formes (objets, semis)
+    const de=P===G.ombre?0:ps.part[3], a=P===G.ombre?ps.part[3]:ps.total; if(a<=de&&!(P===G.ombre&&ps.traits>0)) continue;
+    u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
+    gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); v3Grains(u,ps); gl.uniform1i(u.uPrx,0);
+    gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
+    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
+    gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
+    gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
+    gl.uniform1i(u.uTrait,0);
+    if(a>de) gl.drawArrays(gl.POINTS,de,a-de);
+    if(P===G.ombre&&ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
+  }
   }
   const SP=V3.smP; const note=V3.nImg<3?etapeGL:()=>{};
   note("v3 image "+V3.nImg+" : ombres faites ("+V3.sm.w+" × "+V3.sm.h+"), semis de "+V3.grains+" grains à "+W+" × "+H);
@@ -1018,7 +1083,7 @@ function v3Image(p){
   // (2) tampon G : le sol, puis les grains
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
-  const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol;
+  const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol; so.dmax=S.eau&&S.eau[3]>0?150:420;
   u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
   if(CFG.v3solPlein){                                         // l'ancien maillage : six sommets par quadrilatère, tout le tour
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,Math.PI,so.secteurs); gl.uniform1i(u.uSolIdx,0);
@@ -1031,16 +1096,25 @@ function v3Image(p){
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,demi,ns); gl.uniform1i(u.uSolIdx,1); gl.uniform1i(u.uSolR,so.anneaux);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,so.idx); so.tri=so.anneaux*ns*2; gl.drawElements(gl.TRIANGLES,so.anneaux*ns*6,gl.UNSIGNED_SHORT,0);
   }
+  // les éléments proches, en boîtes (v3_proches) : avant les grains, ils couvrent les grandes surfaces proches sans trou
+  const px=v3Proches();
+  if(px.total>0){ u=G.proches.u; gl.useProgram(G.proches.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
+    gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
+    gl.drawArrays(gl.TRIANGLES,0,px.total*PRX_VPS); }
   const pc=v3Partage(V3.grains,0,p); V3.parts=pc;
-  u=G.grains.u; gl.useProgram(G.grains.p); v3Monde(u,W,H,p);
-  gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); gl.uniform4iv(u.uPart,pc.part); gl.uniform1i(u.uTotal,pc.total);
-  gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
-  gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil,70,W*H);
-  gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
-  gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
-  { const cap=Math.atan2(fwd[0],fwd[1]), q=Math.PI/4;       // ancre des feuilles : la position arrondie à 4 m, le cap arrondi à 45°
-    gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
-  if(pc.total>0) gl.drawArrays(gl.POINTS,0,pc.total);
+  for(const P of [G.grains,G.grainsF]){
+    const de=P===G.grains?0:pc.part[3], a=P===G.grains?pc.part[3]:pc.total; if(a<=de) continue;
+    u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
+    gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); v3Grains(u,pc);
+    gl.uniform1i(u.uPrx,px.on?1:0); gl.uniform4iv(u.uPrxN,px.n);
+    gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
+    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
+    gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
+    gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
+    { const cap=Math.atan2(fwd[0],fwd[1]), q=Math.PI/4;       // ancre des feuilles : la position arrondie à 4 m, le cap arrondi à 45°
+      gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
+    gl.drawArrays(gl.POINTS,de,a-de);
+  }
   gl.disable(gl.DEPTH_TEST);
   if(V3.nImg<3){ v3Sync(g); note("  semis fait"); }
   chrono("tamponG",g);
@@ -1095,16 +1169,10 @@ function v3Basculer(on){
   if(on){ v3Init(); V3.hist=null; V3.n=0; } else { hist=null; v3Libere(false); }
   if(typeof W==="number"&&W>0&&!CFG.w) resize();                    // la résolution interne dépend du moteur
 }
-/* Ce que le semeur ne sait pas encore rendre (liste tenue dans docs/moteur-v3.md). Rend la raison, ou "" si la fiche est rendue. */
+/* Ce que le semeur ne sait pas encore rendre (docs/moteur-v3.md, « Le v3 rend tous les mondes »). Rend la raison, ou "" si la
+   fiche est rendue. La liste est vide : semis, kit nu, dunes, relief et trajet réglés, nuit à la lampe, conifères en cône et eau
+   à l'horizon sont semés. La fonction reste le point d'entrée (bouton « Moteur v3 · pas ici », repli sur le lanceur de rayons). */
 function v3Refus(){
-  if(S.semN>0) return "semis";
-  if(S.kit===1) return "dunes";
-  if(S.kit===2) return "monde nu";
-  const eg=(a,b)=>a.every((v,i)=>Math.abs(v-b[i])<1e-6);
-  if(!eg(S.rel,[1,1,0,0])||!eg(S.traj,[1,.85,.3,.5])||!eg(S.creux,[.10,1.8,.4,0])) return "relief ou trajet réglé";
-  if(S.nuit||S.torch>0) return "nuit, lampe";
-  if(S.houp[0]>.5) return "conifères en cône";
-  if(S.eau&&S.eau[3]>0) return "eau à l'horizon";
   return "";
 }
 function v3Bouton(){
@@ -1233,7 +1301,7 @@ function say(text,bref){ const el=$("pensee"); el.textContent=text; el.classList
 const devant={L:[0,1,2].map(lectureDiff),T:null,v:null,b:new Float32Array(16)};
 function obstaclesDevant(){
   const pts=[1.5,3,5].map(d=>{ const x=cam.x+Math.sin(cam.yaw)*d, z=cam.z+Math.cos(cam.yaw)*d; return [x,terrainH(x,z)+.75,z]; });
-  if(OPT.sondeSync||!devant.v||!progs[varCourante()]){ devant.v=pts.map(q=>probe(...q)[0]); return devant.v; }
+  if(OPT.sondeSync||!devant.v||!sondeDispo()){ devant.v=pts.map(q=>probe(...q)[0]); return devant.v; }
   devant.L.forEach((L,i)=>{ if(recevoirDiff(L,devant.b)) devant.v[i]=devant.b[0]; });
   if(devant.L.every(L=>!L.sync)){
     if(!devant.T) devant.T=[0,1,2].map(()=>target(4,1,ACC_FMT,gl.NEAREST));
@@ -1661,7 +1729,7 @@ async function mesurerV3(f,wait,med){
   const c4=OPT.capteur4; OPT.capteur4=true; const cap4=await chrono7(()=>{ display(src,tt,ec); v3Sync(ec); }); OPT.capteur4=c4;
   const halo=await chrono7(()=>{ postFX(src); v3Sync(bl1); });
   freeT(ec);
-  const sondeB=progs[varCourante()]?await chrono7(()=>probe(cam.x,terrainH(cam.x,cam.z)+.75,cam.z)):null;
+  const sondeB=sondeDispo()?await chrono7(()=>probe(cam.x,terrainH(cam.x,cam.z)+.75,cam.z)):null;
   hold=false;
   const ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
   const ips=f.length>1?(f.length-1)/((f[f.length-1].t-f[0].t)/1000):null;   // horloge réelle : dt est plafonné à 100 ms dans la boucle
@@ -1680,7 +1748,7 @@ async function mesurerV3(f,wait,med){
     ...(ab.length?["","EN MARCHE, UNE OPTIMISATION COUPÉE À LA FOIS (3 s chacune)",...ab]:[]),
     "",
     "BUDGET DE GRAINS",
-    "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+")",
+    "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+(gr.nS&&S.semN?", semis "+gr.nS.slice(0,S.semN).map(k).join(" + "):"")+")",
     "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.sm.w+" × "+V3.sm.h,
     "Sol              "+(V3.sol.tri||0)+" triangles dessinés ("+(CFG.v3solPlein?"tout le tour, sommets répétés":"cap utile, sommets partagés")+")",
     "Tapis du sol     "+(v3TapisActif()?T.L+" niveaux de "+T.N+" × "+T.N+", texel "+Math.round(T.s0*1000)/10+" cm à "+Math.round(T.s0*2**(T.L-1)*100)+" cm":"coupé"),
@@ -1694,7 +1762,7 @@ async function mesurerV3(f,wait,med){
     "Aller-retour     "+fx(vide,1)+" ms (une lecture quand rien n'est en file)",
     "Capteur          "+fx(cap-vide,1)+" ms à "+canvas.width+" × "+canvas.height+" (à 4 lectures/texel : "+fx(cap4-vide,1)+" ms)",
     "Halo, exposition "+fx(halo-vide,1)+" ms",
-    "Sonde bloquante  "+(sondeB!=null?fx(sondeB-vide,1)+" ms de calcul, "+fx(sondeB,1)+" ms d'attente (en marche : lecture différée, "+(OPT.sondeSync?"coupée":"active")+")":"lanceur de rayons pas compilé"),
+    "Sonde bloquante  "+(sondeB!=null?fx(sondeB-vide,1)+" ms de calcul, "+fx(sondeB,1)+" ms d'attente ("+(SONDE.p?"programme de sonde":"lanceur de rayons")+" ; en marche : lecture différée, "+(OPT.sondeSync?"coupée":"active")+")":"sonde pas encore compilée"),
     "",
     "COÛT RÉEL D'UNE IMAGE SELON LE BUDGET",
     ...essais,
@@ -1967,6 +2035,8 @@ if(CFG.histoire) jouerHistoire(CFG.histoire===true?undefined:CFG.histoire);   //
 if(CFG.seed){ setSeed(CFG.seed); cam.x=S.kit!==1?pathX(0):0; }
 if(CFG.z!==undefined){ cam.z=CFG.z; if(S.kit!==1){ cam.x=pathX(cam.z); cam.yaw=pathYaw(cam.z); } }
 if(CFG.yaw!==undefined) cam.yaw+=CFG.yaw;
+if(CFG.dx!==undefined) cam.x+=CFG.dx;                            // tests : écart au trajet (m) et cap absolu (radians, 0 = +z)
+if(CFG.cap!==undefined) cam.yaw=CFG.cap;
 if(CFG.pitch!==undefined) cam.pitch=CFG.pitch;
 if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
@@ -1979,4 +2049,5 @@ $("v3").onclick=()=>v3Basculer(!V3.on);
 if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
 if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();
+sondeProg();                                                     // option v3sonde : la sonde se compile dès le départ, sans bloquer
 requestAnimationFrame(frame);

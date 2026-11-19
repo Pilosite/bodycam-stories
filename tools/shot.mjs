@@ -7,6 +7,7 @@
 // Options lues par la page (window.__CFG) :
 //   still    fige le grain et le tremblement de main      nohud    masque l'interface
 //   z        position le long du sentier, en mètres       yaw, pitch   orientation de départ
+//   dx       écart à l'axe du trajet (m)                  cap      cap absolu du corps (radians, 0 = +z)
 //   w, h     résolution interne forcée                    maxSpp   nombre de passes maximum
 //   prevOnly reste en aperçu de mouvement                 scene    fiche de lieu qui remplace celle du build
 //   seed     graine du monde                              lookYaw  regard tourné (radians), level  niveau de mouvement
@@ -19,7 +20,7 @@
 //            capteur4, sondeSync, expoSync, v3sync, v3solPlein) décrites en tête du bloc « moteur v3 » de src/main.js. En v3, le
 //            nombre de passes attendu est le nombre d'images accumulées à l'arrêt.
 //
-// CHROME=/chemin/vers/chrome force l'exécutable (sinon celui de Playwright).
+// CHROME=/chemin/vers/chrome force l'exécutable (sinon celui de Playwright). PAGE=autre.html : une autre page que dist/index.html.
 import { chromium } from 'playwright';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,7 +38,7 @@ const logs = [];
 page.on('console', m => { if (m.type() === 'error') logs.push(m.text()); });
 page.on('pageerror', e => logs.push('pageerror: ' + e.message));
 await page.addInitScript(c => { window.__CFG = c; }, JSON.parse(cfgJson));
-await page.goto('file://' + join(root, 'dist/index.html'), { timeout: +timeout * 1000 });   // la compilation du shader peut retarder le chargement
+await page.goto('file://' + resolve(root, process.env.PAGE || 'dist/index.html'), { timeout: +timeout * 1000 });   // la compilation du shader peut retarder le chargement
 
 const t0 = Date.now(); let state = null; let failed = '';
 while ((Date.now() - t0) / 1000 < +timeout) {
@@ -46,7 +47,7 @@ while ((Date.now() - t0) / 1000 < +timeout) {
   failed = await page.evaluate(() => { const e = document.getElementById('err'); return e && e.style.display === 'flex' ? e.textContent : ''; });
   if (failed || (state && state.n >= +spp)) break;
 }
-await page.screenshot({ path: resolve(out) });
+await page.screenshot({ path: resolve(out), timeout: 300000 });   // en rendu logiciel, une image peut prendre plusieurs secondes
 await browser.close();
 
 console.log(JSON.stringify({ sortie: out, etat: state, secondes: +((Date.now() - t0) / 1000).toFixed(1) }));
