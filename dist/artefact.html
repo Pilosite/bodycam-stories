@@ -4431,7 +4431,7 @@ function v3Frame(p,dt){
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
   v3Image(p); frames++;
-  if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0});
+  if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,t:performance.now()});
   postFX(V3.hist);
 }
 function v3Basculer(on){
@@ -4473,7 +4473,7 @@ function hud(now){
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
   window.__state={n:CFG.auto?frames:V2.on?v2Prets():V3.on?V3.n:n,
     v3:V3.on?{ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
-    v2:V2.on?{msProj:+V2.msProj.toFixed(1),msProjMoy:+V2.msProjAvg.toFixed(1),points:V2.pts,dessines:V2.dessines,faits:V2.faits.slice(),msParLigne:+V2.msPerRow.toFixed(2)}:undefined,W,H,mLevel,msMotion:+msMotion.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
+    v2:V2.on?{msProj:+V2.msProj.toFixed(1),msProjMoy:+V2.msProjAvg.toFixed(1),points:V2.pts,dessines:V2.dessines,faits:V2.faits.slice(),msParLigne:+V2.msPerRow.toFixed(2)}:undefined,W,H,mLevel,msMotion:+msMotion.toFixed(1),msImage:+lastMotionMs.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
 }
 
 /* ------------------------------------------------------------------ commandes directes */
@@ -4814,7 +4814,8 @@ async function mesurerV3(f,wait,med){
   const det=V3.detail; V3.detail=true; V3.passes={}; V3.n=0; V3.max=Math.max(V3.max,1);
   const k0=V3.nImg; while(V3.nImg<k0+12) { V3.n=0; await wait(60); }
   const pa=Object.assign({},V3.passes); V3.detail=det; hold=false;
-  const dt=med(f.map(x=>x.dt)), ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
+  const ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
+  const ips=f.length>1?(f.length-1)/((f[f.length-1].t-f[0].t)/1000):null;   // horloge réelle : dt est plafonné à 100 ms dans la boucle
   const dbg=gl.getExtension("WEBGL_debug_renderer_info"), gpu=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"inconnu";
   const k=v=>Math.round((v||0)/1000)+" k";
   out.textContent=[
@@ -4824,13 +4825,13 @@ async function mesurerV3(f,wait,med){
     "Puce graphique   "+gpu,
     "",
     "EN MARCHE ("+f.length+" images)",
-    "Images/seconde   "+(dt?fx(1000/dt):"non mesuré"),
+    "Images/seconde   "+(ips?fx(ips):"non mesuré"),
     "Calcul par image "+fx(ms,1)+" ms",
     "Résolution       "+W+" × "+H,
     "",
     "BUDGET DE GRAINS",
     "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+")",
-    "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.carte+" × "+V3.carte,
+    "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.sm.w+" × "+V3.sm.h,
     "Sol              "+V3.sol.anneaux*V3.sol.secteurs*2+" triangles",
     "",
     "PAR PASSE (à l'arrêt, synchronisé)",

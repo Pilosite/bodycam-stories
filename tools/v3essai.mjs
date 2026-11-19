@@ -1,10 +1,12 @@
 // Essai du moteur v3 (docs/moteur-v3.md) : le semeur, comparé au lanceur de rayons.
-// Usage : node tools/v3essai.mjs [dossier] [planche|mesures|tout]
+// Usage : node tools/v3essai.mjs [dossier] [planche|mesures|tout] [tours] [v3,actuel]
 //   planche  rend en v3 les trois vues de forêt de ref/vues.json, puis le départ de la vue a-sentier après 2 m et 5 m de
 //            marche et le regard tourné de 60°, et assemble out/v3-planche.png (référence | v3, puis la marche).
 //   mesures  le test du triptyque : ms par image en marche, en v3, pour la forêt de la fiche 0, la même forêt plus dense
 //            (foret.densite 1, rochers et feuillage 1,5) et la fiche 05-maison-lapin ; puis le moteur actuel à la même
-//            résolution (CFG.auto, niveau de résolution fixé à 0, state.msMotion). Résultats dans mesures.json.
+//            résolution (CFG.auto, niveau de résolution fixé à 0, temps brut d'une image de mouvement : state.msImage,
+//            msMotion en est la moyenne glissante). Résultats dans mesures.json. La machine est partagée : avec tours > 1,
+//            les cas sont repris en alternance et la synthèse donne la médiane de chaque cas sur tous les tours.
 // Rendu logiciel (SwiftShader) : au plus deux navigateurs à la fois. Compter un quart d'heure pour tout.
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
@@ -12,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const [,, dir = 'out/v3', quoi = 'tout'] = process.argv;
+const [,, dir = 'out/v3', quoi = 'tout', tours = '1', moteurs = 'v3,actuel'] = process.argv;
 mkdirSync(join(root, dir), { recursive: true });
 const vues = JSON.parse(readFileSync(join(root, 'ref/vues.json'), 'utf8'));
 const W = vues.largeur, H = vues.hauteur;
@@ -113,7 +115,7 @@ async function mesures() {
     while (ech.length < (moteur === 'v3' ? 14 : 8) && Date.now() - t0 < 900000) {
       await p.waitForTimeout(moteur === 'v3' ? 400 : 1500);
       const s = await st(p); if (!s) continue;
-      const ms = moteur === 'v3' ? (s.v3 && s.v3.images > 3 ? s.v3.ms : null) : (s.n > 2 ? s.msMotion : null);
+      const ms = moteur === 'v3' ? (s.v3 && s.v3.images > 3 ? s.v3.ms : null) : (s.n > 2 ? s.msImage : null);   // temps brut de la dernière image
       if (ms != null && (!ech.length || ms !== ech[ech.length - 1])) ech.push(ms);
     }
     const s = await st(p);
@@ -123,9 +125,17 @@ async function mesures() {
     await p.close();
   };
   const browser = await chromium.launch({ headless: true, args: ARGS });
-  for (const c of cas) { await une(c, 'v3', browser); await une(c, 'actuel', browser); }   // l'un après l'autre : le rendu logiciel est partagé
+  for (let t = 0; t < +tours; t++)
+    for (const c of cas) for (const m of moteurs.split(',')) await une(c, m, browser);   // l'un après l'autre : le rendu logiciel est partagé
   await browser.close();
-  writeFileSync(join(root, dir, 'mesures.json'), JSON.stringify(res, null, 1));
+  const med = a => { a = a.slice().sort((x, y) => x - y); return a[a.length >> 1]; };
+  const synthese = {};
+  for (const r of res) { const k = r.cas + ' / ' + r.moteur; (synthese[k] = synthese[k] || []).push(...r.echantillons); }
+  for (const k in synthese) synthese[k] = { ms_mediane: med(synthese[k]), n: synthese[k].length, min: Math.min(...synthese[k]), max: Math.max(...synthese[k]) };
+  // la machine est partagée : la médiane de chaque tour, puis la plus basse, est l'estimation la moins chargée
+  for (const k in synthese) synthese[k].meilleur_tour = Math.min(...res.filter(r => r.cas + ' / ' + r.moteur === k).map(r => r.ms_mediane));
+  console.table(synthese);
+  writeFileSync(join(root, dir, 'mesures.json'), JSON.stringify({ synthese, mesures: res }, null, 1));
 }
 
 if (quoi === 'planche' || quoi === 'tout') await planche();

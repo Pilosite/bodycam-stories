@@ -1,6 +1,6 @@
 # Moteur v3 : on ne trace plus, on sème
 
-Document de conception. Rien de ce qui suit n'est construit. Il tire les leçons de l'essai v2 (`moteur-v2.md`) et répond au triptyque de `CLAUDE.md`.
+Document de conception, suivi du compte rendu de l'essai n° 1 (en fin de document). Il tire les leçons de l'essai v2 (`moteur-v2.md`) et répond au triptyque de `CLAUDE.md`.
 
 ## Ce que les essais ont appris
 
@@ -46,6 +46,62 @@ La répartition suit le regard et le trajet : beaucoup de grains près de la cam
 | Feuillage | Chaque grain est une feuille : c'est le cas le plus naturel | Essai n° 1 |
 | Deux moteurs à tenir d'accord (semeur et lanceur de rayons) | Ils lisent la même fiche ; le lanceur sert de référence et de mesure de lumière | Tests de non-régression |
 
-## Essai n° 1 (à faire)
 
-Semer la forêt actuelle (fiche 0) : sol, troncs, grès, feuillage, objets en formes ; carte d'ombres ; recettes par pixel ; capteur inchangé. Comparer aux vues de `ref/`, et mesurer sur le téléphone les images par seconde selon le budget de grains. Réussi si l'image passe pour la même vidéo et si la cadence ne bouge pas quand on double la densité d'arbres.
+## Essai n° 1 fait (19 novembre 2026) : la forêt semée
+
+Construit, en mode expérimental : bouton « Moteur v3 », option de test `v3` (options détaillées en tête du bloc « moteur v3 » de `src/main.js`). Le mode par défaut et le v2 restent intacts (vue `a-sentier` du mode par défaut : écart après flou 1,71, au plancher de bruit de `ref/bruit.txt`).
+
+### Ce qui est fait
+
+- **Code partagé.** Le monde n'existe qu'une fois. `pathtrace.frag` est découpé, sans changer son calcul, en `monde.glsl` (aléa, relief, familles d'objets, objets de la fiche, canopée, ciel, lointain), `recette.glsl` (matières) et `reprojection.glsl` (accumulation) ; le build les insère (`#include "…"`, une fois par shader). Les paramètres d'un objet de cellule sont des fonctions (`arbreA`, `brancheA`, `percheB`, `axeB`, `blocGres`, `blocLocal`, `blocForme`) que `sdTreeA`, `sdTreeB`, `sdRock` appellent, et que le semeur appelle aussi : un arbre semé tombe là où le lanceur de rayons le voit, par construction.
+- **Le semeur** (`v3_grains.vert`). Un sommet par grain, `gl_VertexID` et la graine de l'image, aucun tampon. Budget fixe : 300 000 grains vus de la caméra (option `grains`), 180 000 vus du soleil. Le budget est partagé entre familles au prorata de la surface apparente qu'elles demandent (aire de l'objet / aire de sa cellule), pas de leur nombre : une forêt plus dense remplit mieux ses grains, elle n'en reçoit pas plus.
+  - Troncs, branches, perches, blocs : le grain tire un point du sol (cap dans le champ, distance en progression géométrique, donc une densité en 1/d² qui suit la taille apparente), prend l'objet de la cellule, puis un point sur la face tournée vers la caméra (cylindre, capsule de branche, ellipsoïde). Les blocs sont posés sur l'ellipsoïde puis ramenés sur la forme bosselée par deux pas de Newton sur `blocForme`. Le côté du grain est réglé pour couvrir l'objet environ 3 fois (`v3k`) ; sur un tronc, il ne dépasse pas le diamètre et reste dans la silhouette (un tronc lointain plus fin qu'un pixel est dessiné une image sur deux ou trois : l'accumulation en fait un trait fin, au lieu de l'épaissir).
+  - Feuilles : le grain tire une direction de l'écran et une distance dans la tranche de canopée, et prend la feuille de la cellule de 30 cm où il tombe, avec les tirages de `foliage()` (position, couleur, normale). Une feuille proche est touchée presque à chaque image ; une lointaine rarement, et elle est alors agrandie (1,8 fois au plus).
+  - Objets de la fiche (`uShapes`) : objet tiré selon sa taille apparente (calculée par la page), forme selon son aire, grain posé sur la boîte englobante puis ramené sur la forme par Newton sur `sdPrim`. La maison et le lapin de la fiche 05 apparaissent.
+  - Le sol est un maillage polaire de 36 864 triangles centré sur la caméra (pas logarithmique : 3 cm près des pieds, 30 m au loin), qui suit `terrainH`. Aucun trou.
+- **Tampon G** (`v3_gbuf.frag`) : coordonnées de recette dans le repère de l'objet (comme `info` dans le lanceur de rayons), élément, normale, distance. Un grain couvre quelques pixels ; ses coordonnées varient d'un pixel à l'autre le long de la surface, pour que l'écorce ou la litière ne soient pas peintes en carrés.
+- **Une passe plein écran** (`v3_ombrage.frag`) : même choix de recette que `render()`, un seul appel à `recette()`. Soleil : carte d'ombres semée vue du soleil (1024 × 652 pour ce soleil à 21°, texels carrés de 11 cm, perches semées en traits d'un texel), direction tirée dans le disque solaire à chaque image (la pénombre vient de l'accumulation), canopée par sa transmittance statistique (`canopyT`). Hors de la carte, une part statistique de soleil passe entre les troncs. Ambiance : un échantillon cosinus par pixel et par image, ciel atténué par la canopée et par la futaie (statistique), sol éclairé en dessous, pied assombri (distance à l'objet de la cellule, trois familles). La fonction `ambiance()` est l'endroit où brancher l'ambiance rangée dans le monde. Ciel et lointain : calcul par direction, comme avant.
+- **Sortie** au format de l'accumulation (couleur, distance) : reprojection en marche (25 % d'image neuve), accumulation à l'arrêt (64 images au plus, décalage sous-pixel), bloom, exposition, `camera.frag` inchangés. Les grains sont re-tirés à chaque image.
+- **Mesurer** : en v3, images/s en marche, ms par image, budget de grains par famille, détail des trois passes (à l'arrêt, synchronisé).
+- `tools/v3essai.mjs` : la planche et le test du triptyque.
+
+### Ce qu'on voit (planche `out/v3-planche.png`, rendu logiciel 270 × 480)
+
+Rangée 1 : `ref/` (lanceur de rayons, 24 passes) ; rangée 2 : v3, 16 images accumulées ; rangée 3 : v3 en marche après 2 m, 5 m, et le corps tourné de 60°.
+
+- **Placement : exact.** Mêmes arbres, mêmes perches, mêmes blocs, mêmes branches, au même endroit dans les trois vues. Les écorces, la litière, le sentier, la mousse sont les mêmes recettes et se confondent.
+- **Ombres : justes, un peu plus douces.** Vérifié pixel à pixel contre une marche de rayons vers le soleil (outil de mise au point retiré du code) : la carte et le lancer de rayons s'accordent, sauf sur un demi-texel au bord des troncs. Les ombres de v3 sont plus nombreuses et plus douces que celles de `ref/` : le lanceur de rayons, borné en pas, manque des arbres lointains (ses ombres proches sont plus nettes et plus rares), alors que la carte les a tous ; et la pénombre (même rayon de disque solaire que le lanceur) s'accumule sur 16 images au lieu de 24 passes.
+- **Ambiance : réglée à l'œil.** L'approximation donnait une image trop douce (ombres trop claires) ; un facteur global de 0,65 (`v3amb`) remet les percentiles de luminance au niveau de `ref/` (5 %, 50 % et 95 % à 8 niveaux près sur 255). C'est un réglage, pas une mesure de lumière.
+- **Feuillage : ce qui trahit le plus.** À l'arrêt, la canopée est plus floue que les feuilles nettes du lanceur de rayons (les feuilles lointaines, rarement touchées, s'accumulent en taches). En marche, elle devient des confettis de 2 à 5 pixels qui changent à chaque image. Les petites branches de la canopée (`foliage`, grille de 1,5 m) ne sont pas semées.
+- **Objets de la fiche.** La maison et le lapin sont là, mais un mur pris de face n'est pas entièrement couvert à chaque image : en accumulant, on voit à travers (les arbres qui traversent la maison, cachés par le lanceur de rayons, transparaissent). Les fusions douces (« lisse ») ne sont pas suivies. Le mur est plus sombre qu'avec le lanceur de rayons.
+- **Au loin,** à l'horizon, une bande de brume plus claire que dans `ref/` sur certaines vues : les troncs plus fins qu'un pixel y sont dessinés une image sur trois.
+
+### Chiffres (rendu logiciel SwiftShader, 4 cœurs partagés avec d'autres tâches, 270 × 480)
+
+La machine était chargée (charge moyenne 6 à 8 sur 4 cœurs) : d'un passage à l'autre, le même cas varie du simple au double. Les cas sont donc repris en alternance (`node tools/v3essai.mjs out/v3 mesures 4 v3`) et on compare des médianes prises au même moment. Temps de calcul d'une image en marche, synchronisé, à résolution égale (270 × 480, niveau de résolution du moteur actuel fixé à la pleine résolution) :
+
+| Cas | v3, médiane (4 tours alternés) | v3, meilleur tour | Moteur actuel, médiane (3 tours) | Moteur actuel, tour le plus calme |
+|---|---|---|---|---|
+| Forêt (fiche 0) | 1 082 ms | 1 057 ms | 4 201 ms | 4 143 ms |
+| Forêt plus dense (densite 1, rochers 1,5, feuillage 1,5) | 1 092 ms | 1 026 ms | 4 236 ms | 4 093 ms |
+| 05-maison-lapin (8 + 6 formes) | 1 101 ms | 1 022 ms | 4 348 ms | 4 203 ms |
+
+- **Le coût du v3 ne bouge pas avec la richesse**, à la précision de la mesure (± 15 %). Ce n'est pas tout à fait « par construction » : un grain tombé dans une cellule vide s'arrête tôt, donc une forêt plus dense fait travailler un peu plus de grains jusqu'au bout ; le budget (300 000) reste la borne. Un passage isolé, au calme, a donné 563 ms pour la forêt et 997 ms pour la forêt dense : je ne sais pas dire si c'était le bruit de la machine ou ce surcoût.
+- **Le v3 est environ 4 fois plus rapide** que le moteur actuel en marche, à résolution égale, en rendu logiciel. Le moteur actuel varie peu lui aussi ici : en marche, ses pas de rayon sont plafonnés, ce qui borne déjà son coût ; sur le téléphone il passait de 15 à 12 images/s avec la maison et le lapin.
+- **Le budget** : 300 000 grains vus de la caméra (arbres 126 k, perches 58 k, blocs 31 k, feuilles 84 k ; 36 k pour les objets quand la fiche en a), 180 000 vus du soleil, 36 864 triangles de sol.
+- **Détail par passe** (« Mesurer », à l'arrêt, synchronisé, machine chargée) : carte d'ombres 178 ms, tampon G 346 ms, matière et lumière 375 ms. En rendu logiciel, la passe plein écran (recette, deux transmittances de canopée, ombre, ambiance) pèse autant que tout le semis.
+- **Le panneau « Mesurer »** fonctionne en v3 (images/s en marche sur l'horloge réelle, ms par image, budget par famille, détail par passe). Aucune perte de contexte WebGL pendant les essais.
+
+### Ce qui n'est pas vérifié
+
+- **Le téléphone.** Tout a tourné en rendu logiciel, où le coût est surtout celui des sommets et des passes plein écran. Sur un GPU mobile, 300 000 points de quelques pixels, un maillage de 37 000 triangles, un tampon G de deux textures RGBA32F (bande passante) et une carte de profondeur sont des charges ordinaires, mais rien n'est mesuré. Le bouton « Mesurer » en v3 donne la réponse.
+- La précision : le tampon G est en RGBA32F (`EXT_color_buffer_float`) ; un appareil qui ne rend qu'en 16 bits flottants n'a pas été essayé.
+- La nuit et la lampe (hors périmètre : la lampe est ignorée en v3), les dunes, les conifères en cône (le cœur de feuillage n'est pas semé), le lointain en montagnes.
+- Le temps de compilation des shaders sur mobile (le shader d'ombrage inclut tout `recette()`).
+
+### Suite proposée
+
+1. Mesurer sur le téléphone de Toine, avec « Mesurer » en v3, à 150 000, 300 000 et 600 000 grains (`grains`).
+2. Le feuillage : semer les branches de la canopée ; essayer des grains ronds ou des disques orientés ; une part du budget réservée aux feuilles proches.
+3. Les objets : un recouvrement plus fort pour les faces planes, et suivre les fusions douces par deux pas de Newton sur l'objet entier.
+4. L'ambiance rangée dans le monde, branchée dans `ambiance()`, à la place du facteur réglé à l'œil.
