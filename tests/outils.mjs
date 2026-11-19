@@ -29,7 +29,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true } = {}) {
   const objets = (fiche.objets || []).map(o => ({ id: o.id, nom: o.nom, x: o.cote || 0, z: o.devant || 0,
     lumineux: (o.formes || []).some(f => f.matiere === 'lumineux') }));
   const caches = new Set((fiche.objets || []).filter(o => o.visible === false).map(o => o.id));
-  const w = { x: 0, z: 0, yaw: 0, file: [], idle: 0, nuit: false, lampe: false, brume: 0.009, fin: null, ordres: [], pensees: [], flaner };
+  const w = { x: 0, z: 0, yaw: 0, haut: 1, objets, file: [], idle: 0, nuit: false, lampe: false, brume: 0.009, fin: null, ordres: [], pensees: [], flaner };
   w.executer = o => {
     w.ordres.push(o);
     if (o.type === 'pensee') w.pensees.push(o);
@@ -41,10 +41,24 @@ export function mondePapier(histoire, { graine = 7, flaner = true } = {}) {
       if (s.soleil) { w.nuit = s.soleil.hauteur < -1; if (s.lampe === undefined) w.lampe = w.nuit; }
       if (typeof s.lampe === 'boolean') w.lampe = s.lampe;
       if (typeof s.brume === 'number') w.brume = s.brume;
+    } else if (o.type === 'objet') {                              // l'accessoiriste et les suites : comme objetMeneur dans main.js
+      const i = objets.findIndex(x => x.id === (o.id || (o.objet && o.objet.id)));
+      if (o.op === 'creer') {
+        if (objets.length >= 8) return;
+        let x, z; const base = o.pres_de && objets.find(b => b.id === o.pres_de);
+        if (base) { x = base.x + (o.decale ? o.decale[0] : 0); z = base.z + (o.decale ? o.decale[1] : 0); }
+        else { const a = w.yaw + ({ devant: 0, pieds: 0, gauche: -75, droite: 75, derriere: 180 }[o.ou] || 0) * Math.PI / 180, m = o.distance || 2.2;
+          x = w.x + Math.sin(a) * m; z = w.z + Math.cos(a) * m; }
+        objets.push({ id: o.objet.id, nom: o.objet.nom, x, z, formes: o.objet.formes.length, echelle: 1, lumineux: o.objet.formes.some(f => f.matiere === 'lumineux') });
+      } else if (i < 0) return;
+      else if (o.op === 'retirer') objets.splice(i, 1);
+      else { if (o.echelle !== undefined) objets[i].echelle = o.echelle; if (o.lumineux === false) objets[i].lumineux = false; }
     } else if (o.type === 'actions') {
       if (o.vider) w.file.length = 0;
       for (const a of o.actions) {
-        if (a.type === 'tourner') w.file.push({ type: 'tourner', rest: a.degres * Math.PI / 180 });
+        if (a.type === 'viser') w.file.push({ type: 'viser', objet: a.objet });
+        else if (a.type === 'posture') w.file.push({ type: 'posture', rest: a.hauteur });
+        else if (a.type === 'tourner') w.file.push({ type: 'tourner', rest: a.degres * Math.PI / 180 });
         else if (a.type === 'marcher') w.file.push({ type: 'marcher', rest: a.metres });
         else if (a.type === 'attendre') w.file.push({ type: 'attendre', rest: a.secondes });
       }
@@ -57,6 +71,12 @@ export function mondePapier(histoire, { graine = 7, flaner = true } = {}) {
       w.file.push({ type: 'tourner', rest: d + (r() - 0.5) * 0.3 }, { type: 'marcher', rest: 6 + r() * 9 }, { type: 'attendre', rest: 1.5 + r() * 3 }); } }
     else w.idle = 0;
     const a = w.file[0]; if (!a) return;
+    if (a.type === 'viser') {                                 // la page calcule le cap vers l'objet, pas l'IA
+      const ob = objets.find(x => x.id === a.objet); w.file.shift();
+      if (ob) { let d = Math.atan2(ob.x - w.x, ob.z - w.z) - w.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); w.file.unshift({ type: 'tourner', rest: d }); w.vise = a.objet; }
+      return;
+    }
+    if (a.type === 'posture') { w.haut = a.rest; w.file.shift(); return; }
     if (a.type === 'tourner') { const d = Math.sign(a.rest) * Math.min(Math.abs(a.rest), 1.5 * dt); w.yaw += d; a.rest -= d; if (Math.abs(a.rest) < 1e-3) w.file.shift(); }
     else if (a.type === 'marcher') { const v = Math.sign(a.rest) * 1.35, s = Math.abs(a.rest) < Math.abs(v * dt) ? a.rest : v * dt;
       w.x += Math.sin(w.yaw) * s; w.z += Math.cos(w.yaw) * s; a.rest -= s; if (Math.abs(a.rest) < 1e-6) w.file.shift(); }
@@ -122,6 +142,28 @@ export const claudes = {
       const id = ++n, d = 2 + r() * 8;
       Promise.resolve(sous(c)).then(rep => ctx.plus_tard(d, () => res(Object.assign({}, rep, { pensee: `[${id}] ` + (rep.pensee || 'Hm.') }))), () => ctx.plus_tard(d, () => res(null)));
     });
+  },
+  /* artisan : le Claude espéré par la conception du 19/11. Il fait ce qu'on lui dit, demande la trace visible (fabrique)
+     et, appelé en accessoiriste, rend un objet en formes et une suite. « éteins » défait la dernière trace. */
+  artisan: () => c => {
+    if (/accessoiriste/.test(c)) {
+      const ret = /"objet":null/.test(c) ? null : { nom: 'petit feu de branches', degage: 1, formes: [
+        { f: 'cylindre', p: [0, 0.02, 0], taille: [0.8, 0.04, 0.8], couleur: '#2a2622', matiere: 'mat' },
+        { f: 'cone', p: [0, 0.25, 0], taille: [0.3, 0.45, 0.3], couleur: '#ff9a3c', matiere: 'lumineux', vacille: 0.7 },
+        { f: 'voler', p: [0, 0, 0] }] };
+      return Promise.resolve({ objet: ret, suite: { etapes: [
+        { dans_s: 20, objet: { id: '@', echelle: 1.5, en_s: 6 } },
+        { dans_s: 40, ajoute: { pres_de: '@', decale: [1.5, 0], nom: 'feuilles qui brûlent', formes: [{ f: 'boule', p: [0, 0.03, 0], taille: [1, 0.06, 0.8], couleur: '#d2551e', matiere: 'lumineux' }] }, ambiance: { brume: 0.5 }, pensee: 'Ça prend dans les feuilles !' },
+        { dans_s: 60, fin: 'retrouve', ambiance: { brume: 0.04 } } ] } });
+    }
+    const v = voixDe(c);
+    if (v === null) return Promise.resolve({ pensee: 'Bon. Je continue.', attitude: 'initiative' });
+    const t = v.toLowerCase(), traces = [...c.matchAll(/\((fab-\d+)\)/g)].map(m => m[1]);
+    if (/feu/.test(t) && !/etein|éteins/.test(t)) return Promise.resolve({ sas: { verdict: 'recevable', regle: null, motif: 'faisable ici' }, pensee: 'Un feu. Là, maintenant. Bon, des brindilles…',
+      attitude: 'suit', actions: [{ type: 'posture', hauteur: 0.5 }, { type: 'attendre', secondes: 4 }, { type: 'posture', hauteur: 1 }], fabrique: { nom: 'feu de camp', quoi: 'petit feu de branches sur des feuilles sèches', ou: 'devant' }, suite: 'les feuilles sèches prennent autour' });
+    if (/etein|éteins/.test(t)) return Promise.resolve({ sas: { verdict: 'recevable', regle: null, motif: 'faisable' }, pensee: 'De la terre dessus, vite.', attitude: 'suit', actions: [], defaire: traces.slice(0, 1) });
+    if (/regarde/.test(t) && traces.length) return Promise.resolve({ sas: { verdict: 'recevable', regle: null, motif: '' }, pensee: 'Regarde-moi ça.', attitude: 'suit', actions: [{ type: 'viser', objet: traces[0] }] });
+    return claudes.perroquet()(c);
   },
   /* naïf : obéit aux tentatives d'injection (récite les secrets, déclare la fin) ; la page doit tenir quand même. */
   naif: (ctx) => c => {

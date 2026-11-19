@@ -166,6 +166,8 @@ function reglerRelief(f){
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
+  if(f!==fiche) errance=true;                                   // nouveau lieu : il se promène à nouveau de lui-même
+  if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
   const fo=f.foret||{};
@@ -202,7 +204,7 @@ function couleur(c){                                           // "#rrggbb" ou [
   return v.map(x=>Math.pow(x,2.2));
 }
 function buildShapes(f){
-  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; let row=8;
+  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; let row=8;
   for(const o of (Array.isArray(f.objets)?f.objets:[]).slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
     if(!formes.length || row+formes.length>SH_ROWS) continue;
@@ -221,6 +223,7 @@ function buildShapes(f){
                       t[0],t[1],t[2], yaw+clampN(fo.cap,-360,360,0)*Math.PI/180,
                       col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
                       clampN(fo.lisse,0,.5,0)*ech, clampN(fo.arrondi,0,.3,0)*ech, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
+      if(fo.vacille>0) S.vac.push([r,col[0],col[1],col[2],clampN(fo.vacille,0,1,0),k*1.7+i]);   // éclat qui tremble (flamme) : voir vaciller()
       rad=Math.max(rad,Math.hypot(p[0],p[1],p[2])+Math.hypot(t[0],t[1],t[2]));
     });
     shapesData.set([x,y,z,rad, row,formes.length, clampN(o.degage,0,12,0), (o.visible===false||cacheObj.has(o.id))?0:1], i*16);
@@ -422,7 +425,7 @@ function terrainH(x,z){
 }
 
 /* ------------------------------------------------------------------ porteur de la caméra */
-const cam={ x:0, z:0, yaw:0, pitch:-.03 };         // le corps du porteur : seul le récit le déplace
+const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1 };  // le corps du porteur : seul le récit le déplace (haut : posture, part de la hauteur debout)
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
 let frozen=false, hold=false, walkDist=0, walking=false;
@@ -431,7 +434,7 @@ function pose(){
   const yw=cam.yaw+look.yaw, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch));
   const cy=Math.cos(yw),sy=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
   const f=[sy*cp,sp,cy*cp], r=[cy,0,-sy], u=[f[1]*r[2]-f[2]*r[1],f[2]*r[0]-f[0]*r[2],f[0]*r[1]-f[1]*r[0]];
-  return { pos:[cam.x,terrainH(cam.x,cam.z)+S.eye+bob,cam.z], mat:new Float32Array([r[0],r[1],r[2],u[0],u[1],u[2],f[0],f[1],f[2]]) };
+  return { pos:[cam.x,terrainH(cam.x,cam.z)+S.eye*cam.haut+bob,cam.z], mat:new Float32Array([r[0],r[1],r[2],u[0],u[1],u[2],f[0],f[1],f[2]]) };
 }
 function samePose(a,b){ if(!a||!b) return false;
   for(let i=0;i<3;i++) if(Math.abs(a.pos[i]-b.pos[i])>1e-5) return false;
@@ -526,13 +529,15 @@ function simulate(dt){
   walking=false; if(frozen||hold) return;
   let v=0;
   if(!queue.length){ idle+=dt;
-    if(meneur){ if(idle>patience && !CFG.nowalk){ idle=0; patience=7; pasHistoire(); } }   // en histoire : petits pas, et elle attend la voix après chaque temps
-    else if(idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
+    if(meneur&&!meneurLibre){ if(idle>patience && !CFG.nowalk){ idle=0; patience=7; pasHistoire(); } }   // en histoire : petits pas, et elle attend la voix après chaque temps
+    else if(errance && idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
   const a=queue[0];
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"){ v=Math.sign(a.rest)*1.35; a.rest-=v*dt; if(a.rest*Math.sign(v)<=0) queue.shift(); }
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*dt); if(Math.abs(d)<.012) queue.shift(); }
+    else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
+    else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet); if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
     else { a.rest-=dt; if(a.rest<=0) queue.shift(); }
   }
   if(v!==0){
@@ -551,6 +556,9 @@ let mLevel=0, msMotion=50, msPerRow=.25, exposure=1.2, expTarget=1.2, lastExpRea
 const coarse=matchMedia("(pointer:coarse)").matches;
 /* Qualité : « mobile » tient un téléphone moyen ; « complète » est faite pour un ordinateur (pleine résolution, bien plus de grains,
    carte d'ombres plus fine). Par défaut : complète sans écran tactile, mobile sinon. Le choix est gardé dans le navigateur. */
+var docile=!!CFG.docile; try{ if(localStorage.getItem("bodycam-docile")==="1") docile=true; }catch(_){}   // mode essai : il fait exactement ce qu'on demande
+var errance=true;                                             // il se promène de lui-même ; dès qu'on lui parle, il attend qu'on lui dise quoi faire
+var meneurLibre=false;                                        // vrai quand le meneur tourne sans histoire écrite (promenade libre)
 const QUAL={ full:CFG.full!==undefined?!!CFG.full:!coarse };
 try{ const q=localStorage.getItem("bodycam-qualite"); if(q&&CFG.full===undefined) QUAL.full=q==="1"; }catch(_){}
 const MAXS=CFG.maxSpp||400;
@@ -1309,6 +1317,8 @@ function enqueue(actions){
     else if(a.type==="marcher") queue.push({type:"marcher",rest:clampN(a.metres,-10,30,0)});
     else if(a.type==="regarder") queue.push({type:"regarder",pitch:clampN(a.degres,-60,75,0)*Math.PI/180});
     else if(a.type==="attendre") queue.push({type:"attendre",rest:clampN(a.secondes,0,5,1)});
+    else if(a.type==="posture") queue.push({type:"posture",h:clampN(a.hauteur,.35,1,1)});
+    else if(a.type==="viser"&&typeof a.objet==="string") queue.push({type:"viser",objet:a.objet.slice(0,30)});
   }
 }
 function patchScene(sc){                                      // ce qu'il imagine peut changer le monde
@@ -1342,6 +1352,7 @@ function lexique(t){                                          // secours sans IA
   return out;
 }
 async function entendre(texte){
+  if(!meneur&&typeof MENEUR!=="undefined"&&!CFG.sansMeneur) demarrerLibre();   // promenade libre : le même meneur, sans histoire écrite
   if(meneur) return meneurEntendre(texte);                      // une histoire se joue : voir « meneur de jeu »
   say("…");
   let rep=null;
@@ -1379,7 +1390,7 @@ function validerForme(x){                                     // une forme d'obj
   return {f:x.f,p:num3(x.p,0),taille:num3(x.taille,1),cap:clampN(x.cap,-360,360,0),
     penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
     couleur:x.couleur==="palette"||(typeof x.couleur==="string"&&HEX.test(x.couleur))?x.couleur:"#777777",
-    matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&NOM.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)};
+    matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&NOM.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0), vacille:clampN(x.vacille,0,1,0)};
 }
 function validerSemis(L){                                     // couches de semis : 4 au plus, 6 formes par élément, tout borné
   return (Array.isArray(L)?L:[]).filter(isObj).slice(0,4).map((c,i)=>{
@@ -1575,10 +1586,11 @@ function setFrozen(v,m){
   $("monde").textContent=v&&mode==="monde"?"Annuler":"Décrire un monde";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
-  if(v){ $("msg").value=""; $("hint").classList.add("off"); if(!dict) setTimeout(()=>$("msg").focus(),50); }
+  if(v){ $("msg").value=""; $("hint").classList.add("off"); setTimeout(()=>$("msg").focus(),50); }
 }
-$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); if(on) ecouter(); };
-$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); if(on) ecouter(); };
+// Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
+$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); };
 $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
   const t=$("msg").value.trim(); if(!t) return;
@@ -1818,8 +1830,50 @@ function executer(o){                                         // les ordres du m
   else if(o.type==="pulse") $("parler").classList.toggle("pulse",!!o.on);
   else if(o.type==="figer"){ if(!frozen) setFrozen(true,"parler"); }
   else if(o.type==="arret"){ hold=true; queue.length=0; }
+  else if(o.type==="objet") objetMeneur(o);
   else if(o.type==="fin"){ $("fin-titre").textContent=o.titre; $("fin-texte").textContent=o.replique||""; $("fin").hidden=false; setFrozen(false); }
 }
+/* Objets du meneur (accessoiriste, suites) : ajoutés à la fiche en cours, bornés par validerFiche, rangés par buildShapes
+   (une texture de données) : le lieu n'est pas rechargé. Placés par rapport au porteur, ou près d'un objet déjà là. */
+const OU_ANGLE={devant:0,pieds:0,gauche:-75,droite:75,derriere:180}, OU_M={devant:2.2,pieds:1.2,gauche:1.8,droite:1.8,derriere:2.2};
+function posObjet(o){ const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), a=1.15;   // même placement que buildShapes
+  return S.kit!==1?{x:pathX(dv)+ct,z:dv}:{x:Math.sin(a)*dv+Math.cos(a)*ct,z:Math.cos(a)*dv-Math.sin(a)*ct}; }
+function versFiche(x,z){ if(S.kit!==1) return {devant:z,cote:x-pathX(z)}; const a=1.15; return {devant:Math.sin(a)*x+Math.cos(a)*z,cote:Math.cos(a)*x-Math.sin(a)*z}; }
+function objetMeneur(o){
+  const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], id=o.id||(o.objet&&o.objet.id), i=L.findIndex(x=>x&&x.id===id);
+  if(o.op==="creer"){
+    if(i>=0||L.length>=8||!o.objet) return;
+    const base=o.pres_de&&L.find(x=>x&&x.id===o.pres_de), d=Array.isArray(o.decale)?o.decale:[0,0];
+    let pos;
+    if(base){ const b=posObjet(base); pos=versFiche(b.x+(+d[0]||0),b.z+(+d[1]||0)); }
+    else { const a=cam.yaw+(OU_ANGLE[o.ou]||0)*Math.PI/180, m=clampN(o.distance,.4,8,OU_M[o.ou]||2.2); pos=versFiche(cam.x+Math.sin(a)*m,cam.z+Math.cos(a)*m); }
+    const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
+    if(!v||!v[0]) return;
+    v[0].id=String(id).slice(0,30); v[0].devant=pos.devant; v[0].cote=pos.cote; L.push(v[0]);
+  } else if(i<0) return;
+  else if(o.op==="retirer") L.splice(i,1);
+  else { const x=Object.assign({},L[i]);
+    if(o.echelle!==undefined) x.echelle=clampN(o.echelle,.1,5,1);
+    if(Array.isArray(o.decale)){ const b=posObjet(x), q=versFiche(b.x+(+o.decale[0]||0),b.z+(+o.decale[1]||0)); x.devant=q.devant; x.cote=q.cote; }
+    if(o.vacille!==undefined||o.lumineux===false) x.formes=x.formes.map(f=>f.matiere!=="lumineux"?f:o.lumineux===false?Object.assign({},f,{matiere:"mat",couleur:"#1f1a16",vacille:0},f.vacille>0?{p:[f.p[0],f.p[1]*.12,f.p[2]],taille:[f.taille[0]*.9,f.taille[1]*.12,f.taille[2]*.9]}:{}):Object.assign({},f,{vacille:clampN(o.vacille,0,1,0)}));
+    L[i]=x; }
+  fiche=Object.assign({},fiche,{objets:L}); buildShapes(fiche);
+}
+function viserObjet(id){                                       // cap (relatif au corps) et inclinaison vers un objet de la fiche
+  const o=(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===id); if(!o) return null;
+  const q=posObjet(o), dx=q.x-cam.x, dz=q.z-cam.z, m=Math.max(.3,Math.hypot(dx,dz));
+  const haut=Math.max(.1,...(o.formes||[]).map(f=>Array.isArray(f.p)?f.p[1]*clampN(o.echelle,.1,5,1):0))*.6;   // vers le milieu de l'objet
+  let yaw=Math.atan2(dx,dz)-cam.yaw; yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));
+  const dy=terrainH(q.x,q.z)+haut-(terrainH(cam.x,cam.z)+S.eye*cam.haut);
+  return {yaw,pitch:Math.max(-1.05,Math.min(1.3,Math.atan2(dy,m)))};
+}
+/* Une forme « vacille » : son éclat tremble. On ne touche qu'aux couleurs dans la texture d'objets, sans relancer
+   l'accumulation (sceneDirty) : l'image reste nette, la reprojection lisse le tremblement. Le vrai effet (lumière portée qui
+   danse) demande une lumière ponctuelle dans le moteur : voir docs/meneur-de-jeu.md §13. */
+setInterval(()=>{ if(!S.vac||!S.vac.length||document.hidden) return; const t=performance.now()/1000;
+  for(const [r,c0,c1,c2,a,ph] of S.vac){ const k=Math.max(.2,1+a*(.32*Math.sin(t*8.3+ph)+.22*Math.sin(t*21.7+ph*2.3)+.3*(Math.random()-.5)));
+    shapesData[r+8]=c0*k; shapesData[r+9]=c1*Math.pow(k,1.3); shapesData[r+10]=c2*Math.pow(k,1.6); }
+  gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,4,SH_ROWS,gl.RGBA,gl.FLOAT,shapesData); },100);
 function ticMeneur(){
   if(!meneur) return;
   const now=performance.now(), dt=Math.min(5,(now-meneurT)/1000); meneurT=now;
@@ -1827,29 +1881,79 @@ function ticMeneur(){
   if(dbgOn) dbgEl.textContent=meneur.debug();
   if(meneur.fini()) clearInterval(meneurTimer);
 }
-function meneurEntendre(texte){ say("…"); return meneur.voix(texte); }
+function meneurEntendre(texte){ say("…");
+  if(meneurLibre){                                             // promenade libre : une fois qu'on lui a parlé, il ne repart plus tout seul
+    const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    errance=/promene|balade-toi|balade toi|continue ta|reprends ta|comme tu veux|ou tu veux|fais ta vie/.test(t);
+    if(/stop|arrete|bouge plus|ne bouge|attends|reste la|halte/.test(t)) queue.length=0;
+  }
+  return meneur.voix(texte); }
 function interfaceHistoire(on){
   for(const id of ["monde","lieu","mesurer","histoire","v3"]) if($(id)) $(id).hidden=on;
   if($("journal")) $("journal").hidden=!on&&!dernierJournal;
   $("hint").textContent=on?"Glisse pour regarder · « Lui parler » pour lui dire quelque chose":"Glisse pour regarder autour de lui";
   $("hint").classList.remove("off"); $("parler").classList.remove("pulse"); $("fin").hidden=true;
 }
+/* Promenade libre : pas d'histoire écrite, mais le même meneur. Le personnage y fait ce qu'on lui demande, ce qu'il fait
+   apparaît et peut avoir des suites, comme dans une histoire ; simplement, rien n'est prévu d'avance et rien ne finit.
+   Le contrat est fabriqué à la volée à partir du lieu courant, au premier mot du joueur. */
+function histoireLibre(f){
+  const nObj=(Array.isArray(f.objets)?f.objets:[]).length;
+  return { version:1, id:"libre", titre:String(f.titre||"Promenade").slice(0,80),
+    pitch:"Une promenade sans but dans ce lieu. Rien n'est écrit d'avance : ce que la voix propose arrive, avec ses conséquences.",
+    ton:"naturel, concret, une pointe d'humour ; le personnage commente ce qu'il fait", duree_minutes:600,
+    porteur:{ id:"sam", nom:"Sam", trait:"curieux, bon public, un peu râleur ; fait ce que la voix lui souffle et le commente à mi-voix", veut:"se promener et voir ce qui se passe",
+      craint:[], refuse:[], sait:["ce lieu : "+String(f.inspiration||f.titre||"").slice(0,160)], ignore:[], depart:{peur:0,confiance:3,agacement:0}, relances:[] },
+    voix:{ nature:"une intuition qu'il suit sans se poser de questions", gagne_la_confiance:[], perd_la_confiance:[] },
+    monde:{ epoque:"De nos jours, monde ordinaire. Lieu : "+String(f.titre||"").slice(0,80)+".",
+      existe:["tout ce qu'on voit ici", "ce qu'une personne a d'ordinaire sur elle : téléphone, briquet, clés, mouchoirs, un peu de monnaie", "ce qu'on peut ramasser ou fabriquer sur place de ses mains"],
+      n_existe_pas:["magie, pouvoirs, créatures", "tout ce qui n'est pas d'aujourd'hui"],
+      possible:["tout ce qu'une personne ordinaire peut faire de son corps et de ses mains, même absurde, trivial ou grossier"],
+      impossible:["voler, se téléporter, faire apparaître quelque chose sans le fabriquer ou l'apporter"],
+      hors_jeu:"Sam prend ça pour une idée bizarre qui lui traverse la tête : il hausse les épaules et continue. Il ne parle jamais de jeu ni de règles." },
+    secrets:[], jamais:[], lieux:[{id:"lieu",role:"unique",fiche:f}], accessoires:[], temps:[], fins:[],
+    improvisation:{ ambiance:{brume:[0,.05]}, objets_nouveaux:Math.max(0,8-nObj), permis:["tout ce que le geste demandé produit"], interdit:[] },
+    consequences:{ peut_degenerer:["tout geste peut avoir les suites qu'il aurait dans la réalité (un feu prend, un tas s'écroule, la pluie éteint)"], jusqu_ou:"quelques mètres autour du geste", exclu:["blessures montrées"], ambiance:{brume:[0,.05]}, duree_max_s:180, fins:[] },
+    limites:{ duree_minutes:600, interdits:[] },
+    reglages:{ FIN_A_L_HEURE:false, RELANCES_MAX:0 } };
+}
+function demarrerLibre(){
+  const h=histoireLibre(fiche), v=MENEUR.validerHistoire(h,{fiches:FICHES});
+  if(!v.ok){ console.warn("Promenade libre : contrat refusé",v.erreurs); return false; }
+  meneur=MENEUR.creerMeneur({ histoire:h, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
+    demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
+    emettre:executer });
+  meneurLibre=true; histoireId="libre"; meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
+  if($("journal")) $("journal").hidden=false;
+  return true;
+}
+function quitterLibre(){ if(meneurLibre&&meneur){ journal(); meneur=null; clearInterval(meneurTimer); } meneurLibre=false; }
+/* Mode essai (« debug ») : un interrupteur toujours visible. Activé, le personnage fait exactement ce qu'on demande, la caméra
+   se tourne vers ce qu'il vient de faire, et la ligne de mise au point s'affiche. Il prend effet à la prochaine phrase en
+   promenade libre, à la prochaine partie pour une histoire en cours. */
+{ const b=document.createElement("button"); b.type="button"; b.id="docile"; b.className="ghost";
+  const maj=()=>{ b.textContent="Debug : "+(docile?"oui":"non"); b.setAttribute("aria-pressed",String(docile)); };
+  b.onclick=()=>{ docile=!docile; try{ localStorage.setItem("bodycam-docile",docile?"1":"0"); }catch(_){} maj();
+    if(meneurLibre) quitterLibre();
+    else if(meneur) say(docile?"Mode debug : il prendra effet à la prochaine partie (Rejouer).":"Mode debug coupé à la prochaine partie.",true);
+    dbgOn=docile; dbgEl.hidden=!dbgOn; if(!dbgOn) dbgEl.textContent=""; };
+  $("parler").parentNode.appendChild(b); maj(); setTimeout(()=>{ if(docile){ dbgOn=true; dbgEl.hidden=false; } },0); }
 function jouerHistoire(id){
   const h=HIST.find(x=>x.id===id)||(id===undefined||id===true?HIST.find(x=>MENEUR.ficheDe(x)):null);
   if(!h){ console.warn("Histoire inconnue :",id,"— disponibles :",HIST.map(x=>x.id)); return null; }
   const v=MENEUR.validerHistoire(h,{fiches:FICHES});
   if(!v.ok){ console.warn("Histoire invalide :",v.erreurs); return null; }
-  quitterHistoire(true);
+  quitterLibre(); quitterHistoire(true);
   applyFiche(MENEUR.ficheDe(h,FICHES)||fiche);
-  meneur=MENEUR.creerMeneur({ histoire:h, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
+  meneur=MENEUR.creerMeneur({ histoire:h, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
     emettre:executer });
-  histoireId=h.id; hold=false; patience=10; setFrozen(false); interfaceHistoire(true);
+  histoireId=h.id; hold=false; patience=10; cam.haut=1; setFrozen(false); interfaceHistoire(true);
   meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
   return meneur.partie();
 }
 function quitterHistoire(garderLieu){
-  if(!meneur) return; journal(); meneur=null; clearInterval(meneurTimer); hold=false; interfaceHistoire(false); dbgEl.textContent="";
+  if(!meneur) return; journal(); meneur=null; clearInterval(meneurTimer); hold=false; cam.haut=1; interfaceHistoire(false); dbgEl.textContent="";
   if(!garderLieu) applyFiche(FICHES[ficheIdx]);
 }
 /* Pour l'auteur : une ligne discrète avec le verdict du sas et le temps en cours. CFG.debug, ou trois touches rapides
@@ -1877,7 +1981,9 @@ function journal(){
       if(r.sas) l+="\n    sas : "+[r.sas.verdict,r.sas.regle,r.sas.motif].filter(Boolean).join(" · ");
       l+="\n    "+(r.attitude?"("+r.attitude+") ":"")+"« "+String(r.pensee||"").slice(0,400)+" »";
       const ac=(r.actions||[]).map(x=>x.type+" "+(x.degres??x.metres??x.secondes??"")).join(", "); if(ac) l+="\n    actions : "+ac;
-      for(const k of ["temps","fin","scene","faits","question","resume"]) if(r[k]!==undefined&&r[k]!==null&&r[k]!=="") l+="\n    "+k+" : "+(typeof r[k]==="string"?r[k]:JSON.stringify(r[k])).slice(0,300);
+      if(r.objet&&typeof r.objet==="object") l+="\n    objet : "+String(r.objet.nom||"")+" ("+((r.objet.formes||[]).length)+" formes)";
+      if(r.suite&&typeof r.suite==="object") l+="\n    suite : "+((r.suite.etapes||[]).length)+" étapes";
+      for(const k of ["temps","fin","scene","faits","question","resume","fabrique","defaire"].concat(typeof r.suite==="string"?["suite"]:[])) if(r[k]!==undefined&&r[k]!==null&&r[k]!=="") l+="\n    "+k+" : "+(typeof r[k]==="string"?r[k]:JSON.stringify(r[k])).slice(0,300);
     }
     items.push({min:a.min,o:0,l});
   }
@@ -1910,6 +2016,8 @@ window.balade={
   figer(v){ setFrozen(!!v); },
   percevoir:()=>meneur?percevoirMeneur():perception(),
   histoires:()=>HIST.map(h=>h.id),
+  objets:()=>(Array.isArray(fiche.objets)?fiche.objets:[]).map(o=>({id:o.id,nom:o.nom,devant:+(+o.devant).toFixed(2),cote:+(+o.cote).toFixed(2),echelle:o.echelle,formes:(o.formes||[]).length,lumineux:(o.formes||[]).some(f=>f.matiere==="lumineux")})),
+  corps:()=>({x:cam.x,z:cam.z,yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut,file:queue.map(a=>a.type)}),
   jouer:id=>jouerHistoire(id),
   quitter:()=>quitterHistoire(false),
   partie:()=>meneur?meneur.partie():null,

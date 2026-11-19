@@ -1,5 +1,7 @@
 # Contrat d'histoire (version 0)
 
+> Le format v1 (trame, monde, secrets, fins) est décrit dans `meneur-de-jeu.md` §1. Depuis le 19 novembre 2026 (§13), le contrat cadre aussi ce que le porteur fait et ce qui s'ensuit : voir « Ce que le porteur fait, et ses suites » en fin de document.
+
 Le contrat d'histoire est l'accord entre trois parties : l'auteur, qui raconte ce qu'il veut voir vivre ; l'IA de récit, qui le fait vivre ; le moteur, qui le montre. C'est l'équivalent d'un donjon textuel piloté par IA, sauf que la sortie n'est pas du texte : ce sont des intentions que le moteur filme.
 
 ## Les trois moments
@@ -83,3 +85,21 @@ Le moteur borne toutes les valeurs et ignore ce qu'il ne connaît pas. Une répo
 - **La préparation à l'avance** : puisque le récit choisit le trajet, il doit l'annoncer au moteur quelques secondes avant, pour que les images soient prêtes (voir `rendu.md`).
 - **La voix** : dictée pour le joueur, voix de synthèse pour le porteur.
 - **La trace rejouable** : horodatage et poses, pour rejouer une partie à l'identique.
+
+## Ce que le porteur fait, et ses suites (19 novembre 2026)
+
+Le porteur fait ce que la voix demande (`meneur-de-jeu.md` §13) ; ce qu'il fait apparaît à l'image et peut avoir des suites. Ce que le concepteur écrit pour cadrer cela :
+
+| Champ | Sens |
+|---|---|
+| `monde.possible` | Ce qu'une personne ordinaire peut faire ici, de ses mains et de son corps, et ce qu'elle peut fabriquer avec ce qu'elle trouve. Plus c'est large, plus le joueur est libre. |
+| `monde.impossible` | Ce qui sort du monde (pouvoirs, magie). Ne pas y mettre un geste ordinaire : « faire apparaître par la seule parole » est impossible, « faire un feu avec du bois mort » ne l'est pas. |
+| `porteur.refuse` | Lu désormais comme « ce qui lui coûte » : il le fait quand même, en le disant. Seul le caractère `retif` le fait vraiment refuser. |
+| `limites.interdits` | Les seules limites de registre : le sas refuse ce qui y figure. Rien d'autre n'est censuré (un geste trivial ou grossier est fait). |
+| `improvisation.objets_nouveaux` | Nombre de choses nouvelles par partie (6 au plus), plafonné par les places libres du moteur (8 objets, 64 formes, fiche comprise). |
+| `consequences.peut_degenerer`, `jusqu_ou`, `exclu` | En mots : ce qui peut s'emballer, jusqu'où, ce qui n'arrive jamais. Lus par le personnage et par l'accessoiriste. |
+| `consequences.ambiance` | Plages permises aux suites (`brume: [min, max]`, `lampe: true` pour l'autoriser). À défaut, celles de `improvisation.ambiance`. |
+| `consequences.duree_max_s`, `etapes_max` | Bornes d'une suite (300 s et 8 étapes au plus). |
+| `consequences.fins` | Les fins qu'une suite peut ouvrir (aucune par défaut). |
+| `consequences.permis` | `false` : aucun geste n'a de suite. |
+| `reglages.CARACTERE` | `"retif"` pour revenir au porteur qui peut refuser. |
