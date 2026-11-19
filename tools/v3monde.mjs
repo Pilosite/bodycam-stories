@@ -47,7 +47,9 @@ const browser = await chromium.launch({ headless: true, args: ARGS });
 async function rendre(j) {
   const out = join(root, dir, j.nom + '.png');
   if (existsSync(out) && !process.env.REFAIRE) return;
-  const p = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+  const b = await chromium.launch({ headless: true, args: ARGS });   // un navigateur par vue : une chute n'emporte pas les autres
+  try {
+  const p = await b.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   const logs = []; p.on('pageerror', e => logs.push(e.message)); p.on('console', m => { if (m.type() === 'error') logs.push(m.text()); });
   await p.addInitScript(c => { window.__CFG = c; }, j.cfg);
   await p.goto('file://' + join(root, process.env.PAGE || 'dist/index.html'), { timeout: 600000 });   // PAGE : une autre page (copie figée pendant qu'on travaille)
@@ -59,7 +61,8 @@ async function rendre(j) {
   }
   await p.screenshot({ path: out, timeout: 300000 });
   console.log(j.nom, ((Date.now() - t0) / 1000).toFixed(0) + ' s', s && s.v3 ? 'v3 ' + s.v3.msMoy + ' ms' : 'n ' + (s && s.n), logs.slice(0, 3).join(' | '));
-  await p.close();
+  } catch (e) { console.log(j.nom, 'ÉCHEC', String(e.message || e).split('\n')[0]); }
+  await b.close().catch(() => {});
 }
 for (let i = 0; i < jobs.length; i += 2) await Promise.all(jobs.slice(i, i + 2).map(rendre));
 
