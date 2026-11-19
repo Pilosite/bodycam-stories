@@ -21,7 +21,8 @@ function fail(msg){ const e=$("err"); e.style.display="flex"; e.textContent=msg;
 
 /* ------------------------------------------------------------------ WebGL */
 const gl = canvas.getContext("webgl2",{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:"high-performance"});
-canvas.addEventListener("webglcontextlost",e=>{ e.preventDefault(); const el=$("err"); el.style.display="flex"; el.textContent="Contexte WebGL perdu : le shader est trop lourd pour ce GPU."; });
+canvas.addEventListener("webglcontextlost",e=>{ e.preventDefault(); const el=$("err"); el.style.display="flex";
+  el.textContent="Le moteur à rayons est trop lourd pour la carte graphique de cette machine : elle a abandonné.\n\nRecharge la page : elle démarrera sur le moteur v3, qui n'en a pas besoin."; });
 if(!gl) fail("Ce navigateur ne propose pas WebGL2, nécessaire pour le rendu.\nEssaie avec une version récente de Chrome, Safari ou Firefox.");
 if(!gl.getExtension("EXT_color_buffer_float") && !gl.getExtension("EXT_color_buffer_half_float"))
   fail("Ce GPU ne sait pas dessiner dans une texture flottante, nécessaire pour accumuler la lumière.");
@@ -44,15 +45,28 @@ const prog=(fs,vs=VS)=>finir(lancer(fs,vs));
    compile une fois (en tâche de fond si le navigateur le permet), à la première fiche qui la demande : jamais de code généré par monde.
    Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis. */
 const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+(v>>1)+"\n"):FS_PT;
-const P_PT=prog(FS_PT), P_DOWN=prog(FS_DOWN), P_BLUR=prog(FS_BLUR), P_CAM=prog(FS_CAM);
+const P_DOWN=prog(FS_DOWN), P_BLUR=prog(FS_BLUR), P_CAM=prog(FS_CAM);
 const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
-const progs=[P_PT,null,null,null], lances=[];
-function progMonde(){                                           // le programme qui sait dessiner le monde courant
-  const v=(S.semN?1:0)+(S.kit===2?2:0);
-  if(!progs[v]){ progs[v]=finir(lances[v]||lancer(variante(v))); lances[v]=null; }
-  return progs[v];
+/* Le shader du lanceur de rayons est très gros. Sur certains ordinateurs (Chrome sous Windows) sa compilation échoue et emporte
+   tout le contexte WebGL. On le compile donc sous surveillance : une marque est posée avant, retirée après. Si la page meurt
+   entre les deux, le chargement suivant le sait (PT_KO) et ne réessaie pas : il démarre sur le moteur v3, qui n'en a pas besoin.
+   Sur ordinateur, on ne le compile qu'à la demande. balade.reessayerRayons() efface la marque. */
+const bureau=!matchMedia("(pointer:coarse)").matches && !CFG.mobile;
+let PT_KO=false; try{ PT_KO=localStorage.getItem("bodycam-rayons")==="essai"; }catch(_){}
+const progs=[null,null,null,null], lances=[];
+const varCourante=()=>(S.semN?1:0)+(S.kit===2?2:0);
+const ptDispo=()=>compilerPT(varCourante());                    // le lanceur de rayons peut-il dessiner le monde courant ? (le compile au besoin)
+function compilerPT(v){
+  if(progs[v]) return true; if(PT_KO) return false;
+  try{ localStorage.setItem("bodycam-rayons","essai"); }catch(_){}
+  try{ progs[v]=finir(lances[v]||lancer(variante(v))); lances[v]=null; }
+  catch(e){ PT_KO=true; const el=$("err"); if(!gl.isContextLost()){ el.style.display="none"; el.textContent=""; } return false; }
+  try{ localStorage.removeItem("bodycam-rayons"); }catch(_){}
+  return true;
 }
-if(parallele) setTimeout(()=>{ if(!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
+function progMonde(){ if(!ptDispo()) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
+if(!bureau && !PT_KO) compilerPT(0);                            // téléphone : compilé d'emblée, comme avant
+if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
 gl.bindVertexArray(gl.createVertexArray());
 
 function target(w,h,ifmt,filter){
@@ -402,6 +416,7 @@ function common(w,h,p){
 }
 const pb=new Float32Array(16);
 function probe(x,y,z){                                         // distance au décor, lue sur le GPU
+  if(!progs[varCourante()]) return [9,9,9];                    // lanceur de rayons pas compilé (ordinateur en v3) : pas de collision pour l'instant
   const u=common(4,1,lastPose||pose()); gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
   gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev);
   gl.bindFramebuffer(gl.FRAMEBUFFER,probeT.f); gl.viewport(0,0,4,1); draw();
@@ -877,6 +892,7 @@ function qualite(full){                                        // bascule mobile
   $("qualite").textContent="Qualité : "+(full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(!!full));
 }
 function v3Basculer(on){
+  if(!on&&PT_KO&&!v3Refus()){ say("Le moteur à rayons ne se compile pas sur cette machine : on reste sur le v3.",true); return; }
   if(on&&v3Refus()) on=false;                                  // fiche que le semeur ne sait pas rendre : on reste sur le lanceur de rayons
   if(on&&V2.on) v2Basculer(false);
   V3.on=on; V3.repli=false; v3Bouton();
@@ -910,7 +926,7 @@ const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]
 const normz=a=>{ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; };
 
 /* ------------------------------------------------------------------ boucle */
-let lastT=0, vide=null, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
+let ptDit=false, lastT=0, vide=null, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;
@@ -924,6 +940,7 @@ function frame(now){
   if(V2.on&&!v2pret){ if(sceneDirty) v2Vider(); v2Tourner(V2.budget); }
   if(v2pret) v2Frame(p,dt);
   else if(V3.on) v3Frame(p,dt);
+  else if(!ptDispo()){ if(!ptDit){ ptDit=true; say("Ce lieu demande le moteur à rayons, qui ne se compile pas sur cette machine."); } }
   else if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
   else if(n<MAXS){
     const t0=performance.now(); let done=false;
@@ -932,7 +949,7 @@ function frame(now){
   }
   etape("rendu",v2pret?V2.out||hist:V3.on?V3.hist||hist:hist);
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
-  display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist,(now-startT)/1000);
+  display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
   etape("aff",null); hud(now);
   if(pf&&walking) prof.push(pf);
 }
@@ -1532,6 +1549,7 @@ $("fin-quitter").onclick=()=>quitterHistoire(false);
 
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
+  reessayerRayons(){ try{ localStorage.removeItem("bodycam-rayons"); }catch(_){} location.reload(); },
   fiches:()=>FICHES.map(f=>f.id),
   lieu(i){ ficheIdx=((i%FICHES.length)+FICHES.length)%FICHES.length; applyFiche(FICHES[ficheIdx]); },
   fiche(f){ applyFiche(f); },
@@ -1564,6 +1582,7 @@ if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
 if(V2.on){ v2Basculer(true); window.__v2=V2; }                // accès de test (tools/v2essai.mjs)
 $("v2").onclick=()=>v2Basculer(!V2.on);
+if((bureau||PT_KO)&&!V3.on&&CFG.v3!==false&&!v3Refus()) V3.on=true;   // ordinateur : le moteur v3 d'emblée
 if(V3.on){ v3Basculer(true); window.__v3=V3; window.__v3lire=(x,y)=>{ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,V3.hist.f); gl.readPixels(x,y,1,1,gl.RGBA,gl.FLOAT,b); return Array.from(b); }; }               // accès de test (tools/v3essai.mjs)
 $("qualite").onclick=()=>qualite(!QUAL.full); $("qualite").textContent="Qualité : "+(QUAL.full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(QUAL.full));
 $("v3").onclick=()=>v3Basculer(!V3.on);
