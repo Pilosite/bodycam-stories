@@ -999,10 +999,14 @@ function creerMeneur(o) {
       const s = secours(texte), g = secoursGeste(texte), retif = R.CARACTERE === 'retif';
       v.attitude = 'hesite';
       const gestes = validerActions(s.actions).map(a => retif && a.type === 'marcher' ? { type: 'marcher', metres: a.metres / 2 } : a);
-      v.actions = [{ type: 'attendre', secondes: 1.5 }, ...(g && !retif ? g.actions : []), ...gestes].slice(0, 6);
-      if (!retif && !v.fabrique && g) v.fabrique = { nom: g.nom, quoi: '', ou: g.ou };
-      v.pensee = tirer(retif ? CEDE : CEDE_OBEIT);
-      log('cede', {});
+      // Il ne « cède » que s'il y avait quelque chose à faire. Une phrase qu'il n'a pas comprise (dictée coupée, bruit capté)
+      // garde la réponse de Claude : lui faire dire « bon, d'accord » à propos de rien n'a aucun sens.
+      if (gestes.length || g || s.compris !== false && liste(v.actions).length === 0 && retif) {
+        v.actions = [{ type: 'attendre', secondes: 1.5 }, ...(g && !retif ? g.actions : []), ...gestes].slice(0, 6);
+        if (!retif && !v.fabrique && g) v.fabrique = { nom: g.nom, quoi: '', ou: g.ou };
+        v.pensee = tirer(retif ? CEDE : CEDE_OBEIT);
+        log('cede', {});
+      }
     }
     partie.porteur.refus_de_suite = v.attitude === 'refuse' ? partie.porteur.refus_de_suite + 1 : 0;
     // hors monde : un peu de confiance en moins (COUT_HORS_MONDE), de l'agacement s'il insiste
