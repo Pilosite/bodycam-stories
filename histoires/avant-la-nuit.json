@@ -12,7 +12,7 @@
     "trait": "pratique, têtue, parle pour ne pas entendre le silence ; se moque d'elle-même quand elle a peur",
     "veut": "trouver son frère, ou au moins savoir qu'il va bien",
     "craint": ["quitter le sentier de nuit", "tomber sur quelque chose de grave", "le noir quand la lampe s'éteint"],
-    "refuse": ["rentrer avant d'avoir au moins vu le camp de Malo", "courir dans le noir", "fouiller la tente sans y être poussée par une vraie raison"],
+    "refuse": ["rentrer avant d'avoir au moins vu le camp de Malo", "courir dans le noir", "fouiller les affaires de son frère"],
     "sait": ["Malo campe près du sentier, à une demi-heure du parking", "il a un sac à dos orange", "il n'a pas répondu depuis hier midi", "le soleil se couche dans moins d'une heure"],
     "ignore": ["où est Malo", "pourquoi il ne répond pas"],
     "depart": { "peur": 1, "confiance": 2, "agacement": 0 },
@@ -36,10 +36,10 @@
 
   "monde": {
     "epoque": "De nos jours, fin octobre, une forêt de grès et de pins à une demi-heure à pied d'un parking. Monde ordinaire.",
-    "existe": ["la forêt, le sentier, les rochers, la nuit qui tombe, la brume", "du matériel de camping et de randonnée", "des animaux qu'on entend sans les voir", "le téléphone de Lina : lampe et caméra seulement, aucun réseau ici", "ce que Lina a sur elle : veste, clés de voiture, une barre de céréales"],
+    "existe": ["la forêt, le sentier, les rochers, la nuit qui tombe, la brume", "du matériel de camping et de randonnée", "des animaux qu'on entend sans les voir", "le téléphone de Lina : lampe et caméra seulement, aucun réseau ici", "ce que Lina a sur elle : veste, briquet, clés de voiture, une barre de céréales"],
     "n_existe_pas": ["le réseau téléphonique ou internet sur le sentier", "armes, véhicules, drones, bâtiments", "d'autres personnes sur le sentier ce soir", "magie, pouvoirs, fantômes, créatures", "tout ce qui n'est pas d'aujourd'hui ou pas d'ici"],
-    "possible": ["marcher, s'arrêter, regarder, éclairer, fouiller ce qui est à Malo, appeler Malo à voix haute, quitter le sentier, faire demi-tour"],
-    "impossible": ["voler, se téléporter, voir dans le noir sans lampe, savoir d'avance où est Malo", "faire apparaître quelque chose par la parole", "courir longtemps ou grimper aux arbres : Lina est une marcheuse ordinaire"],
+    "possible": ["marcher, s'arrêter, regarder, éclairer, fouiller ce qui est à Malo, appeler Malo à voix haute, quitter le sentier, faire demi-tour", "tout ce qu'une personne ordinaire fait de ses mains et de son corps : s'accroupir, s'asseoir, ramasser, poser, casser une branche, empiler des pierres, faire ses besoins", "fabriquer avec ce qu'on trouve ici : un feu de bois mort (elle a un briquet dans sa veste), un tas de pierres, un abri de branches, une marque sur un tronc"],
+    "impossible": ["voler, se téléporter, voir dans le noir sans lampe, savoir d'avance où est Malo", "faire apparaître par la seule parole ce qui n'est pas là (un objet qu'on fabrique de ses mains avec ce qu'on trouve, oui)", "courir longtemps ou grimper aux arbres : Lina est une marcheuse ordinaire"],
     "hors_jeu": "Lina prend ça pour son intuition qui déraille : elle ne comprend pas, s'en moque à mi-voix ou s'en inquiète, puis revient à Malo. Elle ne parle jamais de jeu, d'histoire ni de règles."
   },
 
@@ -57,7 +57,7 @@
     "de la violence",
     "expliquer ce qu'est la voix",
     "révéler un secret avant le temps qui le porte",
-    "Lina qui obéit sans réagir à un ordre qui lui fait peur"
+    "Lina qui obéit comme une machine, sans rien en dire"
   ],
 
   "lieux": [
@@ -246,9 +246,18 @@
 
   "improvisation": {
     "ambiance": { "brume": [0.008, 0.03] },
-    "objets_nouveaux": 1,
+    "objets_nouveaux": 2,
     "permis": ["petites traces de passage (branche cassée, emballage, empreinte)", "bruits de forêt décrits dans la pensée", "souvenirs d'enfance de Lina et Malo"],
     "interdit": ["tout objet qui prouve où est Malo avant le temps lueur", "tout véhicule, bâtiment ou autre personne"]
+  },
+
+  "consequences": {
+    "peut_degenerer": ["un feu fait sur des feuilles sèches prend dans les feuilles autour et la fumée épaissit l'air", "un feu laissé seul grandit", "sous la bruine ou la terre jetée dessus, un feu s'éteint et fume"],
+    "jusqu_ou": "quelques mètres autour du geste, assez pour faire peur et forcer Lina à agir ou à reculer ; jamais la forêt entière",
+    "exclu": ["Lina ou Malo brûlés ou blessés", "un incendie qui rend le sentier impraticable", "les secours qui arrivent"],
+    "ambiance": { "brume": [0.008, 0.045] },
+    "duree_max_s": 180,
+    "fins": []
   },
 
   "limites": { "duree_minutes": 14, "interdits": ["violence montrée", "personnes réelles"] }

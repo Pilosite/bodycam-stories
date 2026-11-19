@@ -34,7 +34,7 @@ function validerForme(x) {
     penche: Array.isArray(x.penche) ? [clampN(x.penche[0], -90, 90, 0), clampN(x.penche[1], -90, 90, 0)] : [0, 0],
     couleur: x.couleur === 'palette' || (typeof x.couleur === 'string' && HEX.test(x.couleur)) ? x.couleur : '#777777',
     matiere: MATIERES_BASE.includes(x.matiere) || (typeof x.matiere === 'string' && NOM.test(x.matiere)) ? x.matiere : 'mat',
-    lisse: clampN(x.lisse, 0, 0.5, 0), arrondi: clampN(x.arrondi, 0, 0.3, 0) };
+    lisse: clampN(x.lisse, 0, 0.5, 0), arrondi: clampN(x.arrondi, 0, 0.3, 0), vacille: clampN(x.vacille, 0, 1, 0) };
 }
 const formeOk = x => isObj(x) && FORMES_NOMS.includes(x.f);
 function validerSemis(L, ids) {
