@@ -66,7 +66,7 @@ function embarquer(nom, fichier) {
   if (/^\s*import\s/m.test(src) || /<\/script/i.test(src)) throw new Error(fichier + ' : pas d\'import ni de </script>');
   return `const ${nom}=(function(){"use strict";\n${src.replace(/^export\s+/gm, '')}\nreturn {${noms.join(',')}};\n})();`;
 }
-const constructeurJs = embarquer('CONSTRUCTEUR', 'src/constructeur.js') + '\n' + embarquer('ATELIER', 'src/atelier.js') + '\n' + embarquer('VOIX', 'src/voix.js');   // VOIX : la voix du personnage
+const constructeurJs = embarquer('CONSTRUCTEUR', 'src/constructeur.js') + '\n' + embarquer('ATELIER', 'src/atelier.js') + '\n' + embarquer('VOIX', 'src/voix.js') + '\n' + embarquer('ECHELLE', 'src/echelle.js');   // VOIX : la voix du personnage
 // L'ouverture de démo (src/ouverture.js) et les journaux de préparation qu'elle rejoue (ouvertures/*.json) : objets OUVERTURE et OUVERTURES.
 const ouvFiles = readdirSync(join(root, 'ouvertures')).filter(f => f.endsWith('.json')).sort();
 const ouvertureJs = embarquer('OUVERTURE', 'src/ouverture.js') + `\nconst OUVERTURES=${JSON.stringify(ouvFiles.map(f => JSON.parse(read('ouvertures/' + f)))).replace(/<\//g, '<\\/')};`;

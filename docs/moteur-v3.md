@@ -248,3 +248,47 @@ Rien de neuf par image en dehors des recettes, évaluées une fois par pixel : l
 ### Ce qu'on voit, et ce qui trahit encore
 
 Planches (`tools/fidelite.mjs` puis `tools/fidelite-planche.mjs`, qualité complète, 6 images accumulées, rendu logiciel) : sept poses PC 1280 × 800 (sentier à z 0, 22, 40, 56, sol, rocher, marche) et huit en portrait 450 × 800 (gros plans à 1 m : sol, rocher, bouleau, pin, haut du pin, chêne ; sentier ; marche). Mieux : la litière (des feuilles, plus des pavés), le sable blanc, le grès (moins de camouflage, lichens, patine), le bouleau (noir au pied, lenticelles), le pin orangé en hauteur, les troncs qui ne se ressemblent plus, les branches mortes et les éclats de grès qui cassent le sol nu. Trahit encore : de près, la fougère (des plans raides découpés en peigne, qui se lisent comme de la vannerie) et la callune (boules hérissées sombres) ; le grès reste une ellipsoïde lisse de silhouette, avec un liseré sombre au bord ; l'écorce du pin à 1 m a des plaques molles ; feuilles de la canopée en points (hors de ce lot).
+
+## Échelle de l'ombrage (branche `echelle`, 19 novembre 2026)
+
+Sur un PC Windows (Chrome, RTX 5070, ANGLE → Direct3D 11, compilateur FXC), la variante complète de l'ombrage ne finissait pas de se compiler : la page restait sur « La préparation du moteur dure anormalement… en attente : v3 ombrage », et Chrome est tombé au moins une fois. Quelle que soit la cause, la page ne doit plus jamais rester sur un écran d'attente : c'est la finesse qui s'adapte (triptyque, point 2).
+
+### Deux tailles d'ombrage
+
+- **Le socle** : `v3_ombrage.frag` compilé avec `#define SOCLE` (variante fixe, gardes `#ifdef SOCLE` dans `v3_ombrage.frag` et `recette.glsl`, aucun code généré, `recette()` toujours appelée une seule fois). Il garde le soleil et la carte d'ombres, la canopée, l'ambiance, le ciel (aube comprise), la brume uniforme, la matière en recette et la lampe. Il coupe : tapis, semis en détail (la forme touchée suffit, à l'échelle moyenne de sa couche), atmosphère (brume basse, rebord) et rais, ombre de la lampe, eau à l'horizon, lointain, cœur de feuillage des conifères (une teinte), assombrissement au pied des troncs (`pres`), normale des formes par différences (la normale du monde), et dans `recette()` : relief de matière par différences finies, feuilles superposées et lobées (le Voronoï d'origine les remplace), fenêtres et marquage, la quatrième tache, et le bruit en volume passe de quatre à deux octaves (même moyenne : les seuils des recettes restent justes).
+- **La variante complète** : celle d'avant, choisie par la fiche et la qualité (`TAPIS`, `SEMO`, `ATMO`, `RAIS`).
+
+Tailles (`node tools/ombrage-taille.mjs`, et `node tools/ombrage-taille.mjs d1a02e0^1` pour l'ombrage qui se compilait sur ce PC) ; « déplié » recopie chaque fonction à chaque appel et chaque boucle à borne fixe autant de fois, comme le fait FXC ; SPIR-V : traduction d'ANGLE en rendu logiciel. Ce sont des mesures relatives, pas Direct3D.
+
+| Variante | source après inclusions | déplié | SPIR-V |
+|---|---|---|---|
+| socle | 73 104 | 315 290 | 318 707 |
+| complète, forêt (sans semis ni atmosphère) | 73 088 | 966 725 | 485 051 |
+| complète, fiche 09 sur PC (S1 A1 R10) | 73 089 | 1 007 645 | 534 957 |
+| complète, fiche 09 sur téléphone (T1 S1 A1) | 73 088 | 996 737 | 541 749 |
+| ancien ombrage qui compilait sur le PC (`d1a02e0^1`) | 59 225 | 968 045 | 506 617 |
+
+Le source envoyé est le même texte pour toutes les variantes (le préprocesseur trie) ; une fois déplié, le socle fait le tiers de l'ancien ombrage qui marchait. Le gros de l'écart : le relief de matière (quatre évaluations de `recetteH`, chacune avec ses taches et ses fissures), les octaves de bruit et `pres`.
+
+### Au démarrage, et à chaque fiche ou qualité
+
+`v3Ombrage()` (`src/main.js`) et l'automate pur `src/echelle.js` (testé par `tests/echelle.test.mjs`) :
+
+1. Les six programmes du semeur, puis le socle ; la première image est dessinée dès que le socle est prêt.
+2. Après la première image seulement, la variante complète voulue se compile en arrière-plan (`lancer()`/`fini()`, sans bloquer) ; le tapis du sol (qualité mobile) va avec elle. Prête, elle remplace le socle à chaud : `V3.n = 0`, comme un mouvement, l'historique reprojeté se fond dans la nouvelle image en quelques images, sans éclair.
+3. Pas prête en 25 s (`DELAI_OMBRAGE`), ou erreur de compilation : on reste au socle, sans message pour le joueur.
+4. Mémoire `localStorage` `bodycam-ombrage`, par signature (réglages de la variante + empreinte du source : un shader corrigé se retente de lui-même) : « en cours » avant le lancement, « ok » et la durée à la réussite, « echec » (délai, erreur). Une signature encore « en cours » au chargement suivant (Chrome tombé, page rechargée pendant la compilation) devient « echec (interrompu) ». Une variante en échec n'est plus tentée sur cette machine.
+5. Changement de fiche ou de qualité : si la variante complète voulue est déjà compilée, elle sert tout de suite ; sinon le socle (déjà compilé) sert, et la montée recommence.
+
+Le message « La préparation du moteur dure anormalement » ne peut plus venir que du semeur ou du socle. Remise à zéro : « Plus » → « Image complète : réessayer » (visible seulement s'il y a un échec mémorisé ; efface la mémoire et recharge), ou `balade.reessayerOmbrage()`. Diagnostic (trois touches sur le chrono REC, et l'écran d'erreur) : ombrage en service, durées de compilation du socle et de la complète, mémoire. `balade.ombrage()` rend le même état.
+
+Options : `ombrage` = `"socle"` (rester au socle), `"plein"` (attendre la complète avant la première image : le comportement d'avant, par défaut quand `window.__CFG` existe, pour ne pas changer les captures de référence), `"echelle"` (défaut de la page) ; `ombrageJamais` (échec simulé), `ombrageDelai` (ms).
+
+### Vérifié en rendu logiciel (`node tools/ombrage-essai.mjs out/ombrage`, fiche 09, 640 × 400, qualité complète)
+
+- `plein.png` : comportement d'avant (première image après la complète). `socle.png` : la même pose au socle, une forêt crédible, plus plate : ni brume basse éclairée ni rais (le contre-jour est plus clair et plus net), grès sans relief de matière, litière en Voronoï au lieu de feuilles lobées, pas d'assombrissement au pied des blocs.
+- Montée (`ombrage: "echelle"`) : socle en service à 0,4 s, première image ; la complète se lance après elle, prête en 15,6 s (SwiftShader), en service sans éclair ; `montee-apres.png` est identique à `plein.png`. Mémoire : « ok, 15,6 s ».
+- Échec simulé (`ombrageJamais`, délai 20 s) : reste au socle, pas de message, pas d'écran d'attente (`echec-page.png`, l'interface normale) ; mémoire « échec (délai) », bouton de remise à zéro visible.
+- Rechargement pendant la compilation (« en cours » en mémoire) : au chargement suivant, « échec (interrompu) », aucun nouvel essai, socle, bouton visible (`recharge-page.png`).
+
+Non vérifié : rien n'a tourné sur Direct3D ni sur un vrai GPU. SwiftShader compile le socle « en 0,0 s » (la compilation y est différée au premier dessin) : les durées n'y disent rien de FXC. On ne sait pas si le socle passe sur le PC concerné ; il est trois fois plus petit déplié que l'ombrage qui y passait. Sans `KHR_parallel_shader_compile`, la compilation de la complète bloque la page le temps qu'elle dure (le délai ne peut pas l'interrompre) ; la mémoire protège quand même des plantages.
