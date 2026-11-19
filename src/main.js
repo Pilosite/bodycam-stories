@@ -191,7 +191,7 @@ function couleur(c){                                           // "#rrggbb" ou [
   return v.map(x=>Math.pow(x,2.2));
 }
 function buildShapes(f){
-  shapesData.fill(0); S.objN=0; S.objTop=0; let row=8;
+  shapesData.fill(0); S.objN=0; S.objTop=0; S.vac=[]; let row=8;
   for(const o of (Array.isArray(f.objets)?f.objets:[]).slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
     if(!formes.length || row+formes.length>SH_ROWS) continue;
@@ -210,6 +210,7 @@ function buildShapes(f){
                       t[0],t[1],t[2], yaw+clampN(fo.cap,-360,360,0)*Math.PI/180,
                       col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
                       clampN(fo.lisse,0,.5,0)*ech, clampN(fo.arrondi,0,.3,0)*ech, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
+      if(fo.vacille>0) S.vac.push([r,col[0],col[1],col[2],clampN(fo.vacille,0,1,0),k*1.7+i]);   // éclat qui tremble (flamme) : voir vaciller()
       rad=Math.max(rad,Math.hypot(p[0],p[1],p[2])+Math.hypot(t[0],t[1],t[2]));
     });
     shapesData.set([x,y,z,rad, row,formes.length, clampN(o.degage,0,12,0), (o.visible===false||cacheObj.has(o.id))?0:1], i*16);
@@ -411,7 +412,7 @@ function terrainH(x,z){
 }
 
 /* ------------------------------------------------------------------ porteur de la caméra */
-const cam={ x:0, z:0, yaw:0, pitch:-.03 };         // le corps du porteur : seul le récit le déplace
+const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1 };  // le corps du porteur : seul le récit le déplace (haut : posture, part de la hauteur debout)
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
 let frozen=false, hold=false, walkDist=0, walking=false;
@@ -420,7 +421,7 @@ function pose(){
   const yw=cam.yaw+look.yaw, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch));
   const cy=Math.cos(yw),sy=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
   const f=[sy*cp,sp,cy*cp], r=[cy,0,-sy], u=[f[1]*r[2]-f[2]*r[1],f[2]*r[0]-f[0]*r[2],f[0]*r[1]-f[1]*r[0]];
-  return { pos:[cam.x,terrainH(cam.x,cam.z)+S.eye+bob,cam.z], mat:new Float32Array([r[0],r[1],r[2],u[0],u[1],u[2],f[0],f[1],f[2]]) };
+  return { pos:[cam.x,terrainH(cam.x,cam.z)+S.eye*cam.haut+bob,cam.z], mat:new Float32Array([r[0],r[1],r[2],u[0],u[1],u[2],f[0],f[1],f[2]]) };
 }
 function samePose(a,b){ if(!a||!b) return false;
   for(let i=0;i<3;i++) if(Math.abs(a.pos[i]-b.pos[i])>1e-5) return false;
@@ -520,6 +521,8 @@ function simulate(dt){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"){ v=Math.sign(a.rest)*1.35; a.rest-=v*dt; if(a.rest*Math.sign(v)<=0) queue.shift(); }
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*dt); if(Math.abs(d)<.012) queue.shift(); }
+    else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
+    else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet); if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
     else { a.rest-=dt; if(a.rest<=0) queue.shift(); }
   }
   if(v!==0){
@@ -1240,6 +1243,8 @@ function enqueue(actions){
     else if(a.type==="marcher") queue.push({type:"marcher",rest:clampN(a.metres,-10,30,0)});
     else if(a.type==="regarder") queue.push({type:"regarder",pitch:clampN(a.degres,-60,75,0)*Math.PI/180});
     else if(a.type==="attendre") queue.push({type:"attendre",rest:clampN(a.secondes,0,5,1)});
+    else if(a.type==="posture") queue.push({type:"posture",h:clampN(a.hauteur,.35,1,1)});
+    else if(a.type==="viser"&&typeof a.objet==="string") queue.push({type:"viser",objet:a.objet.slice(0,30)});
   }
 }
 function patchScene(sc){                                      // ce qu'il imagine peut changer le monde
@@ -1310,7 +1315,7 @@ function validerForme(x){                                     // une forme d'obj
   return {f:x.f,p:num3(x.p,0),taille:num3(x.taille,1),cap:clampN(x.cap,-360,360,0),
     penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
     couleur:x.couleur==="palette"||(typeof x.couleur==="string"&&HEX.test(x.couleur))?x.couleur:"#777777",
-    matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&NOM.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)};
+    matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&NOM.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0), vacille:clampN(x.vacille,0,1,0)};
 }
 function validerSemis(L){                                     // couches de semis : 4 au plus, 6 formes par élément, tout borné
   return (Array.isArray(L)?L:[]).filter(isObj).slice(0,4).map((c,i)=>{
@@ -1749,8 +1754,50 @@ function executer(o){                                         // les ordres du m
   else if(o.type==="pulse") $("parler").classList.toggle("pulse",!!o.on);
   else if(o.type==="figer"){ if(!frozen) setFrozen(true,"parler"); }
   else if(o.type==="arret"){ hold=true; queue.length=0; }
+  else if(o.type==="objet") objetMeneur(o);
   else if(o.type==="fin"){ $("fin-titre").textContent=o.titre; $("fin-texte").textContent=o.replique||""; $("fin").hidden=false; setFrozen(false); }
 }
+/* Objets du meneur (accessoiriste, suites) : ajoutés à la fiche en cours, bornés par validerFiche, rangés par buildShapes
+   (une texture de données) : le lieu n'est pas rechargé. Placés par rapport au porteur, ou près d'un objet déjà là. */
+const OU_ANGLE={devant:0,pieds:0,gauche:-75,droite:75,derriere:180}, OU_M={devant:2.2,pieds:1.2,gauche:1.8,droite:1.8,derriere:2.2};
+function posObjet(o){ const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), a=1.15;   // même placement que buildShapes
+  return S.kit!==1?{x:pathX(dv)+ct,z:dv}:{x:Math.sin(a)*dv+Math.cos(a)*ct,z:Math.cos(a)*dv-Math.sin(a)*ct}; }
+function versFiche(x,z){ if(S.kit!==1) return {devant:z,cote:x-pathX(z)}; const a=1.15; return {devant:Math.sin(a)*x+Math.cos(a)*z,cote:Math.cos(a)*x-Math.sin(a)*z}; }
+function objetMeneur(o){
+  const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], id=o.id||(o.objet&&o.objet.id), i=L.findIndex(x=>x&&x.id===id);
+  if(o.op==="creer"){
+    if(i>=0||L.length>=8||!o.objet) return;
+    const base=o.pres_de&&L.find(x=>x&&x.id===o.pres_de), d=Array.isArray(o.decale)?o.decale:[0,0];
+    let pos;
+    if(base){ const b=posObjet(base); pos=versFiche(b.x+(+d[0]||0),b.z+(+d[1]||0)); }
+    else { const a=cam.yaw+(OU_ANGLE[o.ou]||0)*Math.PI/180, m=clampN(o.distance,.4,8,OU_M[o.ou]||2.2); pos=versFiche(cam.x+Math.sin(a)*m,cam.z+Math.cos(a)*m); }
+    const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
+    if(!v||!v[0]) return;
+    v[0].id=String(id).slice(0,30); v[0].devant=pos.devant; v[0].cote=pos.cote; L.push(v[0]);
+  } else if(i<0) return;
+  else if(o.op==="retirer") L.splice(i,1);
+  else { const x=Object.assign({},L[i]);
+    if(o.echelle!==undefined) x.echelle=clampN(o.echelle,.1,5,1);
+    if(Array.isArray(o.decale)){ const b=posObjet(x), q=versFiche(b.x+(+o.decale[0]||0),b.z+(+o.decale[1]||0)); x.devant=q.devant; x.cote=q.cote; }
+    if(o.vacille!==undefined||o.lumineux===false) x.formes=x.formes.map(f=>f.matiere!=="lumineux"?f:o.lumineux===false?Object.assign({},f,{matiere:"mat",couleur:"#1f1a16",vacille:0}):Object.assign({},f,{vacille:clampN(o.vacille,0,1,0)}));
+    L[i]=x; }
+  fiche=Object.assign({},fiche,{objets:L}); buildShapes(fiche);
+}
+function viserObjet(id){                                       // cap (relatif au corps) et inclinaison vers un objet de la fiche
+  const o=(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===id); if(!o) return null;
+  const q=posObjet(o), dx=q.x-cam.x, dz=q.z-cam.z, m=Math.max(.3,Math.hypot(dx,dz));
+  const haut=Math.max(.1,...(o.formes||[]).map(f=>Array.isArray(f.p)?f.p[1]*clampN(o.echelle,.1,5,1):0))*.6;   // vers le milieu de l'objet
+  let yaw=Math.atan2(dx,dz)-cam.yaw; yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));
+  const dy=terrainH(q.x,q.z)+haut-(terrainH(cam.x,cam.z)+S.eye*cam.haut);
+  return {yaw,pitch:Math.max(-1.05,Math.min(1.3,Math.atan2(dy,m)))};
+}
+/* Une forme « vacille » : son éclat tremble. On ne touche qu'aux couleurs dans la texture d'objets, sans relancer
+   l'accumulation (sceneDirty) : l'image reste nette, la reprojection lisse le tremblement. Le vrai effet (lumière portée qui
+   danse) demande une lumière ponctuelle dans le moteur : voir docs/meneur-de-jeu.md §13. */
+setInterval(()=>{ if(!S.vac||!S.vac.length||document.hidden) return; const t=performance.now()/1000;
+  for(const [r,c0,c1,c2,a,ph] of S.vac){ const k=Math.max(.2,1+a*(.32*Math.sin(t*8.3+ph)+.22*Math.sin(t*21.7+ph*2.3)+.3*(Math.random()-.5)));
+    shapesData[r+8]=c0*k; shapesData[r+9]=c1*Math.pow(k,1.3); shapesData[r+10]=c2*Math.pow(k,1.6); }
+  gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,4,SH_ROWS,gl.RGBA,gl.FLOAT,shapesData); },100);
 function ticMeneur(){
   if(!meneur) return;
   const now=performance.now(), dt=Math.min(5,(now-meneurT)/1000); meneurT=now;
@@ -1775,12 +1822,12 @@ function jouerHistoire(id){
   meneur=MENEUR.creerMeneur({ histoire:h, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
     emettre:executer });
-  histoireId=h.id; hold=false; patience=10; setFrozen(false); interfaceHistoire(true);
+  histoireId=h.id; hold=false; patience=10; cam.haut=1; setFrozen(false); interfaceHistoire(true);
   meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
   return meneur.partie();
 }
 function quitterHistoire(garderLieu){
-  if(!meneur) return; journal(); meneur=null; clearInterval(meneurTimer); hold=false; interfaceHistoire(false); dbgEl.textContent="";
+  if(!meneur) return; journal(); meneur=null; clearInterval(meneurTimer); hold=false; cam.haut=1; interfaceHistoire(false); dbgEl.textContent="";
   if(!garderLieu) applyFiche(FICHES[ficheIdx]);
 }
 /* Pour l'auteur : une ligne discrète avec le verdict du sas et le temps en cours. CFG.debug, ou trois touches rapides
@@ -1808,7 +1855,9 @@ function journal(){
       if(r.sas) l+="\n    sas : "+[r.sas.verdict,r.sas.regle,r.sas.motif].filter(Boolean).join(" · ");
       l+="\n    "+(r.attitude?"("+r.attitude+") ":"")+"« "+String(r.pensee||"").slice(0,400)+" »";
       const ac=(r.actions||[]).map(x=>x.type+" "+(x.degres??x.metres??x.secondes??"")).join(", "); if(ac) l+="\n    actions : "+ac;
-      for(const k of ["temps","fin","scene","faits","question","resume"]) if(r[k]!==undefined&&r[k]!==null&&r[k]!=="") l+="\n    "+k+" : "+(typeof r[k]==="string"?r[k]:JSON.stringify(r[k])).slice(0,300);
+      if(r.objet&&typeof r.objet==="object") l+="\n    objet : "+String(r.objet.nom||"")+" ("+((r.objet.formes||[]).length)+" formes)";
+      if(r.suite&&typeof r.suite==="object") l+="\n    suite : "+((r.suite.etapes||[]).length)+" étapes";
+      for(const k of ["temps","fin","scene","faits","question","resume","fabrique","defaire"].concat(typeof r.suite==="string"?["suite"]:[])) if(r[k]!==undefined&&r[k]!==null&&r[k]!=="") l+="\n    "+k+" : "+(typeof r[k]==="string"?r[k]:JSON.stringify(r[k])).slice(0,300);
     }
     items.push({min:a.min,o:0,l});
   }
@@ -1841,6 +1890,8 @@ window.balade={
   figer(v){ setFrozen(!!v); },
   percevoir:()=>meneur?percevoirMeneur():perception(),
   histoires:()=>HIST.map(h=>h.id),
+  objets:()=>(Array.isArray(fiche.objets)?fiche.objets:[]).map(o=>({id:o.id,nom:o.nom,devant:+(+o.devant).toFixed(2),cote:+(+o.cote).toFixed(2),echelle:o.echelle,formes:(o.formes||[]).length,lumineux:(o.formes||[]).some(f=>f.matiere==="lumineux")})),
+  corps:()=>({x:cam.x,z:cam.z,yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut,file:queue.map(a=>a.type)}),
   jouer:id=>jouerHistoire(id),
   quitter:()=>quitterHistoire(false),
   partie:()=>meneur?meneur.partie():null,

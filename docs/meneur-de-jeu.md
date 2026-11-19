@@ -1,5 +1,7 @@
 # Le meneur de jeu
 
+> **La conception a changé le 19 novembre 2026** (§13, après les premières parties de Toine avec Claude) : le porteur **fait** ce qu'on lui demande, ce qu'il fait **existe à l'image** (l'accessoiriste), et **le monde réagit** (les suites). Les passages marqués « (avant le 19/11) » décrivent la conception d'origine, gardée comme caractère `retif`.
+
 Document de conception. Les étapes 1 à 8 du §10 sont réalisées dans `src/meneur.js` (tests : `npm test` ; essai sur artefact : `essai-meneur.md`) ; les étapes 9 à 12 (régisseur, accessoiriste, compilateur, essai sur téléphone) restent à faire. Les écarts de la réalisation sont notés en fin de document (§12). Il complète `contrat-histoire.md` (v0) et le remplace pour tout ce qui touche à la trame.
 
 Le meneur de jeu est la couche qui tient ensemble deux volontés : celle du concepteur (une trame, un ton, des fins) et celle du joueur (dire ce qu'il veut au porteur de la caméra). Il ne montre rien lui-même : il décide, et le moteur filme.
@@ -8,7 +10,7 @@ Le meneur de jeu est la couche qui tient ensemble deux volontés : celle du conc
 
 1. **L'IA propose, la page dispose.** Claude n'a pas de mémoire entre deux appels et peut se tromper. C'est donc la page (du code ordinaire, vérifiable) qui tient l'état de la partie, qui vérifie qu'un temps du récit a le droit d'arriver, qui force ceux qui tardent et qui décide qu'une fin est atteinte. L'IA écrit la pensée, choisit les gestes et propose ; elle ne tranche jamais seule sur la trame.
 2. **La trame est un entonnoir, pas un rail.** Le concepteur fixe des passages obligés et des interdits. Entre deux passages, tout est libre. Chaque passage obligé a une échéance : s'il n'est pas arrivé par le jeu, il arrive quand même, parce que le monde vient au porteur.
-3. **Le joueur conseille, le porteur décide.** Ce que dit la voix est un argument, pas un ordre. Trois jauges (peur, confiance, agacement) rendent les réactions du porteur lisibles et influençables.
+3. **Le joueur demande, le porteur fait, à sa façon** (depuis le 19/11, §13). Ce que dit la voix est fait, même absurde ; la peur, la mauvaise humeur et la confiance colorent la façon de faire, pas le fait de faire. Trois jauges (peur, confiance, agacement) rendent ces réactions lisibles. (Avant le 19/11 : « le joueur conseille, le porteur décide » ; c'est le caractère `retif`.)
 4. **L'IA tient deux rôles dans le même appel : le sas, puis le personnage.** Elle trie d'abord ce que le joueur apporte selon les règles du monde fixées par le concepteur (recevable, adapté, refusé), puis elle répond en tant que porteur. Le porteur ne connaît pas ces règles : elles agissent sur lui comme un subconscient. Un refus n'est jamais un message d'erreur, c'est une réaction du personnage (§4).
 5. **Un seul appel rapide par tour, le reste en coulisse.** Le tour de parole coûte un appel `quick`. Tout ce qui demande réflexion (cap du récit, objet nouveau, compilation) passe par des appels `default` hors du chemin du joueur.
 
@@ -422,7 +424,7 @@ Chaque étape laisse le jeu jouable et se vérifie seule. Les étapes 1 à 6 n'o
 | 7 | Consigne v1 : assemblage en deux paquets (§2), sas puis personnage (§4), disposition, temps ouverts seulement, demande de `resume`. | Test de budget sur 60 tours. Puis première vraie partie sur page publiée et cahier de phrases du sas : Toine lit la trace. |
 | 8 | Fins jouées : `scenes` en suite, variantes, écran de fin, rejouer. Trace exportable (`balade.trace()`), rejouable dans Node. | Les trois fins atteintes à la main dans la page ; une trace rejouée donne le même état final. |
 | 9 | Régisseur : appel `default` en coulisse, `cap`, relecture des verdicts du sas, `alerte` dans la trace. | Test : régisseur absent ou lent, rien ne change pour le joueur. Sur traces réelles : les caps sont-ils suivis ? |
-| 10 | Accessoires `mobile` et accessoiriste (objet nouveau, hors champ). | Capture avant et après ; le budget d'objets est respecté ; un objet raté ne casse pas le rendu (`validerFiche`). |
+| 10 | Accessoires `mobile` et accessoiriste (objet nouveau, hors champ). Fait le 19/11 autrement (§13) : l'objet est posé là où le geste a lieu, à l'image ; `mobile` reste à faire. | Capture avant et après ; le budget d'objets est respecté ; un objet raté ne casse pas le rendu (`validerFiche`). |
 | 11 | Compilateur : passes 1 à 4, écran de relecture. | Trois textes d'essai donnent trois contrats valides ; une correction dite à l'oral modifie le bon champ. |
 | 12 | Essai sur le téléphone de Toine : latence réelle des appels, lisibilité des pensées, rythme des relances. | Mesures notées dans `CLAUDE.md`. Réglage des délais du §3. |
 
@@ -431,13 +433,15 @@ Ordre conseillé si le temps manque : 1 à 8 donnent un jeu complet. 9 améliore
 ## 11. Questions ouvertes pour Toine
 
 1. **Qui est la voix, pour le porteur ?** Une intuition qu'il ne questionne pas (choix du scénario fourni), une présence qu'il ne s'explique pas et dont il parle, ou quelqu'un qu'il sait être « ailleurs » ? Cela change tout le ton, et c'est peut-être à fixer pour le jeu entier plutôt que par histoire.
-2. **Jusqu'où le porteur peut-il dire non ?** La conception le fait céder en partie au troisième essai, pour ne pas frustrer. Veux-tu qu'un refus puisse être définitif, quitte à ce que certaines fins soient hors d'atteinte pour un joueur maladroit ? Et un apport hors monde, refusé par le sas, doit-il coûter de la confiance (choix actuel) ou rester sans conséquence pour celui qui s'amuse à tester les bords ?
+2. **Jusqu'où le porteur peut-il dire non ?** La conception le fait céder en partie au troisième essai, pour ne pas frustrer. Veux-tu qu'un refus puisse être définitif, quitte à ce que certaines fins soient hors d'atteinte pour un joueur maladroit ? Et un apport hors monde, refusé par le sas, doit-il coûter de la confiance (choix actuel) ou rester sans conséquence pour celui qui s'amuse à tester les bords ? **Tranché le 19/11** (§13) : il fait ce qu'on lui demande ; le hors monde ne coûte rien ; le caractère `retif` garde l'ancien choix.
 3. **Une histoire doit-elle toujours finir à l'heure ?** Ici, oui : échéances et fin par défaut. L'autre choix est une histoire qui attend le joueur aussi longtemps qu'il veut, plus proche d'AI Dungeon, mais sans garantie de tension ni de fin.
-4. **L'IA peut-elle créer des objets en pleine partie**, au risque de formes ratées à l'image, ou seulement montrer ceux que le concepteur a prévus ? La conception permet les deux, avec un budget par histoire ; le réglage par défaut te revient.
+4. **L'IA peut-elle créer des objets en pleine partie**, au risque de formes ratées à l'image, ou seulement montrer ceux que le concepteur a prévus ? La conception permet les deux, avec un budget par histoire ; le réglage par défaut te revient. **Tranché le 19/11** (§13) : oui, par défaut, dans la limite des places libres du moteur.
 5. **Qui écrit les histoires ?** Toi seul pour l'instant, ou tout joueur, avec un bouton « Raconter une histoire » à côté de « Décrire un monde » ? Dans le second cas le compilateur et sa relecture passent avant le régisseur dans l'ordre de réalisation.
 6. **Le porteur est-il bavard ou taiseux quand on ne lui parle pas, et le meneur peut-il figer le monde de lui-même** pour attendre une réponse à un moment clé ? Aujourd'hui, par respect de la règle « figer est le geste du joueur », il ne le fait pas.
 
 ## 12. Écarts de la réalisation (étapes 1 à 8)
+
+(Les écarts de l'étape 10 et la nouvelle conception sont au §13.)
 
 - **Budget de consigne : 9 000 caractères**, pas 7 000. Le contrat fourni en occupe déjà 3 900 (pas 2 500), et la consigne à vide 6 600. Au-delà du budget, la page réduit d'elle-même : échanges récents à 3, faits à 8, improvisation permise, résumé, puis échanges tronqués. Réglage `BUDGET_CONSIGNE`.
 - **Une proposition de l'IA à condition spatiale** (temps ou fin avec `pres_de`, `retour_m`, `avance_m`) n'est acceptée que si cette condition tient à deux fois près (`MARGE_IA`) : un Claude trop complaisant ne peut pas jouer « Il dort » à 60 m du hamac.
@@ -449,3 +453,87 @@ Ordre conseillé si le temps manque : 1 à 8 donnent un jeu complet. 9 améliore
 - **`montrer` d'un objet marqué `visible: false`** dans la fiche ne l'affichait pas (le drapeau de la fiche l'emportait) : `patchScene` le rend désormais visible.
 - **Pas encore fait** : `mobile` des accessoires (le ruban se montre à sa place), `demande_objet` (consigné dans la trace, jamais accepté), régisseur et `cap` (le champ existe, vide).
 - **Rythme sans parole** : Lina se promène seule le long du sentier ; sans joueur, elle passe les quatre temps obligatoires en deux ou trois minutes puis marche jusqu'à la fin par défaut. Les échéances ne servent qu'au joueur qui la retient. À régler avec Toine (une flânerie qui s'attarde aux lieux de la trame, ou des échéances « au plus tôt »).
+
+## 13. Nouvelle conception (19 novembre 2026) : il fait, ça existe, le monde réagit
+
+Retour de Toine après ses premières parties avec Claude : « Le personnage est chiant, il ne veut jamais faire ce qu'on demande. Je lui demande de faire un feu de camp ; je m'attendrais à ce que le moteur génère un feu de camp (et il peut décider que ça prenne feu dans la forêt). » Puis : « on doit pouvoir potentiellement tout faire, c'est le principe de faire des choses avec l'IA » (son exemple : « fais caca sur le chemin », puis « regarde-la »). Cela renverse trois choix des §0, §4 et §5.
+
+### 13.1 Le porteur fait ce qu'on lui demande
+
+- **Par défaut il agit.** Il peut le dire à sa façon (peur, mauvaise humeur, moquerie, commentaire), mais il le fait. L'attitude `refuse` n'est plus attendue que si le sas refuse. Si Claude rend quand même `refuse` sur un apport accepté, la page le fait céder **tout de suite** (`CEDER_APRES_REFUS: 0`) : gestes du lexique et de l'accessoiriste, pensée de concession (« Pff. Bon. Je le fais, mais je le sens pas. »).
+- **Aucune censure de registre.** Est recevable tout geste qu'une personne ordinaire peut faire ici, même absurde, trivial, grossier ou risqué : il est fait, avec ses suites. Les seules limites sont celles du concepteur (`limites.interdits`, `jamais`) et la sortie du monde.
+- **Le sas ne bloque plus les actions.** Il empêche de sortir du monde (pouvoir, magie, objet d'une autre époque ou d'ailleurs), protège la trame (secrets, suite, fins, consignes) et le quatrième mur. Même là, il préfère `adapte` (la version possible ici) au refus sec. Un hors monde ne coûte plus de confiance (`COUT_HORS_MONDE: 0`) ; l'agacement monte encore si le joueur insiste.
+- **Disposition** : les phrases fabriquées à partir des jauges (§4) disent désormais comment il fait, pas s'il fait (« Tu as peur et tu te méfies : tu le fais, en disant ce qui te fait peur. »).
+- **Contrat** : `porteur.refuse` se lit « ce qui lui coûte (il le fait quand même, en le disant) ». Dans « Avant la nuit », `monde.impossible` ne dit plus « faire apparaître quelque chose par la parole » mais « par la seule parole ce qui n'est pas là » ; `monde.possible` dit ce qu'une personne fait de ses mains et de son corps (feu de bois mort avec son briquet, tas de pierres, abri, besoins).
+- **Revenir au porteur rétif** : `reglages: { "CARACTERE": "retif" }` dans le contrat. Il remet la consigne, les dispositions et les valeurs d'origine (`CEDER_APRES_REFUS: 2`, `COUT_HORS_MONDE: 1`), chacune remplaçable une à une.
+
+### 13.2 Le corps et le regard
+
+Deux actions génériques s'ajoutent aux quatre d'origine, pour le récit comme pour le secours :
+
+| Action | Borne | Ce que fait la page |
+|---|---|---|
+| `posture` | `hauteur` 0,35 à 1 (part de la hauteur debout : 1 debout, 0,5 accroupi, 0,65 assis) | la caméra descend ou remonte, à 0,55 par seconde (`cam.haut` dans `pose()`) |
+| `viser` | `objet` : l'id d'un objet perçu (de la fiche ou fabriqué) | la page calcule le cap et l'inclinaison vers le milieu de l'objet, puis tourne et incline : l'IA ne devine pas d'angle |
+
+Le secours reconnaît « baisse-toi », « accroupis-toi », « assieds-toi », « relève-toi », et « regarde-la / regarde le feu » (le dernier objet fabriqué, ou un objet perçu dont le nom contient un des mots).
+
+### 13.3 L'accessoiriste : ce qu'il fait existe
+
+Le contrat de sortie gagne trois champs : `fabrique` `{nom, quoi, ou}` (ce que le geste laisse de visible et de nouveau ; `ou` : devant, pieds, gauche, droite, derriere), `suite` (une phrase : ce que le geste pourrait entraîner) et `defaire` (ids de traces à éteindre, démonter, ramasser). `demande_objet` reste lu comme `fabrique`.
+
+1. **La pensée part d'abord.** La réponse du personnage est affichée et ses gestes partent (il s'accroupit, il frotte son briquet). Ensuite seulement, si `fabrique` ou `suite` est rempli, la page lance **un appel en coulisse** (modèle `default`, un seul à la fois, 25 s au plus : `DELAI_OBJET_S`). Un tour sans objet ni suite ne coûte aucun appel de plus.
+2. **L'accessoiriste** (`consigneAtelier`, 3 000 caractères) reçoit le monde, l'heure et la lumière, le geste, la phrase du joueur (en donnée JSON), les traces déjà là, le vocabulaire des formes (celui de `creerMonde` : six formes, matières et recettes, `lumineux`, plus `vacille`) et le cadre des suites. Il rend `{"objet": {nom, degage, formes}, "suite": {etapes, si_defait}}`.
+3. **Bornes.** `validerObjet` (module pur) : 12 formes au plus, coordonnées dans ±6 m, tailles bornées, couleurs et matières vérifiées. La page repasse l'objet par `validerFiche`, le place par rapport au porteur (devant : 2,2 m ; pieds : 1,2 m ; gauche, droite, derrière) et l'ajoute à `fiche.objets` ; `buildShapes` met à jour la texture d'objets : **le lieu n'est pas rechargé**.
+4. **Objet raté = pas d'objet.** Réponse illisible, vide ou trop lente : le secours par mots-clés (`SECOURS_GESTES` : feu, crotte, tas de pierres, téléphone posé lampe allumée) s'il reconnaît le geste, sinon rien (`objet_rate` dans la trace). Jamais d'erreur à l'écran. Sans Claude du tout, le même secours fait la pensée, les gestes et l'objet.
+5. **Budget.** `improvisation.objets_nouveaux` (6 au plus), plafonné par les **places libres du moteur** : 8 objets et 64 formes au total. « Avant la nuit » en occupe 6 et 31 : 2 places. Chaque objet fabriqué ou ajouté par une suite en prend une. Au-delà : `objet_refuse` dans la trace, la consigne dit à Claude que plus rien ne peut apparaître (« passe par la pensée »).
+6. **Mémoire.** L'objet reçoit un id stable (`fab-1`, `fab-2`…) et son nom ; un fait est ajouté (« crotte sur le chemin (fab-1) : fait là, pieds ») ; il entre dans `partie.monde.objets` et dans la perception (« Tu vois… »), et la consigne liste à part « Tes traces » avec distance, direction et état (« ça évolue », « éteint »), même hors du champ. C'est ce qui permet « regarde-la » et « éteins-le ».
+
+### 13.4 Les suites : le monde réagit
+
+Une **suite** est une liste d'étapes datées, programmée par le meneur. Elle n'a rien de propre au feu : chaque étape combine au choix
+
+| Clé | Effet |
+|---|---|
+| `dans_s` | secondes depuis le début de la suite (le gel du joueur les met en pause) |
+| `ambiance` | `brume` (et `lampe` si le cadre le permet), ramenée dans les plages de `consequences.ambiance` |
+| `objet` | sur `@` (l'objet fabriqué), `@2`, `@3` (ceux ajoutés par la suite) ou un id : `echelle` (0,2 à 4) avec `en_s` (grandit en plusieurs fois, une mise à jour par seconde), `vacille`, `lumineux: false` (s'éteint : les formes lumineuses deviennent mates et sombres), `decale`, `retirer` |
+| `ajoute` | un nouvel objet (8 formes au plus) près d'un autre (`pres_de`, `decale`) |
+| `pensee` | ce que le porteur se dit alors (filtrée comme toute pensée) |
+| `fin` | ouvre une fin, seulement si elle figure dans `consequences.fins` et qu'elle est ouverte |
+
+- **Qui la propose.** Le personnage la pressent dans `suite` (une phrase) ; l'accessoiriste l'écrit en étapes, dans le cadre du contrat. Le secours sans Claude a ses propres étapes (données de `SECOURS_GESTES`). L'IA peut en proposer de son propre chef, à n'importe quel tour.
+- **Bornes.** 8 étapes, 300 s au plus (moins si le contrat le dit), 2 suites actives à la fois, budget d'objets commun ; `consequences.permis: false` les coupe ; réglage `SUITES`.
+- **Annulable.** `defaire` (« éteins-le », « ramasse ça ») arrête les suites de cette trace et joue leur `si_defait` ; sans `si_defait`, ce qui brille s'éteint et la brume revient en 25 s à sa valeur d'avant. Une trace sans suite s'éteint si elle brille, sinon elle disparaît.
+- **Trace et rejeu.** `objet_demande`, `objet_cree`, `objet_rate`, `objet_refuse`, `suite_programmee`, `suite_etape`, `suite_annulee`, `suite_finie` ; les réponses de l'accessoiriste sont consignées (entrées `o`) : une trace se rejoue à l'identique dans Node.
+
+### 13.5 Ce que le concepteur cadre : `consequences`
+
+```json
+"consequences": {
+  "peut_degenerer": ["un feu fait sur des feuilles sèches prend dans les feuilles autour et la fumée épaissit l'air"],
+  "jusqu_ou": "quelques mètres autour du geste ; jamais la forêt entière",
+  "exclu": ["Lina ou Malo brûlés ou blessés", "un incendie qui rend le sentier impraticable"],
+  "ambiance": { "brume": [0.008, 0.045] },
+  "duree_max_s": 180, "etapes_max": 8,
+  "fins": [],
+  "permis": true
+}
+```
+
+Les trois textes partent dans la consigne du personnage (pour qu'il pressente des suites) et dans celle de l'accessoiriste (avec `jamais`). Les nombres et `fins` sont tenus par le code. `validerHistoire` vérifie les fins citées et la plage de brume, et avertit si `objets_nouveaux` dépasse les places libres du moteur.
+
+### 13.6 Ce que le moteur de rendu ne fait pas encore (et ce que la page fait à la place)
+
+- **Pas de lumière ponctuelle.** Une forme `lumineux` brille (albédo × 8) mais n'éclaire rien autour : le feu se voit, il n'éclaire ni le sol, ni les troncs, ni le visage de la nuit. À faire côté moteur : une ou deux lumières ponctuelles portées par les objets (position, couleur, puissance, rayon), lues dans la texture d'objets (par exemple une ligne d'en-tête libre par objet) et ajoutées dans `lightSurf` du lanceur de rayons et dans `lumiere` du semeur v3, avec une ombre grossière ou sans ombre.
+- **Pas de flamme animée.** `vacille` est fait par la page : une minuterie (100 ms) module la couleur des formes qui vacillent dans `shapesData` et renvoie la texture, sans relancer l'accumulation. À faire côté moteur : un uniform de temps lu par `matProp` pour les formes vacillantes (bruit sur l'émission et une petite déformation du cône), et la lumière ponctuelle qui suit la même intensité.
+- **Pas de fumée.** La fumée est la brume globale (`brume` monte). À faire : une brume locale (sphère de densité autour d'un objet) ou une colonne de particules dans le semeur v3.
+- **Grandir** passe par `echelle`, une mise à jour par seconde ; chaque mise à jour relance l'accumulation (`sceneDirty`), comme tout changement d'objet.
+- **Moteur v3** : il lit la même texture d'objets ; non vérifié avec des objets ajoutés en cours de partie ni avec `vacille`.
+
+### 13.7 Écarts de la réalisation
+
+- Budget de consigne porté à **10 500 caractères** (la consigne à vide passe de 6 600 à 8 500 avec `fabrique`, `posture`, `viser`, les traces et le cadre des suites).
+- Les objets sont placés par la page au moment où l'accessoiriste répond, par rapport au porteur à cet instant (il est en général immobile : il fait son geste).
+- Sans Claude, la phrase « allume un feu » passe aussi par le lexique de la page, qui y lit « allume » (la lampe) : le secours d'un geste reconnu ignore désormais la scène du lexique.
+- La preuve (`node tools/meneur2.mjs`) fait tourner la page avec `nowalk` : Lina ne repart pas d'elle-même, pour garder le feu dans le cadre.
