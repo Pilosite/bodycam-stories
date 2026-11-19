@@ -278,6 +278,12 @@ function moveBy(dist){
   cam.x=nx; cam.z=nz; walkDist+=Math.abs(dist);
 }
 let idle=0, stuck=0;
+let patience=10;                                               // secondes d'immobilité avant qu'elle reparte d'elle-même, en histoire
+function pasHistoire(){                                        // quatre mètres le long du sentier, puis elle s'arrête : le rythme laisse la place au joueur
+  const want=S.kit===0?pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0):cam.yaw;
+  let d=want-cam.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
+  queue.push({type:"tourner",rest:d},{type:"marcher",rest:4});
+}
 function flaner(){                                            // sans consigne, il se promène : c'est le récit par défaut
   const want=S.kit===0 ? pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0)+(Math.random()-.5)*.5
                        : cam.yaw+(Math.random()-.5)*1.2;
@@ -288,7 +294,9 @@ function flaner(){                                            // sans consigne, 
 function simulate(dt){
   walking=false; if(frozen||hold) return;
   let v=0;
-  if(!queue.length){ idle+=dt; if(idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
+  if(!queue.length){ idle+=dt;
+    if(meneur){ if(idle>patience && !CFG.nowalk){ idle=0; patience=7; pasHistoire(); } }   // en histoire : petits pas, et elle attend la voix après chaque temps
+    else if(idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
   const a=queue[0];
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
@@ -891,12 +899,13 @@ function objetsPercus(){                                      // distance, direc
   }
   return out;
 }
+const PATIENCE_APRES_TEMPS=45;                                 // secondes d'attente après un temps de la trame, si le joueur ne dit rien
 function percevoirMeneur(){ const p=perception(), x0=S.kit===0?pathX(0):0;
   p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z).toFixed(1); p.objets=objetsPercus(); return p; }
 function executer(o){                                         // les ordres du meneur, traduits pour le moteur
   if(o.type==="pensee") say(o.texte);
   else if(o.type==="scene") patchScene(o.scene);
-  else if(o.type==="actions"){ if(o.vider) queue.length=0; enqueue(o.actions); }
+  else if(o.type==="actions"){ if(o.vider){ queue.length=0; patience=PATIENCE_APRES_TEMPS; } enqueue(o.actions); }   // un temps vient d'arriver : elle s'arrête et attend la voix
   else if(o.type==="pulse") $("parler").classList.toggle("pulse",!!o.on);
   else if(o.type==="figer"){ if(!frozen) setFrozen(true,"parler"); }
   else if(o.type==="arret"){ hold=true; queue.length=0; }
@@ -926,7 +935,7 @@ function jouerHistoire(id){
   meneur=MENEUR.creerMeneur({ histoire:h, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
     emettre:executer });
-  histoireId=h.id; hold=false; setFrozen(false); interfaceHistoire(true);
+  histoireId=h.id; hold=false; patience=10; setFrozen(false); interfaceHistoire(true);
   meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
   return meneur.partie();
 }

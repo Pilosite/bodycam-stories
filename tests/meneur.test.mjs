@@ -185,8 +185,8 @@ test('étape 6 : la réponse d\'une relance est jetée si le joueur ouvre le can
   const m = creerMeneur({ histoire: ANLN, demander: () => new Promise(r => { resoudre = r; }), secours: lexiqueTest });
   const monde = mondePapier(ANLN, { flaner: false });
   const ordres = []; const m2 = creerMeneur({ histoire: ANLN, demander: () => new Promise(r => { resoudre = r; }), secours: lexiqueTest, emettre: o => ordres.push(o) });
-  m2.tic(0.5, monde.perception());                                // départ : appel d'événement
-  resoudre({ pensee: 'Allez.' }); await new Promise(r => setImmediate(r));
+  m2.tic(0.5, monde.perception());                                // départ : la réplique écrite suffit (IA_APRES_TEMPS: false), pas d'appel
+  if (resoudre) { resoudre({ pensee: 'Allez.' }); await new Promise(r => setImmediate(r)); }
   let t = 0; while (!m2.enVol() && t < 60) { m2.tic(0.5, monde.perception()); t += 0.5; }
   assert.equal(m2.enVol().type, 'relance', 'la relance part en avance');
   const r1 = resoudre;
