@@ -27,6 +27,12 @@ uniform float uAmb;
    Les blocs ont la taille des macroblocs de la compression vidéo du capteur : ce qui en reste passe pour elle. */
 uniform int   uDamier;
 uniform float uAlphaD;
+// TAPIS : variante choisie à la compilation (src/main.js). Sans tapis, ce code n'existe pas dans le programme : sur Direct3D
+// (Intel Arc), sa présence seule empêchait la compilation d'aboutir.
+#ifndef TAPIS
+#define TAPIS 0
+#endif
+#if TAPIS
 /* Tapis du sol (v3_tapis.frag) : la matière du sol, cuite dans des textures ancrées au monde. Niveau choisi selon la taille
    du pixel au sol (comme un niveau de mipmap), fondu entre deux niveaux. Hors des fenêtres prêtes : recette() comme avant. */
 uniform highp sampler2DArray uTap0, uTap1;
@@ -54,7 +60,9 @@ bool tapis(vec2 xz, float lod, out vec4 a, out vec4 b){
     a=mix(a,textureLod(uTap0,c1,0.),f); b=mix(b,textureLod(uTap1,c1,0.),f);
   }
   return true;
-}          // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
+}
+#endif
+          // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
 out vec4 outCol;
 
 uint hu(uint x){ x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u; return (x>>22u)^x; }
@@ -154,11 +162,13 @@ void main(){
       vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
       int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
       vec4 ta, tb; float TsC=-1.;
+#if TAPIS
       if(id==0 && uTapL>0 && (uProf&1)==0 && tapis(q.xz,log2(t*uFish/uRes.y/sqrt(max(abs(dot(rd,gn)),.05))/uTapS0)+uTapBias,ta,tb)){
         alb=ta.rgb*ta.rgb; spec=ta.w; emis=tb.z;             // sol cuit : deux lectures (quatre au fondu) au lieu de recette()
         vec2 ti=tb.xy*4.-2.; n=normalize(gn+vec3(ti.x,0.,ti.y)); TsC=tb.w;
-      }
-      else if(id==0){                                        // sol, et trajet par-dessus
+      } else
+#endif
+      if(id==0){                                        // sol, et trajet par-dessus
         r0=uSurf.x; hs=0.;
         if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(q.x-pathX(q.z))+(uTraj.w>0.?uTraj.w*(fbm(q.xz*.8+3.)-.5):0.)); r1=uSurf.y;
           if(w>=1.) r0=r1; else if(w>0.) nr=2; }

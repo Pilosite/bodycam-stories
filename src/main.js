@@ -762,8 +762,9 @@ const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG
   tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
 function v3Init(){                                             // rend vrai quand les cinq programmes sont prêts (compilation sans bloquer)
   if(V3.gp) return true;
-  if(!V3.lance){ etapeGL("compilation : moteur v3 (4 programmes)");
-    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), sol:lancer(FS_V3GBUF,VS_V3SOL), ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombrage:lancer(FS_V3OMBRAGE), tapis:lancer(FS_V3TAPIS) }; }
+  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; etapeGL("compilation : moteur v3"+(V3.avecTapis?", avec tapis du sol":""));
+    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), sol:lancer(FS_V3GBUF,VS_V3SOL), ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombrage:lancer(V3.avecTapis?FS_V3OMBRAGE.replace("\n","\n#define TAPIS 1\n"):FS_V3OMBRAGE) };
+    if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
   V3.maxPt=Math.min(64,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
@@ -819,7 +820,7 @@ function v3Libere(seulementEcran){
    tant qu'il n'est pas prêt, l'ombrage revient à recette() pour ces pixels. Mémoire : 2 × L × N² × 4 octets (14,7 Mo par défaut).
    Options : v3tapis (false le coupe ; par défaut en qualité mobile seulement), v3tapisN, v3tapisL, v3tapisS0 (m),
    v3tapisBudget (texels cuits par image au plus), v3tapisBias (niveau choisi : négatif = plus fin). */
-function v3TapisActif(){ return OPT.tapis!==undefined?!!OPT.tapis:!QUAL.full; }
+function v3TapisActif(){ return !!(V3.gp&&V3.gp.tapis)&&(OPT.tapis!==undefined?!!OPT.tapis:!QUAL.full); }
 function v3Tapis(p){
   const T=V3.tap; T.cuits=0;
   if(!v3TapisActif()) return false;
@@ -1061,6 +1062,7 @@ function qualite(full){                                        // bascule mobile
   if(!CFG.grains) V3.grains=full?2500000:300000;
   if(!CFG.v3carte) V3.carte=full?2048:1024;
   v3Libere(false); resize(); sceneDirty=true;
+  if((!QUAL.full)!==!!V3.avecTapis){ V3.gp=null; V3.lance=null; V3.t0prep=0; }   // la variante des programmes dépend de la qualité : on recompile, sans bloquer
   $("qualite").textContent="Qualité : "+(full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(!!full));
 }
 function v3Basculer(on){
