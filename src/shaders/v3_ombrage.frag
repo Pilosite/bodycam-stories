@@ -38,6 +38,20 @@ uniform float uAlphaD;
 #ifndef TAPIS
 #define TAPIS 0
 #endif
+/* SOCLE : l'ombrage de repli (docs/moteur-v3.md, « Échelle de l'ombrage »), défini par src/main.js seulement pour lui. Variante
+   fixe du même fichier, la plus petite possible : soleil et carte d'ombres, ambiance, matière réduite (recette.glsl), sans
+   tapis, semis en détail, atmosphère, rais, ombre de la lampe, eau ni lointain. Il se compile d'abord, partout ; la variante
+   complète se compile ensuite en arrière-plan et le remplace quand elle est prête. */
+#ifdef SOCLE
+#undef TAPIS
+#define TAPIS 0
+#undef SEMO
+#define SEMO 0
+#undef ATMO
+#define ATMO 0
+#undef RAIS
+#define RAIS 0
+#endif
 #if TAPIS
 /* Tapis du sol (v3_tapis.frag) : la matière du sol, cuite dans des textures ancrées au monde. Niveau choisi selon la taille
    du pixel au sol (comme un niveau de mipmap), fondu entre deux niveaux. Hors des fenêtres prêtes : recette() comme avant. */
@@ -168,7 +182,11 @@ vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts){
     L=mix(tronc,ciel,Tt);
   } else L=solE;
   float h1=.25, h2=.8;
+#ifdef SOCLE
+  float occ=0.;                                              // socle : sans l'assombrissement au pied des troncs et des blocs
+#else
   float occ=(uProf&8)!=0?0.:max(0.,h1-pres(po+n*h1))*1.6+max(0.,h2-pres(po+n*h2))*.5;
+#endif
   return L*clamp(1.-occ,.25,1.)*uAmb;
 }
 
@@ -177,6 +195,9 @@ vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts){
    si la profondeur gardée à cet endroit est devant le point (de moins de 60 cm : un objet entre les deux, pas un mur au
    premier plan), la lampe est cachée. Coût fixe, six lectures ; ce que l'écran ne montre pas n'ombre pas. */
 float lampeOmbre(vec3 p, vec3 Lp){
+#ifdef SOCLE
+  return 1.;                                                 // socle : la lampe sans son ombre
+#endif
   vec3 L=Lp-p; float dl=length(L); L/=dl;
   float v=1.;
   for(int i=0;i<6;i++){
@@ -238,8 +259,12 @@ void main(){
   vec3 col; float t;
   if(g0.w<0.){                                               // rien de semé : ciel, brume, lointain
     t=1e4;
+#ifdef SOCLE
+    col=rd.y>0.?skyCol(rd):fogCol(rd);                       // socle : ni eau à l'horizon, ni lointain
+#else
     col=rd.y>0.?skyCol(rd):uEau.w>0.?eauLoin(rd):fogCol(rd);
     if(uLoin.w>0. && rd.y>-.02) col=lointain(rd,col);
+#endif
 #if ATMO
     if(uAtmo.x>0.){ float Ts=RAIS>0?canopyT(uCamPos+rd*min(6.,(YC0-.5-uCamPos.y)/max(rd.y,.05)),uSunDir):.5;   // brume basse devant le ciel (la brume uniforme, elle, ne voile pas le ciel)
       float T=exp(-(brumeTau(uCamPos,rd,400.)-uFog*400.));
@@ -272,11 +297,19 @@ void main(){
           if(w>=1.) r0=r1; else if(w>0.) nr=2; }
       }
       else if(id==3) r0=uSurf.z;
+#ifdef SOCLE
+      else if(id==1 && par>=1.){ alb=vec3(.022,.05,.022); spec=.02; }   // socle : cœur de conifère d'une teinte
+#else
       else if(id==1 && par>=1.) matCone(p,gn,alb,n,spec);   // cœur de feuillage d'un conifère
+#endif
       else if(id==4 || id==6){                               // objet, ou élément de semis (retrouvé à partir du point du monde, comme objId()) ; un seul appel à matProp
         vec4 info=vec4(0.,0.,0.,floor(par*128.+.5));
 #if SEMO
         if(id==6) info=semisPix(p.xz,par,q);
+#endif
+#ifdef SOCLE
+        if(id==6){ int c=int(par*24.), k=c/6; vec4 J=texelFetch(uShapes,ivec2(0,SEM0+k*SEML+1),0);   // socle : la forme touchée, échelle moyenne de la couche
+          info=vec4(q,float(SEM0+k*SEML+4+c-k*6)+.45); gInst=vec4(0.,.5*(J.z+J.w),1.,.5); }
 #endif
         vec3 qr; r0=matProp(q,gn,info,id==6,alb,n,spec,emis,qr,nr0,rot); q=qr; }
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; q+=troncVar(par); rot=id==1?RA:RB; }
