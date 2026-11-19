@@ -435,22 +435,51 @@ function common(w,h,p){
   return u;
 }
 const pb=new Float32Array(16);
-function probe(x,y,z){                                         // distance au décor, lue sur le GPU
-  if(!progs[varCourante()]) return [9,9,9];                    // lanceur de rayons pas compilé (ordinateur en v3) : pas de collision pour l'instant
+/* Lecture différée d'une cible (sonde, exposition) : readPixels dans un tampon de la puce (PBO), puis une barrière (fenceSync).
+   On revient voir aux images suivantes ; tant que la barrière n'est pas passée, rien n'attend. Une lecture bloquante force la
+   puce à finir tout ce qui est en file (7,6 ms mesurés pour la sonde sur Mali-G77, dont presque tout est de l'attente). */
+function lectureDiff(){ return {buf:null,sync:null,taille:0,t:0}; }
+function lireDiff(L,cible,w,h,n){                              // lance la lecture de w × h pixels RGBA flottants de la cible
+  if(!L.buf||L.taille!==n*4){ if(L.buf) gl.deleteBuffer(L.buf); L.buf=gl.createBuffer(); L.taille=n*4;
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER,L.buf); gl.bufferData(gl.PIXEL_PACK_BUFFER,L.taille,gl.STREAM_READ); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,cible.f); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,L.buf);
+  gl.readPixels(0,0,w,h,gl.RGBA,gl.FLOAT,0); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  if(L.sync) gl.deleteSync(L.sync);
+  L.sync=gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0); L.t=performance.now(); gl.flush();
+}
+function recevoirDiff(L,dst){                                  // vrai si la lecture lancée est arrivée (et copiée dans dst)
+  if(!L.sync) return false;
+  if(dst.length*4!==L.taille){ gl.deleteSync(L.sync); L.sync=null; return false; }   // la cible a changé de taille entre-temps
+  if(gl.getSyncParameter(L.sync,gl.SYNC_STATUS)!==gl.SIGNALED) return false;
+  gl.deleteSync(L.sync); L.sync=null;
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER,L.buf); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER,0,dst,0,dst.length); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  return true;
+}
+const sondeL=lectureDiff(), SONDE_SYNC=!!CFG.sondeSync;       // option sondeSync : l'ancienne sonde bloquante, pour comparer
+function probeDessin(x,y,z,cible=probeT){                      // distance au décor en (x, y, z), calculée par le lanceur de rayons dans la cible
   const u=common(4,1,lastPose||pose()); gl.uniform1i(u.uMode,1); gl.uniform3f(u.uProbe,x,y,z);
   gl.uniform1f(u.uAlpha,1); bindTex(0,dummy.t,u.uPrev);
-  gl.bindFramebuffer(gl.FRAMEBUFFER,probeT.f); gl.viewport(0,0,4,1); draw();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,cible.f); gl.viewport(0,0,4,1); draw();
+}
+function probe(x,y,z){                                         // distance au décor, lue sur le GPU (bloquant)
+  if(!progs[varCourante()]) return [9,9,9];                    // lanceur de rayons pas compilé (ordinateur en v3) : pas de collision pour l'instant
+  probeDessin(x,y,z);
   gl.readPixels(0,0,4,1,gl.RGBA,gl.FLOAT,pb);
   return [pb[0],pb[4],pb[8]];
 }
 function moveBy(dist){
   let nx=cam.x+Math.sin(cam.yaw)*dist, nz=cam.z+Math.cos(cam.yaw)*dist;
-  // La sonde de collision lit un pixel sur la puce graphique, ce qui la force à tout finir : 16 ms par image mesurés sur Mali-G77.
-  // On ne sonde donc qu'une fois tous les 120 ms (16 cm de marche), un demi-mètre devant ; près d'un obstacle, à chaque image.
+  // La sonde de collision est un calcul du lanceur de rayons sur quatre pixels. On ne sonde qu'une fois tous les 120 ms
+  // (16 cm de marche), un demi-mètre devant ; près d'un obstacle, à chaque image. Par défaut la lecture est différée :
+  // le résultat arrive une à trois images plus tard (moins de 10 cm de marche), ce que couvre le demi-mètre d'avance.
   const R=.42, now=performance.now();
-  if(now-sonde.t>120 || sonde.d<R+.25){ const a=.5*Math.sign(dist||1); sonde.t=now;
-    const sx=nx+Math.sin(cam.yaw)*(sonde.d<R+.25?0:a), sz=nz+Math.cos(cam.yaw)*(sonde.d<R+.25?0:a);
-    [sonde.d,sonde.dx,sonde.dz]=probe(sx,terrainH(sx,sz)+.75,sz); sonde.loin=!(sonde.d<R+.25); }
+  if(!SONDE_SYNC&&recevoirDiff(sondeL,pb)){ sonde.d=pb[0]; sonde.dx=pb[4]; sonde.dz=pb[8]; sonde.loin=!(sonde.d<R+.25); }
+  const pres=sonde.d<R+.25;
+  if((now-sonde.t>120||pres)&&(SONDE_SYNC||!sondeL.sync)){ const a=.5*Math.sign(dist||1); sonde.t=now;
+    const av=pres?(SONDE_SYNC?0:.12*Math.sign(dist||1)):a;    // différée : on sonde là où l'on sera quand la réponse arrivera
+    const sx=nx+Math.sin(cam.yaw)*av, sz=nz+Math.cos(cam.yaw)*av;
+    if(SONDE_SYNC){ [sonde.d,sonde.dx,sonde.dz]=probe(sx,terrainH(sx,sz)+.75,sz); sonde.loin=!(sonde.d<R+.25); }
+    else if(progs[varCourante()]){ probeDessin(sx,terrainH(sx,sz)+.75,sz); lireDiff(sondeL,probeT,4,1,16); } }
   const d=sonde.loin?Math.max(sonde.d,R):sonde.d, dx=sonde.dx, dz=sonde.dz;
   if(d<R){ let gx=(dx-d)/.05, gz=(dz-d)/.05; const l=Math.hypot(gx,gz)||1; nx+=gx/l*(R-d); nz+=gz/l*(R-d); }
   cam.x=nx; cam.z=nz; walkDist+=Math.abs(dist);
@@ -550,15 +579,18 @@ function staticRows(p){
   if(row>=H){ row=0; n++; hist=sDst; histPose=p; return true; }
   return false;
 }
-let blBuf=null;
+let blBuf=null; const expoL=lectureDiff();
 function postFX(src){
   gl.useProgram(P_DOWN.p); bindTex(0,src.t,P_DOWN.u.uTex); gl.uniform2f(P_DOWN.u.uDstRes,bl1.w,bl1.h);
   gl.bindFramebuffer(gl.FRAMEBUFFER,bl1.f); gl.viewport(0,0,bl1.w,bl1.h); draw();
   const now=performance.now();
-  if(now-lastExpRead>180){                                    // exposition auto : moyenne logarithmique, pondérée au centre
-    lastExpRead=now;
-    if(!blBuf||blBuf.length!==bl1.w*bl1.h*4) blBuf=new Float32Array(bl1.w*bl1.h*4);
-    gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf);
+  // Exposition auto : moyenne logarithmique, pondérée au centre, toutes les 180 ms. La lecture est différée (option expoSync :
+  // l'ancienne lecture bloquante) : sur une puce à tuiles, une lecture bloquante attend toute l'image en cours.
+  if(!blBuf||blBuf.length!==bl1.w*bl1.h*4) blBuf=new Float32Array(bl1.w*bl1.h*4);
+  let lu=false;
+  if(CFG.expoSync){ if(now-lastExpRead>180){ lastExpRead=now; gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf); lu=true; } }
+  else { lu=recevoirDiff(expoL,blBuf); if(!expoL.sync&&now-lastExpRead>180){ lastExpRead=now; lireDiff(expoL,bl1,bl1.w,bl1.h,bl1.w*bl1.h*4); } }
+  if(lu){
     let s=0,ws=0,any=false;
     for(let y=0;y<bl1.h;y++) for(let x=0;x<bl1.w;x++){ const i=(y*bl1.w+x)*4;
       const L=.2126*blBuf[i]+.7152*blBuf[i+1]+.0722*blBuf[i+2]; if(L>0) any=true;
@@ -876,10 +908,19 @@ function v3Image(p){
   // (2) tampon G : le sol, puis les grains
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
-  const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol, nSol=so.anneaux*so.secteurs*6;
-  u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc);
-  gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,so.anneaux,so.secteurs); gl.uniform1i(u.uPts,0);
-  gl.drawArrays(gl.TRIANGLES,0,nSol);
+  const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol;
+  u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
+  if(CFG.v3solPlein){                                         // l'ancien maillage : six sommets par quadrilatère, tout le tour
+    gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,Math.PI,so.secteurs); gl.uniform1i(u.uSolIdx,0);
+    so.tri=so.anneaux*so.secteurs*2; gl.drawArrays(gl.TRIANGLES,0,so.anneaux*so.secteurs*6);
+  } else {                                                    // sommets partagés (tampon d'indices), seulement sur le cap utile
+    if(!so.idx){ const R=so.anneaux, N=so.secteurs, ix=new Uint16Array(R*N*6); let k=0;
+      for(let sg=0;sg<N;sg++) for(let r=0;r<R;r++){ const a=sg*(R+1)+r, b=a+1, c=a+R+1, d=c+1; ix.set([a,b,c,b,d,c],k); k+=6; }
+      so.idx=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,so.idx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,ix,gl.STATIC_DRAW); }
+    const demi=Math.min(Math.PI,az.pres), ns=Math.min(so.secteurs,Math.ceil(so.secteurs*demi/Math.PI));
+    gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,demi,ns); gl.uniform1i(u.uSolIdx,1); gl.uniform1i(u.uSolR,so.anneaux);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,so.idx); so.tri=so.anneaux*ns*2; gl.drawElements(gl.TRIANGLES,so.anneaux*ns*6,gl.UNSIGNED_SHORT,0);
+  }
   const pc=v3Partage(V3.grains,0,p); V3.parts=pc;
   u=G.grains.u; gl.useProgram(G.grains.p); v3Monde(u,W,H,p);
   gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); gl.uniform4iv(u.uPart,pc.part); gl.uniform1i(u.uTotal,pc.total);
@@ -900,15 +941,17 @@ function v3Image(p){
   gl.uniform1ui(u.uFrame,f); gl.uniform2fv(u.uJitPx,jit);
   gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
   const occ=S.kit===0?(S.kitP[0]>0?S.kitP[0]/36*.5:0)+(S.houp[3]>0?S.kitP[0]*.8*S.houp[3]/10.9*.14:0):0;   // troncs par mètre : densité × diamètre
-  gl.uniform1f(u.uOccT,occ); gl.uniform1i(u.uVoir,CFG.v3voir|0); gl.uniform1f(u.uPcf,CFG.v3pcf!==undefined?CFG.v3pcf:1); gl.uniform1f(u.uAmb,CFG.v3amb||.65);   // flou de lecture de la carte, en texels
+  gl.uniform1f(u.uOccT,occ); gl.uniform1i(u.uVoir,CFG.v3voir|0); gl.uniform1i(u.uProf||null,CFG.v3prof|0); gl.uniform1f(u.uPcf,CFG.v3pcf!==undefined?CFG.v3pcf:1); gl.uniform1f(u.uAmb,CFG.v3amb||.65);   // flou de lecture de la carte, en texels
   const alpha=!V3.hist?1:bouge?V3.alpha:1/(V3.n+1);
   gl.uniform1f(u.uAlpha,alpha); gl.uniform1i(u.uReproj,bouge?1:0);
   if(V3.hist){ gl.uniform3fv(u.uPrevPos,V3.histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,V3.histPose.mat); }
   gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,W,H); draw();
   if(V3.nImg<3){ v3Sync(dst); note("  matière et lumière faites"); }
   chrono("ombrage",dst);
-  v3Sync();                                                   // force la fin du calcul : le temps mesuré est le vrai temps GPU
-  V3.ms=performance.now()-t0; V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; V3.nImg++;
+  // Plus d'attente de la puce à chaque image (option v3sync pour la remettre) : elle empêchait le processeur de préparer
+  // l'image suivante pendant que la puce finit celle-ci. Sans elle, V3.ms est l'intervalle entre deux images v3.
+  if(V3.detail||CFG.v3sync){ v3Sync(dst); V3.ms=performance.now()-t0; }
+  else { V3.ms=V3.tPrec&&t0-V3.tPrec<250?t0-V3.tPrec:performance.now()-t0; V3.tPrec=t0; } V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; V3.nImg++;
   V3.hist=dst; V3.histPose=p; V3.n++;
 }
 function v3Frame(p,dt){
@@ -1060,8 +1103,21 @@ if(window.claude && window.claude.use) window.claude.use("sample").then(s=>{ sam
 let sayTimer=0;
 function say(text,bref){ const el=$("pensee"); el.textContent=text; el.classList.toggle("on",!!text);
   clearTimeout(sayTimer); if(text) sayTimer=setTimeout(()=>el.classList.remove("on"),bref?3500:9000); }
+/* Obstacles devant (1,5 m, 3 m, 5 m) : le meneur les lit deux fois par seconde. Lecture différée comme la sonde : on rend
+   la dernière réponse arrivée et on relance ; seule la toute première lecture attend. */
+const devant={L:[0,1,2].map(lectureDiff),T:null,v:null,b:new Float32Array(16)};
+function obstaclesDevant(){
+  const pts=[1.5,3,5].map(d=>{ const x=cam.x+Math.sin(cam.yaw)*d, z=cam.z+Math.cos(cam.yaw)*d; return [x,terrainH(x,z)+.75,z]; });
+  if(SONDE_SYNC||!devant.v||!progs[varCourante()]){ devant.v=pts.map(q=>probe(...q)[0]); return devant.v; }
+  devant.L.forEach((L,i)=>{ if(recevoirDiff(L,devant.b)) devant.v[i]=devant.b[0]; });
+  if(devant.L.every(L=>!L.sync)){
+    if(!devant.T) devant.T=[0,1,2].map(()=>target(4,1,ACC_FMT,gl.NEAREST));
+    pts.forEach((q,i)=>{ probeDessin(q[0],q[1],q[2],devant.T[i]); lireDiff(devant.L[i],devant.T[i],4,1,16); });
+  }
+  return devant.v;
+}
 function perception(){
-  const ahead=[1.5,3,5].map(d=>{ const x=cam.x+Math.sin(cam.yaw)*d, z=cam.z+Math.cos(cam.yaw)*d; return probe(x,terrainH(x,z)+.75,z)[0]; });
+  const ahead=obstaclesDevant();
   return { lieu:fiche.titre, inspiration:fiche.inspiration, kit:fiche.kit,
     position:{x:+cam.x.toFixed(1),z:+cam.z.toFixed(1)}, cap_degres:Math.round(((cam.yaw*180/Math.PI)%360+360)%360),
     sur_le_sentier:S.kit!==1?Math.abs(cam.x-pathX(cam.z))<1.3:null,
@@ -1462,7 +1518,7 @@ async function mesurerV3(f,wait,med){
     "BUDGET DE GRAINS",
     "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+")",
     "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.sm.w+" × "+V3.sm.h,
-    "Sol              "+V3.sol.anneaux*V3.sol.secteurs*2+" triangles",
+    "Sol              "+(V3.sol.tri||0)+" triangles dessinés ("+(CFG.v3solPlein?"tout le tour, sommets répétés":"cap utile, sommets partagés")+")",
     "",
     "PAR PASSE (à l'arrêt, attente réelle de la puce)",
     "Semis des grains "+fx(pa.tamponG,1)+" ms",

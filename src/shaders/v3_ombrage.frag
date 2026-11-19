@@ -19,6 +19,7 @@ uniform vec3  uSd;           // direction du soleil de cette image, tirée dans 
 uniform int   uVoir;         // mise au point (option v3voir) : 1 ombre du soleil seule, 2 albédo, 3 normale, 5 carte d'ombres
 uniform float uOccT;
 uniform float uPcf;
+uniform int   uProf;         // mise au point du coût (option v3prof) : 1 sans recette, 2 sans ambiance, 4 sans soleil, 8 sans pres()
 uniform float uAmb;          // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
 out vec4 outCol;
 
@@ -71,27 +72,29 @@ vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts){
     L=mix(tronc,ciel,Tt);
   } else L=solE;
   float h1=.25, h2=.8;
-  float occ=max(0.,h1-pres(po+n*h1))*1.6+max(0.,h2-pres(po+n*h2))*.5;
+  float occ=(uProf&8)!=0?0.:max(0.,h1-pres(po+n*h1))*1.6+max(0.,h2-pres(po+n*h2))*.5;
   return L*clamp(1.-occ,.25,1.)*uAmb;
 }
 
 vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd){
   vec3 sd=uSd;
   vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
-  float Ts=canopyT(po,uSunDir);                              // transmittance de la canopée vers le soleil (statistique)
+  float Ts=(uProf&4)!=0?1.:canopyT(po,uSunDir);                              // transmittance de la canopée vers le soleil (statistique)
   vec3 col=vec3(0.);
   float ndl=max(dot(n,sd),0.);
   if(ndl>0. && dot(gn,sd)>0.){
-    float vis=ombreSoleil(p,gn)*Ts;
+    float vis=(uProf&4)!=0?1.:ombreSoleil(p,gn)*Ts;
     vec3 h=normalize(sd-rd);
     col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),28.));
   }
-  col+=alb*ambiance(po,gn,n,Ts);
+  col+=(uProf&2)!=0?alb*.3:alb*ambiance(po,gn,n,Ts);
   return col;
 }
 
 void main(){
   ivec2 ip=ivec2(gl_FragCoord.xy);
+  if((uProf&16)!=0){ outCol=texelFetch(uG1,ip,0); return; }
+  if((uProf&32)!=0){ vec4 a=texelFetch(uG0,ip,0); if(a.w==5.){ outCol=vec4(1.); return; } }
   rs=hu(uint(ip.x)*1973u+uint(ip.y)*9277u^hu(uFrame)); rnd();
   vec2 uv=(gl_FragCoord.xy+uJitPx-.5*uRes)/uRes.y;
   float rr=length(uv), ang=rr*uFish;
@@ -122,7 +125,7 @@ void main(){
       else if(id==3) r0=uSurf.z;
       else if(id==4){ vec3 qr; r0=matProp(q,gn,vec4(0.,0.,0.,floor(par*128.+.5)),false,alb,n,spec,emis,qr,nr0,rot); q=qr; }
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
-      if(r0>=0){
+      if(r0>=0 && (uProf&1)==0 && !((uProf&64)!=0 && id==0) && !((uProf&128)!=0 && id!=0)){
         vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
         for(int k=0;k<2;k++){
           if(k>=nr) break;
