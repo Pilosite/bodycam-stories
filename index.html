@@ -99,7 +99,8 @@ button.pulse{animation:pulse 1.4s ease-in-out infinite;border-color:var(--ink)}
     <button id="lieu" type="button" class="ghost">Lieu suivant</button>
     <button id="mesurer" type="button" class="ghost">Mesurer</button>
     <button id="suivi" type="button" class="ghost" aria-pressed="true" hidden>Suivi du téléphone : oui</button>
-    <button id="v2" type="button" class="ghost" aria-pressed="false" title="Essai : tourner des panoramiques, puis les projeter">Moteur v2</button>
+    <button id="v2" type="button" class="ghost" aria-pressed="false" hidden title="Essai : tourner des panoramiques, puis les projeter">Moteur v2</button>
+    <button id="v3" type="button" class="ghost" aria-pressed="false" title="Essai : semer des grains au lieu de lancer des rayons">Moteur v3</button>
   </div>
 </div>
 <div id="mesure" hidden>
@@ -949,31 +950,31 @@ const FS_PT = `#version 300 es
 precision highp float;
 precision highp int;
 precision highp sampler2D;
-
-uniform sampler2D uPrev;
-uniform vec2  uRes;
 uniform float uTick;
+uniform int   uQ;
+uniform float uJit;        // anticrénelage par décalage sous-pixel (0 en mouvement)
+uniform vec3  uProbe;
+out vec4 outCol;
+float gT;                    // distance du premier impact, gardée pour la reprojection
+
+// Le monde, partagé par le lanceur de rayons (pathtrace.frag) et le semeur (moteur v3, v3_*.vert / v3_ombrage.frag).
+// Inséré par le build (#include) : chaque fichier qui l'inclut déclare d'abord sa version et ses précisions.
+// Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
+// Les paramètres d'un objet (arbreA, percheB, blocGres) sont calculés en un seul endroit : le lanceur de rayons
+// s'en sert pour sa distance, le semeur pour poser ses grains au même endroit.
+uniform vec2  uRes;
 uniform vec3  uCamPos;
 uniform mat3  uCam;
 uniform float uFish;
 uniform float uFog;
 uniform vec3  uSeed;
-uniform int   uQ;
 uniform vec3  uSunDir;
 uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
 uniform vec3  uSky;        // teinte et niveau du ciel
 uniform float uTorch;      // lampe du téléphone, 0 = éteinte
 uniform int   uKit;        // 0 forêt, 1 dunes
 uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
-uniform vec3  uPrevPos;    // reprojection temporelle : pose de l'image précédente
-uniform mat3  uPrevCam;
-uniform float uAlpha;      // part d'image neuve dans le mélange
-uniform int   uReproj;     // 1 = l'historique est relu à travers l'ancienne pose
-uniform float uJit;        // anticrénelage par décalage sous-pixel (0 en mouvement)
 uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
-uniform vec3  uProbe;
-out vec4 outCol;
-
 uniform vec2  uCan;        // tranche du feuillage : bas, haut
 uniform vec4  uHoup;       // houppier : forme (0 voûte commune, 1 cône par arbre), bas du cône, rayon au pied, part de perches
 #define YC0 uCan.x
@@ -983,7 +984,6 @@ const float CBR=1.5;                // cellule de branche
 const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
-float gT;                    // distance du premier impact, gardée pour la reprojection
 
 /* ---- aléa */
 uint rs;
@@ -1037,38 +1037,52 @@ bool cleared(vec2 w){                                        // ni arbre ni roch
 }
 float sdCapT(vec3 p, vec3 a, vec3 b, float ra, float rb){ vec3 pa=p-a,ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-mix(ra,rb,h); }
 
+/* Paramètres d'un objet de cellule. Ne dépendent que de la cellule (et de la fiche) : le lanceur de rayons les lit pour
+   sa distance, le semeur pour poser ses grains. Rendent false quand la cellule est vide. */
+struct ArbreA { vec4 h; vec2 o; float H; float r0; vec2 lean; };
+bool arbreA(vec2 id, out ArbreA A){
+  A.h=h42(id+uSeed.xy);
+  if(A.h.x>uKitP.x) return false;
+  A.o=(A.h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+A.o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5 || cleared(w)) return false;
+  A.H=11.+6.*A.h.w;
+  A.r0=.16+.17*fract(A.h.w*7.31);
+  A.lean=(h42(id+31.7).xy-.5)*.035;
+  return true;
+}
+float rayonA(ArbreA A, float y){ return A.r0*(1.-.5*clamp(y/A.H,0.,1.))+A.r0*.45*exp(-max(y,0.)*2.5); }
+void brancheA(ArbreA A, int k, out vec3 a0, out vec3 a1, out float rb){   // branche k (0 à 2), dans le repère de la cellule
+  vec2 o=A.o; vec4 h=A.h; float H=A.H;
+  float ac=atan(-o.y,-o.x);
+  float fk=float(k);
+  float hb=H*(.42+.17*fk);
+  float a=ac+(fract(h.w*13.7+fk*.37)-.5)*2.8+fk*.5;
+  float reach=1.0+.5*fract(h.x*91.+fk*.71);
+  float rise=2.2+1.5*fract(h.y*57.+fk*.53);
+  vec2 b0=o+A.lean*hb;
+  a0=vec3(b0.x,hb,b0.y);
+  a1=a0+vec3(cos(a)*reach,rise,sin(a)*reach);
+  rb=A.r0*.34*(1.-.12*fk);
+}
 float sdTreeA(vec3 p, float th, out vec4 info){
   vec2 q=RA*p.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
   float dOut=.5*CA-max(abs(f.x),abs(f.y))+.3+(uMode==1?50.:0.);
   info=vec4(0.);
-  vec4 h=h42(id+uSeed.xy);
-  if(h.x>uKitP.x) return dOut;
-  vec2 o=(h.yz-.5)*3.8;
-  vec2 w=((id+.5)*CA+o)*RA;
-  if(abs(w.x-pathX(w.y))<1.5 || cleared(w)) return dOut;
+  ArbreA A;
+  if(!arbreA(id,A)) return dOut;
+  vec4 h=A.h; vec2 o=A.o; float H=A.H;
   float y=p.y-th;
-  float H=11.+6.*h.w;
-  float r0=.16+.17*fract(h.w*7.31);
-  vec2 lean=(h42(id+31.7).xy-.5)*.035;
   float yc=clamp(y,-1.,H);
-  vec2 dq=f-(o+lean*yc);
-  float r=r0*(1.-.5*clamp(y/H,0.,1.))+r0*.45*exp(-max(y,0.)*2.5);
+  vec2 dq=f-(o+A.lean*yc);
+  float r=rayonA(A,y);
   float dh=length(dq)-r;
   float dv=y-H;
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
-    float ac=atan(-o.y,-o.x);
     vec3 lp=vec3(f.x,y,f.y);
     for(int k=0;k<3;k++){
-      float fk=float(k);
-      float hb=H*(.42+.17*fk);
-      float a=ac+(fract(h.w*13.7+fk*.37)-.5)*2.8+fk*.5;
-      float reach=1.0+.5*fract(h.x*91.+fk*.71);
-      float rise=2.2+1.5*fract(h.y*57.+fk*.53);
-      vec2 b0=o+lean*hb;
-      vec3 a0=vec3(b0.x,hb,b0.y);
-      vec3 a1=a0+vec3(cos(a)*reach,rise,sin(a)*reach);
-      float rb=r0*.34*(1.-.12*fk);
+      vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
   }
@@ -1085,52 +1099,78 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   return min(d*.9,dOut);
 }
 
+struct PercheB { vec4 h; vec2 o; float H; float r0; vec2 lean; };
+bool percheB(vec2 id, out PercheB B){
+  B.h=h42(id+uSeed.xy+71.);
+  if(B.h.x>uKitP.x*.8*uHoup.w) return false;
+  B.o=(B.h.yz-.5)*1.9;
+  vec2 w=((id+.5)*CB+B.o-17.3)*RB;
+  if(abs(w.x-pathX(w.y))<1.15 || cleared(w)) return false;
+  B.H=6.+5.*B.h.w;
+  B.r0=.035+.07*fract(B.h.w*5.3);
+  B.lean=(h42(id+3.1).xy-.5)*.06;
+  return true;
+}
+vec2 axeB(PercheB B, float yc){ return B.o+B.lean*yc+.06*sin(yc*.6+B.h.w*20.)*vec2(cos(B.h.x*40.),sin(B.h.x*40.)); }
+float rayonB(PercheB B, float y){ return B.r0*(1.-.6*clamp(y/B.H,0.,1.))+B.r0*.3*exp(-max(y,0.)*4.); }
 float sdTreeB(vec3 p, float th, out vec4 info){
   vec2 q=RB*p.xz+17.3; vec2 id=floor(q/CB); vec2 f=q-(id+.5)*CB;
   float dOut=.5*CB-max(abs(f.x),abs(f.y))+.22+(uMode==1?50.:0.);
   info=vec4(0.);
-  vec4 h=h42(id+uSeed.xy+71.);
-  if(h.x>uKitP.x*.8*uHoup.w) return dOut;
-  vec2 o=(h.yz-.5)*1.9;
-  vec2 w=((id+.5)*CB+o-17.3)*RB;
-  if(abs(w.x-pathX(w.y))<1.15 || cleared(w)) return dOut;
+  PercheB B;
+  if(!percheB(id,B)) return dOut;
   float y=p.y-th;
-  float H=6.+5.*h.w;
-  float r0=.035+.07*fract(h.w*5.3);
-  vec2 lean=(h42(id+3.1).xy-.5)*.06;
+  float H=B.H;
   float yc=clamp(y,-1.,H);
-  vec2 ax=o+lean*yc+.06*sin(yc*.6+h.w*20.)*vec2(cos(h.x*40.),sin(h.x*40.));
-  vec2 dq=f-ax;
-  float r=r0*(1.-.6*clamp(y/H,0.,1.))+r0*.3*exp(-max(y,0.)*4.);
+  vec2 dq=f-axeB(B,yc);
+  float r=rayonB(B,y);
   float dh=length(dq)-r;
   float dv=y-H;
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
-  info=vec4(dq.x,y,dq.y,h.w);
+  info=vec4(dq.x,y,dq.y,B.h.w);
   return min(d*.85,dOut);
 }
 
+struct Bloc { vec4 h; float R; vec2 o; vec3 rad; float a; };
+bool blocGres(vec2 id, out Bloc B){
+  B.h=h42(id+uSeed.xy+13.);
+  float mask=vnoise(id*.37+uSeed.xy);
+  if(B.h.x>(smoothstep(.32,.68,mask)*.9+.08)*uKitP.y) return false;
+  float R=.7+1.6*B.h.w*B.h.w;
+  B.R=R;
+  B.o=(B.h.yz-.5)*2.*(.5*CC-.3-1.25*R);
+  vec2 w=(id+.5)*CC+B.o;
+  if(abs(w.x-pathX(w.y))<R*1.1+.5 || cleared(w)) return false;
+  B.a=B.h.x*50.;
+  vec4 h=B.h;
+  B.rad=R*vec3(1.+.25*fract(h.y*9.),.62+.3*fract(h.z*7.),.8+.3*fract(h.w*11.));
+  return true;
+}
+vec3 blocLocal(vec3 p, float th, vec2 id, Bloc B){          // repère du bloc : centré, tourné
+  vec2 f=p.xz-(id+.5)*CC;
+  vec3 lp=vec3(f.x-B.o.x,p.y-th-B.R*.22,f.y-B.o.y);
+  float ca=cos(B.a),sa=sin(B.a);
+  lp.xz=mat2(ca,sa,-sa,ca)*lp.xz;
+  return lp;
+}
+float blocForme(vec3 lp, Bloc B){                            // ellipsoïde bosselé, en mètres (avant la marge du pas)
+  vec4 h=B.h; float R=B.R; vec3 rad=B.rad;
+  float d=(length(lp/rad)-1.)*min(rad.x,min(rad.y,rad.z));
+  d+=.10*R*sin(lp.x*2.3/R+h.x*9.)*sin(lp.y*2.9/R+h.y*7.)*sin(lp.z*2.1/R+h.z*5.);
+  d+=.035*R*sin(lp.x*6.1/R)*sin(lp.y*7.3/R+1.)*sin(lp.z*5.7/R+2.);
+  return d;
+}
 float sdRock(vec3 p, float th, out vec4 info){
   vec2 q=p.xz; vec2 id=floor(q/CC); vec2 f=q-(id+.5)*CC;
   float dOut=.5*CC-max(abs(f.x),abs(f.y))+.3+(uMode==1?50.:0.);
   info=vec4(0.);
-  vec4 h=h42(id+uSeed.xy+13.);
-  float mask=vnoise(id*.37+uSeed.xy);
-  if(h.x>(smoothstep(.32,.68,mask)*.9+.08)*uKitP.y) return dOut;
-  float R=.7+1.6*h.w*h.w;
-  vec2 o=(h.yz-.5)*2.*(.5*CC-.3-1.25*R);
-  vec2 w=(id+.5)*CC+o;
-  if(abs(w.x-pathX(w.y))<R*1.1+.5 || cleared(w)) return dOut;
-  vec3 lp=vec3(f.x-o.x,p.y-th-R*.22,f.y-o.y);
-  float a=h.x*50.; float ca=cos(a),sa=sin(a);
-  lp.xz=mat2(ca,sa,-sa,ca)*lp.xz;
-  vec3 rad=R*vec3(1.+.25*fract(h.y*9.),.62+.3*fract(h.z*7.),.8+.3*fract(h.w*11.));
-  float d=(length(lp/rad)-1.)*min(rad.x,min(rad.y,rad.z));
-  d+=.10*R*sin(lp.x*2.3/R+h.x*9.)*sin(lp.y*2.9/R+h.y*7.)*sin(lp.z*2.1/R+h.z*5.);
-  d+=.035*R*sin(lp.x*6.1/R)*sin(lp.y*7.3/R+1.)*sin(lp.z*5.7/R+2.);
-  info=vec4(lp,R);
+  Bloc B;
+  if(!blocGres(id,B)) return dOut;
+  vec3 lp=blocLocal(p,th,id,B);
+  float d=blocForme(lp,B);
+  info=vec4(lp,B.R);
   return min(d*.72,dOut);
 }
-
 float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
 float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
 float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
@@ -1173,6 +1213,122 @@ float sdProps(vec3 p, out vec4 info){
     if(od<d){ d=od; info=vec4(0.,0.,0.,brow); }
   }
   return d;
+}
+
+/* ---- canopée : densité, transmittance, feuilles et branches discrètes */
+float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
+  vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
+  vec4 h=h42(id+uSeed.xy);
+  if(h.x>uKitP.x) return 0.;
+  vec2 o=(h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5) return 0.;
+  float y=c.y-terrainH(w), H=11.+6.*h.w;
+  float t=(y-uHoup.y)/(H+1.2-uHoup.y);
+  if(t<0. || t>1.) return 0.;
+  float R=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*t)*(.8+.2*sin(y*4.2+h.w*30.));   // l'arbre reste dans sa cellule
+  float r=length(f-o);
+  float trou=vnoise3(c*vec3(1.7,2.6,1.7)+h.w*9.);
+  return smoothstep(R,R*.7,r)*smoothstep(.12,.4,trou)*4.*uKitP.z;
+}
+float canopyDens(vec3 c){
+  if(uHoup.x>.5) return coneDens(c);
+  float hp=smoothstep(YC0,YC0+2.5,c.y)*smoothstep(YC1,YC1-4.,c.y);
+  if(hp<=0.) return 0.;
+  float n=vnoise3(c*vec3(.21,.26,.21)+uSeed)*.7+.3*vnoise3(c*.63+7.);
+  float gap=mix(.72,1.,smoothstep(.5,5.,abs(c.x-pathX(c.z))));
+  return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
+}
+float canopyT(vec3 ro, vec3 rd){
+  if(uKitP.z<=0. || uKit!=0) return 1.;
+  float ry=abs(rd.y)<1e-4?1e-4:rd.y;
+  float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
+  float t0=max(min(ta,tb),0.), t1=max(ta,tb);
+  if(t1<=t0) return 1.;
+  t1=min(t1,t0+60.);
+  float ds=(t1-t0)/6.; float od=0.; float j=rnd();
+  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  return exp(-od*ds*SIG);
+}
+vec3 leafCol(vec3 c, float h){
+  if(uHoup.x>.5) return mix(vec3(.010,.030,.014),vec3(.034,.075,.030),h)*(.7+.6*vnoise3(c*.4+uSeed));   // aiguilles : vert sombre toute l'année
+  float sp=vnoise3(c*.09+uSeed+40.);
+  if(sp<.42) return mix(vec3(.030,.062,.018),vec3(.055,.095,.028),h);
+  vec3 ete=mix(vec3(.035,.085,.018),vec3(.075,.15,.03),h);
+  vec3 aut=sp<.70?mix(vec3(.30,.15,.035),vec3(.46,.30,.06),h):mix(vec3(.50,.36,.05),vec3(.36,.38,.07),h);
+  return mix(ete,aut,uKitP.w);
+}
+
+/* ---- ciel et brume */
+vec3 skyBase(vec3 rd){
+  float y=max(rd.y,0.);
+  vec3 c=mix(vec3(.62,.72,.86),vec3(.16,.34,.78),pow(y,.45))*2.2*uSky;
+  float s=max(dot(rd,uSunDir),0.);
+  c+=uSun*vec3(.143,.129,.109)*(.9*pow(s,6.)+3.*pow(s,48.));
+  return c;
+}
+vec3 skyCol(vec3 rd){
+  float s=max(dot(rd,uSunDir),0.);
+  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+}
+/* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
+   Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
+uniform vec4 uLoin;          // hauteur du massif (tangente de l'angle), découpe des crêtes, altitude de la neige (0 à 1, au-delà : aucune), présence
+uniform vec3 uLoinCol;       // roche
+uniform vec3 uLoinBas;       // contreforts
+float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
+  vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
+  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  return s;
+}
+vec3 lointain(vec3 rd, vec3 c){
+  float az=atan(rd.x,rd.z), el=rd.y/max(length(rd.xz),1e-4);
+  if(el>uLoin.x*1.25) return c;
+  vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
+  float sa=atan(uSunDir.x,uSunDir.z);
+  for(int k=0;k<2;k++){
+    float fk=float(k), H=uLoin.x*(k==0?1.:.34);
+    float cr=H*(.42+1.15*loinCrete(az,fk));
+    float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
+    float lit=clamp(.45+.9*d*sin(sa-az)+.35*cos(sa-az),.03,1.);
+    float alt=el/max(uLoin.x,1e-4);
+    float plis=.6*vnoise(vec2(az*uLoin.y*9.+alt*7.+fk*9.,alt*9.-az*5.))+.4*vnoise(vec2(az*uLoin.y*30.-alt*16.,alt*26.+fk*3.));                            // couloirs et arêtes dans la face
+    vec3 alb=k==0?uLoinCol*(.7+.6*plis):uLoinBas*(.75+.5*plis);
+    if(k==0) alb=mix(alb,vec3(.86,.88,.92),smoothstep(uLoin.z-.05,uLoin.z+.05,alt+.5*(plis-.5)+.25*(cr/H-.7)));   // la neige tient sur les hauts, la roche perce dans les faces
+    vec3 col=alb*(uSun*lit*(.30+.15*plis)+vec3(.42,.52,.72)*uSky*.42);
+    col=mix(col,air,(k==0?.30:.14)*(1.-.5*smoothstep(0.,.8,alt)));   // le voile de l'air s'accroche au pied, les sommets en sortent
+    c=mix(c,col,smoothstep(cr+.004,cr-.004,el));
+  }
+  return c;
+}
+vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+
+/* ---- éclairage */
+vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
+  return normalize(uSunDir+(t*cos(a)+b*sin(a))*r); }
+vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*u,0.)); return normalize(n+vec3(s*cos(a),s*sin(a),u)*.999); }
+
+#define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
+
+vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
+  if(dot(n,rd)>0.) n=-n;
+  vec3 sd=sunSample();
+  float T=canopyT(p+sd*.3,sd);
+  float ndl=dot(n,sd);
+  vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
+  vec3 h=normalize(sd-rd);
+  col+=SUN*T*max(ndl,0.)*.3*pow(max(dot(n,h),0.),40.);
+  float hg=clamp((p.y-YC0)/(YC1-YC0),0.,1.);
+  vec3 ambUp=vec3(.45,.55,.70)*mix(.25,1.3,hg*hg)*uSky;
+  vec3 ambDn=vec3(.13,.11,.07)*uSky;
+  if(uTorch>0.){
+    vec3 L=uCamPos-p; float d2=dot(L,L); L/=sqrt(d2);
+    float cs=dot(-L,uCam[2]);
+    col+=alb*uTorch*smoothstep(.50,.90,cs)*(.30+.70*smoothstep(.90,.985,cs))*(.25+.75*abs(dot(n,L)))/(d2+.3);
+  }
+  col+=alb*mix(ambDn,ambUp,n.y*.5+.5);
+  col+=alb*vec3(1.2,1.1,.6)*ambUp*.35*max(-n.y,0.);
+  return col;
 }
 float map(vec3 p){
   float th=terrainH(p.xz);
@@ -1228,49 +1384,6 @@ float shadow(vec3 ro, vec3 rd, float tmax, int steps){
   return 1.;
 }
 
-/* ---- canopée : densité, transmittance, feuilles et branches discrètes */
-float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
-  vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
-  vec4 h=h42(id+uSeed.xy);
-  if(h.x>uKitP.x) return 0.;
-  vec2 o=(h.yz-.5)*3.8;
-  vec2 w=((id+.5)*CA+o)*RA;
-  if(abs(w.x-pathX(w.y))<1.5) return 0.;
-  float y=c.y-terrainH(w), H=11.+6.*h.w;
-  float t=(y-uHoup.y)/(H+1.2-uHoup.y);
-  if(t<0. || t>1.) return 0.;
-  float R=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*t)*(.8+.2*sin(y*4.2+h.w*30.));   // l'arbre reste dans sa cellule
-  float r=length(f-o);
-  float trou=vnoise3(c*vec3(1.7,2.6,1.7)+h.w*9.);
-  return smoothstep(R,R*.7,r)*smoothstep(.12,.4,trou)*4.*uKitP.z;
-}
-float canopyDens(vec3 c){
-  if(uHoup.x>.5) return coneDens(c);
-  float hp=smoothstep(YC0,YC0+2.5,c.y)*smoothstep(YC1,YC1-4.,c.y);
-  if(hp<=0.) return 0.;
-  float n=vnoise3(c*vec3(.21,.26,.21)+uSeed)*.7+.3*vnoise3(c*.63+7.);
-  float gap=mix(.72,1.,smoothstep(.5,5.,abs(c.x-pathX(c.z))));
-  return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
-}
-float canopyT(vec3 ro, vec3 rd){
-  if(uKitP.z<=0. || uKit!=0) return 1.;
-  float ry=abs(rd.y)<1e-4?1e-4:rd.y;
-  float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
-  float t0=max(min(ta,tb),0.), t1=max(ta,tb);
-  if(t1<=t0) return 1.;
-  t1=min(t1,t0+60.);
-  float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
-  return exp(-od*ds*SIG);
-}
-vec3 leafCol(vec3 c, float h){
-  if(uHoup.x>.5) return mix(vec3(.010,.030,.014),vec3(.034,.075,.030),h)*(.7+.6*vnoise3(c*.4+uSeed));   // aiguilles : vert sombre toute l'année
-  float sp=vnoise3(c*.09+uSeed+40.);
-  if(sp<.42) return mix(vec3(.030,.062,.018),vec3(.055,.095,.028),h);
-  vec3 ete=mix(vec3(.035,.085,.018),vec3(.075,.15,.03),h);
-  vec3 aut=sp<.70?mix(vec3(.30,.15,.035),vec3(.46,.30,.06),h):mix(vec3(.50,.36,.05),vec3(.36,.38,.07),h);
-  return mix(ete,aut,uKitP.w);
-}
 float capIntersect(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra){
   vec3 ba=pb-pa, oa=ro-pa;
   float baba=dot(ba,ba), bard=dot(ba,rd), baoa=dot(ba,oa), rdoa=dot(rd,oa), oaoa=dot(oa,oa);
@@ -1363,50 +1476,8 @@ int foliage(vec3 ro, vec3 rd, float tmax, out float tHit, out vec3 nHit, out vec
   return kind;
 }
 
-/* ---- ciel et brume */
-vec3 skyBase(vec3 rd){
-  float y=max(rd.y,0.);
-  vec3 c=mix(vec3(.62,.72,.86),vec3(.16,.34,.78),pow(y,.45))*2.2*uSky;
-  float s=max(dot(rd,uSunDir),0.);
-  c+=uSun*vec3(.143,.129,.109)*(.9*pow(s,6.)+3.*pow(s,48.));
-  return c;
-}
-vec3 skyCol(vec3 rd){
-  float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
-}
-/* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
-   Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
-uniform vec4 uLoin;          // hauteur du massif (tangente de l'angle), découpe des crêtes, altitude de la neige (0 à 1, au-delà : aucune), présence
-uniform vec3 uLoinCol;       // roche
-uniform vec3 uLoinBas;       // contreforts
-float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
-  vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
-  return s;
-}
-vec3 lointain(vec3 rd, vec3 c){
-  float az=atan(rd.x,rd.z), el=rd.y/max(length(rd.xz),1e-4);
-  if(el>uLoin.x*1.25) return c;
-  vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
-  float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
-    float fk=float(k), H=uLoin.x*(k==0?1.:.34);
-    float cr=H*(.42+1.15*loinCrete(az,fk));
-    float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
-    float lit=clamp(.45+.9*d*sin(sa-az)+.35*cos(sa-az),.03,1.);
-    float alt=el/max(uLoin.x,1e-4);
-    float plis=.6*vnoise(vec2(az*uLoin.y*9.+alt*7.+fk*9.,alt*9.-az*5.))+.4*vnoise(vec2(az*uLoin.y*30.-alt*16.,alt*26.+fk*3.));                            // couloirs et arêtes dans la face
-    vec3 alb=k==0?uLoinCol*(.7+.6*plis):uLoinBas*(.75+.5*plis);
-    if(k==0) alb=mix(alb,vec3(.86,.88,.92),smoothstep(uLoin.z-.05,uLoin.z+.05,alt+.5*(plis-.5)+.25*(cr/H-.7)));   // la neige tient sur les hauts, la roche perce dans les faces
-    vec3 col=alb*(uSun*lit*(.30+.15*plis)+vec3(.42,.52,.72)*uSky*.42);
-    col=mix(col,air,(k==0?.30:.14)*(1.-.5*smoothstep(0.,.8,alt)));   // le voile de l'air s'accroche au pied, les sommets en sortent
-    c=mix(c,col,smoothstep(cr+.004,cr-.004,el));
-  }
-  return c;
-}
-vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
-
+// Matières en recettes, partagées par le lanceur de rayons et le semeur (moteur v3). Inséré par le build (#include),
+// après monde.glsl. Un seul appel à recette() par shader : chaque appel est déplié par le compilateur.
 /* ---- matières : une recette par surface, lue dans une texture de données.
    Aucune matière n'est écrite ici : sol, sentier, grès, écorces sont des recettes de src/matieres.json ou de la fiche.
    Une recette s'évalue une fois par impact, dans cet ordre : couleur, nuance, taches sous le motif, motif,
@@ -1558,14 +1629,40 @@ int matProp(vec3 p, vec3 n, vec4 info, out vec3 alb, out vec3 nn, out float spec
   else { emis=1.; }                                                                  // lumineux
   return -1;
 }
-
+// Accumulation temporelle et reprojection, partagées par le lanceur de rayons et le semeur (moteur v3).
+// Inséré par le build (#include), après monde.glsl (uFish).
+uniform sampler2D uPrev;
+uniform vec3  uPrevPos;    // reprojection temporelle : pose de l'image précédente
+uniform mat3  uPrevCam;
+uniform float uAlpha;      // part d'image neuve dans le mélange
+uniform int   uReproj;     // 1 = l'historique est relu à travers l'ancienne pose
+// col : couleur neuve du pixel ip ; P : point du monde qu'il montre. Rend le mélange avec l'historique.
+vec3 melangeHistoire(vec3 col, vec3 P, ivec2 ip){
+  vec3 hist=vec3(0.); float a=1.;
+  if(uAlpha<1.){
+    if(uReproj==0){ hist=texelFetch(uPrev,ip,0).rgb; a=uAlpha; }
+    else {                                                   // où ce point du monde se trouvait-il dans l'image précédente ?
+      vec3 d=P-uPrevPos; float dist=length(d);
+      vec3 dl=(d/dist)*uPrevCam;
+      float sxy=length(dl.xy);
+      vec2 puv=(sxy>1e-6?dl.xy/sxy:vec2(0.))*(acos(clamp(dl.z,-1.,1.))/uFish);
+      vec2 ps=vec2(textureSize(uPrev,0));
+      vec2 pp=puv*ps.y+.5*ps-.5;
+      if(pp.x>0. && pp.y>0. && pp.x<ps.x-1. && pp.y<ps.y-1.){
+        ivec2 b=ivec2(floor(pp)); vec2 f=pp-vec2(b); float ws=0.; vec3 acc=vec3(0.);
+        for(int k=0;k<4;k++){
+          ivec2 o=ivec2(k&1,k>>1); vec4 sm=texelFetch(uPrev,b+o,0);
+          float w=(o.x==1?f.x:1.-f.x)*(o.y==1?f.y:1.-f.y);
+          w*=step(abs(sm.a-dist),.08*dist+.06);              // rejette l'historique d'un autre objet (désoccultation)
+          acc+=sm.rgb*w; ws+=w;
+        }
+        if(ws>.08){ hist=acc/ws; a=uAlpha; }
+      }
+    }
+  }
+  return mix(hist,col,a);
+}
 /* ---- éclairage */
-vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
-  return normalize(uSunDir+(t*cos(a)+b*sin(a))*r); }
-vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*u,0.)); return normalize(n+vec3(s*cos(a),s*sin(a),u)*.999); }
-
-#define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
-
 vec3 Li(vec3 ro, vec3 rd){
   float t=march(ro,rd,45.,uQ==0?30:44);
   if(t<0.){
@@ -1607,27 +1704,6 @@ vec3 lightSurf(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd){
   }
   vec3 wi=cosDir(n); if(dot(wi,gn)<0.) wi=reflect(wi,gn);
   col+=alb*Li(po,wi);
-  return col;
-}
-
-vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
-  vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
-  float ndl=dot(n,sd);
-  vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
-  vec3 h=normalize(sd-rd);
-  col+=SUN*T*max(ndl,0.)*.3*pow(max(dot(n,h),0.),40.);
-  float hg=clamp((p.y-YC0)/(YC1-YC0),0.,1.);
-  vec3 ambUp=vec3(.45,.55,.70)*mix(.25,1.3,hg*hg)*uSky;
-  vec3 ambDn=vec3(.13,.11,.07)*uSky;
-  if(uTorch>0.){
-    vec3 L=uCamPos-p; float d2=dot(L,L); L/=sqrt(d2);
-    float cs=dot(-L,uCam[2]);
-    col+=alb*uTorch*smoothstep(.50,.90,cs)*(.30+.70*smoothstep(.90,.985,cs))*(.25+.75*abs(dot(n,L)))/(d2+.3);
-  }
-  col+=alb*mix(ambDn,ambUp,n.y*.5+.5);
-  col+=alb*vec3(1.2,1.1,.6)*ambUp*.35*max(-n.y,0.);
   return col;
 }
 
@@ -1707,29 +1783,7 @@ void main(){
   col=min(max(col,vec3(0.)),vec3(60.));
   if(col.x!=col.x||col.y!=col.y||col.z!=col.z) col=vec3(0.);
 
-  vec3 hist=vec3(0.); float a=1.;
-  if(uAlpha<1.){
-    if(uReproj==0){ hist=texelFetch(uPrev,ip,0).rgb; a=uAlpha; }
-    else {                                                   // où ce point du monde se trouvait-il dans l'image précédente ?
-      vec3 d=uCamPos+rd*gT-uPrevPos; float dist=length(d);
-      vec3 dl=(d/dist)*uPrevCam;
-      float sxy=length(dl.xy);
-      vec2 puv=(sxy>1e-6?dl.xy/sxy:vec2(0.))*(acos(clamp(dl.z,-1.,1.))/uFish);
-      vec2 ps=vec2(textureSize(uPrev,0));
-      vec2 pp=puv*ps.y+.5*ps-.5;
-      if(pp.x>0. && pp.y>0. && pp.x<ps.x-1. && pp.y<ps.y-1.){
-        ivec2 b=ivec2(floor(pp)); vec2 f=pp-vec2(b); float ws=0.; vec3 acc=vec3(0.);
-        for(int k=0;k<4;k++){
-          ivec2 o=ivec2(k&1,k>>1); vec4 sm=texelFetch(uPrev,b+o,0);
-          float w=(o.x==1?f.x:1.-f.x)*(o.y==1?f.y:1.-f.y);
-          w*=step(abs(sm.a-dist),.08*dist+.06);              // rejette l'historique d'un autre objet (désoccultation)
-          acc+=sm.rgb*w; ws+=w;
-        }
-        if(ws>.08){ hist=acc/ws; a=uAlpha; }
-      }
-    }
-  }
-  outCol=vec4(mix(hist,col,a),gT);
+  outCol=vec4(melangeHistoire(col,uCamPos+rd*gT,ip),gT);
 }`;
 const FS_DOWN = `#version 300 es
 precision highp float; precision highp sampler2D;
@@ -1871,6 +1925,1832 @@ void main(){
     if(s.a>=.7*far){ acc+=s.rgb; ws+=1.; }
   }
   o=ws>0.?vec4(acc/ws,far):(uMarque==1?vec4(4.,0.,4.,1.):vec4(0.,0.,0.,-1.));
+}`;
+const VS_V3GRAINS = `#version 300 es
+// Moteur v3 (essai) : le semeur. Un sommet = un grain. À partir de son numéro (gl_VertexID) et de la graine de l'image,
+// chaque grain choisit où il se pose dans le monde : sur un tronc, une branche, une perche, un bloc de grès, une feuille,
+// un objet de la fiche. Mêmes grilles, mêmes tirages et mêmes formules que le lanceur de rayons (monde.glsl).
+// Aucun tampon de sommets, aucune étape ne parcourt la scène : chaque grain fait un travail borné.
+//
+// Répartition (vue de la caméra) : un grain d'objet posé au sol tire un cap dans le champ et une distance en progression
+// géométrique (ln d uniforme). La densité au sol décroît en 1/d², comme la taille apparente des objets : chaque objet
+// reçoit à peu près le même nombre de grains par pixel d'écran, de près comme de loin. Le côté du grain est réglé pour
+// couvrir l'objet environ uK² fois. Vu du soleil (carte d'ombres), la répartition est uniforme sur un disque qui couvre
+// la carte, décalé vers le soleil (les ombres tombent loin de leur arbre quand le soleil est bas).
+// Les feuilles tirent une direction de l'écran et une distance dans la tranche de canopée, et prennent la feuille de la
+// cellule où elles tombent (voir semeF).
+precision highp float; precision highp int; precision highp sampler2D;
+// Le monde, partagé par le lanceur de rayons (pathtrace.frag) et le semeur (moteur v3, v3_*.vert / v3_ombrage.frag).
+// Inséré par le build (#include) : chaque fichier qui l'inclut déclare d'abord sa version et ses précisions.
+// Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
+// Les paramètres d'un objet (arbreA, percheB, blocGres) sont calculés en un seul endroit : le lanceur de rayons
+// s'en sert pour sa distance, le semeur pour poser ses grains au même endroit.
+uniform vec2  uRes;
+uniform vec3  uCamPos;
+uniform mat3  uCam;
+uniform float uFish;
+uniform float uFog;
+uniform vec3  uSeed;
+uniform vec3  uSunDir;
+uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
+uniform vec3  uSky;        // teinte et niveau du ciel
+uniform float uTorch;      // lampe du téléphone, 0 = éteinte
+uniform int   uKit;        // 0 forêt, 1 dunes
+uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
+uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
+uniform vec2  uCan;        // tranche du feuillage : bas, haut
+uniform vec4  uHoup;       // houppier : forme (0 voûte commune, 1 cône par arbre), bas du cône, rayon au pied, part de perches
+#define YC0 uCan.x
+#define YC1 uCan.y
+const float CS=0.30;                // cellule de feuille
+const float CBR=1.5;                // cellule de branche
+const float SIG=0.16;               // extinction de la canopée
+const float LEAFP=0.62;
+#define SUN uSun
+
+/* ---- aléa */
+uint rs;
+float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
+
+float h21(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+vec2  h22(vec2 p){ vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973)); p3+=dot(p3,p3.yzx+33.33); return fract((p3.xx+p3.yz)*p3.zy); }
+vec4  h42(vec2 p){ vec4 p4=fract(vec4(p.xyxy)*vec4(.1031,.1030,.0973,.1099)); p4+=dot(p4,p4.wzxy+33.33); return fract((p4.xxyz+p4.yzzw)*p4.zywx); }
+float h31(vec3 p){ p=fract(p*.1031); p+=dot(p,p.zyx+31.32); return fract((p.x+p.y)*p.z); }
+vec3  h33(vec3 p){ p=fract(p*vec3(.1031,.1030,.0973)); p+=dot(p,p.yxz+33.33); return fract((p.xxy+p.yxx)*p.zyx); }
+
+float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y); }
+float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
+float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+    if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
+  return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
+
+/* ---- terrain et sentier */
+float pathX(float z){ return 3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.); }
+float terrainH(vec2 p){
+  if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
+    float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
+    return 3.2*(1.-abs(sin(a)))*(.62+.38*sin(p.y*.03+2.+uSeed.z))+.5*sin(p.x*.11+p.y*.08);
+  }
+  float h=1.5*sin(p.x*.041+.6+uSeed.z)*cos(p.y*.035+1.1)+.65*sin(p.x*.097+p.y*.071+2.)+.22*sin(p.x*.29-p.y*.21+uSeed.z*3.);
+  h-=.10*smoothstep(1.8,.4,abs(p.x-pathX(p.y)));
+  return h;
+}
+
+/* ---- arbres, perches, blocs de grès : une grille par famille, un objet par cellule */
+const float CA=6.0, CB=3.3, CC=8.5;
+const mat2 RA=mat2(.8776,.4794,-.4794,.8776);
+const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
+
+/* ---- objets décrits par la fiche : rien n'est prédéfini, tout est composé de formes de base.
+   uShapes, 4 texels par ligne. Lignes 0 à 7, un objet : (centre xyz, rayon englobant) (première forme, nombre, rayon dégagé, visible).
+   Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
+uniform sampler2D uShapes;
+uniform int uObjN;
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+    vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
+    if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
+  return false;
+}
+float sdCapT(vec3 p, vec3 a, vec3 b, float ra, float rb){ vec3 pa=p-a,ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-mix(ra,rb,h); }
+
+/* Paramètres d'un objet de cellule. Ne dépendent que de la cellule (et de la fiche) : le lanceur de rayons les lit pour
+   sa distance, le semeur pour poser ses grains. Rendent false quand la cellule est vide. */
+struct ArbreA { vec4 h; vec2 o; float H; float r0; vec2 lean; };
+bool arbreA(vec2 id, out ArbreA A){
+  A.h=h42(id+uSeed.xy);
+  if(A.h.x>uKitP.x) return false;
+  A.o=(A.h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+A.o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5 || cleared(w)) return false;
+  A.H=11.+6.*A.h.w;
+  A.r0=.16+.17*fract(A.h.w*7.31);
+  A.lean=(h42(id+31.7).xy-.5)*.035;
+  return true;
+}
+float rayonA(ArbreA A, float y){ return A.r0*(1.-.5*clamp(y/A.H,0.,1.))+A.r0*.45*exp(-max(y,0.)*2.5); }
+void brancheA(ArbreA A, int k, out vec3 a0, out vec3 a1, out float rb){   // branche k (0 à 2), dans le repère de la cellule
+  vec2 o=A.o; vec4 h=A.h; float H=A.H;
+  float ac=atan(-o.y,-o.x);
+  float fk=float(k);
+  float hb=H*(.42+.17*fk);
+  float a=ac+(fract(h.w*13.7+fk*.37)-.5)*2.8+fk*.5;
+  float reach=1.0+.5*fract(h.x*91.+fk*.71);
+  float rise=2.2+1.5*fract(h.y*57.+fk*.53);
+  vec2 b0=o+A.lean*hb;
+  a0=vec3(b0.x,hb,b0.y);
+  a1=a0+vec3(cos(a)*reach,rise,sin(a)*reach);
+  rb=A.r0*.34*(1.-.12*fk);
+}
+float sdTreeA(vec3 p, float th, out vec4 info){
+  vec2 q=RA*p.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
+  float dOut=.5*CA-max(abs(f.x),abs(f.y))+.3+(uMode==1?50.:0.);
+  info=vec4(0.);
+  ArbreA A;
+  if(!arbreA(id,A)) return dOut;
+  vec4 h=A.h; vec2 o=A.o; float H=A.H;
+  float y=p.y-th;
+  float yc=clamp(y,-1.,H);
+  vec2 dq=f-(o+A.lean*yc);
+  float r=rayonA(A,y);
+  float dh=length(dq)-r;
+  float dv=y-H;
+  float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
+  if(y>.38*H-1.5 && dh<3.4){
+    vec3 lp=vec3(f.x,y,f.y);
+    for(int k=0;k<3;k++){
+      vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
+      d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
+    }
+  }
+  float fol=0.;
+  if(uHoup.x>.5){                                            // conifère : un cœur de feuillage plein, visible et ombrant à toute distance ; les rameaux détaillés flottent autour
+    float tt=(y-uHoup.y)/(H+1.2-uHoup.y);
+    if(tt>-.15 && tt<1.15){
+      float Rc=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*clamp(tt,0.,1.))*(.8+.2*sin(y*4.2+h.w*30.))*.74;
+      float dc=max(length(f-o)-Rc,max(uHoup.y-y,y-(H+1.2)))*.55;
+      if(dc<d){ d=dc; fol=2.; }
+    }
+  }
+  info=vec4(dq.x,y,dq.y,h.w+fol);
+  return min(d*.9,dOut);
+}
+
+struct PercheB { vec4 h; vec2 o; float H; float r0; vec2 lean; };
+bool percheB(vec2 id, out PercheB B){
+  B.h=h42(id+uSeed.xy+71.);
+  if(B.h.x>uKitP.x*.8*uHoup.w) return false;
+  B.o=(B.h.yz-.5)*1.9;
+  vec2 w=((id+.5)*CB+B.o-17.3)*RB;
+  if(abs(w.x-pathX(w.y))<1.15 || cleared(w)) return false;
+  B.H=6.+5.*B.h.w;
+  B.r0=.035+.07*fract(B.h.w*5.3);
+  B.lean=(h42(id+3.1).xy-.5)*.06;
+  return true;
+}
+vec2 axeB(PercheB B, float yc){ return B.o+B.lean*yc+.06*sin(yc*.6+B.h.w*20.)*vec2(cos(B.h.x*40.),sin(B.h.x*40.)); }
+float rayonB(PercheB B, float y){ return B.r0*(1.-.6*clamp(y/B.H,0.,1.))+B.r0*.3*exp(-max(y,0.)*4.); }
+float sdTreeB(vec3 p, float th, out vec4 info){
+  vec2 q=RB*p.xz+17.3; vec2 id=floor(q/CB); vec2 f=q-(id+.5)*CB;
+  float dOut=.5*CB-max(abs(f.x),abs(f.y))+.22+(uMode==1?50.:0.);
+  info=vec4(0.);
+  PercheB B;
+  if(!percheB(id,B)) return dOut;
+  float y=p.y-th;
+  float H=B.H;
+  float yc=clamp(y,-1.,H);
+  vec2 dq=f-axeB(B,yc);
+  float r=rayonB(B,y);
+  float dh=length(dq)-r;
+  float dv=y-H;
+  float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
+  info=vec4(dq.x,y,dq.y,B.h.w);
+  return min(d*.85,dOut);
+}
+
+struct Bloc { vec4 h; float R; vec2 o; vec3 rad; float a; };
+bool blocGres(vec2 id, out Bloc B){
+  B.h=h42(id+uSeed.xy+13.);
+  float mask=vnoise(id*.37+uSeed.xy);
+  if(B.h.x>(smoothstep(.32,.68,mask)*.9+.08)*uKitP.y) return false;
+  float R=.7+1.6*B.h.w*B.h.w;
+  B.R=R;
+  B.o=(B.h.yz-.5)*2.*(.5*CC-.3-1.25*R);
+  vec2 w=(id+.5)*CC+B.o;
+  if(abs(w.x-pathX(w.y))<R*1.1+.5 || cleared(w)) return false;
+  B.a=B.h.x*50.;
+  vec4 h=B.h;
+  B.rad=R*vec3(1.+.25*fract(h.y*9.),.62+.3*fract(h.z*7.),.8+.3*fract(h.w*11.));
+  return true;
+}
+vec3 blocLocal(vec3 p, float th, vec2 id, Bloc B){          // repère du bloc : centré, tourné
+  vec2 f=p.xz-(id+.5)*CC;
+  vec3 lp=vec3(f.x-B.o.x,p.y-th-B.R*.22,f.y-B.o.y);
+  float ca=cos(B.a),sa=sin(B.a);
+  lp.xz=mat2(ca,sa,-sa,ca)*lp.xz;
+  return lp;
+}
+float blocForme(vec3 lp, Bloc B){                            // ellipsoïde bosselé, en mètres (avant la marge du pas)
+  vec4 h=B.h; float R=B.R; vec3 rad=B.rad;
+  float d=(length(lp/rad)-1.)*min(rad.x,min(rad.y,rad.z));
+  d+=.10*R*sin(lp.x*2.3/R+h.x*9.)*sin(lp.y*2.9/R+h.y*7.)*sin(lp.z*2.1/R+h.z*5.);
+  d+=.035*R*sin(lp.x*6.1/R)*sin(lp.y*7.3/R+1.)*sin(lp.z*5.7/R+2.);
+  return d;
+}
+float sdRock(vec3 p, float th, out vec4 info){
+  vec2 q=p.xz; vec2 id=floor(q/CC); vec2 f=q-(id+.5)*CC;
+  float dOut=.5*CC-max(abs(f.x),abs(f.y))+.3+(uMode==1?50.:0.);
+  info=vec4(0.);
+  Bloc B;
+  if(!blocGres(id,B)) return dOut;
+  vec3 lp=blocLocal(p,th,id,B);
+  float d=blocForme(lp,B);
+  info=vec4(lp,B.R);
+  return min(d*.72,dOut);
+}
+float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
+float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
+float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
+float sdPrim(vec3 q, float ty, vec3 s){
+  if(ty<.5) return sdBox(q,s);                                                   // boîte
+  if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
+  if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
+  if(ty<3.5){ float r=s.x*clamp(.5-q.y/(2.*s.y),0.,1.); return max(length(q.xz)-r,abs(q.y)-s.y)*.7; }      // cône, pointe en haut
+  if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
+  vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
+  return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+vec3 primLocal(vec3 p, int row){
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+  vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
+  q.xz=vec2(c*q.x-s*q.z,s*q.x+c*q.z);
+  if(e.w!=0.){ c=cos(e.w); s=sin(e.w); q.xy=vec2(c*q.x+s*q.y,-s*q.x+c*q.y); }
+  if(e.z!=0.){ c=cos(e.z); s=sin(e.z); q.yz=vec2(c*q.y+s*q.z,-s*q.y+c*q.z); }
+  return q;
+}
+float sdProps(vec3 p, out vec4 info){
+  float d=1e5; info=vec4(0.);
+  for(int i=0;i<8;i++){
+    if(i>=uObjN) break;
+    vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
+    if(o1.w<.5) continue;
+    float bound=length(p-o0.xyz)-o0.w;
+    if(bound>.8){ d=min(d,bound); continue; }
+    float od=1e5; float best=1e5; float brow=0.;
+    int st=int(o1.x), cn=int(o1.y);
+    for(int j=0;j<24;j++){
+      if(j>=cn) break;
+      int row=st+j;
+      vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+      float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
+      if(dd<best){ best=dd; brow=float(row); }
+      od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+    }
+    od*=.8;
+    if(od<d){ d=od; info=vec4(0.,0.,0.,brow); }
+  }
+  return d;
+}
+
+/* ---- canopée : densité, transmittance, feuilles et branches discrètes */
+float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
+  vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
+  vec4 h=h42(id+uSeed.xy);
+  if(h.x>uKitP.x) return 0.;
+  vec2 o=(h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5) return 0.;
+  float y=c.y-terrainH(w), H=11.+6.*h.w;
+  float t=(y-uHoup.y)/(H+1.2-uHoup.y);
+  if(t<0. || t>1.) return 0.;
+  float R=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*t)*(.8+.2*sin(y*4.2+h.w*30.));   // l'arbre reste dans sa cellule
+  float r=length(f-o);
+  float trou=vnoise3(c*vec3(1.7,2.6,1.7)+h.w*9.);
+  return smoothstep(R,R*.7,r)*smoothstep(.12,.4,trou)*4.*uKitP.z;
+}
+float canopyDens(vec3 c){
+  if(uHoup.x>.5) return coneDens(c);
+  float hp=smoothstep(YC0,YC0+2.5,c.y)*smoothstep(YC1,YC1-4.,c.y);
+  if(hp<=0.) return 0.;
+  float n=vnoise3(c*vec3(.21,.26,.21)+uSeed)*.7+.3*vnoise3(c*.63+7.);
+  float gap=mix(.72,1.,smoothstep(.5,5.,abs(c.x-pathX(c.z))));
+  return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
+}
+float canopyT(vec3 ro, vec3 rd){
+  if(uKitP.z<=0. || uKit!=0) return 1.;
+  float ry=abs(rd.y)<1e-4?1e-4:rd.y;
+  float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
+  float t0=max(min(ta,tb),0.), t1=max(ta,tb);
+  if(t1<=t0) return 1.;
+  t1=min(t1,t0+60.);
+  float ds=(t1-t0)/6.; float od=0.; float j=rnd();
+  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  return exp(-od*ds*SIG);
+}
+vec3 leafCol(vec3 c, float h){
+  if(uHoup.x>.5) return mix(vec3(.010,.030,.014),vec3(.034,.075,.030),h)*(.7+.6*vnoise3(c*.4+uSeed));   // aiguilles : vert sombre toute l'année
+  float sp=vnoise3(c*.09+uSeed+40.);
+  if(sp<.42) return mix(vec3(.030,.062,.018),vec3(.055,.095,.028),h);
+  vec3 ete=mix(vec3(.035,.085,.018),vec3(.075,.15,.03),h);
+  vec3 aut=sp<.70?mix(vec3(.30,.15,.035),vec3(.46,.30,.06),h):mix(vec3(.50,.36,.05),vec3(.36,.38,.07),h);
+  return mix(ete,aut,uKitP.w);
+}
+
+/* ---- ciel et brume */
+vec3 skyBase(vec3 rd){
+  float y=max(rd.y,0.);
+  vec3 c=mix(vec3(.62,.72,.86),vec3(.16,.34,.78),pow(y,.45))*2.2*uSky;
+  float s=max(dot(rd,uSunDir),0.);
+  c+=uSun*vec3(.143,.129,.109)*(.9*pow(s,6.)+3.*pow(s,48.));
+  return c;
+}
+vec3 skyCol(vec3 rd){
+  float s=max(dot(rd,uSunDir),0.);
+  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+}
+/* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
+   Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
+uniform vec4 uLoin;          // hauteur du massif (tangente de l'angle), découpe des crêtes, altitude de la neige (0 à 1, au-delà : aucune), présence
+uniform vec3 uLoinCol;       // roche
+uniform vec3 uLoinBas;       // contreforts
+float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
+  vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
+  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  return s;
+}
+vec3 lointain(vec3 rd, vec3 c){
+  float az=atan(rd.x,rd.z), el=rd.y/max(length(rd.xz),1e-4);
+  if(el>uLoin.x*1.25) return c;
+  vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
+  float sa=atan(uSunDir.x,uSunDir.z);
+  for(int k=0;k<2;k++){
+    float fk=float(k), H=uLoin.x*(k==0?1.:.34);
+    float cr=H*(.42+1.15*loinCrete(az,fk));
+    float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
+    float lit=clamp(.45+.9*d*sin(sa-az)+.35*cos(sa-az),.03,1.);
+    float alt=el/max(uLoin.x,1e-4);
+    float plis=.6*vnoise(vec2(az*uLoin.y*9.+alt*7.+fk*9.,alt*9.-az*5.))+.4*vnoise(vec2(az*uLoin.y*30.-alt*16.,alt*26.+fk*3.));                            // couloirs et arêtes dans la face
+    vec3 alb=k==0?uLoinCol*(.7+.6*plis):uLoinBas*(.75+.5*plis);
+    if(k==0) alb=mix(alb,vec3(.86,.88,.92),smoothstep(uLoin.z-.05,uLoin.z+.05,alt+.5*(plis-.5)+.25*(cr/H-.7)));   // la neige tient sur les hauts, la roche perce dans les faces
+    vec3 col=alb*(uSun*lit*(.30+.15*plis)+vec3(.42,.52,.72)*uSky*.42);
+    col=mix(col,air,(k==0?.30:.14)*(1.-.5*smoothstep(0.,.8,alt)));   // le voile de l'air s'accroche au pied, les sommets en sortent
+    c=mix(c,col,smoothstep(cr+.004,cr-.004,el));
+  }
+  return c;
+}
+vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+
+/* ---- éclairage */
+vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
+  return normalize(uSunDir+(t*cos(a)+b*sin(a))*r); }
+vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*u,0.)); return normalize(n+vec3(s*cos(a),s*sin(a),u)*.999); }
+
+#define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
+
+vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
+  if(dot(n,rd)>0.) n=-n;
+  vec3 sd=sunSample();
+  float T=canopyT(p+sd*.3,sd);
+  float ndl=dot(n,sd);
+  vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
+  vec3 h=normalize(sd-rd);
+  col+=SUN*T*max(ndl,0.)*.3*pow(max(dot(n,h),0.),40.);
+  float hg=clamp((p.y-YC0)/(YC1-YC0),0.,1.);
+  vec3 ambUp=vec3(.45,.55,.70)*mix(.25,1.3,hg*hg)*uSky;
+  vec3 ambDn=vec3(.13,.11,.07)*uSky;
+  if(uTorch>0.){
+    vec3 L=uCamPos-p; float d2=dot(L,L); L/=sqrt(d2);
+    float cs=dot(-L,uCam[2]);
+    col+=alb*uTorch*smoothstep(.50,.90,cs)*(.30+.70*smoothstep(.90,.985,cs))*(.25+.75*abs(dot(n,L)))/(d2+.3);
+  }
+  col+=alb*mix(ambDn,ambUp,n.y*.5+.5);
+  col+=alb*vec3(1.2,1.1,.6)*ambUp*.35*max(-n.y,0.);
+  return col;
+}
+// Moteur v3 (essai) : ce que partagent les deux programmes qui remplissent le tampon G (sol en maillage, grains).
+// Inséré après monde.glsl. Même fisheye équidistant que pathtrace.frag ; profondeur linéaire (distance / 400).
+uniform vec2  uJit;          // décalage sous-pixel de l'image (en unités de l'écran), pour l'accumulation à l'arrêt
+out vec3 vQ;                 // coordonnées de la recette (repère local de l'objet, ou monde), ou couleur d'une feuille
+out vec3 vN;                 // normale, monde
+flat out float vCode;        // élément (partie entière) et paramètre (partie fractionnaire × 2)
+out float vDist;             // distance à la caméra
+out vec3 vDx;                // variation des coordonnées de recette par pixel, en x et en y de l'écran (grains seulement)
+out vec3 vDy;
+out vec2 vDd;                // variation de la distance par pixel
+out float vSz;               // côté du grain, en pixels
+const float DMAX=400.;
+// Projette P ; rend false s'il est derrière ou trop loin du champ. ang : angle à l'axe de visée.
+bool projette(vec3 P, float marge, out vec4 pos, out float dist, out float ang){
+  vec3 d=P-uCamPos; dist=length(d);
+  pos=vec4(0.,0.,2.,1.);
+  if(dist<.05) return false;
+  vec3 dl=(d/dist)*uCam;
+  ang=acos(clamp(dl.z,-1.,1.));
+  if(ang>marge) return false;
+  float sxy=length(dl.xy);
+  vec2 puv=(sxy>1e-6?dl.xy/sxy:vec2(0.))*(ang/uFish);
+  pos=vec4(puv*2.*uRes.y/uRes+uJit,clamp(dist/DMAX,0.,1.)*2.-1.,1.);
+  return true;
+}
+void sansGrain(){ vQ=vec3(0.); vN=vec3(0.,1.,0.); vCode=-1.; vDist=0.; vDx=vec3(0.); vDy=vec3(0.); vDd=vec2(0.); vSz=0.; }
+uniform uint  uFrame;        // graine de l'image : les grains sont re-tirés à chaque image
+uniform int   uVue;          // 0 caméra (tampon G), 1 soleil (carte d'ombres)
+uniform ivec4 uPart;         // fin des tranches : arbres, perches, blocs, feuilles ; puis objets jusqu'à uTotal
+uniform int   uTotal;
+uniform vec4  uAz;           // cap du regard, demi-ouverture du cap au loin, distance mini, ln(dmax / dmin)
+uniform float uAzPres;       // demi-ouverture du cap tout près (tout le tour quand on regarde ses pieds)
+float demiCap(float d){ return mix(uAz.y,uAzPres,clamp(2.5/d,0.,1.)); }
+uniform vec3  uZone;         // vue du soleil : centre (xz) et rayon du disque semé (uniformément : la carte a des texels égaux)
+uniform vec4  uNb;           // grains des tranches : arbres, perches, blocs, feuilles
+uniform float uK;            // recouvrement visé (côté du grain = uK × l'écart moyen entre grains)
+uniform float uMaxPt;
+uniform vec2  uFeuil;        // feuilles : profondeur de tranche au plus, pixels de l'écran
+uniform vec3  uSoleilC;      // carte d'ombres : centre, base (droite, haut, vers le soleil), demi-largeur et profondeur
+uniform mat3  uSoleilM;
+uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
+uniform vec3  uSd;           // direction du soleil de cette image
+uniform int   uTrait;        // vue du soleil : 1 = les perches sont semées en traits (deux sommets par grain, gl.LINES)
+uniform sampler2D uSemis;    // objets de la fiche : lignes 0-7 (poids cumulé, grains), lignes 8+ (aire cumulée dans l'objet, aire)
+
+uint hu(uint x){ x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u; return (x>>22u)^x; }
+
+struct Grain { vec3 P; vec3 N; vec3 q; float code; mat2 rot; float s; };   // s : côté du grain, en mètres
+// Sur un cylindre de rayon r, le côté du grain ne dépasse pas le diamètre et le grain reste dans la silhouette :
+// un tronc fin n'est pas épaissi, il est seulement moins couvert à chaque image (l'accumulation en fait un trait fin).
+float cote(float aire, float n){ return uK*sqrt(aire/max(n,1e-6)); }
+float angleVu(float s, float r){ return asin((2.*rnd()-1.)*clamp(1.-s/(2.*r),0.,1.)); }
+
+vec2 tireSol(out float dh){                                  // un point du sol, selon la vue
+  if(uVue==0){ dh=uAz.z*exp(rnd()*uAz.w); float c=uAz.x+(2.*rnd()-1.)*demiCap(dh); return uCamPos.xz+dh*vec2(sin(c),cos(c)); }
+  float c=6.2831853*rnd(); dh=uZone.z*sqrt(rnd()); return uZone.xy+dh*vec2(sin(c),cos(c));
+}
+float parM2(vec2 c, float N){                                // grains attendus par m² de sol au point c
+  if(uVue==0){ float d=max(distance(c,uCamPos.xz),uAz.z); return N/(d*d*2.*demiCap(d)*uAz.w); }
+  return N/(3.1415927*uZone.z*uZone.z);
+}
+vec3 versVue(vec3 P){ return uVue==0?uCamPos-P:uSd; }       // direction du spectateur (caméra ou soleil)
+
+/* ---- arbres (sdTreeA) : tronc et trois branches */
+bool semeA(out Grain g){
+  float dh; vec2 xz=tireSol(dh);
+  vec2 id=floor((RA*xz)/CA);
+  ArbreA A; if(!arbreA(id,A)) return false;
+  vec2 c=(id+.5)*CA;
+  vec2 pied=(c+A.o)*RA; float th0=terrainH(pied);
+  vec3 vv=versVue(vec3(pied.x,th0+1.5,pied.y));
+  vec2 vc=RA*vv.xz; vec3 vl=vec3(vc.x,vv.y,vc.y);            // direction du spectateur, repère de la cellule
+  float aT=2.*A.r0*.85*(A.H+.3);
+  vec4 aB=vec4(0.);
+  for(int k=0;k<3;k++){ vec3 a0,a1; float rb; brancheA(A,k,a0,a1,rb); aB[k]=2.*rb*.67*length(a1-a0); }
+  float u=rnd()*(aT+aB.x+aB.y+aB.z);
+  float s=cote(aT+aB.x+aB.y+aB.z,parM2(pied,uNb.x)*CA*CA);
+  vec3 lp, nl;                                               // repère de la cellule (f.x, y, f.y)
+  if(u<aT){
+    float y=mix(-.3,A.H,rnd()), yc=clamp(y,-1.,A.H);
+    vec2 ax=A.o+A.lean*yc; float r=rayonA(A,y);
+    vec2 to=uVue==0?vl.xz-(ax-A.o):vl.xz;
+    float ph=atan(to.y,to.x)+angleVu(s,r); s=min(s,2.*r);
+    vec2 e=vec2(cos(ph),sin(ph));
+    lp=vec3(ax.x+r*e.x,y,ax.y+r*e.y); nl=vec3(e.x,0.,e.y);
+  } else {
+    u-=aT; int k=u<aB.x?0:u<aB.x+aB.y?1:2;
+    vec3 a0,a1; float rb; brancheA(A,k,a0,a1,rb);
+    float t=rnd(); vec3 cc=mix(a0,a1,t); float rr=mix(rb,rb*.35,t);
+    vec3 ax=normalize(a1-a0), e1=normalize(cross(ax,abs(ax.y)>.95?vec3(1.,0.,0.):vec3(0.,1.,0.))), e2=cross(ax,e1);
+    vec3 to=uVue==0?vl-(cc-vec3(A.o.x,1.5,A.o.y)):vl; to-=ax*dot(to,ax);
+    float ph=atan(dot(to,e2),dot(to,e1))+angleVu(s,rr); s=min(s,2.*rr);
+    nl=cos(ph)*e1+sin(ph)*e2; lp=cc+rr*nl;
+  }
+  vec2 w=(c+lp.xz)*RA;
+  g.P=vec3(w.x,terrainH(w)+lp.y,w.y);
+  vec2 nw=nl.xz*RA; g.N=normalize(vec3(nw.x,nl.y,nw.y));
+  float yc=clamp(lp.y,-1.,A.H); vec2 dq=lp.xz-(A.o+A.lean*yc);
+  g.q=vec3(dq.x,lp.y,dq.y); g.code=1.+.5*A.h.w; g.rot=RA;
+  g.s=s;
+  return true;
+}
+
+/* ---- perches (sdTreeB) */
+bool semeB(out Grain g){
+  float dh; vec2 xz=tireSol(dh);
+  vec2 id=floor((RB*xz+17.3)/CB);
+  PercheB B; if(!percheB(id,B)) return false;
+  vec2 c=(id+.5)*CB;
+  vec2 pied=(c+B.o-17.3)*RB;
+  vec3 vv=versVue(vec3(pied.x,terrainH(pied)+1.5,pied.y));
+  vec2 vc=RB*vv.xz;
+  float y=mix(-.3,B.H,rnd()), yc=clamp(y,-1.,B.H);
+  vec2 ax=axeB(B,yc); float r=rayonB(B,y);
+  vec2 to=uVue==0?vc-(ax-B.o):vc;
+  float sB=cote(2.*B.r0*.8*(B.H+.3),parM2(pied,uNb.y)*CB*CB);
+  float ph=atan(to.y,to.x)+angleVu(sB,r);
+  vec2 e=vec2(cos(ph),sin(ph));
+  vec2 f=ax+r*e;
+  vec2 w=(c+f-17.3)*RB;
+  g.P=vec3(w.x,terrainH(w)+y,w.y);
+  vec2 nw=e*RB; g.N=vec3(nw.x,0.,nw.y);
+  g.q=vec3(r*e.x,y,r*e.y); g.code=2.+.5*B.h.w; g.rot=RB;
+  g.s=min(sB,2.*r);
+  return true;
+}
+
+/* Vue du soleil : une perche ne fait souvent qu'un ou deux texels de large. Un grain carré l'épaissit ou la troue ;
+   un trait d'un texel suit son axe. La perche est couverte environ deux fois et demie par des traits tirés au hasard. */
+bool semeBTrait(int bout, out vec3 P){
+  float dh; vec2 xz=tireSol(dh);
+  vec2 id=floor((RB*xz+17.3)/CB);
+  PercheB B; if(!percheB(id,B)) return false;
+  vec2 c=(id+.5)*CB, pied=(c+B.o-17.3)*RB;
+  float m=parM2(pied,uNb.y)*CB*CB;
+  float L=(B.H+.3)*clamp(2.5/max(m,1e-3),.2,1.);
+  float y0=mix(-.3,B.H-L,rnd()), y=bout==0?y0:y0+L;
+  vec2 w=(c+axeB(B,clamp(y,-1.,B.H))-17.3)*RB;
+  P=vec3(w.x,terrainH(w)+y,w.y);
+  return true;
+}
+
+/* ---- blocs de grès (sdRock) : grain posé sur l'ellipsoïde, puis ramené sur la forme bosselée (deux pas de Newton) */
+float formeBloc(vec3 P, vec2 id, Bloc B){ return blocForme(blocLocal(P,terrainH(P.xz),id,B),B); }
+vec3 gradBloc(vec3 P, vec2 id, Bloc B){
+  const float e=.01; const vec2 k=vec2(1.,-1.);
+  return (k.xyy*formeBloc(P+k.xyy*e,id,B)+k.yyx*formeBloc(P+k.yyx*e,id,B)+k.yxy*formeBloc(P+k.yxy*e,id,B)+k.xxx*formeBloc(P+k.xxx*e,id,B))/(4.*e);
+}
+bool semeR(out Grain g){
+  float dh; vec2 xz=tireSol(dh);
+  vec2 id=floor(xz/CC);
+  Bloc B; if(!blocGres(id,B)) return false;
+  vec2 cw=(id+.5)*CC+B.o;
+  float ca=cos(B.a), sa=sin(B.a); mat2 M=mat2(ca,sa,-sa,ca);
+  vec3 vv=versVue(vec3(cw.x,terrainH(cw)+B.R*.22,cw.y));
+  vec2 vc=M*vv.xz; vec3 vl=vec3(vc.x,vv.y,vc.y);
+  float z=2.*rnd()-1., a=6.2831853*rnd(), s=sqrt(max(1.-z*z,0.));
+  vec3 u=vec3(s*cos(a),z,s*sin(a));
+  if(dot(u/B.rad,vl)<0.) u=-u;
+  vec3 lp=B.rad*u;
+  vec2 w=cw+lp.xz*M;
+  vec3 P=vec3(w.x,terrainH(w)+B.R*.22+lp.y,w.y);
+  vec3 gr=vec3(0.,1.,0.);
+  for(int i=0;i<2;i++){ gr=gradBloc(P,id,B); P-=gr*formeBloc(P,id,B)/max(dot(gr,gr),1e-4); }
+  g.P=P; g.N=normalize(gr);
+  g.q=blocLocal(P,terrainH(P.xz),id,B); g.code=3.; g.rot=M;
+  g.s=cote(3.1416*max(B.rad.x,B.rad.z)*B.rad.y,parM2(cw,uNb.z)*CC*CC);
+  return true;
+}
+
+/* ---- objets de la fiche (sdProps) : objet tiré selon son poids (calculé par la page), forme selon son aire,
+   grain posé sur la boîte englobante de la forme puis ramené sur elle (trois pas de Newton sur sdPrim).
+   Les fusions douces (« lisse ») ne sont pas suivies. */
+vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de primLocal
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+  float c, s;
+  if(e.z!=0.){ c=cos(e.z); s=sin(e.z); q.yz=vec2(c*q.y-s*q.z,s*q.y+c*q.z); }
+  if(e.w!=0.){ c=cos(e.w); s=sin(e.w); q.xy=vec2(c*q.x-s*q.y,s*q.x+c*q.y); }
+  c=cos(b.w); s=sin(b.w); q.xz=vec2(c*q.x+s*q.z,-s*q.x+c*q.z);
+  return dir?q:q+a.xyz;
+}
+bool semeP(out Grain g){
+  float u=rnd(); int oi=-1; float nO=0.;
+  for(int i=0;i<8;i++){ if(i>=uObjN) break; vec4 s=texelFetch(uSemis,ivec2(0,i),0); if(u<=s.x && s.y>0.){ oi=i; nO=s.y; break; } }
+  if(oi<0) return false;
+  vec4 o1=texelFetch(uShapes,ivec2(1,oi),0);
+  int st=int(o1.x), cn=int(o1.y), row=st; float v=rnd(), aire=1.;
+  for(int j=0;j<24;j++){ if(j>=cn) break; vec4 s=texelFetch(uSemis,ivec2(0,st+j),0); row=st+j; aire=s.y; if(v<=s.x) break; }
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+  float z=2.*rnd()-1., ag=6.2831853*rnd(), s=sqrt(max(1.-z*z,0.));
+  vec3 d=vec3(s*cos(ag),z,s*sin(ag));
+  vec3 vw=versVue(a.xyz);
+  vec3 q=d*(b.xyz+e.y);
+  const vec2 k=vec2(1.,-1.); const float ee=.005;
+  vec3 gr=d;
+  for(int pass=0;pass<2;pass++){
+    vec3 bb=b.xyz+e.y, ad=max(abs(d),vec3(1e-4));
+    q=d*min(bb.x/ad.x,min(bb.y/ad.y,bb.z/ad.z));             // départ sur la boîte englobante (coins compris), puis Newton sur la forme
+    for(int i=0;i<3;i++){
+      gr=(k.xyy*sdPrim(q+k.xyy*ee,a.w,b.xyz)+k.yyx*sdPrim(q+k.yyx*ee,a.w,b.xyz)+k.yxy*sdPrim(q+k.yxy*ee,a.w,b.xyz)+k.xxx*sdPrim(q+k.xxx*ee,a.w,b.xyz))/(4.*ee);
+      q-=gr*(sdPrim(q,a.w,b.xyz)-e.y)/max(dot(gr,gr),1e-4);
+    }
+    if(dot(primMonde(gr,row,true),vw)>=0.) break;
+    d=-d;                                                    // face cachée : on retente de l'autre côté
+  }
+  g.P=primMonde(q,row,false); g.N=normalize(primMonde(gr,row,true));
+  g.q=g.P; g.code=4.+.5*(float(row)/128.); g.rot=mat2(1.);
+  g.s=cote(aire*.5,nO*aire);    // nO : grains attendus par m² de surface de l'objet ; ils tombent tous sur la moitié tournée vers la vue
+  return true;
+}
+
+/* ---- feuilles (vue de la caméra seulement : la canopée ombre par sa transmittance statistique, canopyT).
+   Le grain tire une direction de l'écran et une distance dans la tranche de canopée, puis prend la feuille de la cellule
+   de 30 cm où il tombe : mêmes cellules, mêmes tirages que les feuilles du lanceur de rayons (foliage). Une feuille proche
+   est touchée à presque chaque image et dessinée à sa taille ; une feuille lointaine l'est rarement, et elle est alors
+   agrandie (jusqu'à 1,8 fois, 5 pixels au plus) pour compenser en partie. */
+bool semeF(out vec4 pos, out float taille){
+  vec2 uv=(vec2(rnd(),rnd())-.5)*vec2(uRes.x/uRes.y,1.);
+  float rr=length(uv), ang=rr*uFish;
+  vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
+  float ry=abs(rd.y)<1e-4?1e-4:rd.y;
+  float ta=(YC0-uCamPos.y)/ry, tb=(YC1-uCamPos.y)/ry;
+  float t0=max(min(ta,tb),0.), t1=min(min(max(ta,tb),150.),t0+uFeuil.x);
+  if(t1<=t0) return false;
+  t0=max(t0,2.);
+  if(t1<=t0) return false;
+  float lr=log(t1/t0), t;                                    // distance en progression géométrique : les feuilles proches d'abord
+  vec3 cell, hc; bool ok=false;
+  for(int k=0;k<3;k++){                                      // trois essais : la plupart des cellules sont vides
+    t=t0*exp(rnd()*lr);
+    cell=floor((uCamPos+rd*t)/CS);
+    hc=h33(cell+uSeed);
+    if(hc.x<canopyDens((cell+.5)*CS)*LEAFP){ ok=true; break; }
+  }
+  if(!ok) return false;
+  vec3 r2=h33(cell+19.19);
+  vec3 c=(cell+.3+.4*r2)*CS;
+  float la=(.05+.05*hc.y)*(uHoup.x>.5?3.2:1.);
+  float dist, a2;
+  if(!projette(c,1.62,pos,dist,a2)) return false;
+  float ppr=uRes.y/uFish;
+  float e=3.*uNb.w*pow(CS*ppr/t,2.)/uFeuil.y*CS/(t*lr);         // grains attendus dans cette cellule à chaque image (environ)
+  float p=1.-exp(-e);
+  // agrandissement borné : au-delà, une feuille rare deviendrait un carré visible en marche ; le feuillage lointain
+  // est alors un peu plus clair que celui du lanceur de rayons (non corrigé)
+  taille=min(1.5*la/dist*ppr*min(1./sqrt(max(p,1e-4)),1.8),5.);
+  vQ=leafCol(c,hc.z); vN=normalize(r2.zxy*2.-1.+vec3(0.,.6,0.)); vCode=5.; vDist=dist;
+  return true;
+}
+
+void main(){
+  rs=hu(uint(gl_VertexID)^hu(uFrame)); rnd();
+  gl_Position=vec4(0.,0.,2.,1.); gl_PointSize=1.;
+  sansGrain();
+  int i=gl_VertexID;
+  if(uTrait==1){                                             // perches vues du soleil, en traits
+    rs=hu(uint(i>>1)^hu(uFrame)); rnd();
+    vec3 P; if(!semeBTrait(i&1,P)) return;
+    vec3 l=(P-uSoleilC)*uSoleilM;
+    gl_Position=vec4(l.xy/uSoleilE.xy,clamp(-l.z/uSoleilE.z,-1.,1.),1.);
+    return;
+  }
+  if(i>=uTotal) return;
+  if(i>=uPart.z && i<uPart.w){
+    vec4 pos; float t;
+    if(uVue!=0 || !semeF(pos,t)) return;
+    if(t<1.){ if(rnd()>t*t) return; t=1.; }
+    gl_Position=pos; gl_PointSize=min(t,uMaxPt); vSz=gl_PointSize;
+    return;
+  }
+  Grain g; bool ok;
+  if(i<uPart.x) ok=semeA(g);
+  else if(i<uPart.y) ok=semeB(g);
+  else if(i<uPart.z) ok=semeR(g);
+  else ok=semeP(g);
+  if(!ok) return;
+  float s=g.s;
+  if(uVue==1){                                               // carte d'ombres : projection orthographique
+    vec3 l=(g.P-uSoleilC)*uSoleilM;
+    float t=s/uSoleilE.w;
+    if(t<1.){ if(rnd()>t*t) return; t=1.; }
+    gl_Position=vec4(l.xy/uSoleilE.xy,clamp(-l.z/uSoleilE.z,-1.,1.),1.);
+    gl_PointSize=min(t,uMaxPt);
+    return;
+  }
+  vec4 pos; float dist, ang;
+  if(!projette(g.P,1.62,pos,dist,ang)) return;
+  vec3 dv=(g.P-uCamPos)/dist;
+  if(dot(g.N,dv)>.2) return;                                 // face tournée vers l'arrière
+  float ppr=uRes.y/uFish;                                    // pixels par radian
+  float t=s/dist*ppr*max(1.,ang/max(sin(ang),.05));
+  if(t<1.){ if(rnd()>t*t) return; t=1.; }
+  t=min(t,uMaxPt);
+  gl_Position=pos; gl_PointSize=t;
+  // variation des coordonnées de recette d'un pixel à l'autre du grain : déplacement dans le plan tangent, ramené le long du regard
+  float den=dot(dv,g.N); den=sign(den)*max(abs(den),.25); if(den==0.) den=-.25;
+  float m=dist/ppr;
+  vec3 ex=uCam[0]*m, ey=uCam[1]*m;
+  ex-=dv*dot(ex,g.N)/den; ey-=dv*dot(ey,g.N)/den;
+  vec2 rx=g.rot*ex.xz, ry=g.rot*ey.xz;
+  vQ=g.q; vN=g.N; vCode=g.code; vDist=dist; vSz=t;
+  vDx=vec3(rx.x,ex.y,rx.y); vDy=vec3(ry.x,ey.y,ry.y); vDd=vec2(dot(ex,dv),dot(ey,dv));
+}`, VS_V3SOL = `#version 300 es
+// Moteur v3 (essai) : le sol, un maillage polaire centré sur la caméra qui suit terrainH. Anneaux de plus en plus
+// espacés (pas logarithmique) : dense près de la caméra, sans trou. Aucun tampon de sommets : gl_VertexID suffit.
+precision highp float; precision highp int; precision highp sampler2D;
+// Le monde, partagé par le lanceur de rayons (pathtrace.frag) et le semeur (moteur v3, v3_*.vert / v3_ombrage.frag).
+// Inséré par le build (#include) : chaque fichier qui l'inclut déclare d'abord sa version et ses précisions.
+// Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
+// Les paramètres d'un objet (arbreA, percheB, blocGres) sont calculés en un seul endroit : le lanceur de rayons
+// s'en sert pour sa distance, le semeur pour poser ses grains au même endroit.
+uniform vec2  uRes;
+uniform vec3  uCamPos;
+uniform mat3  uCam;
+uniform float uFish;
+uniform float uFog;
+uniform vec3  uSeed;
+uniform vec3  uSunDir;
+uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
+uniform vec3  uSky;        // teinte et niveau du ciel
+uniform float uTorch;      // lampe du téléphone, 0 = éteinte
+uniform int   uKit;        // 0 forêt, 1 dunes
+uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
+uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
+uniform vec2  uCan;        // tranche du feuillage : bas, haut
+uniform vec4  uHoup;       // houppier : forme (0 voûte commune, 1 cône par arbre), bas du cône, rayon au pied, part de perches
+#define YC0 uCan.x
+#define YC1 uCan.y
+const float CS=0.30;                // cellule de feuille
+const float CBR=1.5;                // cellule de branche
+const float SIG=0.16;               // extinction de la canopée
+const float LEAFP=0.62;
+#define SUN uSun
+
+/* ---- aléa */
+uint rs;
+float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
+
+float h21(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+vec2  h22(vec2 p){ vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973)); p3+=dot(p3,p3.yzx+33.33); return fract((p3.xx+p3.yz)*p3.zy); }
+vec4  h42(vec2 p){ vec4 p4=fract(vec4(p.xyxy)*vec4(.1031,.1030,.0973,.1099)); p4+=dot(p4,p4.wzxy+33.33); return fract((p4.xxyz+p4.yzzw)*p4.zywx); }
+float h31(vec3 p){ p=fract(p*.1031); p+=dot(p,p.zyx+31.32); return fract((p.x+p.y)*p.z); }
+vec3  h33(vec3 p){ p=fract(p*vec3(.1031,.1030,.0973)); p+=dot(p,p.yxz+33.33); return fract((p.xxy+p.yxx)*p.zyx); }
+
+float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y); }
+float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
+float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+    if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
+  return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
+
+/* ---- terrain et sentier */
+float pathX(float z){ return 3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.); }
+float terrainH(vec2 p){
+  if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
+    float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
+    return 3.2*(1.-abs(sin(a)))*(.62+.38*sin(p.y*.03+2.+uSeed.z))+.5*sin(p.x*.11+p.y*.08);
+  }
+  float h=1.5*sin(p.x*.041+.6+uSeed.z)*cos(p.y*.035+1.1)+.65*sin(p.x*.097+p.y*.071+2.)+.22*sin(p.x*.29-p.y*.21+uSeed.z*3.);
+  h-=.10*smoothstep(1.8,.4,abs(p.x-pathX(p.y)));
+  return h;
+}
+
+/* ---- arbres, perches, blocs de grès : une grille par famille, un objet par cellule */
+const float CA=6.0, CB=3.3, CC=8.5;
+const mat2 RA=mat2(.8776,.4794,-.4794,.8776);
+const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
+
+/* ---- objets décrits par la fiche : rien n'est prédéfini, tout est composé de formes de base.
+   uShapes, 4 texels par ligne. Lignes 0 à 7, un objet : (centre xyz, rayon englobant) (première forme, nombre, rayon dégagé, visible).
+   Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
+uniform sampler2D uShapes;
+uniform int uObjN;
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+    vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
+    if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
+  return false;
+}
+float sdCapT(vec3 p, vec3 a, vec3 b, float ra, float rb){ vec3 pa=p-a,ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-mix(ra,rb,h); }
+
+/* Paramètres d'un objet de cellule. Ne dépendent que de la cellule (et de la fiche) : le lanceur de rayons les lit pour
+   sa distance, le semeur pour poser ses grains. Rendent false quand la cellule est vide. */
+struct ArbreA { vec4 h; vec2 o; float H; float r0; vec2 lean; };
+bool arbreA(vec2 id, out ArbreA A){
+  A.h=h42(id+uSeed.xy);
+  if(A.h.x>uKitP.x) return false;
+  A.o=(A.h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+A.o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5 || cleared(w)) return false;
+  A.H=11.+6.*A.h.w;
+  A.r0=.16+.17*fract(A.h.w*7.31);
+  A.lean=(h42(id+31.7).xy-.5)*.035;
+  return true;
+}
+float rayonA(ArbreA A, float y){ return A.r0*(1.-.5*clamp(y/A.H,0.,1.))+A.r0*.45*exp(-max(y,0.)*2.5); }
+void brancheA(ArbreA A, int k, out vec3 a0, out vec3 a1, out float rb){   // branche k (0 à 2), dans le repère de la cellule
+  vec2 o=A.o; vec4 h=A.h; float H=A.H;
+  float ac=atan(-o.y,-o.x);
+  float fk=float(k);
+  float hb=H*(.42+.17*fk);
+  float a=ac+(fract(h.w*13.7+fk*.37)-.5)*2.8+fk*.5;
+  float reach=1.0+.5*fract(h.x*91.+fk*.71);
+  float rise=2.2+1.5*fract(h.y*57.+fk*.53);
+  vec2 b0=o+A.lean*hb;
+  a0=vec3(b0.x,hb,b0.y);
+  a1=a0+vec3(cos(a)*reach,rise,sin(a)*reach);
+  rb=A.r0*.34*(1.-.12*fk);
+}
+float sdTreeA(vec3 p, float th, out vec4 info){
+  vec2 q=RA*p.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
+  float dOut=.5*CA-max(abs(f.x),abs(f.y))+.3+(uMode==1?50.:0.);
+  info=vec4(0.);
+  ArbreA A;
+  if(!arbreA(id,A)) return dOut;
+  vec4 h=A.h; vec2 o=A.o; float H=A.H;
+  float y=p.y-th;
+  float yc=clamp(y,-1.,H);
+  vec2 dq=f-(o+A.lean*yc);
+  float r=rayonA(A,y);
+  float dh=length(dq)-r;
+  float dv=y-H;
+  float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
+  if(y>.38*H-1.5 && dh<3.4){
+    vec3 lp=vec3(f.x,y,f.y);
+    for(int k=0;k<3;k++){
+      vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
+      d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
+    }
+  }
+  float fol=0.;
+  if(uHoup.x>.5){                                            // conifère : un cœur de feuillage plein, visible et ombrant à toute distance ; les rameaux détaillés flottent autour
+    float tt=(y-uHoup.y)/(H+1.2-uHoup.y);
+    if(tt>-.15 && tt<1.15){
+      float Rc=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*clamp(tt,0.,1.))*(.8+.2*sin(y*4.2+h.w*30.))*.74;
+      float dc=max(length(f-o)-Rc,max(uHoup.y-y,y-(H+1.2)))*.55;
+      if(dc<d){ d=dc; fol=2.; }
+    }
+  }
+  info=vec4(dq.x,y,dq.y,h.w+fol);
+  return min(d*.9,dOut);
+}
+
+struct PercheB { vec4 h; vec2 o; float H; float r0; vec2 lean; };
+bool percheB(vec2 id, out PercheB B){
+  B.h=h42(id+uSeed.xy+71.);
+  if(B.h.x>uKitP.x*.8*uHoup.w) return false;
+  B.o=(B.h.yz-.5)*1.9;
+  vec2 w=((id+.5)*CB+B.o-17.3)*RB;
+  if(abs(w.x-pathX(w.y))<1.15 || cleared(w)) return false;
+  B.H=6.+5.*B.h.w;
+  B.r0=.035+.07*fract(B.h.w*5.3);
+  B.lean=(h42(id+3.1).xy-.5)*.06;
+  return true;
+}
+vec2 axeB(PercheB B, float yc){ return B.o+B.lean*yc+.06*sin(yc*.6+B.h.w*20.)*vec2(cos(B.h.x*40.),sin(B.h.x*40.)); }
+float rayonB(PercheB B, float y){ return B.r0*(1.-.6*clamp(y/B.H,0.,1.))+B.r0*.3*exp(-max(y,0.)*4.); }
+float sdTreeB(vec3 p, float th, out vec4 info){
+  vec2 q=RB*p.xz+17.3; vec2 id=floor(q/CB); vec2 f=q-(id+.5)*CB;
+  float dOut=.5*CB-max(abs(f.x),abs(f.y))+.22+(uMode==1?50.:0.);
+  info=vec4(0.);
+  PercheB B;
+  if(!percheB(id,B)) return dOut;
+  float y=p.y-th;
+  float H=B.H;
+  float yc=clamp(y,-1.,H);
+  vec2 dq=f-axeB(B,yc);
+  float r=rayonB(B,y);
+  float dh=length(dq)-r;
+  float dv=y-H;
+  float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
+  info=vec4(dq.x,y,dq.y,B.h.w);
+  return min(d*.85,dOut);
+}
+
+struct Bloc { vec4 h; float R; vec2 o; vec3 rad; float a; };
+bool blocGres(vec2 id, out Bloc B){
+  B.h=h42(id+uSeed.xy+13.);
+  float mask=vnoise(id*.37+uSeed.xy);
+  if(B.h.x>(smoothstep(.32,.68,mask)*.9+.08)*uKitP.y) return false;
+  float R=.7+1.6*B.h.w*B.h.w;
+  B.R=R;
+  B.o=(B.h.yz-.5)*2.*(.5*CC-.3-1.25*R);
+  vec2 w=(id+.5)*CC+B.o;
+  if(abs(w.x-pathX(w.y))<R*1.1+.5 || cleared(w)) return false;
+  B.a=B.h.x*50.;
+  vec4 h=B.h;
+  B.rad=R*vec3(1.+.25*fract(h.y*9.),.62+.3*fract(h.z*7.),.8+.3*fract(h.w*11.));
+  return true;
+}
+vec3 blocLocal(vec3 p, float th, vec2 id, Bloc B){          // repère du bloc : centré, tourné
+  vec2 f=p.xz-(id+.5)*CC;
+  vec3 lp=vec3(f.x-B.o.x,p.y-th-B.R*.22,f.y-B.o.y);
+  float ca=cos(B.a),sa=sin(B.a);
+  lp.xz=mat2(ca,sa,-sa,ca)*lp.xz;
+  return lp;
+}
+float blocForme(vec3 lp, Bloc B){                            // ellipsoïde bosselé, en mètres (avant la marge du pas)
+  vec4 h=B.h; float R=B.R; vec3 rad=B.rad;
+  float d=(length(lp/rad)-1.)*min(rad.x,min(rad.y,rad.z));
+  d+=.10*R*sin(lp.x*2.3/R+h.x*9.)*sin(lp.y*2.9/R+h.y*7.)*sin(lp.z*2.1/R+h.z*5.);
+  d+=.035*R*sin(lp.x*6.1/R)*sin(lp.y*7.3/R+1.)*sin(lp.z*5.7/R+2.);
+  return d;
+}
+float sdRock(vec3 p, float th, out vec4 info){
+  vec2 q=p.xz; vec2 id=floor(q/CC); vec2 f=q-(id+.5)*CC;
+  float dOut=.5*CC-max(abs(f.x),abs(f.y))+.3+(uMode==1?50.:0.);
+  info=vec4(0.);
+  Bloc B;
+  if(!blocGres(id,B)) return dOut;
+  vec3 lp=blocLocal(p,th,id,B);
+  float d=blocForme(lp,B);
+  info=vec4(lp,B.R);
+  return min(d*.72,dOut);
+}
+float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
+float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
+float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
+float sdPrim(vec3 q, float ty, vec3 s){
+  if(ty<.5) return sdBox(q,s);                                                   // boîte
+  if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
+  if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
+  if(ty<3.5){ float r=s.x*clamp(.5-q.y/(2.*s.y),0.,1.); return max(length(q.xz)-r,abs(q.y)-s.y)*.7; }      // cône, pointe en haut
+  if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
+  vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
+  return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+vec3 primLocal(vec3 p, int row){
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+  vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
+  q.xz=vec2(c*q.x-s*q.z,s*q.x+c*q.z);
+  if(e.w!=0.){ c=cos(e.w); s=sin(e.w); q.xy=vec2(c*q.x+s*q.y,-s*q.x+c*q.y); }
+  if(e.z!=0.){ c=cos(e.z); s=sin(e.z); q.yz=vec2(c*q.y+s*q.z,-s*q.y+c*q.z); }
+  return q;
+}
+float sdProps(vec3 p, out vec4 info){
+  float d=1e5; info=vec4(0.);
+  for(int i=0;i<8;i++){
+    if(i>=uObjN) break;
+    vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
+    if(o1.w<.5) continue;
+    float bound=length(p-o0.xyz)-o0.w;
+    if(bound>.8){ d=min(d,bound); continue; }
+    float od=1e5; float best=1e5; float brow=0.;
+    int st=int(o1.x), cn=int(o1.y);
+    for(int j=0;j<24;j++){
+      if(j>=cn) break;
+      int row=st+j;
+      vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+      float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
+      if(dd<best){ best=dd; brow=float(row); }
+      od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+    }
+    od*=.8;
+    if(od<d){ d=od; info=vec4(0.,0.,0.,brow); }
+  }
+  return d;
+}
+
+/* ---- canopée : densité, transmittance, feuilles et branches discrètes */
+float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
+  vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
+  vec4 h=h42(id+uSeed.xy);
+  if(h.x>uKitP.x) return 0.;
+  vec2 o=(h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5) return 0.;
+  float y=c.y-terrainH(w), H=11.+6.*h.w;
+  float t=(y-uHoup.y)/(H+1.2-uHoup.y);
+  if(t<0. || t>1.) return 0.;
+  float R=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*t)*(.8+.2*sin(y*4.2+h.w*30.));   // l'arbre reste dans sa cellule
+  float r=length(f-o);
+  float trou=vnoise3(c*vec3(1.7,2.6,1.7)+h.w*9.);
+  return smoothstep(R,R*.7,r)*smoothstep(.12,.4,trou)*4.*uKitP.z;
+}
+float canopyDens(vec3 c){
+  if(uHoup.x>.5) return coneDens(c);
+  float hp=smoothstep(YC0,YC0+2.5,c.y)*smoothstep(YC1,YC1-4.,c.y);
+  if(hp<=0.) return 0.;
+  float n=vnoise3(c*vec3(.21,.26,.21)+uSeed)*.7+.3*vnoise3(c*.63+7.);
+  float gap=mix(.72,1.,smoothstep(.5,5.,abs(c.x-pathX(c.z))));
+  return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
+}
+float canopyT(vec3 ro, vec3 rd){
+  if(uKitP.z<=0. || uKit!=0) return 1.;
+  float ry=abs(rd.y)<1e-4?1e-4:rd.y;
+  float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
+  float t0=max(min(ta,tb),0.), t1=max(ta,tb);
+  if(t1<=t0) return 1.;
+  t1=min(t1,t0+60.);
+  float ds=(t1-t0)/6.; float od=0.; float j=rnd();
+  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  return exp(-od*ds*SIG);
+}
+vec3 leafCol(vec3 c, float h){
+  if(uHoup.x>.5) return mix(vec3(.010,.030,.014),vec3(.034,.075,.030),h)*(.7+.6*vnoise3(c*.4+uSeed));   // aiguilles : vert sombre toute l'année
+  float sp=vnoise3(c*.09+uSeed+40.);
+  if(sp<.42) return mix(vec3(.030,.062,.018),vec3(.055,.095,.028),h);
+  vec3 ete=mix(vec3(.035,.085,.018),vec3(.075,.15,.03),h);
+  vec3 aut=sp<.70?mix(vec3(.30,.15,.035),vec3(.46,.30,.06),h):mix(vec3(.50,.36,.05),vec3(.36,.38,.07),h);
+  return mix(ete,aut,uKitP.w);
+}
+
+/* ---- ciel et brume */
+vec3 skyBase(vec3 rd){
+  float y=max(rd.y,0.);
+  vec3 c=mix(vec3(.62,.72,.86),vec3(.16,.34,.78),pow(y,.45))*2.2*uSky;
+  float s=max(dot(rd,uSunDir),0.);
+  c+=uSun*vec3(.143,.129,.109)*(.9*pow(s,6.)+3.*pow(s,48.));
+  return c;
+}
+vec3 skyCol(vec3 rd){
+  float s=max(dot(rd,uSunDir),0.);
+  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+}
+/* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
+   Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
+uniform vec4 uLoin;          // hauteur du massif (tangente de l'angle), découpe des crêtes, altitude de la neige (0 à 1, au-delà : aucune), présence
+uniform vec3 uLoinCol;       // roche
+uniform vec3 uLoinBas;       // contreforts
+float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
+  vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
+  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  return s;
+}
+vec3 lointain(vec3 rd, vec3 c){
+  float az=atan(rd.x,rd.z), el=rd.y/max(length(rd.xz),1e-4);
+  if(el>uLoin.x*1.25) return c;
+  vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
+  float sa=atan(uSunDir.x,uSunDir.z);
+  for(int k=0;k<2;k++){
+    float fk=float(k), H=uLoin.x*(k==0?1.:.34);
+    float cr=H*(.42+1.15*loinCrete(az,fk));
+    float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
+    float lit=clamp(.45+.9*d*sin(sa-az)+.35*cos(sa-az),.03,1.);
+    float alt=el/max(uLoin.x,1e-4);
+    float plis=.6*vnoise(vec2(az*uLoin.y*9.+alt*7.+fk*9.,alt*9.-az*5.))+.4*vnoise(vec2(az*uLoin.y*30.-alt*16.,alt*26.+fk*3.));                            // couloirs et arêtes dans la face
+    vec3 alb=k==0?uLoinCol*(.7+.6*plis):uLoinBas*(.75+.5*plis);
+    if(k==0) alb=mix(alb,vec3(.86,.88,.92),smoothstep(uLoin.z-.05,uLoin.z+.05,alt+.5*(plis-.5)+.25*(cr/H-.7)));   // la neige tient sur les hauts, la roche perce dans les faces
+    vec3 col=alb*(uSun*lit*(.30+.15*plis)+vec3(.42,.52,.72)*uSky*.42);
+    col=mix(col,air,(k==0?.30:.14)*(1.-.5*smoothstep(0.,.8,alt)));   // le voile de l'air s'accroche au pied, les sommets en sortent
+    c=mix(c,col,smoothstep(cr+.004,cr-.004,el));
+  }
+  return c;
+}
+vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+
+/* ---- éclairage */
+vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
+  return normalize(uSunDir+(t*cos(a)+b*sin(a))*r); }
+vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*u,0.)); return normalize(n+vec3(s*cos(a),s*sin(a),u)*.999); }
+
+#define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
+
+vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
+  if(dot(n,rd)>0.) n=-n;
+  vec3 sd=sunSample();
+  float T=canopyT(p+sd*.3,sd);
+  float ndl=dot(n,sd);
+  vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
+  vec3 h=normalize(sd-rd);
+  col+=SUN*T*max(ndl,0.)*.3*pow(max(dot(n,h),0.),40.);
+  float hg=clamp((p.y-YC0)/(YC1-YC0),0.,1.);
+  vec3 ambUp=vec3(.45,.55,.70)*mix(.25,1.3,hg*hg)*uSky;
+  vec3 ambDn=vec3(.13,.11,.07)*uSky;
+  if(uTorch>0.){
+    vec3 L=uCamPos-p; float d2=dot(L,L); L/=sqrt(d2);
+    float cs=dot(-L,uCam[2]);
+    col+=alb*uTorch*smoothstep(.50,.90,cs)*(.30+.70*smoothstep(.90,.985,cs))*(.25+.75*abs(dot(n,L)))/(d2+.3);
+  }
+  col+=alb*mix(ambDn,ambUp,n.y*.5+.5);
+  col+=alb*vec3(1.2,1.1,.6)*ambUp*.35*max(-n.y,0.);
+  return col;
+}
+// Moteur v3 (essai) : ce que partagent les deux programmes qui remplissent le tampon G (sol en maillage, grains).
+// Inséré après monde.glsl. Même fisheye équidistant que pathtrace.frag ; profondeur linéaire (distance / 400).
+uniform vec2  uJit;          // décalage sous-pixel de l'image (en unités de l'écran), pour l'accumulation à l'arrêt
+out vec3 vQ;                 // coordonnées de la recette (repère local de l'objet, ou monde), ou couleur d'une feuille
+out vec3 vN;                 // normale, monde
+flat out float vCode;        // élément (partie entière) et paramètre (partie fractionnaire × 2)
+out float vDist;             // distance à la caméra
+out vec3 vDx;                // variation des coordonnées de recette par pixel, en x et en y de l'écran (grains seulement)
+out vec3 vDy;
+out vec2 vDd;                // variation de la distance par pixel
+out float vSz;               // côté du grain, en pixels
+const float DMAX=400.;
+// Projette P ; rend false s'il est derrière ou trop loin du champ. ang : angle à l'axe de visée.
+bool projette(vec3 P, float marge, out vec4 pos, out float dist, out float ang){
+  vec3 d=P-uCamPos; dist=length(d);
+  pos=vec4(0.,0.,2.,1.);
+  if(dist<.05) return false;
+  vec3 dl=(d/dist)*uCam;
+  ang=acos(clamp(dl.z,-1.,1.));
+  if(ang>marge) return false;
+  float sxy=length(dl.xy);
+  vec2 puv=(sxy>1e-6?dl.xy/sxy:vec2(0.))*(ang/uFish);
+  pos=vec4(puv*2.*uRes.y/uRes+uJit,clamp(dist/DMAX,0.,1.)*2.-1.,1.);
+  return true;
+}
+void sansGrain(){ vQ=vec3(0.); vN=vec3(0.,1.,0.); vCode=-1.; vDist=0.; vDx=vec3(0.); vDy=vec3(0.); vDd=vec2(0.); vSz=0.; }
+uniform vec4 uSolP;          // rayon du premier anneau, pas logarithmique, nombre d'anneaux, nombre de secteurs
+void main(){
+  int S=int(uSolP.w), quad=gl_VertexID/6, c=gl_VertexID-quad*6;
+  int ring=quad/S, seg=quad-ring*S;
+  int ox=(c==1||c==3||c==4)?1:0, oy=(c==2||c==4||c==5)?1:0;
+  float r=(ring+ox==0)?0.:uSolP.x*exp(float(ring+ox-1)*uSolP.y);   // le premier anneau ferme le disque sous la caméra
+  float cap=atan(uCam[2].x,uCam[2].z);
+  float ph=cap+(float(seg+oy)/float(S)-.5)*6.2831853;
+  vec2 xz=uCamPos.xz+r*vec2(sin(ph),cos(ph));
+  vec3 P=vec3(xz.x,terrainH(xz),xz.y);
+  float e=.04;
+  vec3 N=normalize(vec3(terrainH(xz-vec2(e,0.))-terrainH(xz+vec2(e,0.)),2.*e,terrainH(xz-vec2(0.,e))-terrainH(xz+vec2(0.,e))));
+  sansGrain();
+  vec4 pos; float dist, ang;
+  projette(P,2.3,pos,dist,ang);                              // au-delà, le sommet part derrière le plan lointain
+  gl_Position=pos;
+  vQ=P; vN=N; vCode=0.; vDist=dist;
+}`, FS_V3GBUF = `#version 300 es
+// Moteur v3 (essai) : écriture du tampon G. Un grain couvre quelques pixels : ses coordonnées de recette varient
+// d'un pixel à l'autre le long de la surface (vDx, vDy), pour que la matière ne soit pas peinte en carrés.
+precision highp float;
+in vec3 vQ; in vec3 vN; flat in float vCode; in float vDist; in vec3 vDx; in vec3 vDy; in vec2 vDd; in float vSz;
+uniform int uPts;            // 1 = grains (points), 0 = maillage du sol
+layout(location=0) out vec4 g0;   // coordonnées de recette (ou couleur d'une feuille), élément
+layout(location=1) out vec4 g1;   // normale, distance
+void main(){
+  vec3 q=vQ; float d=vDist;
+  if(uPts==1){ vec2 o=(gl_PointCoord-.5)*vSz; o.y=-o.y; q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o); }
+  g0=vec4(q,vCode); g1=vec4(normalize(vN),d);
+}`, FS_V3OMBRE = `#version 300 es
+// Moteur v3 (essai) : carte d'ombres. Les grains semés vus du soleil n'écrivent que leur profondeur.
+precision highp float;
+void main(){}`, FS_V3OMBRAGE = `#version 300 es
+// Moteur v3 (essai) : la passe plein écran. Lit le tampon G (élément, coordonnées de recette, normale, distance) et
+// évalue la matière avec la même fonction recette() que le lanceur de rayons (un seul appel), puis la lumière :
+// soleil avec la carte d'ombres semée et la transmittance statistique de la canopée, ambiance approchée (voir ambiance()).
+// Le ciel et le lointain restent un calcul par direction. Sortie au format de l'accumulation (couleur, distance),
+// mélangée à l'historique reprojeté : le grain d'une image se lisse sur les suivantes.
+precision highp float; precision highp int; precision highp sampler2D;
+// Le monde, partagé par le lanceur de rayons (pathtrace.frag) et le semeur (moteur v3, v3_*.vert / v3_ombrage.frag).
+// Inséré par le build (#include) : chaque fichier qui l'inclut déclare d'abord sa version et ses précisions.
+// Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
+// Les paramètres d'un objet (arbreA, percheB, blocGres) sont calculés en un seul endroit : le lanceur de rayons
+// s'en sert pour sa distance, le semeur pour poser ses grains au même endroit.
+uniform vec2  uRes;
+uniform vec3  uCamPos;
+uniform mat3  uCam;
+uniform float uFish;
+uniform float uFog;
+uniform vec3  uSeed;
+uniform vec3  uSunDir;
+uniform vec3  uSun;        // éclairement du soleil (ou de la lune)
+uniform vec3  uSky;        // teinte et niveau du ciel
+uniform float uTorch;      // lampe du téléphone, 0 = éteinte
+uniform int   uKit;        // 0 forêt, 1 dunes
+uniform vec4  uKitP;       // seuil d'arbres, rochers, feuillage, saison (0 été, 1 automne)
+uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
+uniform vec2  uCan;        // tranche du feuillage : bas, haut
+uniform vec4  uHoup;       // houppier : forme (0 voûte commune, 1 cône par arbre), bas du cône, rayon au pied, part de perches
+#define YC0 uCan.x
+#define YC1 uCan.y
+const float CS=0.30;                // cellule de feuille
+const float CBR=1.5;                // cellule de branche
+const float SIG=0.16;               // extinction de la canopée
+const float LEAFP=0.62;
+#define SUN uSun
+
+/* ---- aléa */
+uint rs;
+float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
+
+float h21(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+vec2  h22(vec2 p){ vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973)); p3+=dot(p3,p3.yzx+33.33); return fract((p3.xx+p3.yz)*p3.zy); }
+vec4  h42(vec2 p){ vec4 p4=fract(vec4(p.xyxy)*vec4(.1031,.1030,.0973,.1099)); p4+=dot(p4,p4.wzxy+33.33); return fract((p4.xxyz+p4.yzzw)*p4.zywx); }
+float h31(vec3 p){ p=fract(p*.1031); p+=dot(p,p.zyx+31.32); return fract((p.x+p.y)*p.z); }
+vec3  h33(vec3 p){ p=fract(p*vec3(.1031,.1030,.0973)); p+=dot(p,p.yxz+33.33); return fract((p.xxy+p.yxx)*p.zyx); }
+
+float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y); }
+float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
+float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+    if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
+  return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
+
+/* ---- terrain et sentier */
+float pathX(float z){ return 3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.); }
+float terrainH(vec2 p){
+  if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
+    float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
+    return 3.2*(1.-abs(sin(a)))*(.62+.38*sin(p.y*.03+2.+uSeed.z))+.5*sin(p.x*.11+p.y*.08);
+  }
+  float h=1.5*sin(p.x*.041+.6+uSeed.z)*cos(p.y*.035+1.1)+.65*sin(p.x*.097+p.y*.071+2.)+.22*sin(p.x*.29-p.y*.21+uSeed.z*3.);
+  h-=.10*smoothstep(1.8,.4,abs(p.x-pathX(p.y)));
+  return h;
+}
+
+/* ---- arbres, perches, blocs de grès : une grille par famille, un objet par cellule */
+const float CA=6.0, CB=3.3, CC=8.5;
+const mat2 RA=mat2(.8776,.4794,-.4794,.8776);
+const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
+
+/* ---- objets décrits par la fiche : rien n'est prédéfini, tout est composé de formes de base.
+   uShapes, 4 texels par ligne. Lignes 0 à 7, un objet : (centre xyz, rayon englobant) (première forme, nombre, rayon dégagé, visible).
+   Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
+uniform sampler2D uShapes;
+uniform int uObjN;
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+    vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
+    if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
+  return false;
+}
+float sdCapT(vec3 p, vec3 a, vec3 b, float ra, float rb){ vec3 pa=p-a,ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-mix(ra,rb,h); }
+
+/* Paramètres d'un objet de cellule. Ne dépendent que de la cellule (et de la fiche) : le lanceur de rayons les lit pour
+   sa distance, le semeur pour poser ses grains. Rendent false quand la cellule est vide. */
+struct ArbreA { vec4 h; vec2 o; float H; float r0; vec2 lean; };
+bool arbreA(vec2 id, out ArbreA A){
+  A.h=h42(id+uSeed.xy);
+  if(A.h.x>uKitP.x) return false;
+  A.o=(A.h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+A.o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5 || cleared(w)) return false;
+  A.H=11.+6.*A.h.w;
+  A.r0=.16+.17*fract(A.h.w*7.31);
+  A.lean=(h42(id+31.7).xy-.5)*.035;
+  return true;
+}
+float rayonA(ArbreA A, float y){ return A.r0*(1.-.5*clamp(y/A.H,0.,1.))+A.r0*.45*exp(-max(y,0.)*2.5); }
+void brancheA(ArbreA A, int k, out vec3 a0, out vec3 a1, out float rb){   // branche k (0 à 2), dans le repère de la cellule
+  vec2 o=A.o; vec4 h=A.h; float H=A.H;
+  float ac=atan(-o.y,-o.x);
+  float fk=float(k);
+  float hb=H*(.42+.17*fk);
+  float a=ac+(fract(h.w*13.7+fk*.37)-.5)*2.8+fk*.5;
+  float reach=1.0+.5*fract(h.x*91.+fk*.71);
+  float rise=2.2+1.5*fract(h.y*57.+fk*.53);
+  vec2 b0=o+A.lean*hb;
+  a0=vec3(b0.x,hb,b0.y);
+  a1=a0+vec3(cos(a)*reach,rise,sin(a)*reach);
+  rb=A.r0*.34*(1.-.12*fk);
+}
+float sdTreeA(vec3 p, float th, out vec4 info){
+  vec2 q=RA*p.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
+  float dOut=.5*CA-max(abs(f.x),abs(f.y))+.3+(uMode==1?50.:0.);
+  info=vec4(0.);
+  ArbreA A;
+  if(!arbreA(id,A)) return dOut;
+  vec4 h=A.h; vec2 o=A.o; float H=A.H;
+  float y=p.y-th;
+  float yc=clamp(y,-1.,H);
+  vec2 dq=f-(o+A.lean*yc);
+  float r=rayonA(A,y);
+  float dh=length(dq)-r;
+  float dv=y-H;
+  float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
+  if(y>.38*H-1.5 && dh<3.4){
+    vec3 lp=vec3(f.x,y,f.y);
+    for(int k=0;k<3;k++){
+      vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
+      d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
+    }
+  }
+  float fol=0.;
+  if(uHoup.x>.5){                                            // conifère : un cœur de feuillage plein, visible et ombrant à toute distance ; les rameaux détaillés flottent autour
+    float tt=(y-uHoup.y)/(H+1.2-uHoup.y);
+    if(tt>-.15 && tt<1.15){
+      float Rc=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*clamp(tt,0.,1.))*(.8+.2*sin(y*4.2+h.w*30.))*.74;
+      float dc=max(length(f-o)-Rc,max(uHoup.y-y,y-(H+1.2)))*.55;
+      if(dc<d){ d=dc; fol=2.; }
+    }
+  }
+  info=vec4(dq.x,y,dq.y,h.w+fol);
+  return min(d*.9,dOut);
+}
+
+struct PercheB { vec4 h; vec2 o; float H; float r0; vec2 lean; };
+bool percheB(vec2 id, out PercheB B){
+  B.h=h42(id+uSeed.xy+71.);
+  if(B.h.x>uKitP.x*.8*uHoup.w) return false;
+  B.o=(B.h.yz-.5)*1.9;
+  vec2 w=((id+.5)*CB+B.o-17.3)*RB;
+  if(abs(w.x-pathX(w.y))<1.15 || cleared(w)) return false;
+  B.H=6.+5.*B.h.w;
+  B.r0=.035+.07*fract(B.h.w*5.3);
+  B.lean=(h42(id+3.1).xy-.5)*.06;
+  return true;
+}
+vec2 axeB(PercheB B, float yc){ return B.o+B.lean*yc+.06*sin(yc*.6+B.h.w*20.)*vec2(cos(B.h.x*40.),sin(B.h.x*40.)); }
+float rayonB(PercheB B, float y){ return B.r0*(1.-.6*clamp(y/B.H,0.,1.))+B.r0*.3*exp(-max(y,0.)*4.); }
+float sdTreeB(vec3 p, float th, out vec4 info){
+  vec2 q=RB*p.xz+17.3; vec2 id=floor(q/CB); vec2 f=q-(id+.5)*CB;
+  float dOut=.5*CB-max(abs(f.x),abs(f.y))+.22+(uMode==1?50.:0.);
+  info=vec4(0.);
+  PercheB B;
+  if(!percheB(id,B)) return dOut;
+  float y=p.y-th;
+  float H=B.H;
+  float yc=clamp(y,-1.,H);
+  vec2 dq=f-axeB(B,yc);
+  float r=rayonB(B,y);
+  float dh=length(dq)-r;
+  float dv=y-H;
+  float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
+  info=vec4(dq.x,y,dq.y,B.h.w);
+  return min(d*.85,dOut);
+}
+
+struct Bloc { vec4 h; float R; vec2 o; vec3 rad; float a; };
+bool blocGres(vec2 id, out Bloc B){
+  B.h=h42(id+uSeed.xy+13.);
+  float mask=vnoise(id*.37+uSeed.xy);
+  if(B.h.x>(smoothstep(.32,.68,mask)*.9+.08)*uKitP.y) return false;
+  float R=.7+1.6*B.h.w*B.h.w;
+  B.R=R;
+  B.o=(B.h.yz-.5)*2.*(.5*CC-.3-1.25*R);
+  vec2 w=(id+.5)*CC+B.o;
+  if(abs(w.x-pathX(w.y))<R*1.1+.5 || cleared(w)) return false;
+  B.a=B.h.x*50.;
+  vec4 h=B.h;
+  B.rad=R*vec3(1.+.25*fract(h.y*9.),.62+.3*fract(h.z*7.),.8+.3*fract(h.w*11.));
+  return true;
+}
+vec3 blocLocal(vec3 p, float th, vec2 id, Bloc B){          // repère du bloc : centré, tourné
+  vec2 f=p.xz-(id+.5)*CC;
+  vec3 lp=vec3(f.x-B.o.x,p.y-th-B.R*.22,f.y-B.o.y);
+  float ca=cos(B.a),sa=sin(B.a);
+  lp.xz=mat2(ca,sa,-sa,ca)*lp.xz;
+  return lp;
+}
+float blocForme(vec3 lp, Bloc B){                            // ellipsoïde bosselé, en mètres (avant la marge du pas)
+  vec4 h=B.h; float R=B.R; vec3 rad=B.rad;
+  float d=(length(lp/rad)-1.)*min(rad.x,min(rad.y,rad.z));
+  d+=.10*R*sin(lp.x*2.3/R+h.x*9.)*sin(lp.y*2.9/R+h.y*7.)*sin(lp.z*2.1/R+h.z*5.);
+  d+=.035*R*sin(lp.x*6.1/R)*sin(lp.y*7.3/R+1.)*sin(lp.z*5.7/R+2.);
+  return d;
+}
+float sdRock(vec3 p, float th, out vec4 info){
+  vec2 q=p.xz; vec2 id=floor(q/CC); vec2 f=q-(id+.5)*CC;
+  float dOut=.5*CC-max(abs(f.x),abs(f.y))+.3+(uMode==1?50.:0.);
+  info=vec4(0.);
+  Bloc B;
+  if(!blocGres(id,B)) return dOut;
+  vec3 lp=blocLocal(p,th,id,B);
+  float d=blocForme(lp,B);
+  info=vec4(lp,B.R);
+  return min(d*.72,dOut);
+}
+float sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.); }
+float sdEll(vec3 p, vec3 r){ return (length(p/r)-1.)*min(r.x,min(r.y,r.z)); }
+float smin(float a, float b, float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
+float sdPrim(vec3 q, float ty, vec3 s){
+  if(ty<.5) return sdBox(q,s);                                                   // boîte
+  if(ty<1.5) return sdEll(q,s);                                                  // boule ou ellipsoïde
+  if(ty<2.5){ vec2 d=vec2(length(q.xz)-s.x,abs(q.y)-s.y); return min(max(d.x,d.y),0.)+length(max(d,0.)); }   // cylindre debout
+  if(ty<3.5){ float r=s.x*clamp(.5-q.y/(2.*s.y),0.,1.); return max(length(q.xz)-r,abs(q.y)-s.y)*.7; }      // cône, pointe en haut
+  if(ty<4.5){ q.y-=clamp(q.y,-s.y,s.y); return length(q)-s.x; }                  // capsule debout
+  vec2 nn=normalize(vec2(2.*s.y,s.z));                                           // toit à deux pentes, faîtage le long de x
+  return max(abs(q.x)-s.x,max(abs(q.z)*nn.x+q.y*nn.y-(nn.x*s.z-nn.y*s.y),-q.y-s.y));
+}
+vec3 primLocal(vec3 p, int row){
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+  vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
+  q.xz=vec2(c*q.x-s*q.z,s*q.x+c*q.z);
+  if(e.w!=0.){ c=cos(e.w); s=sin(e.w); q.xy=vec2(c*q.x+s*q.y,-s*q.x+c*q.y); }
+  if(e.z!=0.){ c=cos(e.z); s=sin(e.z); q.yz=vec2(c*q.y+s*q.z,-s*q.y+c*q.z); }
+  return q;
+}
+float sdProps(vec3 p, out vec4 info){
+  float d=1e5; info=vec4(0.);
+  for(int i=0;i<8;i++){
+    if(i>=uObjN) break;
+    vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
+    if(o1.w<.5) continue;
+    float bound=length(p-o0.xyz)-o0.w;
+    if(bound>.8){ d=min(d,bound); continue; }
+    float od=1e5; float best=1e5; float brow=0.;
+    int st=int(o1.x), cn=int(o1.y);
+    for(int j=0;j<24;j++){
+      if(j>=cn) break;
+      int row=st+j;
+      vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+      float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
+      if(dd<best){ best=dd; brow=float(row); }
+      od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+    }
+    od*=.8;
+    if(od<d){ d=od; info=vec4(0.,0.,0.,brow); }
+  }
+  return d;
+}
+
+/* ---- canopée : densité, transmittance, feuilles et branches discrètes */
+float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
+  vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
+  vec4 h=h42(id+uSeed.xy);
+  if(h.x>uKitP.x) return 0.;
+  vec2 o=(h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5) return 0.;
+  float y=c.y-terrainH(w), H=11.+6.*h.w;
+  float t=(y-uHoup.y)/(H+1.2-uHoup.y);
+  if(t<0. || t>1.) return 0.;
+  float R=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*t)*(.8+.2*sin(y*4.2+h.w*30.));   // l'arbre reste dans sa cellule
+  float r=length(f-o);
+  float trou=vnoise3(c*vec3(1.7,2.6,1.7)+h.w*9.);
+  return smoothstep(R,R*.7,r)*smoothstep(.12,.4,trou)*4.*uKitP.z;
+}
+float canopyDens(vec3 c){
+  if(uHoup.x>.5) return coneDens(c);
+  float hp=smoothstep(YC0,YC0+2.5,c.y)*smoothstep(YC1,YC1-4.,c.y);
+  if(hp<=0.) return 0.;
+  float n=vnoise3(c*vec3(.21,.26,.21)+uSeed)*.7+.3*vnoise3(c*.63+7.);
+  float gap=mix(.72,1.,smoothstep(.5,5.,abs(c.x-pathX(c.z))));
+  return smoothstep(.50,.63,n)*hp*gap*uKitP.z;
+}
+float canopyT(vec3 ro, vec3 rd){
+  if(uKitP.z<=0. || uKit!=0) return 1.;
+  float ry=abs(rd.y)<1e-4?1e-4:rd.y;
+  float ta=(YC0-ro.y)/ry, tb=(YC1-ro.y)/ry;
+  float t0=max(min(ta,tb),0.), t1=max(ta,tb);
+  if(t1<=t0) return 1.;
+  t1=min(t1,t0+60.);
+  float ds=(t1-t0)/6.; float od=0.; float j=rnd();
+  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  return exp(-od*ds*SIG);
+}
+vec3 leafCol(vec3 c, float h){
+  if(uHoup.x>.5) return mix(vec3(.010,.030,.014),vec3(.034,.075,.030),h)*(.7+.6*vnoise3(c*.4+uSeed));   // aiguilles : vert sombre toute l'année
+  float sp=vnoise3(c*.09+uSeed+40.);
+  if(sp<.42) return mix(vec3(.030,.062,.018),vec3(.055,.095,.028),h);
+  vec3 ete=mix(vec3(.035,.085,.018),vec3(.075,.15,.03),h);
+  vec3 aut=sp<.70?mix(vec3(.30,.15,.035),vec3(.46,.30,.06),h):mix(vec3(.50,.36,.05),vec3(.36,.38,.07),h);
+  return mix(ete,aut,uKitP.w);
+}
+
+/* ---- ciel et brume */
+vec3 skyBase(vec3 rd){
+  float y=max(rd.y,0.);
+  vec3 c=mix(vec3(.62,.72,.86),vec3(.16,.34,.78),pow(y,.45))*2.2*uSky;
+  float s=max(dot(rd,uSunDir),0.);
+  c+=uSun*vec3(.143,.129,.109)*(.9*pow(s,6.)+3.*pow(s,48.));
+  return c;
+}
+vec3 skyCol(vec3 rd){
+  float s=max(dot(rd,uSunDir),0.);
+  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+}
+/* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
+   Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
+uniform vec4 uLoin;          // hauteur du massif (tangente de l'angle), découpe des crêtes, altitude de la neige (0 à 1, au-delà : aucune), présence
+uniform vec3 uLoinCol;       // roche
+uniform vec3 uLoinBas;       // contreforts
+float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
+  vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
+  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  return s;
+}
+vec3 lointain(vec3 rd, vec3 c){
+  float az=atan(rd.x,rd.z), el=rd.y/max(length(rd.xz),1e-4);
+  if(el>uLoin.x*1.25) return c;
+  vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
+  float sa=atan(uSunDir.x,uSunDir.z);
+  for(int k=0;k<2;k++){
+    float fk=float(k), H=uLoin.x*(k==0?1.:.34);
+    float cr=H*(.42+1.15*loinCrete(az,fk));
+    float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
+    float lit=clamp(.45+.9*d*sin(sa-az)+.35*cos(sa-az),.03,1.);
+    float alt=el/max(uLoin.x,1e-4);
+    float plis=.6*vnoise(vec2(az*uLoin.y*9.+alt*7.+fk*9.,alt*9.-az*5.))+.4*vnoise(vec2(az*uLoin.y*30.-alt*16.,alt*26.+fk*3.));                            // couloirs et arêtes dans la face
+    vec3 alb=k==0?uLoinCol*(.7+.6*plis):uLoinBas*(.75+.5*plis);
+    if(k==0) alb=mix(alb,vec3(.86,.88,.92),smoothstep(uLoin.z-.05,uLoin.z+.05,alt+.5*(plis-.5)+.25*(cr/H-.7)));   // la neige tient sur les hauts, la roche perce dans les faces
+    vec3 col=alb*(uSun*lit*(.30+.15*plis)+vec3(.42,.52,.72)*uSky*.42);
+    col=mix(col,air,(k==0?.30:.14)*(1.-.5*smoothstep(0.,.8,alt)));   // le voile de l'air s'accroche au pied, les sommets en sortent
+    c=mix(c,col,smoothstep(cr+.004,cr-.004,el));
+  }
+  return c;
+}
+vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
+
+/* ---- éclairage */
+vec3 sunSample(){ float a=6.2832*rnd(), r=sqrt(rnd())*.011; vec3 t=normalize(cross(uSunDir,vec3(0.,1.,0.))), b=cross(uSunDir,t);
+  return normalize(uSunDir+(t*cos(a)+b*sin(a))*r); }
+vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*u,0.)); return normalize(n+vec3(s*cos(a),s*sin(a),u)*.999); }
+
+#define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
+
+vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
+  if(dot(n,rd)>0.) n=-n;
+  vec3 sd=sunSample();
+  float T=canopyT(p+sd*.3,sd);
+  float ndl=dot(n,sd);
+  vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
+  vec3 h=normalize(sd-rd);
+  col+=SUN*T*max(ndl,0.)*.3*pow(max(dot(n,h),0.),40.);
+  float hg=clamp((p.y-YC0)/(YC1-YC0),0.,1.);
+  vec3 ambUp=vec3(.45,.55,.70)*mix(.25,1.3,hg*hg)*uSky;
+  vec3 ambDn=vec3(.13,.11,.07)*uSky;
+  if(uTorch>0.){
+    vec3 L=uCamPos-p; float d2=dot(L,L); L/=sqrt(d2);
+    float cs=dot(-L,uCam[2]);
+    col+=alb*uTorch*smoothstep(.50,.90,cs)*(.30+.70*smoothstep(.90,.985,cs))*(.25+.75*abs(dot(n,L)))/(d2+.3);
+  }
+  col+=alb*mix(ambDn,ambUp,n.y*.5+.5);
+  col+=alb*vec3(1.2,1.1,.6)*ambUp*.35*max(-n.y,0.);
+  return col;
+}
+// Matières en recettes, partagées par le lanceur de rayons et le semeur (moteur v3). Inséré par le build (#include),
+// après monde.glsl. Un seul appel à recette() par shader : chaque appel est déplié par le compilateur.
+/* ---- matières : une recette par surface, lue dans une texture de données.
+   Aucune matière n'est écrite ici : sol, sentier, grès, écorces sont des recettes de src/matieres.json ou de la fiche.
+   Une recette s'évalue une fois par impact, dans cet ordre : couleur, nuance, taches sous le motif, motif,
+   variation, grain, taches, relief, mousse, salissure. Disposition des texels : voir packRecette dans src/main.js. */
+uniform sampler2D uMats;
+uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
+uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
+uniform vec2  uSurfP;        // part de l'écorce a, arbres et perches
+const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, celui où la mousse monte
+vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
+float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
+  if(sol){ vec2 x=q.xz*s.xz+o; return fb?fbm(x):vnoise(x); }
+  vec3 x=q*s+o; return fb?fbm3(x):vnoise3(x);
+}
+float tacheM(int r, int k, vec3 q, float hs, bool sol){     // masque de la tache k ; hs = hauteur au-dessus du sol
+  vec4 b=rT(r,18+k*4), c=rT(r,19+k*4), d=rT(r,20+k*4);
+  float N=dot(b.xyz,b.xyz)>0.?rN(q,b.xyz,d.z,b.w>.5,sol):0.;
+  if(d.x!=0.) N+=d.x*smoothstep(c.z,c.w,hs);
+  return smoothstep(c.x,c.y,N);
+}
+vec3 palette(int r, float h){
+  for(int i=0;i<5;i++){ vec4 p=rT(r,12+i); if(h<p.w || i==4) return p.rgb; }
+  return vec3(0.);
+}
+vec2 motifUV(vec3 q, vec3 n, bool sol){ if(sol || abs(n.y)>.7) return q.xz; return abs(n.x)>abs(n.z)?q.zy:q.xy; }
+float planches(vec2 uv, float e, vec4 P, out vec2 id){       // 1 sur la planche, 0 dans le joint
+  float u=uv.x*e, i=floor(u), L=max(P.y,.2);
+  float v=uv.y/L+h21(vec2(i,7.)), j=floor(v);
+  id=vec2(i,j);
+  return smoothstep(0.,P.x,min(fract(u),1.-fract(u)))*smoothstep(0.,P.x/(e*L),min(fract(v),1.-fract(v)));
+}
+float paves(vec2 uv, float e, vec4 P, out vec2 id){          // 1 au sommet du pavé, 0 dans le joint
+  vec2 x=uv*e; x.x+=P.y*floor(x.y); id=floor(x);
+  vec2 f=fract(x)-.5+(h22(id)-.5)*.08;
+  float m=min(.5-abs(f.x),.5-abs(f.y));
+  return smoothstep(0.,P.x,m)*(1.-P.w*dot(f,f));
+}
+float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
+  vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
+  float a=rN(q,e.xyz,e.w,false,sol);
+  float h=1.-smoothstep(p0.x,p0.y,1.-abs(a*2.-1.))*p0.z;
+  if(p1.z>0.){ float b=rN(q,e2.xyz,e2.w,false,sol); h-=p1.z*smoothstep(p1.x,p1.y,1.-abs(b*2.-1.)); }
+  return clamp(h,0.,1.);
+}
+float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relief : motif, creux des taches, bosses
+  vec4 mo=rT(r,6); float H=0.;
+  if(mo.w!=0.){
+    int ty=int(mo.x+.5); float mh=1.; vec2 id;
+    if(ty==3) mh=fissH(r,q,sol);
+    else if(ty==4) mh=planches(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
+    else if(ty==5) mh=paves(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
+    for(int k=0;k<4;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,q,hs,sol); }
+    H+=mo.w*mh;
+  }
+  for(int k=0;k<2;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.){ vec4 b=rT(r,42+k*2); H+=a.w*rN(q,a.xyz,b.y,b.x>.5,sol); } }
+  return H;
+}
+void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec){
+  vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39);
+  bool sol=c0.w<.5;
+  alb=c0.rgb; tilt=vec3(0.); spec=nup.w;
+  vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
+  if(nc.w>0.){ vec4 ns=rT(r,4); alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,rN(q,ns.xyz,nup.z,ns.w>.5,sol))); }
+  for(int k=0;k<4;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
+  int ty=int(mo.x+.5); float cover=1., mm=1.;   // mm : où le motif est posé (pour les taches sur le motif)
+  if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
+    vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
+    vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
+    vec3 v=voro(wp*e.x); float hc=v.y;
+    vec3 lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
+    lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
+    float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
+    float on=step(1.-cov,fract(hc*7.3));
+    if(p1.z<.7) on*=smoothstep(p1.z+.04,p1.z-.04,v.x);
+    alb=mix(alb,lc,on*mo.y); mm=on;
+    vec2 tl=h22(vec2(hc*37.,hc*91.))-.5;
+    tilt+=vec3(tl.x,0.,tl.y)*(rel.z+mo.z*on);
+    cover=1.-p0.w*step(.5,fract(hc*5.1));                    // une part des feuilles couvre la mousse
+  } else if(ty==2){                                          // rides de vent
+    vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
+    float w=fbm(q.xz*p0.y+uSeed.xy);
+    vec2 dir=normalize(vec2(1.,.35+.5*(w-.5)));
+    if(p1.x!=0.){ float c=cos(p1.x), s=sin(p1.x); dir=mat2(c,s,-s,c)*dir; }
+    float ph=dot(q.xz,dir)*e.x+p0.x*fbm(q.xz*1.3);
+    float mk=smoothstep(p0.z,p0.w,w+.2*n.y);
+    alb=mix(alb,rT(r,8).rgb,mo.y*smoothstep(.3,.8,sin(ph)*mk));
+    tilt+=vec3(dir.x,0.,dir.y)*cos(ph)*mo.z*mk;
+  } else if(ty==3){                                          // fissures
+    float h=fissH(r,q,sol); float as=rT(r,9).w;
+    alb=mix(alb,as>0.?alb*(1.-as):rT(r,8).rgb,(1.-h)*mo.y);
+  } else if(ty==4 || ty==5){                                 // planches, pavés : éléments répétés et joints
+    vec4 e=rT(r,7), P=rT(r,9); vec2 id;
+    float s=ty==4?planches(motifUV(q,n,sol),e.x,P,id):paves(motifUV(q,n,sol),e.x,P,id);
+    if(rT(r,12).w>0.) alb=palette(r,h21(id+.5));
+    alb*=1.-.5*P.z+P.z*h21(id+3.7);
+    alb=mix(alb,rT(r,8).rgb,mo.y*(1.-smoothstep(.0,.6,s)));
+  }
+  vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*rN(q,va.xyz,0.,true,sol);
+  vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*rN(q,gr.xyz,0.,false,sol);
+  for(int k=0;k<4;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)*(pl>1.5?mm:1.)); }
+  if(rel.w>0.){                                              // grain du relief : petites facettes
+    float s=rT(r,40).x;
+    tilt+=sol?vec3(vnoise(q.xz*s)-.5,0.,vnoise(q.xz*s+9.)-.5)*rel.w
+             :(vec3(vnoise3(q*s),vnoise3(q*s+9.),vnoise3(q*s+17.))-.5)*rel.w;
+  }
+  if(mo.w!=0. || rT(r,41).w!=0. || rT(r,43).w!=0.){         // relief en hauteur : pente par différences finies
+    const float e=.004; vec4 hv=vec4(0.);
+    for(int i=0;i<4;i++){                                    // un seul appel dans la boucle : le compilateur n'en déplie pas quatre copies
+      vec3 o=i==1?vec3(e,0.,0.):i==2?vec3(0.,e,0.):i==3?vec3(0.,0.,e):vec3(0.);
+      hv[i]=(sol && i==2)?hv.x:recetteH(r,q+o,n,hs,sol);
+    }
+    vec3 g=(hv.yzw-hv.x)/e;
+    g.xz=g.xz*rot;
+    tilt-=g;
+  }
+  vec4 m0=rT(r,33);
+  if(m0.w>0.){                                               // mousse ou lichen : par plaques, selon l'orientation et la hauteur
+    vec4 m1=rT(r,34), m2=rT(r,35), m3=rT(r,36), m4=rT(r,37), m5=rT(r,38);
+    float N=sol?(m1.w>.5?fbm(q.xz*m1.xz+m2.z+uSeed.xy):vnoise(q.xz*m1.xz+m2.z+uSeed.xy)):rN(q,m1.xyz,m2.z,m1.w>.5,false);
+    float m=smoothstep(m2.x,m2.y,N);
+    bool dOn=m3.x!=m3.y, cOn=m4.x!=m4.y;
+    float Np=m5.z>0.?rN(q,vec3(m5.z),m5.w,true,sol):N;      // bruit qui décale la limite de pente
+    if(dOn || cOn) m*=max(dOn?smoothstep(m3.x,m3.y,n.y+m3.z*(Np-.5)):0.,cOn?m4.z*smoothstep(m4.x,m4.y,dot(n,HUMIDE)):0.);
+    if(m5.x!=m5.y) m*=smoothstep(m5.x,m5.y,hs);
+    vec3 mc=m0.rgb; if(m2.w>0.) mc*=1.-.5*m2.w+m2.w*rN(q,vec3(m3.w),0.,false,sol);
+    alb=mix(alb,mc,m*cover*m0.w);                            // les feuilles posées dessus cachent la mousse...
+    tilt*=1.-m4.w*m; spec*=1.-m;                             // ...mais le sol reste humide et plat dessous
+  }
+  if(!sol && rel.x>0.) alb*=mix(1.-rel.x,1.,smoothstep(0.,rel.y,hs));   // salissure : le pied s'assombrit
+}
+
+int matProp(vec3 p, vec3 n, vec4 info, out vec3 alb, out vec3 nn, out float spec, out float emis, out vec3 qr){   // rend une recette, ou -1
+  int row=int(info.w);
+  vec3 q=primLocal(p,row);
+  vec4 b=texelFetch(uShapes,ivec2(1,row),0), cm=texelFetch(uShapes,ivec2(2,row),0);
+  alb=cm.rgb; nn=n; spec=.05; emis=0.;
+  float m=cm.a;
+  qr=q;
+  if(m>15.5) return int(m-16.);                              // la forme nomme une recette de la fiche
+  vec3 r=abs(q)/max(b.xyz,vec3(1e-3));
+  float u=r.z>r.x?q.x:q.z;                                   // coordonnée le long de la face touchée
+  if(m<.5){ alb*=.9+.2*vnoise3(q*14.); }                                            // mat, peint, crépi
+  else if(m<1.5){ alb*=(.62+.7*h21(vec2(floor(u*7.),3.)))*(.8+.4*vnoise(vec2(u*40.,q.y*3.)))*mix(.3,1.,smoothstep(0.,.07,fract(u*7.))); }   // bois en planches
+  else if(m<2.5){ alb*=(.65+.7*fbm3(q*2.3))*(.85+.3*vnoise3(q*50.)); if(uKit==0) alb=mix(alb,vec3(.07,.12,.03),.6*smoothstep(.4,.9,n.y)*smoothstep(.45,.6,fbm3(q*1.1+3.))); }   // pierre
+  else if(m<3.5){ alb*=.85+.3*vnoise3(q*6.); spec=.5; }                              // métal
+  else if(m<4.5){ alb*=.12; spec=.8; }                                               // verre
+  else if(m<5.5){ alb*=.7+.6*vnoise3(q*110.); }                                      // pelage, tissu
+  else if(m<6.5){ alb*=(.7+.6*vnoise(vec2(q.x*3.,q.z*14.)))*mix(.55,1.,smoothstep(0.,.08,fract(abs(q.z)*4.))); spec=.08; }   // tuile, ardoise
+  else { emis=1.; }                                                                  // lumineux
+  return -1;
+}
+// Accumulation temporelle et reprojection, partagées par le lanceur de rayons et le semeur (moteur v3).
+// Inséré par le build (#include), après monde.glsl (uFish).
+uniform sampler2D uPrev;
+uniform vec3  uPrevPos;    // reprojection temporelle : pose de l'image précédente
+uniform mat3  uPrevCam;
+uniform float uAlpha;      // part d'image neuve dans le mélange
+uniform int   uReproj;     // 1 = l'historique est relu à travers l'ancienne pose
+// col : couleur neuve du pixel ip ; P : point du monde qu'il montre. Rend le mélange avec l'historique.
+vec3 melangeHistoire(vec3 col, vec3 P, ivec2 ip){
+  vec3 hist=vec3(0.); float a=1.;
+  if(uAlpha<1.){
+    if(uReproj==0){ hist=texelFetch(uPrev,ip,0).rgb; a=uAlpha; }
+    else {                                                   // où ce point du monde se trouvait-il dans l'image précédente ?
+      vec3 d=P-uPrevPos; float dist=length(d);
+      vec3 dl=(d/dist)*uPrevCam;
+      float sxy=length(dl.xy);
+      vec2 puv=(sxy>1e-6?dl.xy/sxy:vec2(0.))*(acos(clamp(dl.z,-1.,1.))/uFish);
+      vec2 ps=vec2(textureSize(uPrev,0));
+      vec2 pp=puv*ps.y+.5*ps-.5;
+      if(pp.x>0. && pp.y>0. && pp.x<ps.x-1. && pp.y<ps.y-1.){
+        ivec2 b=ivec2(floor(pp)); vec2 f=pp-vec2(b); float ws=0.; vec3 acc=vec3(0.);
+        for(int k=0;k<4;k++){
+          ivec2 o=ivec2(k&1,k>>1); vec4 sm=texelFetch(uPrev,b+o,0);
+          float w=(o.x==1?f.x:1.-f.x)*(o.y==1?f.y:1.-f.y);
+          w*=step(abs(sm.a-dist),.08*dist+.06);              // rejette l'historique d'un autre objet (désoccultation)
+          acc+=sm.rgb*w; ws+=w;
+        }
+        if(ws>.08){ hist=acc/ws; a=uAlpha; }
+      }
+    }
+  }
+  return mix(hist,col,a);
+}
+uniform sampler2D uG0, uG1;  // tampon G
+uniform sampler2D uOmbre;    // carte d'ombres (profondeur vue du soleil)
+uniform uint  uFrame;
+uniform vec2  uJitPx;        // même décalage sous-pixel que les grains, en pixels
+uniform vec3  uSoleilC;
+uniform mat3  uSoleilM;
+uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
+uniform vec3  uSd;           // direction du soleil de cette image, tirée dans le disque solaire (pénombre par accumulation)
+uniform int   uVoir;         // mise au point (option v3voir) : 1 ombre du soleil seule, 2 albédo, 3 normale, 5 carte d'ombres
+uniform float uOccT;
+uniform float uPcf;
+uniform float uAmb;          // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
+out vec4 outCol;
+
+uint hu(uint x){ x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u; return (x>>22u)^x; }
+
+float ombreSoleil(vec3 p, vec3 gn){                          // 1 = éclairé ; quatre lectures tirées au hasard autour du texel
+  vec3 l=(p+gn*.08-uSoleilC)*uSoleilM;
+  vec2 uv=l.xy/uSoleilE.xy*.5+.5;
+  // hors de la carte (au loin) : la part statistique de soleil qui passe entre les troncs
+  float h=max(13.-(p.y-terrainH(p.xz)),0.), stat=exp(-uOccT*h/max(uSd.y,.1)*length(uSd.xz));
+  float bord=smoothstep(.85,1.,max(abs(uv.x*2.-1.),abs(uv.y*2.-1.)));
+  if(bord>=1.) return stat;
+  float z=(clamp(-l.z/uSoleilE.z,-1.,1.))*.5+.5-.075/uSoleilE.z;  // marge de 15 cm vers le soleil (un grain est plat)
+  float v=0.; vec2 tx=uSoleilE.w/(2.*uSoleilE.xy);
+  for(int k=0;k<4;k++){
+    vec2 o=(vec2(rnd(),rnd())-.5)*tx*uPcf;
+    v+=z<=texture(uOmbre,uv+o).r?1.:0.;
+  }
+  return mix(v*.25,stat,bord);
+}
+
+/* Près d'un tronc, d'une perche ou d'un bloc, on voit moins de ciel. Distance à l'objet de la cellule, sans parcourir
+   la scène : trois familles, une cellule chacune. Les objets de la fiche n'assombrissent pas (non fait). */
+float pres(vec3 p){
+  float d=9.;
+  if(uKit==0){
+    vec2 q=RA*p.xz; vec2 id=floor(q/CA); ArbreA A;
+    if(arbreA(id,A)){ float y=p.y-terrainH(p.xz); vec2 f=q-(id+.5)*CA; d=min(d,length(f-(A.o+A.lean*clamp(y,-1.,A.H)))-rayonA(A,y)); }
+    q=RB*p.xz+17.3; id=floor(q/CB); PercheB B;
+    if(percheB(id,B)){ float y=p.y-terrainH(p.xz); vec2 f=q-(id+.5)*CB; d=min(d,length(f-axeB(B,clamp(y,-1.,B.H)))-rayonB(B,y)); }
+  }
+  if(uKitP.y>0.){ vec2 id=floor(p.xz/CC); Bloc B; if(blocGres(id,B)) d=min(d,blocForme(blocLocal(p,terrainH(p.xz),id,B),B)); }
+  return d;
+}
+
+/* Lumière d'ambiance : approximation assumée de l'essai n° 1 (docs/moteur-v3.md).
+   Un échantillon cosinus par pixel et par image : vers le haut, le ciel atténué par la canopée (canopyT, statistique)
+   et par la futaie (troncs, statistique) ; vers le bas, le sol éclairé ; près du pied des objets, moins de ciel.
+   C'est ici que se branchera la lumière d'ambiance rangée dans le monde (grille le long du trajet, calculée en fond). */
+vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts){
+  vec3 wi=cosDir(n); if(dot(wi,gn)<0.) wi=reflect(wi,gn);
+  vec3 L;
+  vec3 solE=vec3(.24,.15,.07)*(vec3(.20,.21,.20)*uSky+SUN*max(uSunDir.y,0.)*Ts*.8);   // sol éclairé, vu d'en haut
+  if(wi.y>.02){
+    float T=canopyT(po,wi);
+    vec3 ciel=min(skyBase(wi),vec3(6.))*T+CANOPY_GLOW*(1.-T);
+    float trajet=max(YC0-po.y,0.)/wi.y*length(wi.xz);       // distance horizontale parcourue sous la canopée
+    float Tt=exp(-uOccT*trajet);
+    vec3 tronc=vec3(.11,.095,.08)*(vec3(.20,.21,.20)*uSky+SUN*.3*Ts);
+    L=mix(tronc,ciel,Tt);
+  } else L=solE;
+  float h1=.25, h2=.8;
+  float occ=max(0.,h1-pres(po+n*h1))*1.6+max(0.,h2-pres(po+n*h2))*.5;
+  return L*clamp(1.-occ,.25,1.)*uAmb;
+}
+
+vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd){
+  vec3 sd=uSd;
+  vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
+  float Ts=canopyT(po,uSunDir);                              // transmittance de la canopée vers le soleil (statistique)
+  vec3 col=vec3(0.);
+  float ndl=max(dot(n,sd),0.);
+  if(ndl>0. && dot(gn,sd)>0.){
+    float vis=ombreSoleil(p,gn)*Ts;
+    vec3 h=normalize(sd-rd);
+    col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),28.));
+  }
+  col+=alb*ambiance(po,gn,n,Ts);
+  return col;
+}
+
+void main(){
+  ivec2 ip=ivec2(gl_FragCoord.xy);
+  rs=hu(uint(ip.x)*1973u+uint(ip.y)*9277u^hu(uFrame)); rnd();
+  vec2 uv=(gl_FragCoord.xy+uJitPx-.5*uRes)/uRes.y;
+  float rr=length(uv), ang=rr*uFish;
+  vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
+  vec4 g0=texelFetch(uG0,ip,0), g1=texelFetch(uG1,ip,0);
+  vec3 col; float t;
+  if(g0.w<0.){                                               // rien de semé : ciel, brume, lointain
+    t=1e4;
+    col=rd.y>0.?skyCol(rd):fogCol(rd);
+    if(uLoin.w>0. && rd.y>-.02) col=lointain(rd,col);
+  } else {
+    t=g1.w;
+    vec3 p=uCamPos+rd*t;
+    vec3 gn=normalize(g1.xyz);
+    int id=int(floor(g0.w)); float par=(g0.w-float(id))*2.;
+    if(id==5){
+      col=shadeLeaf(p,gn,g0.xyz,rd);                         // feuille : couleur portée par le grain
+    } else {
+      if(dot(gn,rd)>0.) gn=-gn;
+      // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
+      vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
+      int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.);
+      if(id==0){                                             // sol, et trajet par-dessus
+        r0=uSurf.x; hs=0.;
+        if(uSurf.y!=uSurf.x){ w=smoothstep(1.15,.55,abs(q.x-pathX(q.z))+.5*(fbm(q.xz*.8+3.)-.5)); r1=uSurf.y;
+          if(w>=1.) r0=r1; else if(w>0.) nr=2; }
+      }
+      else if(id==3) r0=uSurf.z;
+      else if(id==4){ vec3 qr; r0=matProp(q,gn,vec4(0.,0.,0.,floor(par*128.+.5)),alb,n,spec,emis,qr); q=qr; }
+      else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
+      if(r0>=0){
+        vec3 A=vec3(0.), T=vec3(0.); float SP=0.;
+        for(int k=0;k<2;k++){
+          if(k>=nr) break;
+          vec3 a, tt; float sp; recette(k==0?r0:r1,q,gn,hs,rot,a,tt,sp);
+          float wk=nr==1?1.:(k==0?1.-w:w);
+          A+=a*wk; T+=tt*wk; SP+=sp*wk;
+        }
+        alb=A; n=normalize(gn+T); spec=SP;
+      }
+      col=lumiere(p,gn,n,alb,spec,rd)+alb*emis*8.;
+      if(uVoir==1) col=vec3(ombreSoleil(p,gn));
+      else if(uVoir==2) col=alb*3.;
+      else if(uVoir==3) col=n*.5+.5;
+    }
+    col=mix(fogCol(rd),col,exp(-t*uFog));
+  }
+  col=min(max(col,vec3(0.)),vec3(60.));
+  if(col.x!=col.x||col.y!=col.y||col.z!=col.z) col=vec3(0.);
+  if(uVoir==5){ float z=texture(uOmbre,gl_FragCoord.xy/uRes).r; col=vec3(z<1.?1.:0.); }   // la carte d'ombres elle-même
+  outCol=vec4(melangeHistoire(col,uCamPos+rd*t,ip),t);
 }`;
 const FICHES = [{"version":0,"id":"grands-avaux-sentier","titre":"Sentier entre les grès, fin d'automne","inspiration":"Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux","graine":4821,"kit":"foret","ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-33,"hauteur":21},"brume":0.011},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]},{"version":0,"id":"grands-avaux-nuit","titre":"Le même sentier, de nuit, à la lampe du téléphone","inspiration":"Forêt des Grands Avaux, Champcueil, après la tombée du jour","graine":4821,"kit":"foret","ambiance":{"saison":"automne","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.012},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"histoire":{"pitch":"Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.","protagonistes":[{"id":"sam","role":"porteur de la caméra","trait":"prudent, se parle pour se rassurer"}],"temps":[{"id":"bruit","quand":"après quelques dizaines de mètres ou si la voix parle d'un bruit","ce_qui_se_passe":"un craquement sur la gauche, Sam se fige","scene":{"brume":0.03}},{"id":"panne","quand":"plus tard, si Sam s'éloigne du sentier","ce_qui_se_passe":"la lampe faiblit puis s'éteint","scene":{"lampe":false}}]}},{"version":0,"id":"sous-bois-voile","titre":"Sous-bois d'été, ciel voilé, brume épaisse","inspiration":"Futaie dense par temps laiteux, sans ombres nettes","graine":7313,"kit":"foret","foret":{"densite":0.85,"rochers":0.5,"feuillage":1.3},"ambiance":{"saison":"ete","meteo":"voile","soleil":{"azimut":40,"hauteur":34},"brume":0.028},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"dunes-soir","titre":"Dunes en fin de journée","inspiration":"Erg saharien, soleil rasant, rides de vent sur le sable","graine":2207,"kit":"dunes","ambiance":{"soleil":{"azimut":-60,"hauteur":11},"brume":0.0025},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"maison-lapin","titre":"Une maison dans les bois, un lapin devant","inspiration":"Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur","graine":3170,"kit":"foret","foret":{"densite":0.7,"rochers":0.6,"feuillage":1},"ambiance":{"saison":"automne","soleil":{"azimut":-33,"hauteur":24},"brume":0.009},"objets":[{"id":"maison","nom":"petite maison en bois","devant":14,"cote":5.5,"degage":4.5,"formes":[{"f":"boite","p":[0,1.15,0],"taille":[4,2.6,3],"couleur":"#8a765f","matiere":"bois"},{"f":"toit","p":[0,2.95,0],"taille":[4.5,1.3,3.7],"couleur":"#4a4440","matiere":"tuile"},{"f":"boite","p":[1.2,3.4,0.4],"taille":[0.4,1,0.4],"couleur":"#8b4a38","matiere":"pierre"},{"f":"boite","p":[-0.5,0.98,1.51],"taille":[0.9,1.95,0.04],"couleur":"#3c2f25","matiere":"bois"},{"f":"boite","p":[1.05,1.35,1.51],"taille":[0.8,0.7,0.04],"couleur":"#2a3038","matiere":"verre"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.86,0.05,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.05,0.76,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[-0.5,0.06,1.8],"taille":[1.2,0.12,0.6],"couleur":"#7d7a74","matiere":"pierre"}]},{"id":"lapin","nom":"lapin de garenne assis","devant":10.5,"cote":2.2,"cap":70,"formes":[{"f":"boule","p":[0,0.11,0],"taille":[0.18,0.22,0.3],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.09,-0.09],"taille":[0.2,0.2,0.2],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.21,0.13],"taille":[0.11,0.12,0.13],"couleur":"#8f7a64","matiere":"pelage","lisse":0.04},{"f":"capsule","p":[0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,6],"couleur":"#7d6955","matiere":"pelage"},{"f":"capsule","p":[-0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,-6],"couleur":"#7d6955","matiere":"pelage"},{"f":"boule","p":[0,0.1,-0.19],"taille":[0.07,0.07,0.07],"couleur":"#e6e1d8","matiere":"pelage"}]}],"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}}];                      // fiches de lieu embarquées (scenes/*.json)
 
@@ -2194,7 +4074,7 @@ function resize(){
   bl1=target(Math.max(8,Math.round(W*bs)),Math.max(8,Math.round(H*bs)),gl.RGBA16F,gl.LINEAR);
   bl2=target(bl1.w,bl1.h,gl.RGBA16F,gl.LINEAR);
   hist=null; n=0; row=0; mLevel=CFG.level!==undefined?CFG.level:1;
-  V2.out=null;
+  V2.out=null; if(V3.gb) v3Libere(true);
 }
 const px1=new Float32Array(4);
 function renderPass(dst,y0,rows,o,p){
@@ -2369,8 +4249,216 @@ function v2Prets(){                                           // panoramiques te
 }
 function v2Basculer(on){
   V2.on=on; $("v2").setAttribute("aria-pressed",String(on)); $("v2").textContent=on?"Moteur v2 · oui":"Moteur v2";
+  if(on&&V3.on) v3Basculer(false);
   if(on){ v2Init(); V2.lastPose=null; V2.out=null; } else { hist=null; v2Vider(); freeT(V2.spare); V2.spare=null; v2LibereCibles(); }
 }
+
+/* ------------------------------------------------------------------ moteur v3 (essai) : on ne trace plus, on sème
+   Voir docs/moteur-v3.md. Chaque image, à budget fixe : (1) carte d'ombres, les grains semés vus du soleil ; (2) tampon G,
+   le sol en maillage polaire puis les grains vus de la caméra (v3_grains.vert : chaque grain se pose lui-même, à partir de
+   son numéro) ; (3) une passe plein écran (v3_ombrage.frag) : recettes, lumière, ciel, accumulation reprojetée.
+   Le monde (grilles, tirages, formules) est le code GLSL du lanceur de rayons, partagé par le build (monde.glsl).
+   Options de test : v3, grains (budget de la caméra, 300 000 par défaut), grainsOmbre (budget du soleil, 60 % du précédent),
+   v3k (recouvrement des grains), v3carte (largeur de la carte d'ombres), v3alpha (part d'image neuve en mouvement),
+   v3max (images accumulées à l'arrêt), v3detail (chronomètre chaque passe : ajoute des synchronisations),
+   v3net (soleil ponctuel, sans pénombre), v3pcf (flou de lecture de la carte, en texels), v3amb (niveau de l'ambiance,
+   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres). */
+const V3={ on:!!CFG.v3, grains:CFG.grains||300000, ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||1024,
+  alpha:CFG.v3alpha||.25, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
+  n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
+  sol:{r0:.3, anneaux:96, secteurs:192, dmax:420} };
+function v3Init(){
+  if(V3.gp) return;
+  V3.gp={ grains:prog(FS_V3GBUF,VS_V3GRAINS), sol:prog(FS_V3GBUF,VS_V3SOL), ombre:prog(FS_V3OMBRE,VS_V3GRAINS), ombrage:prog(FS_V3OMBRAGE) };
+  V3.maxPt=Math.min(64,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
+  V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,72);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+}
+function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
+  if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
+    v3Libere(true);
+    const tex=()=>{ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,W,H);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST); return t; };
+    const g={w:W,h:H,t0:tex(),t1:tex(),rb:gl.createRenderbuffer(),f:gl.createFramebuffer()};
+    gl.bindRenderbuffer(gl.RENDERBUFFER,g.rb); gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,W,H);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,g.f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,g.t0,0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,g.t1,0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,g.rb);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
+    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail("Moteur v3 : tampon G incomplet.");
+    V3.gb=g; V3.A=target(W,H,ACC_FMT,gl.NEAREST); V3.B=target(W,H,ACC_FMT,gl.NEAREST); V3.hist=null; V3.n=0;
+  }
+  const smH=Math.round(V3.carte*v3CarteH()/55);               // texels carrés : la carte est moins haute que large quand le soleil est bas
+  if(!V3.sm||V3.sm.w!==V3.carte||V3.sm.h!==smH){
+    if(V3.sm){ gl.deleteTexture(V3.sm.t); gl.deleteFramebuffer(V3.sm.f); }
+    const s={w:V3.carte,h:smH,t:gl.createTexture(),f:gl.createFramebuffer()};
+    gl.bindTexture(gl.TEXTURE_2D,s.t); gl.texStorage2D(gl.TEXTURE_2D,1,gl.DEPTH_COMPONENT24,s.w,s.h);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,s.f); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.TEXTURE_2D,s.t,0);
+    gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail("Moteur v3 : carte d'ombres incomplète.");
+    V3.sm=s;
+  }
+}
+function v3CarteH(){ const y=Math.max(.05,S.sunDir[1]); return Math.min(55,Math.round((55*y+14)/5)*5); }   // demi-hauteur de la carte d'ombres (m), arrondie
+function v3Libere(seulementEcran){
+  const g=V3.gb; if(g){ gl.deleteTexture(g.t0); gl.deleteTexture(g.t1); gl.deleteRenderbuffer(g.rb); gl.deleteFramebuffer(g.f); }
+  freeT(V3.A); freeT(V3.B); V3.gb=V3.A=V3.B=V3.hist=null; V3.n=0;
+  if(!seulementEcran&&V3.sm){ gl.deleteTexture(V3.sm.t); gl.deleteFramebuffer(V3.sm.f); V3.sm=null; }
+}
+/* Demi-ouverture du cap à semer. Au loin : le plus grand écart de cap parmi les directions du bord de l'image proches de
+   l'horizon, plus une marge. Tout près : tout le tour si l'image contient le nadir ou le zénith (regard vers les pieds). */
+function v3Cap(p){
+  const m=p.mat, a=W/H, fish=1.09/(.5*Math.max(1,a)), cap=Math.atan2(m[6],m[8]);
+  const dir=(x,y)=>{ const rr=Math.hypot(x,y)||1e-5, an=rr*fish, s=Math.sin(an)/rr, l=[x*s,y*s,Math.cos(an)];
+    return [m[0]*l[0]+m[3]*l[1]+m[6]*l[2],m[1]*l[0]+m[4]*l[1]+m[7]*l[2],m[2]*l[0]+m[5]*l[1]+m[8]*l[2]]; };
+  let pole=false;
+  for(const sy of [-1,1]){                                     // zénith ou nadir dans l'image ?
+    const l=[m[1]*sy,m[4]*sy,m[7]*sy], an=Math.acos(Math.max(-1,Math.min(1,l[2]))), sxy=Math.hypot(l[0],l[1])||1e-6;
+    const u=l[0]/sxy*an/fish, v=l[1]/sxy*an/fish; if(Math.abs(u)<.5*a+.05&&Math.abs(v)<.55) pole=true; }
+  let loin=0, tout=0;
+  for(let i=0;i<64;i++){ const t=i/64*4, x=(t<1?t-.5:t<2?.5:t<3?2.5-t:-.5)*a, y=t<1?-.5:t<2?t-1.5:t<3?.5:3.5-t;
+    const d=dir(x,y); let da=Math.atan2(d[0],d[2])-cap; da=Math.abs(Math.atan2(Math.sin(da),Math.cos(da)));
+    tout=Math.max(tout,da); if(d[1]>-.35&&d[1]<.7) loin=Math.max(loin,da); }
+  if(loin===0) loin=tout;
+  return {cap,demi:Math.min(Math.PI,loin+.3),pres:pole?Math.PI:Math.min(Math.PI,tout+.3)};
+}
+function aireForme(ty,s){                                      // aire approchée d'une forme de base (demi-tailles s)
+  const [x,y,z]=s;
+  if(ty===1){ const p=1.6; return 4*Math.PI*Math.pow((Math.pow(x*y,p)+Math.pow(x*z,p)+Math.pow(y*z,p))/3,1/p); }
+  if(ty===2) return 2*Math.PI*x*2*y+2*Math.PI*x*x;
+  if(ty===3) return Math.PI*x*(x+Math.hypot(x,2*y));
+  if(ty===4) return 2*Math.PI*x*2*y+4*Math.PI*x*x;
+  return 8*(x*y+y*z+x*z);
+}
+/* Objets de la fiche : poids de chaque objet (vu de la caméra : taille apparente ; vu du soleil : taille), aire de chaque
+   forme. Rangés dans une petite texture lue par les grains. */
+function v3Semis(nb,vue,p){
+  const d=V3.semis; d.fill(0);
+  const ws=[], ai=[]; let tot=0;
+  for(let i=0;i<S.objN;i++){ const o=i*16, row=shapesData[o+4], cn=shapesData[o+5], vis=shapesData[o+7]>.5, rad=shapesData[o+3];
+    let a=0; for(let j=0;j<cn;j++){ const r=(row+j)*16; a+=aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); }
+    const dd=Math.max(1,Math.hypot(shapesData[o]-p.pos[0],shapesData[o+1]-p.pos[1],shapesData[o+2]-p.pos[2])-rad*.5);
+    const w=vis?(vue===0?rad*rad/(dd*dd):rad*rad):0; ws.push(w); ai.push(a||1); tot+=w; }
+  let cum=0;
+  for(let i=0;i<S.objN;i++){ cum+=ws[i]; d[i*4]=tot>0?cum/tot:0; d[i*4+1]=tot>0?nb*(ws[i]/tot)/ai[i]:0;
+    const o=i*16, row=shapesData[o+4], cn=shapesData[o+5]; let c=0;
+    for(let j=0;j<cn;j++){ const r=(row+j)*16, a=aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); c+=a;
+      d[(row+j)*4]=c/ai[i]; d[(row+j)*4+1]=a; } }
+  if(tot<=0) for(let i=0;i<S.objN;i++) d[i*4]=0;
+  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,1,72,gl.RGBA,gl.FLOAT,d);
+  return tot>0;
+}
+/* Partage du budget entre les familles, au prorata de la surface apparente qu'elles demandent (aire de l'objet / aire de
+   sa cellule) : le recouvrement de l'écran reste le même pour toutes. Les grains tombés dans une cellule vide sont perdus :
+   un monde plus dense en perd moins, il ne coûte pas plus. */
+function v3Partage(N,vue,p){
+  const tr=S.kit===0&&S.kitP[0]>0, pe=tr&&S.houp[3]>0, bl=S.kitP[1]>0;
+  const w=[tr?6.8/36:0, pe?.95/10.9:0, bl?3.4/72.25:0];
+  const fF=vue===0&&S.kit===0&&S.kitP[2]>0?.28:0;
+  const ob=S.objN>0&&v3Semis(1,vue,p), fP=ob?(vue===0?.12:.1):0;
+  const sw=w[0]+w[1]+w[2], solide=N*(1-fF-fP);
+  const nA=sw>0?Math.round(solide*w[0]/sw):0, nB=sw>0?Math.round(solide*w[1]/sw):0, nR=sw>0?Math.round(solide*w[2]/sw):0;
+  const nF=Math.round(N*fF), nP=ob?Math.round(N*fP):0;
+  if(ob) v3Semis(nP,vue,p);
+  if(vue===1){ const traits=Math.round(nB*.35);               // vue du soleil : les perches en traits (voir semeBTrait)
+    return {nA,nB:0,nR,nF,nP,traits,part:[nA,nA,nA+nR,nA+nR+nF],total:nA+nR+nF+nP}; }
+  return {nA,nB,nR,nF,nP,traits:0,part:[nA,nA+nB,nA+nB+nR,nA+nB+nR+nF],total:nA+nB+nR+nF+nP};
+}
+function v3Monde(u,w,h,p){                                    // uniformes de monde.glsl (mêmes valeurs que common())
+  gl.uniform2f(u.uRes||null,w,h); gl.uniform3fv(u.uCamPos||null,p.pos); gl.uniformMatrix3fv(u.uCam||null,false,p.mat);
+  gl.uniform1f(u.uFish||null,1.09/(.5*Math.max(1,w/h))); gl.uniform1f(u.uFog||null,S.fog); gl.uniform3fv(u.uSeed||null,seed);
+  gl.uniform3fv(u.uSunDir||null,S.sunDir); gl.uniform3fv(u.uSun||null,S.sun); gl.uniform3fv(u.uSky||null,S.sky); gl.uniform1f(u.uTorch||null,S.torch);
+  gl.uniform1i(u.uKit||null,S.kit); gl.uniform4fv(u.uKitP||null,S.kitP); gl.uniform1i(u.uMode||null,0);
+  gl.uniform2fv(u.uCan||null,S.can); gl.uniform4fv(u.uHoup||null,S.houp);
+  gl.uniform4fv(u.uLoin||null,S.loin); gl.uniform3fv(u.uLoinCol||null,S.loinCol); gl.uniform3fv(u.uLoinBas||null,S.loinBas);
+  if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
+  if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP); }
+}
+const px3=new Float32Array(4);
+function v3Sync(){ gl.bindFramebuffer(gl.FRAMEBUFFER,dummy.f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3); }
+function v3Image(p){
+  v3Init(); v3Cibles();
+  const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
+  const chrono=nom=>{ if(!V3.detail) return; v3Sync(); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
+  const rnd=Math.random;
+  const jit=bouge?[0,0]:[rnd()-.5,rnd()-.5];                   // décalage sous-pixel, seulement à l'arrêt
+  // soleil de cette image : tiré dans le disque solaire (pénombre par accumulation)
+  const sd0=S.sunDir, t1=normz(cross3(sd0,[0,1,0])), b1=cross3(t1,sd0), ra=CFG.v3net?0:Math.sqrt(rnd())*.011, aa=6.2832*rnd();
+  const sd=normz([0,1,2].map(i=>sd0[i]+(t1[i]*Math.cos(aa)+b1[i]*Math.sin(aa))*ra));
+  const right=normz(cross3(sd,[0,1,0])), up=cross3(right,sd);
+  const fwd=[p.mat[6],p.mat[8]], fl=Math.hypot(fwd[0],fwd[1])||1;
+  const cx=p.pos[0]+fwd[0]/fl*25, cz=p.pos[2]+fwd[1]/fl*25, C=[cx,terrainH(cx,cz)+5,cz], E=55, D=120;
+  const Ey=V3.sm.h/V3.sm.w*E;                                 // la carte vue du soleil bas est surtout large : on serre la hauteur
+  const sh=Math.hypot(sd[0],sd[2])||1, recul=Math.min(30,14/Math.max(.25,sd[1]/sh)*.5);
+  const zone=[cx+sd[0]/sh*recul*.5,cz+sd[2]/sh*recul*.5,E+recul*.5];
+  const soleilM=new Float32Array([...right,...up,...sd]), soleilE=[E,Ey,D,2*E/V3.carte];
+  const az=v3Cap(p), dmin=.35, L=Math.log(160/dmin);
+  // (1) carte d'ombres
+  const Ns=V3.ombre||Math.round(V3.grains*.6);
+  let u=G.ombre.u; gl.useProgram(G.ombre.p); v3Monde(u,W,H,p);
+  const ps=v3Partage(Ns,1,p);
+  gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); gl.uniform4iv(u.uPart,ps.part); gl.uniform1i(u.uTotal,ps.total);
+  gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
+  gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
+  gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
+  gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V3.sm.f); gl.viewport(0,0,V3.sm.w,V3.sm.h);
+  gl.clearBufferfv(gl.DEPTH,0,[1]); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
+  gl.uniform1i(u.uTrait,0);
+  if(ps.total>0) gl.drawArrays(gl.POINTS,0,ps.total);
+  if(ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
+  chrono("ombre");
+  // (2) tampon G : le sol, puis les grains
+  const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H);
+  gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
+  const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol, nSol=so.anneaux*so.secteurs*6;
+  u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc);
+  gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,so.anneaux,so.secteurs); gl.uniform1i(u.uPts,0);
+  gl.drawArrays(gl.TRIANGLES,0,nSol);
+  const pc=v3Partage(V3.grains,0,p); V3.parts=pc;
+  u=G.grains.u; gl.useProgram(G.grains.p); v3Monde(u,W,H,p);
+  gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); gl.uniform4iv(u.uPart,pc.part); gl.uniform1i(u.uTotal,pc.total);
+  gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
+  gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil,70,W*H);
+  gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
+  gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
+  if(pc.total>0) gl.drawArrays(gl.POINTS,0,pc.total);
+  gl.disable(gl.DEPTH_TEST);
+  chrono("tamponG");
+  // (3) matière, lumière, ciel, accumulation
+  const dst=V3.hist===V3.A?V3.B:V3.A;
+  u=G.ombrage.u; gl.useProgram(G.ombrage.p); v3Monde(u,W,H,p);
+  bindTex(0,g.t0,u.uG0); bindTex(1,g.t1,u.uG1); bindTex(2,V3.sm.t,u.uOmbre); bindTex(6,(V3.hist||dummy).t,u.uPrev);
+  gl.uniform1ui(u.uFrame,f); gl.uniform2fv(u.uJitPx,jit);
+  gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
+  const occ=S.kit===0?(S.kitP[0]>0?S.kitP[0]/36*.5:0)+(S.houp[3]>0?S.kitP[0]*.8*S.houp[3]/10.9*.14:0):0;   // troncs par mètre : densité × diamètre
+  gl.uniform1f(u.uOccT,occ); gl.uniform1i(u.uVoir,CFG.v3voir|0); gl.uniform1f(u.uPcf,CFG.v3pcf!==undefined?CFG.v3pcf:1); gl.uniform1f(u.uAmb,CFG.v3amb||.65);   // flou de lecture de la carte, en texels
+  const alpha=!V3.hist?1:bouge?V3.alpha:1/(V3.n+1);
+  gl.uniform1f(u.uAlpha,alpha); gl.uniform1i(u.uReproj,bouge?1:0);
+  if(V3.hist){ gl.uniform3fv(u.uPrevPos,V3.histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,V3.histPose.mat); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,W,H); draw();
+  chrono("ombrage");
+  v3Sync();                                                   // force la fin du calcul : le temps mesuré est le vrai temps GPU
+  V3.ms=performance.now()-t0; V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; V3.nImg++;
+  V3.hist=dst; V3.histPose=p; V3.n++;
+}
+function v3Frame(p,dt){
+  if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
+  else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
+  v3Image(p); frames++;
+  if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,t:performance.now()});
+  postFX(V3.hist);
+}
+function v3Basculer(on){
+  if(on&&V2.on) v2Basculer(false);
+  V3.on=on; $("v3").setAttribute("aria-pressed",String(on)); $("v3").textContent=on?"Moteur v3 · oui":"Moteur v3";
+  if(on){ v3Init(); V3.hist=null; V3.n=0; } else { hist=null; v3Libere(false); }
+}
+const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const normz=a=>{ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; };
 
 /* ------------------------------------------------------------------ boucle */
 let lastT=0, bench=null, lastMotionMs=0; const startT=performance.now();
@@ -2383,6 +4471,7 @@ function frame(now){
   const v2pret=V2.on&&!sceneDirty&&V2.panos.some(o=>o.t);         // tant qu'aucun panoramique n'est tourné, on garde l'image du moteur actuel : jamais d'écran noir
   if(V2.on&&!v2pret){ if(sceneDirty) v2Vider(); v2Tourner(V2.budget); }
   if(v2pret) v2Frame(p,dt);
+  else if(V3.on) v3Frame(p,dt);
   else if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
   else if(n<MAXS){
     const t0=performance.now(); let done=false;
@@ -2390,7 +4479,7 @@ function frame(now){
     if(done && (n<14||n%4===0)) postFX(hist);
   }
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
-  display(v2pret?V2.out||hist:hist,(now-startT)/1000);
+  display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist,(now-startT)/1000);
   hud(now);
 }
 let lastHud=0;
@@ -2400,10 +4489,11 @@ function hud(now){
   $("rec").textContent=p2(Math.floor(s/60))+":"+p2(s%60);
   $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
   $("camid").textContent="CAM 07 · GRAINE "+seedN;
-  $("stat").textContent=V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
+  $("stat").textContent=V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS":V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
-  window.__state={n:CFG.auto?frames:V2.on?v2Prets():n,
-    v2:V2.on?{msProj:+V2.msProj.toFixed(1),msProjMoy:+V2.msProjAvg.toFixed(1),points:V2.pts,dessines:V2.dessines,faits:V2.faits.slice(),msParLigne:+V2.msPerRow.toFixed(2)}:undefined,W,H,mLevel,msMotion:+msMotion.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
+  window.__state={n:CFG.auto?frames:V2.on?v2Prets():V3.on?V3.n:n,
+    v3:V3.on?{ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
+    v2:V2.on?{msProj:+V2.msProj.toFixed(1),msProjMoy:+V2.msProjAvg.toFixed(1),points:V2.pts,dessines:V2.dessines,faits:V2.faits.slice(),msParLigne:+V2.msPerRow.toFixed(2)}:undefined,W,H,mLevel,msMotion:+msMotion.toFixed(1),msImage:+lastMotionMs.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
 }
 
 /* ------------------------------------------------------------------ commandes directes */
@@ -2679,6 +4769,7 @@ async function mesurer(){
   const f=bench.slice(Math.min(10,bench.length>>2)); bench=null; queue.length=0; hold=true;
   await wait(400);
   if(V2.on) return mesurerV2(f,wait,med);
+  if(V3.on) return mesurerV3(f,wait,med);
   const n0=n, t0=performance.now(); let n1=n0, t1=t0;
   while(performance.now()-t0<14000 && n<n0+6){ await wait(100); if(n!==n1){ n1=n; t1=performance.now(); } }
   hold=false;
@@ -2736,6 +4827,40 @@ async function mesurerV2(f,wait,med){
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
+/* Moteur v3 : en marche, chaque image sème le budget de grains entier ; à l'arrêt, on chronomètre aussi chaque passe. */
+async function mesurerV3(f,wait,med){
+  const out=$("mesure-txt"), fx=(v,d=1)=>v==null?"non mesuré":v.toFixed(d).replace(".",",");
+  out.textContent="Marche mesurée. Détail des passes à l'arrêt…";
+  const det=V3.detail; V3.detail=true; V3.passes={}; V3.n=0; V3.max=Math.max(V3.max,1);
+  const k0=V3.nImg; while(V3.nImg<k0+12) { V3.n=0; await wait(60); }
+  const pa=Object.assign({},V3.passes); V3.detail=det; hold=false;
+  const ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
+  const ips=f.length>1?(f.length-1)/((f[f.length-1].t-f[0].t)/1000):null;   // horloge réelle : dt est plafonné à 100 ms dans la boucle
+  const dbg=gl.getExtension("WEBGL_debug_renderer_info"), gpu=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"inconnu";
+  const k=v=>Math.round((v||0)/1000)+" k";
+  out.textContent=[
+    "MESURE · MOTEUR V3 · "+(fiche.titre||fiche.id),
+    "",
+    "Écran            "+canvas.width+" × "+canvas.height+" (×"+(window.devicePixelRatio||1).toFixed(2)+")",
+    "Puce graphique   "+gpu,
+    "",
+    "EN MARCHE ("+f.length+" images)",
+    "Images/seconde   "+(ips?fx(ips):"non mesuré"),
+    "Calcul par image "+fx(ms,1)+" ms",
+    "Résolution       "+W+" × "+H,
+    "",
+    "BUDGET DE GRAINS",
+    "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+")",
+    "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.sm.w+" × "+V3.sm.h,
+    "Sol              "+V3.sol.anneaux*V3.sol.secteurs*2+" triangles",
+    "",
+    "PAR PASSE (à l'arrêt, synchronisé)",
+    "Carte d'ombres   "+fx(pa.ombre,1)+" ms",
+    "Tampon G         "+fx(pa.tamponG,1)+" ms",
+    "Matière, lumière "+fx(pa.ombrage,1)+" ms",
+  ].join("\n");
+  $("mesure-copier").disabled=false;
+}
 $("mesurer").onclick=()=>{ mesurer().catch(e=>{ hold=false; bench=null; $("mesure-txt").textContent="La mesure a échoué : "+(e&&e.message||e); }); };
 $("mesure-fermer").onclick=()=>{ $("mesure").hidden=true; };
 $("mesure-copier").onclick=()=>{ const t=$("mesure-txt"), b=$("mesure-copier"), ok=()=>{ b.textContent="Copié"; setTimeout(()=>b.textContent="Copier",1500); };
@@ -2781,7 +4906,7 @@ function ticMeneur(){
 }
 function meneurEntendre(texte){ say("…"); return meneur.voix(texte); }
 function interfaceHistoire(on){
-  for(const id of ["monde","lieu","mesurer","histoire","v2"]) if($(id)) $(id).hidden=on;
+  for(const id of ["monde","lieu","mesurer","histoire","v3"]) if($(id)) $(id).hidden=on;
   if($("journal")) $("journal").hidden=!on&&!dernierJournal;
   $("hint").textContent=on?"Glisse pour regarder · « Lui parler » pour lui dire quelque chose":"Glisse pour regarder autour de lui";
   $("hint").classList.remove("off"); $("parler").classList.remove("pulse"); $("fin").hidden=true;
@@ -2882,6 +5007,8 @@ if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
 if(V2.on){ v2Basculer(true); window.__v2=V2; }                // accès de test (tools/v2essai.mjs)
 $("v2").onclick=()=>v2Basculer(!V2.on);
+if(V3.on){ v3Basculer(true); window.__v3=V3; window.__v3lire=(x,y)=>{ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,V3.hist.f); gl.readPixels(x,y,1,1,gl.RGBA,gl.FLOAT,b); return Array.from(b); }; }               // accès de test (tools/v3essai.mjs)
+$("v3").onclick=()=>v3Basculer(!V3.on);
 if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
 if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();
