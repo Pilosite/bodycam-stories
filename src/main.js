@@ -155,6 +155,7 @@ function reglerRelief(f){
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
+  if(f!==fiche) errance=true;                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
@@ -516,7 +517,7 @@ function simulate(dt){
   let v=0;
   if(!queue.length){ idle+=dt;
     if(meneur&&!meneurLibre){ if(idle>patience && !CFG.nowalk){ idle=0; patience=7; pasHistoire(); } }   // en histoire : petits pas, et elle attend la voix après chaque temps
-    else if(idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
+    else if(errance && idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
   const a=queue[0];
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
@@ -543,6 +544,7 @@ const coarse=matchMedia("(pointer:coarse)").matches;
 /* Qualité : « mobile » tient un téléphone moyen ; « complète » est faite pour un ordinateur (pleine résolution, bien plus de grains,
    carte d'ombres plus fine). Par défaut : complète sans écran tactile, mobile sinon. Le choix est gardé dans le navigateur. */
 var docile=!!CFG.docile; try{ if(localStorage.getItem("bodycam-docile")==="1") docile=true; }catch(_){}   // mode essai : il fait exactement ce qu'on demande
+var errance=true;                                             // il se promène de lui-même ; dès qu'on lui parle, il attend qu'on lui dise quoi faire
 var meneurLibre=false;                                        // vrai quand le meneur tourne sans histoire écrite (promenade libre)
 const QUAL={ full:CFG.full!==undefined?!!CFG.full:!coarse };
 try{ const q=localStorage.getItem("bodycam-qualite"); if(q&&CFG.full===undefined) QUAL.full=q==="1"; }catch(_){}
@@ -1813,7 +1815,13 @@ function ticMeneur(){
   if(dbgOn) dbgEl.textContent=meneur.debug();
   if(meneur.fini()) clearInterval(meneurTimer);
 }
-function meneurEntendre(texte){ say("…"); return meneur.voix(texte); }
+function meneurEntendre(texte){ say("…");
+  if(meneurLibre){                                             // promenade libre : une fois qu'on lui a parlé, il ne repart plus tout seul
+    const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    errance=/promene|balade-toi|balade toi|continue ta|reprends ta|comme tu veux|ou tu veux|fais ta vie/.test(t);
+    if(/stop|arrete|bouge plus|ne bouge|attends|reste la|halte/.test(t)) queue.length=0;
+  }
+  return meneur.voix(texte); }
 function interfaceHistoire(on){
   for(const id of ["monde","lieu","mesurer","histoire","v3"]) if($(id)) $(id).hidden=on;
   if($("journal")) $("journal").hidden=!on&&!dernierJournal;
