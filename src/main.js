@@ -34,7 +34,8 @@ const ETAPES=[]; const t00=performance.now();
 function etapeGL(nom){ ETAPES.push(((performance.now()-t00)/1000).toFixed(1)+" s  "+nom); if(ETAPES.length>14) ETAPES.shift(); }
 let CARTE="?";
 function diag(){ const m=CARTE;
-  return "\n\n— Diagnostic à copier —\nCarte : "+m+"\nÉcran : "+canvas.width+" × "+canvas.height+", qualité "+(typeof QUAL==="object"&&QUAL.full?"complète":"mobile")+"\nDernières étapes :\n"+ETAPES.join("\n"); }
+  let o=""; try{ if(typeof V3==="object"&&V3.on) o="\n"+ombDiag(); }catch(_){}
+  return "\n\n— Diagnostic à copier —\nCarte : "+m+"\nÉcran : "+canvas.width+" × "+canvas.height+", qualité "+(typeof QUAL==="object"&&QUAL.full?"complète":"mobile")+o+"\nDernières étapes :\n"+ETAPES.join("\n"); }
 canvas.addEventListener("webglcontextlost",e=>{ e.preventDefault(); const el=$("err"); el.style.display="flex"; el.style.userSelect="text"; el.style.webkitUserSelect="text";
   try{ localStorage.setItem("bodycam-chute",ETAPES[ETAPES.length-1]||""); }catch(_){}
   el.textContent="La carte graphique a abandonné (contexte WebGL perdu)."+diag(); });
@@ -840,18 +841,76 @@ const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG
   n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*SH_ROWS), maxPt:64, kf:CFG.v3kf||2.4,
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},          // dmax : 150 m quand l'eau est à l'horizon (au-delà, le lanceur de rayons ne touche plus rien : c'est la mer)
   tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
-function v3Init(){                                             // rend vrai quand tous les programmes sont prêts (compilation sans bloquer)
-  const vAtmo=S.atmo&&S.atmo[0]?1:0, vRais=vAtmo&&QUAL.full?(CFG.rais!==undefined?Math.max(0,Math.min(16,CFG.rais|0)):10):0;   // variante de l'ombrage : atmosphère, et rais en qualité complète
-  if((V3.gp||V3.lance) && (V3.avecAtmo!==vAtmo||V3.avecRais!==vRais)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }
-  if((V3.gp||V3.lance) && V3.avecSem!==(S.semN>0)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }   // la variante de l'ombrage dépend des semis de la fiche
-  if(V3.gp) return true;
-  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; V3.avecSem=S.semN>0; V3.avecAtmo=vAtmo; V3.avecRais=vRais; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
+/* Échelle de l'ombrage (docs/moteur-v3.md, « Échelle de l'ombrage » ; src/echelle.js). Le programme d'ombrage existe en deux
+   tailles : le socle (#define SOCLE : soleil, carte d'ombres, ambiance, matière réduite), qui se compile partout, et la variante
+   complète voulue par la fiche et la qualité (tapis, semis, atmosphère, rais). La page compile d'abord le socle et dessine dès
+   qu'il est prêt ; ensuite seulement, sans bloquer, elle compile la variante complète et la met en service quand elle est prête.
+   Une variante complète qui n'est pas prête en DELAI_OMBRAGE, ou pendant la compilation de laquelle la page est tombée, est
+   notée en échec dans localStorage (bodycam-ombrage) et n'est plus tentée sur cette machine : on reste au socle.
+   CFG.ombrage : "socle" (rester au socle), "plein" (attendre la variante complète avant la première image : comportement
+   d'avant, par défaut quand window.__CFG existe, pour que les captures de référence ne changent pas), "echelle" (défaut).
+   Essais (tools/ombrage-essai.mjs) : CFG.ombrageJamais (la variante complète n'est jamais prête : échec simulé),
+   CFG.ombrageDelai (délai d'abandon en ms, au lieu de DELAI_OMBRAGE). */
+const OMB={ mode:CFG.ombrage||(window.__CFG?"plein":"echelle"), delai:CFG.ombrageDelai||ECHELLE.DELAI_OMBRAGE, e:{}, mem:{}, empr:ECHELLE.empreinte(FS_V3OMBRAGE), sig:"", tSocle:0 };
+try{ const r=ECHELLE.auDemarrage(ECHELLE.lireMemoire(localStorage.getItem(ECHELLE.CLE_OMBRAGE)),Date.now()); OMB.mem=r.mem;
+  if(r.echecs.length){ localStorage.setItem(ECHELLE.CLE_OMBRAGE,JSON.stringify(OMB.mem)); r.echecs.forEach(k=>etapeGL("ombrage "+k+" : interrompu au chargement précédent, noté en échec")); } }catch(_){}
+function ombMemoire(sig,evt,ms){ if(OMB.mode!=="echelle") return; OMB.mem=ECHELLE.noter(OMB.mem,sig,evt,{now:Date.now(),ms}); try{ localStorage.setItem(ECHELLE.CLE_OMBRAGE,JSON.stringify(OMB.mem)); }catch(_){} ombBouton(); }
+function ombVoulue(){                                          // la variante complète que demandent la fiche et la qualité
+  const atmo=S.atmo&&S.atmo[0]?1:0;
+  const v={ tapis:!QUAL.full&&CFG.v3tapis!==false, semis:S.semN>0, atmo, rais:atmo&&QUAL.full?(CFG.rais!==undefined?Math.max(0,Math.min(16,CFG.rais|0)):10):0 };
+  v.sig=ECHELLE.signature(v,OMB.empr); return v; }
+function ombLancer(sig,defs,tapis,rais){                            // une variante, compilée sans attendre
+  etapeGL("compilation : ombrage "+sig);
+  const e={ sig, l:lancer(FS_V3OMBRAGE.replace("\n","\n"+defs+"\n")), t0:performance.now(), tapis, rais:rais||0, p:null, echec:"", ms:0 };
+  if(tapis&&!V3.tapP&&!V3.tapL) V3.tapL=lancer(FS_V3TAPIS);    // le tapis du sol (qualité mobile) va avec la variante qui le lit
+  return OMB.e[sig]=e; }
+function ombAvancer(e,socle){                                  // rend vrai quand la variante est prête ; abandonne une complète trop lente
+  if(e.p) return true; if(e.echec) return false;
+  const pret=(socle||!CFG.ombrageJamais)&&fini(e.l)&&(!e.tapis||V3.tapP||!V3.tapL||fini(V3.tapL));
+  if(!pret){
+    if(!socle&&OMB.mode==="echelle"&&performance.now()-e.t0>OMB.delai){
+      e.echec="délai"; ombMemoire(e.sig,"delai",performance.now()-e.t0); etapeGL("  ombrage "+e.sig+" : pas prêt en "+(OMB.delai/1000)+" s, on reste au socle");
+      try{ gl.deleteProgram(e.l.p); }catch(_){} }
+    return false; }
+  const fin=()=>{ e.p=finir(e.l); if(e.tapis&&!V3.tapP&&V3.tapL){ V3.tapP=finir(V3.tapL); V3.tapL=null; } };
+  if(socle) fin();                                             // le socle (ou le mode plein) qui ne compile pas : l'erreur s'affiche, comme avant
+  else try{ fin(); }
+  catch(err){ e.echec="erreur"; e.p=null; ombMemoire(e.sig,"erreur"); etapeGL("  ombrage "+e.sig+" : erreur de compilation, on reste au socle");
+    const el=$("err"); if(!gl.isContextLost()){ el.style.display="none"; el.textContent=""; } return false; }
+  e.ms=performance.now()-e.t0; if(!socle) ombMemoire(e.sig,"ok",e.ms);
+  etapeGL("  compilé : ombrage "+e.sig+" en "+(e.ms/1000).toFixed(1)+" s"); return true; }
+function v3Ombrage(){                                          // choisit le programme d'ombrage de cette image (V3.omb) ; faux : rien de prêt
+  const v=ombVoulue(); OMB.sig=v.sig;
+  for(const k in OMB.e){ const e=OMB.e[k]; if(!e.p&&!e.echec&&k!=="socle") ombAvancer(e,false); }   // celles qui compilent encore (fiche quittée comprise)
+  let P=OMB.e[v.sig]; const pleinePrete=!!(P&&P.p);
+  let So=OMB.e.socle; const soclePret=!!(So&&So.p);
+  const c=ECHELLE.choisir({ mode:OMB.mode, pleinePrete, soclePret, mem:OMB.mem, sig:v.sig, imageFaite:V3.nImg>0 });
+  if(c.socle&&!So) So=ombLancer("socle","#define SOCLE 1\n#define TAPIS 0\n#define SEMO 0\n#define ATMO 0\n#define RAIS 0",false);
+  if(c.socle&&!soclePret&&ombAvancer(So,true)){ OMB.tSocle=So.ms; return v3Ombrage(); }
+  if(c.tenter&&!P){ P=ombLancer(v.sig,"#define TAPIS "+(v.tapis?1:0)+"\n#define SEMO "+(v.semis?1:0)+"\n#define ATMO "+v.atmo+"\n#define RAIS "+v.rais,v.tapis,v.rais); if(OMB.mode==="echelle") ombMemoire(v.sig,"debut"); }
+  if(OMB.mode==="plein"&&P&&!P.p&&ombAvancer(P,true)) return v3Ombrage();   // mode plein : comme avant, une erreur s'affiche
+  V3.attendSocle=c.utiliser===null&&c.socle;
+  const e=c.utiliser==="plein"?P:c.utiliser==="socle"?So:null; if(!e) return false;
+  if(V3.omb!==e){                                              // mise en service : l'historique reprojeté se fond dans la nouvelle image (V3.n=0 : comme un mouvement), sans éclair
+    if(V3.omb) V3.n=0;
+    etapeGL("ombrage en service : "+(e===So?"socle":"complet "+e.sig)); V3.omb=e; }
+  return true; }
+function ombDiag(){                                           // pour le diagnostic (trois touches sur le chrono REC, et l'écran d'erreur)
+  const L=[], e=V3.omb, So=OMB.e.socle, P=OMB.e[OMB.sig], f=ms=>(ms/1000).toFixed(1)+" s";
+  L.push("Ombrage v3 ("+OMB.mode+") : "+(!e?"rien de prêt":e===So?"SOCLE":"complet "+e.sig));
+  if(So) L.push("  socle : "+(So.p?"compilé en "+f(So.ms):"compilation depuis "+f(performance.now()-So.t0)));
+  if(OMB.sig&&OMB.mode!=="socle") L.push("  voulu "+OMB.sig+" : "+(P?P.p?"compilé en "+f(P.ms):P.echec?"échec ("+P.echec+")":"compilation depuis "+f(performance.now()-P.t0):!ECHELLE.peutTenter(OMB.mem,OMB.sig)?"échec mémorisé, pas retenté":"pas encore lancé"));
+  const m=ECHELLE.resumer(OMB.mem); if(m.length) L.push("  mémoire : "+m.join(" ; "));
+  return L.join("\n"); }
+function ombBouton(){ const b=$("ombrage-raz"); if(b) b.hidden=!ECHELLE.echecs(OMB.mem).length; }
+function ombRaz(){ try{ localStorage.removeItem(ECHELLE.CLE_OMBRAGE); }catch(_){} location.reload(); }   // remise à zéro de la mémoire : tout se retente
+function v3Init(){                                             // rend vrai quand les programmes du semeur et un ombrage sont prêts (compilation sans bloquer)
+  if(!V3.gp){
+  if(!V3.lance){ etapeGL("compilation : moteur v3 (6 programmes, puis l'ombrage)");
     const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
     V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), grainsF:lancer(F(FS_V3GBUF),F(VS_V3GRAINS)), sol:lancer(FS_V3GBUF,VS_V3SOL),
-      ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombreF:lancer(F(FS_V3OMBRE),F(VS_V3GRAINS)), proches:lancer(FS_V3PROCHES,VS_V3PROCHES),
-      ombrage:lancer(FS_V3OMBRAGE.replace("\n","\n#define TAPIS "+(V3.avecTapis?1:0)+"\n#define SEMO "+(V3.avecSem?1:0)+"\n#define ATMO "+vAtmo+"\n#define RAIS "+vRais+"\n")) };
-    if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
-  for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
+      ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombreF:lancer(F(FS_V3OMBRE),F(VS_V3GRAINS)), proches:lancer(FS_V3PROCHES,VS_V3PROCHES) }; }
+  for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } V3.attendSocle=true; return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
   // Taille maximale d'un grain : plafonnée à 64 pixels, une surface vue de très près (tronc, bloc, mur) ne pouvait plus être couverte
   // et laissait voir à travers. Le plafond suit maintenant ce que la puce accepte, jusqu'à 320 pixels.
@@ -859,7 +918,8 @@ function v3Init(){                                             // rend vrai quan
   V3.tapVide=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,V3.tapVide); gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,1,1,1);
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
-  return true;
+  }
+  return v3Ombrage();
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
@@ -908,7 +968,7 @@ function v3Libere(seulementEcran){
    tant qu'il n'est pas prêt, l'ombrage revient à recette() pour ces pixels. Mémoire : 2 × L × N² × 4 octets (14,7 Mo par défaut).
    Options : v3tapis (false le coupe ; par défaut en qualité mobile seulement), v3tapisN, v3tapisL, v3tapisS0 (m),
    v3tapisBudget (texels cuits par image au plus), v3tapisBias (niveau choisi : négatif = plus fin). */
-function v3TapisActif(){ return !!(V3.gp&&V3.gp.tapis)&&(OPT.tapis!==undefined?!!OPT.tapis:!QUAL.full); }
+function v3TapisActif(){ return !!(V3.omb&&V3.omb.p&&V3.omb.tapis&&V3.tapP)&&(OPT.tapis!==undefined?!!OPT.tapis:!QUAL.full); }
 function v3Tapis(p){
   const T=V3.tap; T.cuits=0;
   if(!v3TapisActif()) return false;
@@ -927,7 +987,7 @@ function v3Tapis(p){
   if(T.panne) return false;
   const cle=JSON.stringify([seed,S.surf,S.traj,S.rel,S.creux,S.kit,matVersion,S.sunDir,S.kitP,S.can,S.houp]);   // tout ce dont dépend la cuisson
   if(cle!==T.cle){ T.cle=cle; T.lv.forEach(l=>{ l.pret=false; l.fill=-1; }); }
-  const G=V3.gp.tapis, u=G.u; gl.useProgram(G.p); v3Monde(u,N,N,p); gl.uniform1i(u.uTapN,N);
+  const G=V3.tapP, u=G.u; gl.useProgram(G.p); v3Monde(u,N,N,p); gl.uniform1i(u.uTapN,N);
   gl.viewport(0,0,N,N); gl.enable(gl.SCISSOR_TEST);
   let budget=T.budget;
   const md=v=>((v%N)+N)%N;
@@ -1078,7 +1138,7 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
   gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
   gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);
-  atmoUniformes(u,p,V3.avecRais||0);
+  atmoUniformes(u,p,V3.omb&&V3.omb.rais||0);
 }
 /* Atmosphère : uAtmo (modèle, trouble, brume basse au sol, hauteur d'échelle) et uAtmo2 (sol de référence de la brume basse :
    celui de la caméra ; force du rebord ; pas des rais dans la carte d'ombres, v3 en qualité complète seulement ; troncs par
@@ -1183,7 +1243,7 @@ function v3Image(p){
   v3Tapis(p); if(V3.tap.cuits) chrono("tapis",{f:V3.tap.f[V3.tap.dernier],u8:true}); else chrono("tapis");
   // (4) matière, lumière, ciel, accumulation
   const dst=V3.hist===V3.A?V3.B:V3.A;
-  u=G.ombrage.u; gl.useProgram(G.ombrage.p); v3Monde(u,W,H,p);
+  const GO=V3.omb.p; u=GO.u; gl.useProgram(GO.p); v3Monde(u,W,H,p);
   bindTex(0,g.t0,u.uG0); bindTex(1,g.t1,u.uG1); bindTex(2,V3.sm.t,u.uOmbre); bindTex(6,(V3.hist||dummy).t,u.uPrev);
   gl.uniform1ui(u.uFrame,f); gl.uniform2fv(u.uJitPx,jit);
   gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
@@ -1204,8 +1264,9 @@ function v3Image(p){
   V3.hist=dst; V3.histPose=p; V3.n++;
 }
 function v3Frame(p,dt){
-  if(!v3Init()){ const d=performance.now()-(V3.t0prep||(V3.t0prep=performance.now()));
-    if(d>2500) say(d>25000?"La préparation du moteur dure anormalement. Touche trois fois le chrono REC… ou recharge la page. Dernière étape : "+(ETAPES[ETAPES.length-1]||""):"Préparation du moteur graphique…",true);
+  if(v3Init()) V3.t0prep=0;
+  else { const d=performance.now()-(V3.t0prep||(V3.t0prep=performance.now()));
+    if(d>2500) say(d>25000&&V3.attendSocle?"La préparation du moteur dure anormalement. Touche trois fois le chrono REC… ou recharge la page. Dernière étape : "+(ETAPES[ETAPES.length-1]||""):"Préparation du moteur graphique…",true);
     return; }                                        // programmes encore en compilation
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
@@ -1219,7 +1280,7 @@ function qualite(full){                                        // bascule mobile
   if(!CFG.grains) V3.grains=full?2500000:300000;
   if(!CFG.v3carte) V3.carte=full?2048:1024;
   v3Libere(false); resize(); sceneDirty=true;
-  if((!QUAL.full)!==!!V3.avecTapis){ V3.gp=null; V3.lance=null; V3.t0prep=0; }   // la variante des programmes dépend de la qualité : on recompile, sans bloquer
+  V3.t0prep=0;                                                 // la variante de l'ombrage dépend de la qualité : v3Ombrage() la monte, socle d'abord
   $("qualite").textContent="Qualité : "+(full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(!!full));
 }
 function v3Basculer(on){
@@ -1288,10 +1349,11 @@ function hud(now){
   $("rec").textContent=p2(Math.floor(s/60))+":"+p2(s%60);
   $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
   $("camid").textContent="CAM 07 · GRAINE "+seedN;
-  $("stat").textContent=V3.on&&!V3.gp?"V3 · PRÉPARATION…":!V3.on&&ptEnCours()?"PRÉPARATION…":V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS":V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
+  if(dbgOn&&!meneur) dbgEl.textContent=V3.on?ombDiag():"";
+  $("stat").textContent=V3.on&&!(V3.gp&&V3.omb)?"V3 · PRÉPARATION…":!V3.on&&ptEnCours()?"PRÉPARATION…":V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS":V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
   window.__state={n:CFG.auto?frames:V2.on?v2Prets():V3.on?V3.n:n,
-    v3:V3.on?{ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),tapis:V3.tap.lv.map(l=>l.pret?1:0).join(''),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
+    v3:V3.on?{ombrage:V3.omb?(V3.omb===OMB.e.socle?"socle":"plein"):"",ombrageSig:OMB.sig,ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),tapis:V3.tap.lv.map(l=>l.pret?1:0).join(''),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
     v2:V2.on?{msProj:+V2.msProj.toFixed(1),msProjMoy:+V2.msProjAvg.toFixed(1),points:V2.pts,dessines:V2.dessines,faits:V2.faits.slice(),msParLigne:+V2.msPerRow.toFixed(2)}:undefined,W,H,mLevel,msMotion:+msMotion.toFixed(1),msImage:+lastMotionMs.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
 }
 
@@ -2166,7 +2228,7 @@ function ticMeneur(){
   if(!meneur) return;
   const now=performance.now(), dt=Math.min(5,(now-meneurT)/1000); meneurT=now;
   meneur.tic(dt,percevoirMeneur(),{gel:frozen});
-  if(dbgOn) dbgEl.textContent=meneur.debug();
+  if(dbgOn) dbgEl.textContent=meneur.debug()+(V3.on?"\n"+ombDiag():"");
   if(meneur.fini()) clearInterval(meneurTimer);
 }
 function meneurEntendre(texte){ say("…");
@@ -2230,7 +2292,7 @@ let dbgOn=!!CFG.debug; try{ if(localStorage.getItem("bodycam-debug")==="1") dbgO
 const dbgEl=document.body.appendChild(document.createElement("div")); dbgEl.id="debug-meneur"; dbgEl.setAttribute("aria-hidden","true"); dbgEl.hidden=!dbgOn;
 { const chip=document.querySelector(".hud.top .chip"); let n=0,t=0; chip.style.pointerEvents="auto";
   chip.addEventListener("pointerdown",()=>{ const now=performance.now(); n=now-t<450?n+1:1; t=now; if(n<3) return; n=0;
-    dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=meneur&&dbgOn?meneur.debug():""; try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }); }
+    dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=dbgOn?(meneur?meneur.debug()+"\n":"")+(V3.on?ombDiag():""):""; try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }); }
 if(HIST.some(x=>MENEUR.ficheDe(x))){ const b=document.createElement("button"); b.type="button"; b.id="histoire"; b.textContent="Jouer l'histoire";
   $("outils").prepend(b); b.onclick=()=>{ fermerOutils(); jouerHistoire(); }; }
 /* Journal de partie : ce que le joueur peut copier et envoyer. Chaque tour : ce qu'il a dit, le verdict du sas,
@@ -2274,6 +2336,8 @@ $("fin-quitter").onclick=()=>quitterHistoire(false);
 
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
+  reessayerOmbrage:ombRaz,                                     // oublie les variantes d'ombrage notées en échec, et recharge
+  ombrage:()=>({mode:OMB.mode,enService:V3.omb?V3.omb.sig:"",voulu:OMB.sig,memoire:OMB.mem}),
   reessayerRayons(){ try{ localStorage.removeItem("bodycam-rayons-2"); }catch(_){} location.reload(); },
   fiches:()=>FICHES.map(f=>f.id),
   lieu(i){ ficheIdx=((i%FICHES.length)+FICHES.length)%FICHES.length; applyFiche(FICHES[ficheIdx]); },
@@ -2326,6 +2390,7 @@ if((bureau||PT_KO)&&!V3.on&&(!window.__CFG||CFG.bureau)&&!v3Refus()) V3.on=true;
 if(V3.on){ v3Basculer(true); window.__v3=V3; window.__v3lire=(x,y)=>{ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,V3.hist.f); gl.readPixels(x,y,1,1,gl.RGBA,gl.FLOAT,b); return Array.from(b); }; }               // accès de test (tools/v3essai.mjs)
 $("qualite").onclick=()=>qualite(!QUAL.full); $("qualite").textContent="Qualité : "+(QUAL.full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(QUAL.full));
 $("v3").onclick=()=>v3Basculer(!V3.on);
+$("ombrage-raz").onclick=ombRaz; ombBouton();
 if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
 if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();
