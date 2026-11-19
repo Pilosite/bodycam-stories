@@ -11045,7 +11045,7 @@ function buildShapes(f){
   for(const o of (Array.isArray(f.objets)?f.objets:[]).filter(o=>o&&!(o.visible===false||cacheObj.has(o.id))).slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
     if(!formes.length || row+formes.length>SH_ROWS) continue;
-    const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), ech=clampN(o.echelle,.1,5,1);
+    const dv=clampN(o.devant,-60,400,12), ct=clampN(o.cote,-120,120,3), ech=clampN(o.echelle,.1,5,1);
     let x,z,yaw;
     if(S.kit!==1){ z=dv; x=pathX(z)+ct; yaw=Math.atan2(pathX(z-4)-x,-4); }          // par défaut, la face avant regarde celui qui arrive
     else { const a=1.15; x=Math.sin(a)*dv+Math.cos(a)*ct; z=Math.cos(a)*dv-Math.sin(a)*ct; yaw=a+Math.PI; }
@@ -12662,7 +12662,7 @@ function objetsPercus(){                                      // distance, direc
   const rel=a=>((a*180/Math.PI)%360+540)%360-180, yw=cam.yaw+look.yaw, out=[];
   for(const o of (Array.isArray(fiche.objets)?fiche.objets:[]).slice(0,16)){
     if(!o||!o.id) continue;
-    const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), a=1.15;           // même placement que buildShapes
+    const dv=clampN(o.devant,-60,400,12), ct=clampN(o.cote,-120,120,3), a=1.15;           // même placement que buildShapes
     const x=S.kit!==1?pathX(dv)+ct:Math.sin(a)*dv+Math.cos(a)*ct, z=S.kit!==1?dv:Math.cos(a)*dv-Math.sin(a)*ct;
     const dx=x-cam.x, dz=z-cam.z, m=Math.hypot(dx,dz), dir=Math.atan2(dx,dz);
     const visible=!(o.visible===false||cacheObj.has(o.id)), lum=(o.formes||[]).some(f=>f&&f.matiere==="lumineux");
@@ -12692,7 +12692,7 @@ function executer(o){                                         // les ordres du m
 /* Objets du meneur (accessoiriste, suites) : ajoutés à la fiche en cours, bornés par validerFiche, rangés par buildShapes
    (une texture de données) : le lieu n'est pas rechargé. Placés par rapport au porteur, ou près d'un objet déjà là. */
 
-function posObjet(o){ const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), a=1.15;   // même placement que buildShapes
+function posObjet(o){ const dv=clampN(o.devant,-60,400,12), ct=clampN(o.cote,-120,120,3), a=1.15;   // même placement que buildShapes
   return S.kit!==1?{x:pathX(dv)+ct,z:dv}:{x:Math.sin(a)*dv+Math.cos(a)*ct,z:Math.cos(a)*dv-Math.sin(a)*ct}; }
 function versFiche(x,z){ if(S.kit!==1) return {devant:z,cote:x-pathX(z)}; const a=1.15; return {devant:Math.sin(a)*x+Math.cos(a)*z,cote:Math.cos(a)*x-Math.sin(a)*z}; }
 const reserves=new Map();                                     // places prises au tour de voix, là où le geste a lieu

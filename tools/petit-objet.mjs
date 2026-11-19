@@ -38,7 +38,7 @@ console.log(JSON.stringify((await page.evaluate(() => balade.trace().evenements)
 const c = await page.evaluate(() => balade.corps()), o = await page.evaluate(() => balade.percevoir().objets.find(x => x.id === 'fab-1'));
 console.log(moteur, JSON.stringify({ corps: { haut: c.haut, zoom: +c.zoom.toFixed(2), pitch: +c.pitch.toFixed(2) }, objet: o }));
 await page.evaluate(p => { balade.resolution(p); for (const e of document.querySelectorAll('button, #hint, #debug-meneur')) e.style.visibility = 'hidden'; }, +pxCapture);
-await page.waitForFunction(() => window.__state.n >= 10, null, { timeout: 400000 }).catch(() => console.log('(passes incomplètes)'));
+await page.waitForFunction(n => window.__state.n >= n, +(process.env.PASSES || 10), { timeout: 600000 }).catch(() => console.log('(passes incomplètes)'));
 await page.screenshot({ path: join(out, moteur + '-zoom.png') });
 await page.evaluate(() => { balade.agir([{ type: 'attendre', secondes: 0 }]); });
 await browser.close();
