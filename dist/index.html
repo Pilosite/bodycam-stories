@@ -59,7 +59,8 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #mesure[hidden]{display:none}
 #mesure{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
   padding:calc(24px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:rgba(12,15,11,.86)}
-#mesure pre{margin:0;max-width:100%;overflow:auto;font:400 12.5px/1.6 var(--f-mono);white-space:pre-wrap;-webkit-user-select:text;user-select:text;font-variant-numeric:tabular-nums}
+#mesure{z-index:30}
+#mesure pre{margin:0;max-width:100%;max-height:72%;overflow:auto;font:400 12.5px/1.6 var(--f-mono);white-space:pre-wrap;-webkit-user-select:text;user-select:text;font-variant-numeric:tabular-nums}
 #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:left;
   background:var(--bg);font-family:var(--f-mono);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow:auto}
 /* meneur de jeu : bouton qui pulse quand le porteur pose une question, écran de fin, ligne de mise au point (CFG.debug) */
@@ -2768,7 +2769,8 @@ function ticMeneur(){
 }
 function meneurEntendre(texte){ say("…"); return meneur.voix(texte); }
 function interfaceHistoire(on){
-  for(const id of ["monde","lieu","mesurer","histoire"]) if($(id)) $(id).hidden=on;
+  for(const id of ["monde","lieu","mesurer","histoire","v2"]) if($(id)) $(id).hidden=on;
+  if($("journal")) $("journal").hidden=!on&&!dernierJournal;
   $("hint").textContent=on?"Glisse pour regarder · « Lui parler » pour lui dire quelque chose":"Glisse pour regarder autour de lui";
   $("hint").classList.remove("off"); $("parler").classList.remove("pulse"); $("fin").hidden=true;
 }
@@ -2787,7 +2789,7 @@ function jouerHistoire(id){
   return meneur.partie();
 }
 function quitterHistoire(garderLieu){
-  if(!meneur) return; meneur=null; clearInterval(meneurTimer); hold=false; interfaceHistoire(false); dbgEl.textContent="";
+  if(!meneur) return; journal(); meneur=null; clearInterval(meneurTimer); hold=false; interfaceHistoire(false); dbgEl.textContent="";
   if(!garderLieu) applyFiche(FICHES[ficheIdx]);
 }
 /* Pour l'auteur : une ligne discrète avec le verdict du sas et le temps en cours. CFG.debug, ou trois touches rapides
@@ -2799,6 +2801,39 @@ const dbgEl=document.body.appendChild(document.createElement("div")); dbgEl.id="
     dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=meneur&&dbgOn?meneur.debug():""; try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }); }
 if(HIST.some(x=>MENEUR.ficheDe(x))){ const b=document.createElement("button"); b.type="button"; b.id="histoire"; b.textContent="Jouer l'histoire";
   $("monde").before(b); b.onclick=()=>jouerHistoire(); }
+/* Journal de partie : ce que le joueur peut copier et envoyer. Chaque tour : ce qu'il a dit, le verdict du sas,
+   la pensée, les actions, le délai de Claude ou le secours ; plus les temps et la fin. Lisible sans outil. */
+let dernierJournal="";
+function journal(){
+  if(!meneur) return dernierJournal;
+  const t=meneur.trace(), L=[], f=v=>Number(v).toFixed(1).replace(".",",");
+  const dbg=gl.getExtension("WEBGL_debug_renderer_info");
+  L.push("JOURNAL · "+t.histoire+" · graine "+t.graine+" · "+(sampler?"avec Claude":"SANS Claude (secours)")+" · "+(dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"")+" · "+new Date().toISOString().slice(0,16));
+  const items=[];
+  for(const a of t.appels||[]){
+    const dit=(String(a.consigne||"").match(/La voix dit : (".*")\s*$/)||[])[1], r=a.reponse;
+    let l="["+f(a.min)+" min] "+a.type.toUpperCase()+(dit?" · joueur : "+dit:"")+" · "+a.statut+(a.ms?" en "+f(a.ms/1000)+" s":"");
+    if(r&&typeof r==="object"){
+      if(r.sas) l+="\n    sas : "+[r.sas.verdict,r.sas.regle,r.sas.motif].filter(Boolean).join(" · ");
+      l+="\n    "+(r.attitude?"("+r.attitude+") ":"")+"« "+String(r.pensee||"").slice(0,400)+" »";
+      const ac=(r.actions||[]).map(x=>x.type+" "+(x.degres??x.metres??x.secondes??"")).join(", "); if(ac) l+="\n    actions : "+ac;
+      for(const k of ["temps","fin","scene","faits","question","resume"]) if(r[k]!==undefined&&r[k]!==null&&r[k]!=="") l+="\n    "+k+" : "+(typeof r[k]==="string"?r[k]:JSON.stringify(r[k])).slice(0,300);
+    }
+    items.push({min:a.min,o:0,l});
+  }
+  for(const e of t.evenements||[]){
+    if(e.type==="pensee"&&e.source==="ia") continue;                    // déjà dans l'appel
+    const x=Object.assign({},e); delete x.min; delete x.type;
+    items.push({min:e.min,o:1,l:"["+f(e.min)+" min] "+e.type+" · "+(e.type==="pensee"?e.source+" · « "+e.texte+" »":Object.entries(x).map(([k,v])=>k+" "+(typeof v==="string"?v:JSON.stringify(v))).join(" · "))});
+  }
+  items.sort((a,b)=>a.min-b.min||a.o-b.o).forEach(i=>L.push(i.l));
+  const p=t.final||{};
+  L.push("ÉTAT · "+f(p.horloge?p.horloge.minutes:0)+" min · tours "+(p.horloge?p.horloge.tours:0)+" · temps passés "+((p.trame&&p.trame.passes)||[]).map(x=>x.id+"("+x.cause+")").join(", ")+" · fin "+((p.trame&&p.trame.fin)||"—")+" · peur "+(p.porteur?p.porteur.peur:"")+" confiance "+(p.porteur?p.porteur.confiance:"")+" agacement "+(p.porteur?p.porteur.agacement:""));
+  return dernierJournal=L.join("\n");
+}
+function montrerJournal(){ $("mesure-txt").textContent=journal()||"Aucune partie jouée."; $("mesure").hidden=false; $("mesure-copier").disabled=false; }
+{ const b=document.createElement("button"); b.type="button"; b.id="journal"; b.className="ghost"; b.textContent="Journal"; b.hidden=true; $("parler").after(b); b.onclick=montrerJournal;
+  const c=document.createElement("button"); c.type="button"; c.className="ghost"; c.textContent="Journal de la partie"; $("fin-quitter").after(c); c.onclick=montrerJournal; }
 $("fin-rejouer").onclick=()=>jouerHistoire(histoireId);
 $("fin-quitter").onclick=()=>quitterHistoire(false);
 
