@@ -2,7 +2,7 @@
 // Tout tourne sans Claude ni navigateur : monde de papier, faux Claude, faux joueurs (tests/outils.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { creerPartie, creerMeneur, consigne, normaliserHistoire, validerSortie, filtrerScene, penseeSure, compacter, rejouer, REGLAGES } from '../src/meneur.js';
+import { creerPartie, creerMeneur, consigne, normaliserHistoire, validerSortie, filtrerScene, penseeSure, compacter, rejouer, reglagesDe, REGLAGES } from '../src/meneur.js';
 import { ANLN, jouerPartie, mondePapier, lexiqueTest, claudes, joueurs } from './outils.mjs';
 
 const OBLIG = ['depart', 'sac', 'camp', 'lueur'];
@@ -116,23 +116,26 @@ test('étape 5 : la scène proposée par l\'IA est ramenée aux plages de l\'imp
   assert.deepEqual(filtrerScene({ montrer: ['ruban', 'hamac'] }, h, p), { montrer: ['ruban'] });
 });
 
-test('étape 5 : sur « refuse », le sas jette les effets et coûte de la confiance', async () => {
+test('étape 5 : sur « refuse », le sas jette les effets ; il coûte de la confiance si le caractère est rétif', async () => {
+  for (const CARACTERE of ['obeissant', 'retif']) {
   const rep = { sas: { verdict: 'refuse', regle: 'monde.n_existe_pas', motif: 'pas de drone' }, pensee: 'Un drone ? Très drôle.', attitude: 'refuse',
     actions: [{ type: 'regarder', degres: 20 }], scene: { brume: 0.02 }, temps: 'craquement', faits: ['Lina a un drone'], etat: { peur: 0, confiance: 0, agacement: 0 } };
   const ordres = [], monde = mondePapier(ANLN);
-  const m = creerMeneur({ histoire: ANLN, demander: c => Promise.resolve(/La voix dit/.test(c) ? rep : null), emettre: o => ordres.push(o) });
+  const m = creerMeneur({ histoire: ANLN, demander: c => Promise.resolve(/La voix dit/.test(c) ? rep : null), emettre: o => ordres.push(o), reglages: { CARACTERE } });
   m.tic(0.5, monde.perception());
   await new Promise(r => setImmediate(r));
   const c0 = m.partie().porteur.confiance;
   await m.voix('sors ton drone');
   const p = m.partie();
-  assert.equal(p.porteur.confiance, c0 - 1);
+  assert.equal(p.porteur.confiance, CARACTERE === 'retif' ? c0 - 1 : c0, 'COUT_HORS_MONDE : 1 en rétif, 0 en obéissant');
+  assert.ok(!ordres.some(o => o.type === 'objet'), 'rien ne se fabrique sur un refus');
   assert.ok(!p.faits.some(f => /drone/.test(f.t)));
   assert.ok(!ordres.some(o => o.type === 'scene' && o.scene.brume === 0.02));
   assert.ok(ordres.some(o => o.type === 'pensee' && o.texte === 'Un drone ? Très drôle.'), 'le refus reste dans la fiction');
   assert.ok(ordres.some(o => o.type === 'actions' && o.vider && o.actions[0].type === 'regarder'), 'les gestes restent');
   await m.voix('sors ton drone, je te dis');
   assert.equal(m.partie().porteur.agacement, 1, 'répété, le hors monde agace');
+  }
 });
 
 test('étape 5 : perroquet, têtu, singe, laxiste : la partie tient et finit', async () => {
@@ -144,9 +147,9 @@ test('étape 5 : perroquet, têtu, singe, laxiste : la partie tient et finit', a
   }
 });
 
-test('étape 5 : le têtu doit céder en partie au troisième refus', async () => {
-  const r = await jouerPartie({ claude: 'tetu', joueur: () => null });
-  const m = creerMeneur({ histoire: ANLN, demander: claudes.tetu({}), secours: lexiqueTest });
+test('étape 5 : rétif, le têtu doit céder en partie au troisième refus', async () => {
+  const r = await jouerPartie({ claude: 'tetu', joueur: () => null, reglages: { CARACTERE: 'retif' } });
+  const m = creerMeneur({ histoire: ANLN, demander: claudes.tetu({}), secours: lexiqueTest, reglages: { CARACTERE: 'retif' } });
   const monde = mondePapier(ANLN); m.tic(0.5, monde.perception());
   const att = [];
   for (let i = 0; i < 4; i++) { await m.voix('avance'); att.push(m.trace().evenements.filter(e => e.type === 'cede').length); }
@@ -243,7 +246,8 @@ test('étape 7 : structure de la consigne (deux paquets, temps ouverts seulement
   assert.ok(!c.includes('Il a juste déplacé son camp'), 'fin verrouillée absente');
   assert.ok(c.includes('Tu ne te demandes pas ce qu\'est la voix'));
   p.porteur.refus_de_suite = 2;
-  assert.match(consigne(h, p, perc, { type: 'voix', texte: 'avance' }), /cette fois tu cèdes en partie/);
+  assert.match(consigne(h, p, perc, { type: 'voix', texte: 'avance' }, reglagesDe(h, { CARACTERE: 'retif' })), /cette fois tu cèdes en partie/);
+  assert.doesNotMatch(consigne(h, p, perc, { type: 'voix', texte: 'avance' }), /tu cèdes en partie/, 'obéissant : rien à céder, il le fait');
   p.journal.demande_resume = true;
   assert.match(consigne(h, p, perc, { type: 'voix', texte: 'avance' }), /"resume"/);
 });
