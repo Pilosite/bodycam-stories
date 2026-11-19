@@ -4435,16 +4435,26 @@ let PT_KO=false; try{ PT_KO=localStorage.getItem("bodycam-rayons")==="essai"; }c
 const progs=[null,null,null,null], lances=[];
 const varCourante=()=>(S.semN?1:0)+(S.kit===2?2:0);
 const ptDispo=()=>compilerPT(varCourante());                    // le lanceur de rayons peut-il dessiner le monde courant ? (le compile au besoin)
-function compilerPT(v){
+/* Compilation sans bloquer : quand le navigateur le permet, le programme se compile sur un fil à part et on revient voir
+   à chaque image s'il est prêt. Attendre le résultat d'un coup fige le processus graphique ; sur un gros shader, Chrome
+   sous Windows le croit planté et le tue (constaté : trois chutes, puis tout l'affichage 3D désactivé). */
+const EXTP=gl.getExtension("KHR_parallel_shader_compile");
+const fini=x=>!EXTP||gl.getProgramParameter(x.p,EXTP.COMPLETION_STATUS_KHR);
+function compilerPT(v,attendre){
   if(progs[v]) return true; if(PT_KO) return false;
-  try{ localStorage.setItem("bodycam-rayons","essai"); }catch(_){}
-  etapeGL("compilation : moteur à rayons, variante "+v);
-  try{ progs[v]=finir(lances[v]||lancer(variante(v))); lances[v]=null; etapeGL("  compilé : moteur à rayons"); }
+  if(!lances[v]||!lances[v].marque){
+    try{ localStorage.setItem("bodycam-rayons","essai"); }catch(_){}
+    etapeGL("compilation : moteur à rayons, variante "+v);
+    lances[v]=lances[v]||lancer(variante(v)); lances[v].marque=true;
+  }
+  if(!attendre&&!fini(lances[v])) return false;                 // pas encore prêt : on repassera
+  try{ progs[v]=finir(lances[v]); lances[v]=null; etapeGL("  compilé : moteur à rayons"); }
   catch(e){ PT_KO=true; const el=$("err"); if(!gl.isContextLost()){ el.style.display="none"; el.textContent=""; } return false; }
   try{ localStorage.removeItem("bodycam-rayons"); }catch(_){}
   return true;
 }
-function progMonde(){ if(!ptDispo()) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
+const ptEnCours=()=>{ const l=lances[varCourante()]; return !!(l&&l.marque&&!progs[varCourante()]&&!PT_KO); };
+function progMonde(){ if(!compilerPT(varCourante(),true)) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
 if(!bureau && !PT_KO) compilerPT(0);                            // téléphone : compilé d'emblée, comme avant
 if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
 gl.bindVertexArray(gl.createVertexArray());
@@ -4865,7 +4875,7 @@ const MAXS=CFG.maxSpp||400;
 function pairAt(i){ if(!pairs[i]){ const w=Math.max(2,Math.round(W*LEVELS[i])), h=Math.max(2,Math.round(H*LEVELS[i]));
   pairs[i]={a:target(w,h,ACC_FMT,gl.NEAREST),b:target(w,h,ACC_FMT,gl.NEAREST)}; } return pairs[i]; }
 function resize(){
-  const dpr=Math.min(window.devicePixelRatio||1,QUAL.full?2:1.5);   // en mobile, le capteur simulé coûtait 12 ms à 720 × 1302
+  const dpr=Math.min(window.devicePixelRatio||1,QUAL.full?2:1.2);   // en mobile, le capteur simulé coûtait 12 ms à 720 × 1302
   const cw=Math.max(2,Math.round(canvas.clientWidth*dpr)), ch=Math.max(2,Math.round(canvas.clientHeight*dpr));
   canvas.width=cw; canvas.height=ch;
   const maxPx=CFG.maxPx||(QUAL.full?2000000:V3.on?115000:coarse?250000:440000);   // v3 en mobile : la résolution que le moteur à rayons tenait en marche   // mode complet : jusqu'à la pleine résolution de l'écran
@@ -5069,19 +5079,24 @@ const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG
   alpha:CFG.v3alpha||.18, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
   n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420} };
-function v3Init(){
-  if(V3.gp) return;
-  V3.gp={ grains:prog(FS_V3GBUF,VS_V3GRAINS,"v3 grains"), sol:prog(FS_V3GBUF,VS_V3SOL,"v3 sol"), ombre:prog(FS_V3OMBRE,VS_V3GRAINS,"v3 ombres"), ombrage:prog(FS_V3OMBRAGE,VS,"v3 matière et lumière") };
+function v3Init(){                                             // rend vrai quand les quatre programmes sont prêts (compilation sans bloquer)
+  if(V3.gp) return true;
+  if(!V3.lance){ etapeGL("compilation : moteur v3 (4 programmes)");
+    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), sol:lancer(FS_V3GBUF,VS_V3SOL), ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombrage:lancer(FS_V3OMBRAGE) }; }
+  for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
+  const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
   V3.maxPt=Math.min(64,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,72);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  return true;
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
     v3Libere(true);
-    const tex=()=>{ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,W,H);
+    const tex=fmt=>{ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,fmt,W,H);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST); return t; };
-    const g={w:W,h:H,t0:tex(),t1:tex(),rb:gl.createRenderbuffer(),f:gl.createFramebuffer()};
+    const g={w:W,h:H,t0:tex(gl.RGBA32F),t1:tex(CFG.v3g32?gl.RGBA32F:gl.RGBA16F),   // normale et distance : 16 bits suffisent, et la bande passante compte sur téléphone
+      rb:gl.createRenderbuffer(),f:gl.createFramebuffer()};
     gl.bindRenderbuffer(gl.RENDERBUFFER,g.rb); gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,W,H);
     gl.bindFramebuffer(gl.FRAMEBUFFER,g.f);
     gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,g.t0,0);
@@ -5190,7 +5205,7 @@ function v3Sync(t){
   gl.bindFramebuffer(gl.FRAMEBUFFER,(t||dummy).f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3);
 }
 function v3Image(p){
-  v3Init(); v3Cibles();
+  v3Cibles();
   const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
   const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
   const rnd=Math.random;
@@ -5208,7 +5223,7 @@ function v3Image(p){
   const az=v3Cap(p), dmin=.35, L=Math.log(160/dmin);
   // (1) carte d'ombres
   // En marche, la carte n'est refaite qu'une image sur trois : le soleil ne bouge pas, et c'était une grosse part du coût mesuré sur téléphone.
-  const refaire=!bouge||!V3.smP||f%3===0||V3.smP.w!==V3.sm.w;
+  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%3===0));
   let u;
   if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w};
   const Ns=V3.ombre||Math.round(V3.grains*.6);
@@ -5267,6 +5282,7 @@ function v3Image(p){
   V3.hist=dst; V3.histPose=p; V3.n++;
 }
 function v3Frame(p,dt){
+  if(!v3Init()) return;                                        // programmes encore en compilation
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
   v3Image(p); frames++;
@@ -5330,7 +5346,7 @@ function frame(now){
   if(V2.on&&!v2pret){ if(sceneDirty) v2Vider(); v2Tourner(V2.budget); }
   if(v2pret) v2Frame(p,dt);
   else if(V3.on) v3Frame(p,dt);
-  else if(!ptDispo()){ if(!ptDit){ ptDit=true; say("Ce lieu demande le moteur à rayons, qui ne se compile pas sur cette machine."); } }
+  else if(!ptDispo()){ if(!ptEnCours()&&!ptDit){ ptDit=true; say("Ce lieu demande le moteur à rayons, qui ne se compile pas sur cette machine."); } }
   else if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
   else if(n<MAXS){
     const t0=performance.now(); let done=false;
@@ -5350,7 +5366,7 @@ function hud(now){
   $("rec").textContent=p2(Math.floor(s/60))+":"+p2(s%60);
   $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
   $("camid").textContent="CAM 07 · GRAINE "+seedN;
-  $("stat").textContent=V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS":V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
+  $("stat").textContent=V3.on&&!V3.gp?"V3 · PRÉPARATION…":!V3.on&&ptEnCours()?"PRÉPARATION…":V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS":V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
   window.__state={n:CFG.auto?frames:V2.on?v2Prets():V3.on?V3.n:n,
     v3:V3.on?{ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
@@ -5790,11 +5806,14 @@ async function mesurerV3(f,wait,med){
   const k0=V3.nImg; while(V3.nImg<k0+12) { V3.n=0; await wait(60); }
   const pa=Object.assign({},V3.passes);
   const g0=V3.grains, essais=[];                              // le coût réel d'une image selon le budget de grains
-  for(const g of [150000,300000,700000,1500000]){
+  for(const g of [1000,150000,300000,700000]){
     out.textContent="Coût réel avec "+Math.round(g/1000)+" k grains…";
     V3.grains=g; V3.passes={}; const k1=V3.nImg, t9=performance.now(); while(V3.nImg<k1+10 && performance.now()-t9<6000){ V3.n=0; await wait(40); }
-    essais.push(Math.round(g/1000)+" k : "+fx((V3.passes.tamponG||0)+(V3.passes.ombrage||0),0)+" ms");
+    essais.push((g<2000?"sol seul":Math.round(g/1000)+" k")+" : semis "+fx(V3.passes.tamponG||0,0)+" + lumière "+fx(V3.passes.ombrage||0,0)+" ms");
   }
+  V3.grains=g0; V3.passes={}; V3.sansOmbre=true;               // la même image sans refaire la carte d'ombres : sa part du coût
+  { const k1=V3.nImg, t9=performance.now(); while(V3.nImg<k1+10 && performance.now()-t9<6000){ V3.n=0; await wait(40); } }
+  essais.push("sans refaire les ombres : semis "+fx(V3.passes.tamponG||0,0)+" + lumière "+fx(V3.passes.ombrage||0,0)+" ms"); V3.sansOmbre=false;
   V3.grains=g0; V3.n=0; V3.detail=det; hold=false;
   const ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
   const ips=f.length>1?(f.length-1)/((f[f.length-1].t-f[0].t)/1000):null;   // horloge réelle : dt est plafonné à 100 ms dans la boucle
@@ -5820,7 +5839,7 @@ async function mesurerV3(f,wait,med){
     "Ombres, matière, lumière "+fx(pa.ombrage,1)+" ms",
     "",
     "COÛT RÉEL D'UNE IMAGE SELON LE BUDGET",
-    essais.join(" · "),
+    ...essais,
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
@@ -5972,7 +5991,7 @@ if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
 if(V2.on){ v2Basculer(true); window.__v2=V2; }                // accès de test (tools/v2essai.mjs)
 $("v2").onclick=()=>v2Basculer(!V2.on);
-if((bureau||PT_KO)&&!V3.on&&CFG.v3!==false&&!v3Refus()) V3.on=true;   // ordinateur : le moteur v3 d'emblée
+if((bureau||PT_KO)&&!V3.on&&(!window.__CFG||CFG.bureau)&&!v3Refus()) V3.on=true;   // ordinateur : le moteur v3 d'emblée
 if(V3.on){ v3Basculer(true); window.__v3=V3; window.__v3lire=(x,y)=>{ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,V3.hist.f); gl.readPixels(x,y,1,1,gl.RGBA,gl.FLOAT,b); return Array.from(b); }; }               // accès de test (tools/v3essai.mjs)
 $("qualite").onclick=()=>qualite(!QUAL.full); $("qualite").textContent="Qualité : "+(QUAL.full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(QUAL.full));
 $("v3").onclick=()=>v3Basculer(!V3.on);
