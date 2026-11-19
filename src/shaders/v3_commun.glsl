@@ -33,3 +33,17 @@ bool projette(vec3 P, float marge, out vec4 pos, out float dist, out float ang){
 }
 void sansGrain(){ vQ=vec3(0.); vN=vec3(0.,1.,0.); vCode=-1.; vDist=0.; vDx=vec3(0.); vDy=vec3(0.); vDd=vec2(0.); vSz=0.;
   vL=vec3(0.); vLx=vec3(0.); vLy=vec3(0.); vB=vec4(0.); vT=vec2(-1.,0.); }
+/* Éléments proches (v3_proches.vert) : les formes des objets, les éléments de semis et les blocs de grès des cellules
+   voisines de la caméra ne sont pas semés en grains mais dessinés en boîtes englobantes, chaque pixel cherchant la forme
+   exacte le long de son rayon. Une fenêtre fixe de cellules par couche : le coût ne dépend pas du monde. Le semeur saute
+   ces cellules (procheS, procheB) : ce qui est dessiné en boîte ne l'est pas deux fois. */
+uniform int   uPrx;          // 1 = éléments proches dessinés en boîtes
+uniform ivec4 uPrxN;         // demi-fenêtre de cellules de chaque couche de semis
+bool procheS(int k, vec2 id, ElemS e){
+  if(uPrx==0) return false;
+  int n=k==0?uPrxN.x:k==1?uPrxN.y:k==2?uPrxN.z:uPrxN.w;
+  if(e.rg) return id.x<min(e.K.w,2.) && abs(id.y-floor(uCamPos.z/e.A.y))<=float(n);
+  vec2 c=floor(semisG(uCamPos.xz,e)/e.A.xy);
+  return max(abs(id.x-c.x),abs(id.y-c.y))<=float(n);
+}
+bool procheB(vec2 id){ vec2 c=floor(uCamPos.xz/CC); return uPrx==1 && max(abs(id.x-c.x),abs(id.y-c.y))<=2.; }

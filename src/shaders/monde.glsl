@@ -247,6 +247,14 @@ vec3 primLocal(vec3 p, int row){
   if(e.z!=0.){ c=cos(e.z); s=sin(e.z); q.yz=vec2(c*q.y+s*q.z,-s*q.y+c*q.z); }
   return q;
 }
+vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de primLocal
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+  float c, s;
+  if(e.z!=0.){ c=cos(e.z); s=sin(e.z); q.yz=vec2(c*q.y-s*q.z,s*q.y+c*q.z); }
+  if(e.w!=0.){ c=cos(e.w); s=sin(e.w); q.xy=vec2(c*q.x-s*q.y,s*q.x+c*q.y); }
+  c=cos(b.w); s=sin(b.w); q.xz=vec2(c*q.x+s*q.z,-s*q.x+c*q.z);
+  return dir?q:q+a.xyz;
+}
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
   for(int i=0;i<8;i++){
@@ -295,11 +303,14 @@ struct ElemS { vec4 A, B, T, K, J, D, E, h2; vec2 gc, sl; vec3 th; float side, y
 vec2 semisG(vec2 xz, ElemS e){ return e.rg?vec2(e.side*(xz.x-pathX(xz.y))-e.T.x,xz.y):mat2(e.A.z,e.A.w,-e.A.w,e.A.z)*xz; }   // monde -> repère de la grille
 // Cellule de la couche k sous le point xz du sol. Rend -1 si le point est dans la grille (id, f : cellule et position dans
 // la cellule), sinon une borne de la distance horizontale à la grille (rive exclue, trop près ou trop loin du trajet).
-float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
+void semisTete(int k, float side, out ElemS e){              // la couche k (et la rive, en rangée) : sa grille
   int r0=SEM0+k*SEML;
   e.A=texelFetch(uShapes,ivec2(0,r0),0); e.B=texelFetch(uShapes,ivec2(1,r0),0); e.T=texelFetch(uShapes,ivec2(2,r0),0);
   e.K=texelFetch(uShapes,ivec2(1,r0+1),0);
-  e.rg=e.B.w>.5; e.side=1.; id=vec2(0.); f=vec2(0.);
+  e.rg=e.B.w>.5; e.side=e.rg?side:1.;
+}
+float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
+  semisTete(k,1.,e); id=vec2(0.); f=vec2(0.);
   if(e.rg){                                                  // rangée : la grille suit le trajet, les deux rives en miroir
     float u=xz.x-pathX(xz.y); e.side=u<0.?-1.:1.;
     if(e.T.z*e.side<-.5) return abs(u)+e.T.x;                // rive exclue
