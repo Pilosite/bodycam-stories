@@ -270,7 +270,7 @@ bool semeP(out Grain g){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 V=uVue==0?primLocal(uCamPos,row):primLocal(a.xyz+uSd,row);
   vec3 lq, ln;
-  if(!surfForme(a.w,b.xyz,e.y,V,uVue==0,lq,ln)) return false;
+  if(!surfForme(mod(a.w,8.),b.xyz,e.y,V,uVue==0,lq,ln)) return false;
   g.P=primMonde(lq,row,false); g.N=normalize(primMonde(ln,row,true));
   g.q=g.P; g.code=4.+.5*(float(row)/128.); g.rot=mat2(1.);
   g.row=row; g.sem=false; g.ech=1.;
@@ -281,7 +281,8 @@ bool semeP(out Grain g){
 /* ---- éléments des couches de semis (sdSemis) : le grain tire un point du sol (cap élargi du rayon de l'élément), prend
    l'élément de la cellule avec les tirages de semisElem, une forme selon son aire, un point sur la partie de la forme
    tournée vers la vue, et le ramène dans le monde (semisMonde). Le tampon G garde le point du monde : la passe de matière
-   retrouve l'élément par sdSemis, comme le lanceur de rayons. */
+   garde le point dans le repère de l'élément, la couche et la forme : la passe de matière n'a plus qu'à retrouver les
+   tirages de la cellule (semisPix, v3_ombrage.frag), sans déplier sdSemis (trop lourd à compiler sur Direct3D). */
 bool semeS(int k, out Grain g){
   float Rk=k==0?uSemR.x:k==1?uSemR.y:k==2?uSemR.z:uSemR.w, Nk=k==0?uNbS.x:k==1?uNbS.y:k==2?uNbS.z:uNbS.w;
   vec2 xz=tireSolR(Rk);
@@ -294,12 +295,12 @@ bool semeS(int k, out Grain g){
   vec3 C=semisMonde(vec3(0.),e);
   vec3 V=uVue==0?primLocal(semisLocal(uCamPos,e),row):primLocal(a.xyz+normalize(semisLocal(C+uSd,e)-semisLocal(C,e)),row);
   vec3 lq, ln;
-  if(!surfForme(a.w,b.xyz,ee.y,V,uVue==0,lq,ln)) return false;
+  if(!surfForme(mod(a.w,8.),b.xyz,ee.y,V,uVue==0,lq,ln)) return false;
   g.P=semisMonde(primMonde(lq,row,false),e);
   vec3 t1=normalize(cross(ln,abs(ln.y)<.9?vec3(0.,1.,0.):vec3(1.,0.,0.))), t2=cross(ln,t1);
   const float ep=.02;                                        // normale : la transformation (échelle, pente, rangée courbe) n'est pas une rotation
   g.N=normalize(cross(semisMonde(primMonde(lq+t1*ep,row,false),e)-g.P,semisMonde(primMonde(lq+t2*ep,row,false),e)-g.P));
-  g.q=g.P; g.code=6.+.125*float(k); g.rot=mat2(1.);
+  g.q=g.P; g.code=6.+(float(k*6+row-r0-4)+.5)/48.; g.rot=mat2(1.);   // couche et forme touchée : l'ombrage n'a plus à les chercher (semisPix)
   g.row=row; g.sem=true; g.e=e; g.ech=1./(e.s*sqrt(e.sy));
   float nE=parM2R(C.xz,Nk,Rk)*e.A.x*e.A.y;       // grains attendus sur cet élément à chaque image
   float aE=texelFetch(uSemis,ivec2(0,r0),0).x*e.s*e.s*mix(1.,e.sy,.7);
@@ -424,11 +425,14 @@ void main(){
     vL=versForme(g,g.P); vLx=versForme(g,g.P+ex)-vL; vLy=versForme(g,g.P+ey)-vL;
     vB=vec4(b.xyz,e.y);
     float pl=m*g.ech;                                        // un pixel (ou un texel), en mètres du repère de la forme
-    vT=vec2(ty,(ty<.5||ty>4.5)?.7*pl:.7*pl+.3*s*g.ech);       // faces planes : découpe au pixel ; formes courbes : un peu de marge
+    float t8=mod(ty,8.); vT=vec2(ty,(t8<.5||t8>4.5)?.7*pl:.7*pl+.3*s*g.ech);       // faces planes : découpe au pixel ; formes courbes : un peu de marge
   }
 #endif
   if(uVue==1){ vDd=-vec2(dot(ex,uSd),dot(ey,uSd))/(2.*uSoleilE.z); return; }   // profondeur vue du soleil, par texel
   vec2 rx=g.rot*ex.xz, ry=g.rot*ey.xz;
   vQ=g.q; vN=g.N; vCode=g.code; vDist=dist;
   vDx=vec3(rx.x,ex.y,rx.y); vDy=vec3(ry.x,ey.y,ry.y); vDd=vec2(dot(ex,dv),dot(ey,dv));
+#if FORMES
+  if(g.sem){ vQ=primMonde(vL,g.row,false); vDx=primMonde(vLx,g.row,true); vDy=primMonde(vLy,g.row,true); }   // élément de semis : point et variation dans le repère de l'élément (voir semeS)
+#endif
 }

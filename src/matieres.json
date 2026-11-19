@@ -1216,6 +1216,818 @@
     }
    },
    "brillance": 0.05
+  },
+  "gres-fontainebleau": {
+   "nom": "grès de Fontainebleau de près : grain de sable, patine sombre en croûte, lichens pâles en rosettes, algue verte côté humide, bosselé",
+   "espace": "volume",
+   "couleur": "#aaa69c",
+   "variation": {
+    "echelle": 0.9,
+    "force": 0.45
+   },
+   "nuance": {
+    "couleur": "#bcae94",
+    "force": 0.5,
+    "echelle": 2.2,
+    "seuils": [
+     0.45,
+     0.75
+    ],
+    "fbm": true,
+    "decalage": 7
+   },
+   "grain": {
+    "echelle": 150,
+    "force": 0.35
+   },
+   "taches": [
+    {
+     "couleur": "#000000",
+     "force": 0.6,
+     "echelle": [
+      1.6,
+      0.6,
+      1.6
+     ],
+     "seuils": [
+      0.48,
+      0.8
+     ],
+     "fbm": true,
+     "decalage": 3,
+     "biais": 0.25,
+     "hauteur": [
+      0.1,
+      1.6
+     ]
+    },
+    {
+     "couleur": "#dcdccd",
+     "force": 0.8,
+     "echelle": 14,
+     "seuils": [
+      0.63,
+      0.69
+     ],
+     "fbm": true,
+     "decalage": 11
+    },
+    {
+     "couleur": "#929d70",
+     "force": 0.55,
+     "echelle": 7,
+     "seuils": [
+      0.6,
+      0.74
+     ],
+     "fbm": true,
+     "decalage": 17
+    },
+    {
+     "couleur": "#3e3c37",
+     "force": 0.4,
+     "echelle": 26,
+     "seuils": [
+      0.76,
+      0.8
+     ],
+     "decalage": 23
+    }
+   ],
+   "mousse": {
+    "couleur": "#4a6229",
+    "force": 0.9,
+    "echelle": 0.9,
+    "seuils": [
+     0.42,
+     0.62
+    ],
+    "fbm": true,
+    "decalage": 3,
+    "dessus": [
+     0.3,
+     0.85
+    ],
+    "pente_bruit": 0.7,
+    "pente_echelle": 4.3,
+    "pente_decalage": 5,
+    "cote": [
+     0.3,
+     0.9
+    ],
+    "cote_force": 0.8,
+    "adoucit": 0.6,
+    "grain": {
+     "echelle": 80,
+     "force": 1
+    }
+   },
+   "salissure": {
+    "force": 0.55,
+    "hauteur": 0.35
+   },
+   "relief": {
+    "bosses": [
+     {
+      "echelle": 2.6,
+      "fbm": true,
+      "decalage": 5,
+      "force": 0.045
+     },
+     {
+      "echelle": 11,
+      "decalage": 9,
+      "force": 0.014
+     }
+    ],
+    "grain": {
+     "echelle": 110,
+     "force": 0.32
+    }
+   },
+   "brillance": 0.05
+  },
+  "litiere-automne": {
+   "nom": "litière d'automne de près : feuilles de chêne et de châtaignier rousses, bouleau jaune, aiguilles, terre noire, bosselée",
+   "espace": "sol",
+   "couleur": "#5b4532",
+   "motif": {
+    "type": "feuilles",
+    "echelle": 21,
+    "deformation": 0.15,
+    "eclat": 0.6,
+    "bord": 0.6,
+    "recouvre": 0.75,
+    "inclinaison": 0.8,
+    "palette": [
+     {
+      "couleur": "#7b4a26",
+      "part": 0.3
+     },
+     {
+      "couleur": "#a26a35",
+      "part": 0.22
+     },
+     {
+      "couleur": "#c49a48",
+      "part": 0.12
+     },
+     {
+      "couleur": "#5e4a36",
+      "part": 0.2
+     },
+     {
+      "couleur": "#6d5a45",
+      "part": 0.16
+     }
+    ],
+    "couverture": 0.97,
+    "couverture_bruit": 0,
+    "taille": 0.95,
+    "opacite": 1,
+    "forme": 0.42,
+    "lobes": 0.35
+   },
+   "taches": [
+    {
+     "couleur": "#000000",
+     "force": 0.45,
+     "echelle": 0.35,
+     "seuils": [
+      0.35,
+      0.72
+     ],
+     "fbm": true,
+     "decalage": 11
+    },
+    {
+     "couleur": "#a2582c",
+     "force": 0.18,
+     "echelle": [
+      70,
+      1,
+      9
+     ],
+     "seuils": [
+      0.72,
+      0.8
+     ],
+     "decalage": 41,
+     "sous_motif": true
+    },
+    {
+     "couleur": "#2c241c",
+     "force": 0.6,
+     "echelle": 3,
+     "seuils": [
+      0.62,
+      0.8
+     ],
+     "fbm": true,
+     "decalage": 29,
+     "creux": 0.6,
+     "sur_motif": true
+    }
+   ],
+   "grain": {
+    "echelle": 70,
+    "force": 0.4
+   },
+   "mousse": {
+    "couleur": "#3a4b22",
+    "force": 1,
+    "echelle": 0.42,
+    "seuils": [
+     0.62,
+     0.73
+    ],
+    "fbm": true,
+    "decalage": 20,
+    "grain": {
+     "echelle": 55,
+     "force": 0.9
+    },
+    "adoucit": 0.5
+   },
+   "relief": {
+    "motif": 0.01,
+    "inclinaison": 0.22,
+    "bosses": [
+     {
+      "echelle": 4,
+      "fbm": true,
+      "decalage": 3,
+      "force": 0.03
+     },
+     {
+      "echelle": 17,
+      "decalage": 7,
+      "force": 0.008
+     }
+    ],
+    "grain": {
+     "echelle": 40,
+     "force": 0.3
+    }
+   },
+   "brillance": 0.2
+  },
+  "sable-blanc": {
+   "nom": "sentier de sable blanc de Fontainebleau, tassé, piétiné, humus en bordure, quelques feuilles",
+   "espace": "sol",
+   "couleur": "#cdc4b1",
+   "variation": {
+    "echelle": 2.4,
+    "force": 0.3
+   },
+   "taches": [
+    {
+     "couleur": "#000000",
+     "force": 0.32,
+     "echelle": 0.55,
+     "seuils": [
+      0.5,
+      0.8
+     ],
+     "fbm": true,
+     "decalage": 5,
+     "sous_motif": true
+    },
+    {
+     "couleur": "#e4ded0",
+     "force": 0.4,
+     "echelle": [
+      1.5,
+      1,
+      4
+     ],
+     "seuils": [
+      0.55,
+      0.75
+     ],
+     "fbm": true,
+     "decalage": 13,
+     "sous_motif": true
+    },
+    {
+     "couleur": "#000000",
+     "force": 0.35,
+     "echelle": 0.35,
+     "seuils": [
+      0.35,
+      0.7
+     ],
+     "fbm": true,
+     "decalage": 11,
+     "sur_motif": true
+    }
+   ],
+   "motif": {
+    "type": "feuilles",
+    "echelle": 16,
+    "deformation": 0.18,
+    "eclat": 0.55,
+    "bord": 0.6,
+    "recouvre": 0.8,
+    "inclinaison": 0.6,
+    "palette": [
+     {
+      "couleur": "#7b4a26",
+      "part": 0.3
+     },
+     {
+      "couleur": "#a26a35",
+      "part": 0.25
+     },
+     {
+      "couleur": "#c49a48",
+      "part": 0.2
+     },
+     {
+      "couleur": "#5e4a36",
+      "part": 0.25
+     }
+    ],
+    "couverture": 0.08,
+    "couverture_bruit": 0.35,
+    "taille": 0.7,
+    "opacite": 0.95,
+    "forme": 0.45,
+    "lobes": 0.3
+   },
+   "grain": {
+    "echelle": 220,
+    "force": 0.35
+   },
+   "relief": {
+    "inclinaison": 0.1,
+    "bosses": [
+     {
+      "echelle": 2.2,
+      "fbm": true,
+      "decalage": 4,
+      "force": 0.035
+     },
+     {
+      "echelle": 9,
+      "decalage": 6,
+      "force": 0.008
+     }
+    ],
+    "grain": {
+     "echelle": 90,
+     "force": 0.22
+    }
+   },
+   "brillance": 0.03
+  },
+  "ecorce-pin-sylvestre": {
+   "nom": "pin sylvestre : bas gris-brun en grosses plaques séparées de crevasses profondes, haut orangé en fines écailles",
+   "espace": "volume",
+   "couleur": "#6f6157",
+   "nuance": {
+    "couleur": "#8a7464",
+    "force": 0.9,
+    "echelle": [
+     7,
+     1.5,
+     7
+    ],
+    "seuils": [
+     0.2,
+     0.9
+    ],
+    "decalage": 0
+   },
+   "taches": [
+    {
+     "couleur": "#c47e4a",
+     "force": 1,
+     "echelle": [
+      3,
+      0.5,
+      3
+     ],
+     "seuils": [
+      0.95,
+      1.45
+     ],
+     "fbm": true,
+     "biais": 1,
+     "hauteur": [
+      3.5,
+      7.5
+     ],
+     "sous_motif": true
+    },
+    {
+     "couleur": "#9a8f84",
+     "force": 0.45,
+     "echelle": [
+      5,
+      1.2,
+      5
+     ],
+     "seuils": [
+      0.55,
+      0.8
+     ],
+     "decalage": 7,
+     "sous_motif": true
+    },
+    {
+     "couleur": "#000000",
+     "force": 0.35,
+     "echelle": [
+      3,
+      6,
+      3
+     ],
+     "seuils": [
+      0.5,
+      0.85
+     ],
+     "fbm": true,
+     "decalage": 19
+    }
+   ],
+   "motif": {
+    "type": "fissures",
+    "echelle": [
+     16,
+     1.6,
+     16
+    ],
+    "decalage": 2,
+    "seuils": [
+     0.7,
+     0.95
+    ],
+    "profondeur": 1,
+    "couleur": "#2e2622",
+    "fines": {
+     "echelle": [
+      40,
+      5,
+      40
+     ],
+     "decalage": 4,
+     "seuils": [
+      0.82,
+      0.96
+     ],
+     "profondeur": 0.35
+    }
+   },
+   "grain": {
+    "echelle": [
+     60,
+     25,
+     60
+    ],
+    "force": 0.4
+   },
+   "mousse": {
+    "couleur": "#6f7a45",
+    "force": 0.7,
+    "echelle": [
+     5,
+     2,
+     5
+    ],
+    "seuils": [
+     0.4,
+     0.62
+    ],
+    "decalage": 9,
+    "cote": [
+     -0.1,
+     0.7
+    ],
+    "cote_force": 1,
+    "hauteur": [
+     1.6,
+     0.2
+    ]
+   },
+   "relief": {
+    "motif": 0.03,
+    "grain": {
+     "echelle": 70,
+     "force": 0.2
+    }
+   },
+   "brillance": 0.05
+  },
+  "ecorce-bouleau-verruqueux": {
+   "nom": "bouleau verruqueux : blanc crayeux, lenticelles en tirets horizontaux, taches noires, pied noir et crevassé",
+   "espace": "volume",
+   "couleur": "#dcd8cf",
+   "nuance": {
+    "couleur": "#c9bcae",
+    "force": 0.5,
+    "echelle": [
+     3,
+     1.2,
+     3
+    ],
+    "seuils": [
+     0.45,
+     0.8
+    ],
+    "fbm": true,
+    "decalage": 3
+   },
+   "grain": {
+    "echelle": [
+     24,
+     4,
+     24
+    ],
+    "force": 0.22
+   },
+   "taches": [
+    {
+     "couleur": "#4f4a46",
+     "force": 0.75,
+     "echelle": [
+      14,
+      60,
+      14
+     ],
+     "seuils": [
+      0.74,
+      0.8
+     ],
+     "creux": 0.25
+    },
+    {
+     "couleur": "#272422",
+     "force": 0.95,
+     "echelle": [
+      5,
+      2.2,
+      5
+     ],
+     "seuils": [
+      0.7,
+      0.76
+     ],
+     "fbm": true,
+     "decalage": 12,
+     "creux": 0.4
+    },
+    {
+     "couleur": "#26221f",
+     "force": 1,
+     "echelle": [
+      6,
+      1.4,
+      6
+     ],
+     "decalage": 2,
+     "seuils": [
+      0.62,
+      0.72
+     ],
+     "fbm": true,
+     "biais": 0.42,
+     "hauteur": [
+      0.9,
+      0.05
+     ],
+     "creux": 0.9
+    },
+    {
+     "couleur": "#000000",
+     "force": 0.3,
+     "echelle": [
+      2,
+      0.4,
+      2
+     ],
+     "seuils": [
+      0.4,
+      0.9
+     ],
+     "fbm": true,
+     "decalage": 31
+    }
+   ],
+   "mousse": {
+    "couleur": "#5d6b3a",
+    "force": 0.45,
+    "echelle": [
+     6,
+     2,
+     6
+    ],
+    "seuils": [
+     0.4,
+     0.6
+    ],
+    "decalage": 9,
+    "cote": [
+     -0.2,
+     0.7
+    ],
+    "cote_force": 1,
+    "hauteur": [
+     0.5,
+     0.05
+    ]
+   },
+   "relief": {
+    "motif": 0.012,
+    "grain": {
+     "echelle": 60,
+     "force": 0.12
+    }
+   },
+   "brillance": 0.08
+  },
+  "fougere-rousse": {
+   "nom": "fougère aigle en automne : frondes rousses à brun tabac, nervure claire, pointes desséchées",
+   "espace": "volume",
+   "couleur": "forme",
+   "nuance": {
+    "couleur": "#5c3a1f",
+    "force": 0.6,
+    "echelle": [
+     3,
+     3,
+     3
+    ],
+    "seuils": [
+     0.4,
+     0.8
+    ],
+    "fbm": true,
+    "decalage": 4
+   },
+   "taches": [
+    {
+     "couleur": "#c79a5a",
+     "force": 0.55,
+     "echelle": [
+      1,
+      20,
+      30
+     ],
+     "seuils": [
+      0.62,
+      0.78
+     ],
+     "decalage": 8
+    },
+    {
+     "couleur": "#000000",
+     "force": 0.4,
+     "echelle": [
+      40,
+      4,
+      4
+     ],
+     "seuils": [
+      0.5,
+      0.8
+     ],
+     "decalage": 13
+    }
+   ],
+   "grain": {
+    "echelle": 60,
+    "force": 0.3
+   },
+   "relief": {
+    "grain": {
+     "echelle": 45,
+     "force": 0.35
+    }
+   },
+   "brillance": 0.04
+  },
+  "callune": {
+   "nom": "callune (bruyère) en automne : rameaux serrés vert sombre, fleurs fanées rousses et grises",
+   "espace": "volume",
+   "couleur": "#3a3b2a",
+   "nuance": {
+    "couleur": "#6e4c3c",
+    "force": 0.5,
+    "echelle": 6,
+    "seuils": [
+     0.5,
+     0.75
+    ],
+    "fbm": true,
+    "decalage": 6
+   },
+   "taches": [
+    {
+     "couleur": "#000000",
+     "force": 0.6,
+     "echelle": 22,
+     "seuils": [
+      0.45,
+      0.75
+     ],
+     "decalage": 21
+    }
+   ],
+   "grain": {
+    "echelle": 110,
+    "force": 0.7
+   },
+   "salissure": {
+    "force": 0.5,
+    "hauteur": 0.2
+   },
+   "relief": {
+    "grain": {
+     "echelle": 70,
+     "force": 0.5
+    }
+   },
+   "brillance": 0.02
+  },
+  "bois-mort": {
+   "nom": "branche morte au sol : bois gris délavé, écorce brune par lambeaux, mousse dessus",
+   "espace": "volume",
+   "couleur": "#4f463c",
+   "nuance": {
+    "couleur": "#7a7266",
+    "force": 0.5,
+    "echelle": [
+     3,
+     9,
+     3
+    ],
+    "seuils": [
+     0.4,
+     0.7
+    ],
+    "decalage": 5
+   },
+   "taches": [
+    {
+     "couleur": "#3a2c22",
+     "force": 0.6,
+     "echelle": [
+      6,
+      1.5,
+      6
+     ],
+     "seuils": [
+      0.55,
+      0.7
+     ],
+     "fbm": true,
+     "decalage": 15
+    }
+   ],
+   "grain": {
+    "echelle": [
+     50,
+     6,
+     50
+    ],
+    "force": 0.4
+   },
+   "mousse": {
+    "couleur": "#4a5a2a",
+    "force": 0.8,
+    "echelle": 3,
+    "seuils": [
+     0.45,
+     0.65
+    ],
+    "fbm": true,
+    "dessus": [
+     0.2,
+     0.8
+    ]
+   },
+   "relief": {
+    "grain": {
+     "echelle": [
+      60,
+      10,
+      60
+     ],
+     "force": 0.3
+    }
+   },
+   "brillance": 0.03
+  },
+  "gres-eclat": {
+   "nom": "éclats et cailloux de grès : le grès de Fontainebleau sans la mousse, plus clair",
+   "base": "gres-fontainebleau",
+   "couleur": "#b3aea3",
+   "mousse": null,
+   "salissure": {
+    "force": 0.4,
+    "hauteur": 0.06
+   }
   }
  },
  "surfaces": {

@@ -192,6 +192,7 @@ function applyFiche(f){
 
 /* Objets : la fiche les décrit en formes de base, on les range dans une texture de données lue par le shader. */
 const FORMES={boite:0,boule:1,cylindre:2,cone:3,capsule:4,toit:5};
+const dentsDe=fo=>Math.round(clampN(fo.dents,0,60,0));       // découpe en peigne le long de x (sdPrim, monde.glsl)
 const MATIERES={mat:0,bois:1,pierre:2,metal:3,verre:4,pelage:5,tissu:5,tuile:6,lumineux:7};
 const SEM0=72, SEM_L=10, SH_ROWS=SEM0+4*SEM_L, shapesData=new Float32Array(4*4*SH_ROWS), cacheObj=new Set();
 const shapesT=gl.createTexture();
@@ -220,7 +221,7 @@ function buildShapes(f){
       const t=(Array.isArray(fo.taille)?fo.taille:[1,1,1]).map(v=>clampN(v,.01,40,1)*ech*.5);
       const pe=Array.isArray(fo.penche)?fo.penche:[0,0], col=couleur(fo.couleur), r=(row+k)*16;
       ancrer(fo.f,p,t,pe,2);
-      shapesData.set([x+c*p[0]+sn*p[2], y+p[1], z-sn*p[0]+c*p[2], FORMES[fo.f],
+      shapesData.set([x+c*p[0]+sn*p[2], y+p[1], z-sn*p[0]+c*p[2], FORMES[fo.f]+8*dentsDe(fo),
                       t[0],t[1],t[2], yaw+clampN(fo.cap,-360,360,0)*Math.PI/180,
                       col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
                       clampN(fo.lisse,0,.5,0)*ech, clampN(fo.arrondi,0,.3,0)*ech, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
@@ -276,7 +277,7 @@ function packSemis(f){
       if(pe[0]||pe[1]){ const R=Math.hypot(...t)+(fo.f==="capsule"?t[0]:0); e=[R,R,R]; }
       for(let i=0;i<3;i++){ mn[i]=Math.min(mn[i],p[i]-e[i]-ar); mx[i]=Math.max(mx[i],p[i]+e[i]+ar); }
       const col=fo.couleur==="palette"&&pal.length?[-1,-1,-1]:couleur(fo.couleur);
-      shapesData.set([p[0],p[1],p[2],FORMES[fo.f], t[0],t[1],t[2],fc,
+      shapesData.set([p[0],p[1],p[2],FORMES[fo.f]+8*dentsDe(fo), t[0],t[1],t[2],fc,
                       col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
                       clampN(fo.lisse,0,.5,0), ar, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], (r0+4+j)*16);
     });
@@ -348,7 +349,8 @@ function packRecette(r,row){
   put(7,[...ech(mo.echelle,ty===1?15:ty===2?26:ty===4?7:ty===5?5:ty>=6?1:[20,3,20]),N(mo.decalage,-100,100,0)]);
   if(mo.couleur!==undefined) put(8,[...couleur(mo.couleur),0]);
   if(ty===1){ put(9,[N(mo.deformation,0,.5,.12),N(mo.eclat,0,1.5,.5),N(mo.bord,0,1,.55),N(mo.recouvre,0,1,.8)]);
-    put(10,[N(mo.couverture,0,1,1),N(mo.couverture_bruit,0,1,0),N(mo.taille,.05,1,1),0]); }
+    put(10,[N(mo.couverture,0,1,1),N(mo.couverture_bruit,0,1,0),N(mo.taille,.05,mo.forme>0?1.2:1,1),N(mo.forme,0,1,0)]);   // forme > 0 : feuilles superposées (feuillesSup), largeur / longueur
+    put(11,[N(mo.lobes,0,1,0),0,0,0]); }
   if(ty===2){ const mk=Ob(mo.masque), ms=seuils(mk.seuils,.25,.6);
     put(9,[N(mo.deformation,0,20,6),N(mk.echelle,0,5,.25),ms[0],ms[1]]); put(10,[N(mo.cap,-180,180,0)*Math.PI/180,0,0,0]); }
   if(ty===3){ const s=seuils(mo.seuils,.7,.97), fi=Ob(mo.fines), s2=seuils(fi.seuils,.8,.97);
@@ -396,7 +398,7 @@ function buildMats(f){
   const d=MAT_LIB.surfaces[kit], ar=sf.arbres||d.arbres||{}, pe=sf.perches||d.perches||{};
   S.surf=[ok(sf.sol,d.sol),ok(sf.trajet,d.trajet),ok(sf.rochers,d.rochers),0];
   S.surfT=[ok(ar.a,"ecorce-pin"),ok(ar.b,"ecorce-chene"),ok(pe.a,"ecorce-bouleau"),ok(pe.b,"ecorce-chataignier")];
-  S.surfP=[clampN(ar.part,0,1,.45),clampN(pe.part,0,1,.5)];
+  S.surfP=[clampN(ar.part,0,1,.45),clampN(pe.part,0,1,.5),kitDe(f)===0&&isObj(f.foret)?clampN(f.foret.variete,0,1,0):0,0];   // variété des troncs (troncVar, recette.glsl)
   for(const o of [...(Array.isArray(f.objets)?f.objets:[]),...(Array.isArray(f.semis)?f.semis:[])]) for(const fo of (o&&Array.isArray(o.formes))?o.formes:[])   // formes qui nomment une recette
     if(fo&&typeof fo.matiere==="string"&&isObj(lib[fo.matiere])) use(fo.matiere);
   const rs=resoudre(sf.sol,lib)||resoudre(d.sol,lib);            // couleur du sol vue par la lumière indirecte
@@ -454,7 +456,7 @@ function common(w,h,p){
   bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
   gl.uniform2fv(u.uCan,S.can); gl.uniform4fv(u.uHoup,S.houp);
   gl.uniform4fv(u.uLoin,S.loin); gl.uniform4fv(u.uEau,S.eau||[0,0,0,0]); gl.uniform3fv(u.uLoinCol,S.loinCol); gl.uniform3fv(u.uLoinBas,S.loinBas);
-  bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP);
+  bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP);
   gl.uniform1i(u.uKit,S.kit); gl.uniform4fv(u.uKitP,S.kitP); gl.uniform1i(u.uMode,0);
   gl.uniform4fv(u.uRel,S.rel); gl.uniform4fv(u.uTraj,S.traj); gl.uniform4fv(u.uCreux,S.creux); gl.uniform2fv(u.uTerK,S.terK); gl.uniform1f(u.uYTop,S.yTop);
   gl.uniform1i(u.uSemN,S.semN); gl.uniform4fv(u.uSemTop,S.semTop); gl.uniform3fv(u.uSolAlb,S.solAlb); gl.uniform1f(u.uNuit,S.lum);
@@ -945,7 +947,7 @@ function v3Cap(p){
   return {cap,demi:Math.min(Math.PI,loin+.3),pres:pole?Math.PI:Math.min(Math.PI,tout+.3)};
 }
 function aireForme(ty,s){                                      // aire approchée d'une forme de base (demi-tailles s)
-  const [x,y,z]=s;
+  const [x,y,z]=s; ty%=8;                                         // dents du peigne : même aire, à peu près
   if(ty===1){ const p=1.6; return 4*Math.PI*Math.pow((Math.pow(x*y,p)+Math.pow(x*z,p)+Math.pow(y*z,p))/3,1/p); }
   if(ty===2) return 2*Math.PI*x*2*y+2*Math.PI*x*x;
   if(ty===3) return Math.PI*x*(x+Math.hypot(x,2*y));
@@ -1039,7 +1041,7 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   gl.uniform2fv(u.uCan||null,S.can); gl.uniform4fv(u.uHoup||null,S.houp);
   gl.uniform4fv(u.uLoin||null,S.loin); gl.uniform3fv(u.uLoinCol||null,S.loinCol); gl.uniform3fv(u.uLoinBas||null,S.loinBas);
   if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
-  if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP); }
+  if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP); }
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
   gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
   gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);

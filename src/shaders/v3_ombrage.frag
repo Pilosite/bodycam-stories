@@ -70,6 +70,18 @@ bool tapis(vec2 xz, float lod, out vec4 a, out vec4 b){
 #endif
           // réglage global de l'ambiance (essai)         // troncs : épaisseur optique par mètre parcouru à l'horizontale (statistique de la fiche)
 out vec4 outCol;
+#if SEMO
+/* Élément de semis d'un pixel. Le tampon G porte déjà le point dans le repère de l'élément (lp) et la forme touchée
+   (par = (6 × couche + forme + 0,5) / 24, écrit par semeS et par v3_proches.frag) : il ne reste qu'à retrouver la cellule et
+   ses tirages (échelle, étirement, aléa), sans parcourir les formes ni déplier sdSemis. Rend info comme sdSemis. */
+vec4 semisPix(vec2 xz, float par, vec3 lp){
+  int c=int(par*24.), k=c/6, j=c-k*6;
+  ElemS e; vec2 id, f; semisGrille(xz,k,e,id,f);
+  vec4 h2=semisH2(k,id,semisH(k,id,e.side),e.side), J=texelFetch(uShapes,ivec2(0,SEM0+k*SEML+1),0);
+  gInst=vec4(0.,mix(J.z,J.w,h2.x),mix(e.K.x,e.K.y,h2.y),h2.w);
+  return vec4(lp,float(SEM0+k*SEML+4+j)+.9*h2.w);
+}
+#endif
 
 uint hu(uint x){ x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u; return (x>>22u)^x; }
 
@@ -198,7 +210,7 @@ void main(){
       // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
       vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
       int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
-      vec4 ta, tb; float TsC=-1.;
+      vec4 ta, tb; float TsC=-1.; gTon=vec3(1.);
 #if TAPIS
       if(id==0 && uTapL>0 && (uProf&1)==0 && tapis(q.xz,log2(t*uFish/uRes.y/sqrt(max(abs(dot(rd,gn)),.05))/uTapS0)+uTapBias,ta,tb)){
         alb=ta.rgb*ta.rgb; spec=ta.w; emis=tb.z;             // sol cuit : deux lectures (quatre au fondu) au lieu de recette()
@@ -215,10 +227,10 @@ void main(){
       else if(id==4 || id==6){                               // objet, ou élément de semis (retrouvé à partir du point du monde, comme objId()) ; un seul appel à matProp
         vec4 info=vec4(0.,0.,0.,floor(par*128.+.5));
 #if SEMO
-        if(id==6){ vec4 inst; gTol=.002; sdSemis(q,int(par*4.+.5),info,inst); gInst=inst; }
+        if(id==6) info=semisPix(p.xz,par,q);
 #endif
         vec3 qr; r0=matProp(q,gn,info,id==6,alb,n,spec,emis,qr,nr0,rot); q=qr; }
-      else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
+      else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; q+=troncVar(par); rot=id==1?RA:RB; }
       if(r0>=0 && (uProf&1)==0 && !((uProf&64)!=0 && id==0) && !((uProf&128)!=0 && id!=0)){
         vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
         for(int k=0;k<2;k++){
@@ -227,7 +239,7 @@ void main(){
           float wk=nr==1?1.:(k==0?1.-w:w);
           A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
         }
-        alb=A; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
+        alb=A*gTon; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
       }
       col=lumiere(p,gn,n,alb,spec,rd,TsC)+alb*emis*8.;
       if(uVoir==1) col=vec3(ombreSoleil(p,gn));

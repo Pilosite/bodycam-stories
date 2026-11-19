@@ -34,7 +34,8 @@ function validerForme(x) {
     penche: Array.isArray(x.penche) ? [clampN(x.penche[0], -90, 90, 0), clampN(x.penche[1], -90, 90, 0)] : [0, 0],
     couleur: x.couleur === 'palette' || (typeof x.couleur === 'string' && HEX.test(x.couleur)) ? x.couleur : '#777777',
     matiere: MATIERES_BASE.includes(x.matiere) || (typeof x.matiere === 'string' && NOM.test(x.matiere)) ? x.matiere : 'mat',
-    lisse: clampN(x.lisse, 0, 0.5, 0), arrondi: clampN(x.arrondi, 0, 0.3, 0), vacille: clampN(x.vacille, 0, 1, 0) };
+    lisse: clampN(x.lisse, 0, 0.5, 0), arrondi: clampN(x.arrondi, 0, 0.3, 0), vacille: clampN(x.vacille, 0, 1, 0),
+    dents: Math.round(clampN(x.dents, 0, 60, 0)) };
 }
 const formeOk = x => isObj(x) && FORMES_NOMS.includes(x.f);
 function validerSemis(L, ids) {
@@ -75,7 +76,8 @@ export function validerFiche(f, opts = {}) {
   if (typeof a.lampe === 'boolean') out.ambiance.lampe = a.lampe;
   if (kit === 'foret') { const fo = isObj(f.foret) ? f.foret : {}; out.foret = { densite: clampN(fo.densite, 0, 1, 0.7), rochers: clampN(fo.rochers, 0, 1.5, 1), feuillage: clampN(fo.feuillage, 0, 1.5, 1) };
     if (fo.houppier === 'cone') { out.foret.houppier = 'cone'; out.foret.houppier_bas = clampN(fo.houppier_bas, 0.3, 8, 1.6); out.foret.houppier_rayon = clampN(fo.houppier_rayon, 0.8, 3.2, 2.5); }
-    if (fo.perches !== undefined) out.foret.perches = clampN(fo.perches, 0, 1, 1); }
+    if (fo.perches !== undefined) out.foret.perches = clampN(fo.perches, 0, 1, 1);
+    if (fo.variete !== undefined) out.foret.variete = clampN(fo.variete, 0, 1, 0); }
   else if (kit === 'dunes') out.dunes = { rochers: clampN(f.dunes && f.dunes.rochers, 0, 1.5, 0) };
   if (kit !== 'dunes') {                                          // relief et trajet réglables (forêt et monde nu)
     const re = isObj(f.relief) ? f.relief : null, tr = isObj(f.trajet) ? f.trajet : null;

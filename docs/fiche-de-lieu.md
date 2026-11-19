@@ -42,6 +42,7 @@ Les fiches vivent dans `scenes/*.json`. Le build les embarque toutes dans la pag
 | `foret.feuillage` | oui | 0 à 1,5. Densité de la canopée. |
 | `foret.houppier` | oui | `voute` (feuillus et pins, feuillage haut et commun) ou `cone` (conifères : un cône de feuillage par arbre, vert sombre). Réglages : `houppier_bas`, `houppier_rayon` en mètres. |
 | `foret.perches` | oui | 0 à 1. Part de jeunes troncs fins. |
+| `foret.variete` | oui | 0 à 1. Variété des troncs : chaque arbre décale les motifs de son écorce et prend sa teinte (0 : tous les troncs d'une recette identiques, comme avant). |
 | `dunes.rochers` | oui | Abondance des blocs dans le sable, 0 par défaut. |
 | `ambiance.saison` | oui | `ete`, `automne`, `hiver`. Couleur et densité des feuilles. |
 | `ambiance.meteo` | oui | `clair` ou `voile` (soleil laiteux, ombres douces). |
@@ -123,6 +124,8 @@ Exemples complets : `essais/san-francisco.json`, `essais/village-nuit.json`, `es
 
 Le moteur ne connaît aucun objet. La fiche les construit en assemblant des formes : `boite`, `boule`, `cylindre`, `cone`, `capsule`, `toit`. Chaque forme a un centre `p` (mètres, y = 0 au sol, +z = face avant), une `taille` entière, un `cap`, une inclinaison `penche`, une `couleur`, une `matiere` (`mat`, `bois`, `pierre`, `metal`, `verre`, `pelage`, `tissu`, `tuile`, `lumineux`), et peut se fondre dans ses voisines avec `lisse`. Un objet se place par `devant` et `cote` le long du trajet, écarte les arbres avec `degage`, et peut être caché puis montré par un temps du récit (`"scene": {"montrer": ["id"]}`).
 
+Une forme peut être découpée en peigne avec `dents` (1 à 60) : fentes de part et d'autre d'une nervure le long de son axe x, dents penchées vers le bout, contour en fuseau. Sur une `boite` très mince, c'est une fronde de fougère ou une palme ; sur une boîte épaisse, une grille ou une clôture ajourée.
+
 Limites : 8 objets, 24 formes par objet, 64 formes en tout. Exemple complet : `scenes/05-maison-lapin.json`.
 
 ## Matières : des recettes, pas du code
@@ -147,7 +150,7 @@ Une recette s'évalue toujours dans le même ordre. Tous les champs sont faculta
 | `couleur` | Couleur de base, `#rrggbb`, ou `"forme"` : la couleur de la forme qui porte la recette (avec une palette de semis, chaque maison garde sa couleur sous la même recette). |
 | `nuance` | Seconde couleur par plages : `couleur`, `force`, `echelle`, `seuils`, `fbm`, `decalage`. |
 | `taches` | Jusqu'à quatre couches : `couleur`, `force`, `echelle` (nombre ou `[x, y, z]`, anisotrope), `seuils`, `fbm`, `decalage`, `biais` et `hauteur` (plus présentes vers une hauteur, comme le pied noirci d'un bouleau), `creux` (la tache est en creux), `sous_motif` (peinte avant le motif), `sur_motif` (seulement sur les éléments du motif). `#000000` assombrit : humidité, salissures. |
-| `motif` | `type` : `feuilles` (litière de cellules, `palette`, `couverture`, `taille`), `rides` (vent sur le sable), `fissures` (écorce : `seuils`, `profondeur`, `fines`, `assombrit`), `planches` (`joint`, `longueur`, `couchees` pour un bardage), `paves` (`joint`, `decalage_rangs`, `bombe` ; `echelle: [x, y, z]` pour des briques), `fenetres`, `marquage` (ci-dessous). Communs : `echelle`, `couleur` (joints, fond des fissures, vitre, peinture), `opacite`, `inclinaison`, `palette` (`[{ "couleur", "part" }]`). |
+| `motif` | `type` : `feuilles` (litière de cellules, `palette`, `couverture`, `taille` ; avec `forme` > 0, de vraies feuilles qui se recouvrent, largeur / longueur = `forme`, une part `lobes` lobées comme le chêne), `rides` (vent sur le sable), `fissures` (écorce : `seuils`, `profondeur`, `fines`, `assombrit`), `planches` (`joint`, `longueur`, `couchees` pour un bardage), `paves` (`joint`, `decalage_rangs`, `bombe` ; `echelle: [x, y, z]` pour des briques), `fenetres`, `marquage` (ci-dessous). Communs : `echelle`, `couleur` (joints, fond des fissures, vitre, peinture), `opacite`, `inclinaison`, `palette` (`[{ "couleur", "part" }]`). |
 | `variation`, `grain` | Modulation de la couleur, grande et fine : `echelle`, `force`. |
 | `mousse` | Mousse ou lichen : `couleur`, `force`, `echelle`, `seuils`, `fbm`, `dessus` (seuils sur l'orientation vers le ciel, limite décalée par `pente_bruit`, `pente_echelle`), `cote` (seuils vers le côté humide), `hauteur` (seuils sur la hauteur au-dessus du sol), `grain`, `adoucit` (efface le relief). |
 | `salissure` | Le pied s'assombrit : `force`, `hauteur` en mètres. |

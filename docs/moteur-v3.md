@@ -206,3 +206,41 @@ En plus de ce qu'il affichait : images/s en marche avec chaque optimisation coup
 2. Si l'ombrage reste lourd : sortir `recette()` du shader d'ombrage dans une passe « matière » à part (troncs, rochers, objets), pour que la passe de lumière, plus petite, occupe mieux la puce ; et calculer l'ambiance (`canopyT` dans une direction tirée, `pres`) à demi-résolution.
 3. Si le capteur reste à 10 ms quelle que soit la taille : c'est l'attente de l'affichage, pas le shader ; ne plus la compter, ou alléger la composition (canvas sans `preserveDrawingBuffer`, déjà le cas).
 4. Le même tapis pour les semis au sol plats (marquage, pavés) quand le semeur saura les semer.
+
+## Fidélité de la forêt (branche `fidelite`, 19 novembre 2026)
+
+But : la forêt des Grands Avaux (Champcueil) en automne, en qualité complète sur PC, pour une démo. Tout est générique : recettes en données, sous-bois en couches de `semis`, trois mots de vocabulaire en plus. Le fragment `essais/champcueil-sous-bois.json` (à fusionner dans la fiche 09) porte les réglages ; `scenes/01` n'est pas modifiée.
+
+### Constats sur le lieu (recherche, sans image importée)
+
+1. Blocs de grès arrondis, émoussés, gris clair à beige (sable de quartz cimenté), en chaos et en platières (dalles plates au sommet, mares temporaires).
+2. Surface patinée : croûtes brunes, grises et noires, surtout dans les creux et sous les surplombs ; lichens en mosaïques vert-gris et jaune orangé, d'autres gris-brun qui se fondent dans la pierre ; mousse et algue verte côté humide et au pied.
+3. Sentiers de sable blanc presque pur (95 à 99 % de silice), tassé, tenu par les racines des pins.
+4. Pin sylvestre : haut du tronc orangé à saumon, en fines écailles ; bas gris-brun, en grosses plaques séparées de sillons profonds.
+5. Bouleau verruqueux : blanc lisse et un peu brillant, taches noires avec crevasses, pied qui noircit et se fissure en vieillissant.
+6. Chênes (pédonculé, pubescent), taillis de châtaignier en cépées (un châtaignier à cinq troncs est signalé sur le parcours), pinèdes.
+7. Fougère aigle : grandes frondes triangulaires, brunes à rousses en automne, qui se couchent sur le sol.
+8. Lande à callune et bruyère cendrée sur les platières, colonisée par les bouleaux.
+9. Litière (observation commune, non sourcée) : feuilles de chêne et de châtaignier rousses, de bouleau jaunes, aiguilles, branches mortes.
+
+### Ce qui a changé
+
+| Écart (rendu avant) | Correction générique |
+|---|---|
+| Litière en polygones jointifs (Voronoï), plate | Motif `feuilles` avec `forme` > 0 : de vraies feuilles en fuseau, plus larges à la base, une part lobée (`lobes`), qui se recouvrent (la feuille du dessus parmi les neuf cellules voisines), bords relevés ; bosses du sol en relief de matière. Recette `litiere-automne`. |
+| Grès lisse, taches en camouflage | `gres-fontainebleau` : patine sombre plus forte vers le haut, rosettes de lichen pâle, lichen vert, petits creux sombres, bosses à deux échelles et grain de surface (relief de matière, sans toucher à la forme). `gres-eclat` (sans mousse) pour les cailloux. |
+| Sentier gris uniforme | `sable-blanc` : sable blanc tassé, traînées plus claires, humus en bordure, quelques feuilles. |
+| Troncs identiques d'un arbre à l'autre | `foret.variete` (0 à 1) : chaque arbre décale les motifs de son écorce et prend sa teinte (`troncVar`, `recette.glsl`, les deux moteurs). 0 par défaut : rien ne change. |
+| Pin aux fissures en vers, sans orangé | `ecorce-pin-sylvestre` : fissures étirées en hauteur, orangé par plaques au-dessus de 3,5 m. |
+| Bouleau à pied gris uniforme | `ecorce-bouleau-verruqueux` : lenticelles, taches noires, pied noir crevassé irrégulier. |
+| Aucun sous-bois | Quatre couches de `semis` : fougère aigle (5 frondes + une couchée, `boite` mince découpée en peigne), callune (5 rameaux dressés en éventail), branches mortes (4 capsules couchées), éclats de grès à demi enterrés. |
+
+Vocabulaire ajouté (`fiche-de-lieu.md`) : `dents` sur une forme (découpe en peigne le long de x, contour en fuseau : `sdPrim` dans `monde.glsl`, le type porte 8 × dents) ; `forme` et `lobes` du motif `feuilles` ; `foret.variete`. Les vues de `ref/` ne bougent pas : écart après flou entre main et cette branche, même pose, même machine, 1,60 sur `b-troncs` (plancher de bruit 1,53) ; aucune fiche de `scenes/` n'utilise les nouveaux champs.
+
+### L'ombrage n'a plus `sdSemis`
+
+Sur Direct3D, l'ombrage ne compilait plus avec `sdSemis` déplié (main, variante `SEMO`). Le semeur (`semeS`) et les proches (`v3_proches.frag`) écrivent maintenant dans le tampon G le point dans le repère de l'élément et la forme touchée (code 6 + (6 × couche + forme + 0,5) / 48) ; l'ombrage (`semisPix`) ne retrouve que la cellule et ses deux tirages (`semisH`, `semisH2`, partagés avec `semisElem`) : ni boucle sur les formes, ni `terrainH`, ni `cleared`. Taille de l'ombrage traduit par ANGLE (rendu logiciel, sans tapis) : variante à semis 509 736 caractères sur main, 477 079 ici ; variante sans semis 450 728 sur main, 457 688 ici (peigne et `troncVar`).
+
+### Ce qui coûte
+
+Rien de neuf par image en dehors des recettes, évaluées une fois par pixel : la litière superposée parcourt neuf cellules comme le Voronoï d'avant ; le grès a deux bosses et un grain (sa première version, avec des creux en relief, faisait tomber Chrome en rendu logiciel sur un bloc plein écran : allégée). Les couches de semis entrent dans le budget fixe de grains. En qualité mobile, le sol passe par le tapis (cuit une fois). Rien n'est mesuré sur un vrai GPU.
