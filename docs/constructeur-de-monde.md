@@ -82,9 +82,11 @@ Collection `scenes` de la capacité `db`, un document par scène :
 
 ## L'interface
 
+La rangée du bas ne garde que « Lui parler », « Scènes » et « Plus » ; « Plus » ouvre au-dessus les autres commandes (Jouer l'histoire, Décrire un monde, Mesurer, Suivi, Qualité, moteurs v2 et v3, Debug). « Décrire un monde » ouvre la banque sur le champ de description.
+
 « Scènes » (à la place de « Lieu suivant ») ouvre la banque : tiroir en bas de l'écran sur téléphone (84 % de la hauteur, défilement propre), panneau de 410 px à droite sur ordinateur (la barre du bas se décale). En tête, « Nouvelle scène » : un champ de plusieurs lignes, « Dicter » si la dictée existe, « Créer la scène ». Puis le chantier en cours, puis les cartes : vignette, titre, date, origine, début de la description. Une carte s'ouvre sur ses actions : Jouer ici, Retoucher, Dupliquer et modifier, Renommer, Régénérer, Supprimer (en deux temps : « Confirmer la suppression » pendant 5 s), Historique. Les formulaires sont en ligne (pas de `prompt`), tout est bouton (clavier, cibles de 44 px), Échap ferme. Pendant une fabrication, « Jouer ici » et les autres fabrications sont désactivés (la capture a besoin de la caméra).
 
-« Décrire un monde » garde son geste (voix ou clavier dans la barre du bas) mais ne fige plus l'image : la fabrication part en tâche de fond et la puce la suit.
+« Décrire un monde » (menu « Plus ») ouvre la banque sur le champ de description ; la fabrication part en tâche de fond, l'image n'est jamais figée, et la puce la suit quand le panneau est fermé.
 
 Captures : `out/constructeur/portrait-chantier.png`, `portrait-banque.png`, `portrait-erreur.png`, `paysage-banque.png` (`node tools/constructeur-essai.mjs`).
 
@@ -137,11 +139,20 @@ Essais sans Claude ni base : `npm test` (module), `node tools/constructeur-essai
 
 Écrites en tenant le rôle de Claude avec ces consignes, passées par la chaîne dans la page (`out/scenes/<nom>/` : `appel-i.txt` consigne réelle, `appel-i-vue-k.jpg` vues envoyées, `rep-i.json` réponses), rendues avant et après relecture : `out/constructeur-planche.png`. Fiches gardées : `essais/constructeur-port.json`, `essais/constructeur-gare.json`, `essais/constructeur-parking.json`.
 
-RESULTATS
+| Scène | Notes de relecture | Ce que la relecture a corrigé |
+|---|---|---|
+| Port de pêche à l'aube | 4 → 6 | quai trop large qui cachait l'eau, bateaux trop loin et trop bas ; le bassin reste une bande étroite en portrait |
+| Gare de campagne | 7 → 8 | gare trop petite depuis le départ, collines trop basses ; tilleuls trop réguliers |
+| Parking souterrain | 2 → 6 | voile gris de la brume éclairée par la lampe, piliers et murs réduits par le moteur (formes trop grandes pour la cellule) |
+
+Cinq demandes de plus (ruelle, chalet à l'aube, plage, cimetière de nuit, entrepôt) : `tests/scenes-variees.mjs`, `node tools/constructeur-variete.mjs` (voir `docs/constructeur.md`).
 
 ## Ce que le moteur ne sait pas montrer
 
-LIMITES
+- L'eau proche (rive, vagues, bassin) : seulement un sol sombre et brillant ; la vraie eau est sous l'horizon.
+- La lumière ponctuelle : « lumineux » brille sans éclairer ; la nuit, seule la lampe (15 m) révèle le décor.
+- Texte, personnages, mouvement, falaises, ponts, escaliers.
+- Un intérieur de maison : murs et plafond se composent, mais meubles, portes et fenêtres vues de dedans épuisent vite les 64 formes d'objets.
 
 ## Pour la suite : histoire et objets à états
 

@@ -240,6 +240,7 @@ function demi(fo, ech = 1, commeMoteur = false) {
   const ca = Math.abs(Math.cos((fo.cap || 0) * Math.PI / 180)), sa = Math.abs(Math.sin((fo.cap || 0) * Math.PI / 180));
   return [t[0] * ca + t[2] * sa, t[1], t[0] * sa + t[2] * ca];
 }
+const demiForme = demi;                                            // controler() appelle « demi » le demi-champ
 const basseForme = fo => (fo.p ? fo.p[1] : 0) - demi(fo)[1] < 2.1;   // ce qui barre le passage : les parties basses
 /* Boîte englobante d'un assemblage de formes, dans son repère (y = 0 au sol). commeMoteur : la règle de packSemis. */
 export function emprise(formes, ech = 1, commeMoteur = false) {
@@ -296,16 +297,21 @@ export function controler(fiche, geo, opts = {}) {
       }
     }
     const depart = (() => { const c = points[0], dx = pos.x - c.x, dz = pos.z - c.z; return { distance: +Math.hypot(dx, dz).toFixed(1), angle: Math.round(rel(Math.atan2(dx, dz) - c.yaw) * 180 / Math.PI) }; })();
+    // en travers du trajet, dans le repère de l'objet : x (face au porteur) ou z (« oriente » trajet, face à l'axe)
+    const ech = clampN(o.echelle, 0.1, 5, 1), travers = fo => { const i = o.oriente === 'trajet' ? 2 : 0, c = clampN(o.cote, -20, 20, 0) + (fo.p ? clampN(fo.p[i], -40, 40, 0) : 0) * ech, r = demiForme(fo, ech)[i]; return [c - r, c + r]; };
+    const couvre = e.bas > 2.1 && (o.formes || []).some(fo => { const [a, b] = travers(fo); return a <= -hw && b >= hw; });   // plafond, toit, passerelle au-dessus du trajet
     const el = { id: o.id, nom, genre: 'objet', devant: o.devant, cote: o.cote, largeur: +e.larg.toFixed(1), hauteur: +e.haut.toFixed(1), depart, premier, meilleure, caches: [] };
+    if (couvre) { el.au_dessus = true; dire('info', o.id, `${nom} : au-dessus du trajet, de ${e.bas.toFixed(1)} à ${e.haut.toFixed(1)} m (plafond, toit, passerelle)`); }
     if (o.visible === false) { el.cache_au_depart = true; dire('info', o.id, `${nom} : caché au départ (le récit le montrera)`); }
-    if (!meilleure) dire('erreur', o.id, `${nom} : jamais dans le champ depuis le trajet (départ : ${depart.distance} m, ${depart.angle}° ; le champ fait ±${Math.round(demi * 180 / Math.PI)}° en portrait${P.nuit && !lumineux(o.formes) ? ', et la nuit la lampe ne porte qu\'à ' + P.eclaire + ' m' : ''}). Rapproche-le de l'axe : |cote| ≤ 0,5 × devant.`);
+    if (couvre) {}                                                  // une enveloppe : se juge sur les vues, pas sur son centre
+    else if (!meilleure) dire('erreur', o.id, `${nom} : jamais dans le champ depuis le trajet (départ : ${depart.distance} m, ${depart.angle}° ; le champ fait ±${Math.round(demi * 180 / Math.PI)}° en portrait${P.nuit && !lumineux(o.formes) ? ', et la nuit la lampe ne porte qu\'à ' + P.eclaire + ' m' : ''}). Rapproche-le de l'axe : |cote| ≤ 0,5 × devant.`);
     else if (!premier || premier.z > 20) dire('avertissement', o.id, `${nom} : n'entre dans le champ qu'à partir de z = ${premier.z} m ; depuis le départ il est à ${depart.angle}°, hors champ`);
     if (meilleure && meilleure.taille_deg < 3) dire('avertissement', o.id, `${nom} : trop petit pour se lire (${meilleure.taille_deg}° au mieux, à ${meilleure.distance} m)`);
     if (e.haut > 60) dire('erreur', o.id, `${nom} : ${e.haut.toFixed(0)} m de haut, invraisemblable`);
     if (e.haut < 0.05) dire('erreur', o.id, `${nom} : sous le sol`);
-    if (e.bas > 0.4 && !lumineux(o.formes)) dire('avertissement', o.id, `${nom} : flotte à ${e.bas.toFixed(1)} m du sol`);
-    const eb = emprise((o.formes || []).filter(basseForme), clampN(o.echelle, 0.1, 5, 1));
-    if (kit !== 1 && eb.haut > 0.3 && Math.abs(o.cote) - (o.oriente === 'trajet' ? eb.prof : eb.larg) / 2 < couloir) dire('avertissement', o.id, `${nom} : barre le passage (cote ${o.cote}, ${(o.oriente === 'trajet' ? eb.prof : eb.larg).toFixed(1)} m en travers) ; le porteur le contournera ou s'arrêtera devant`);
+    if (e.bas > 0.4 && !couvre && !lumineux(o.formes)) dire('avertissement', o.id, `${nom} : flotte à ${e.bas.toFixed(1)} m du sol`);
+    const basses = (o.formes || []).filter(fo => basseForme(fo) && (fo.p ? fo.p[1] : 0) + demiForme(fo)[1] > 0.3), eb = emprise(basses, ech);
+    if (kit !== 1 && basses.some(fo => { const [a, b] = travers(fo); return a < couloir && b > -couloir; })) dire('avertissement', o.id, `${nom} : barre le passage (cote ${o.cote}, ${(o.oriente === 'trajet' ? eb.prof : eb.larg).toFixed(1)} m en travers) ; le porteur le contournera ou s'arrêtera devant`);
     if (kit === 0) {                                                // forêt : les arbres poussent partout hors du sentier, sauf « degage »
       if ((o.degage || 0) < e.rayon * 0.9) dire('erreur', o.id, `${nom} : en forêt, degage ${o.degage || 0} m < rayon ${e.rayon.toFixed(1)} m : des arbres poussent au travers. Mets degage ≥ ${Math.ceil(e.rayon + 1)}`);
       if (meilleure) { const m = masqueForet(Math.max(0, meilleure.distance - (o.degage || 0))); if (m > 0.2) { el.caches.push('arbres'); dire('avertissement', o.id, `${nom} : environ ${Math.round(m * 100)} % de la vue masquée par les troncs à ${meilleure.distance} m ; rapproche-le du sentier ou éclaircis la forêt`); } }
@@ -451,7 +457,7 @@ const MOTEUR_TEXTE = (recettes) => `LE MOTEUR (lis tout : c'est ce qu'il sait mo
 - Le porteur part de z = 0 sur l'axe du trajet et marche le long du trajet vers les z croissants (« devant »), sur 40 à 80 m, en regardant surtout devant lui. Le joueur peut tourner la tête, mais ce qu'il voit d'abord est le cône devant.
 - Un objet n'est dans le champ en approchant que si |cote| ≤ 0,55 × (devant − z) : un objet à cote 11 et devant 15 n'est JAMAIS vu en marchant. Pour se lire au premier coup d'œil : devant 10 à 35, |cote| ≤ 0,5 × devant, et assez grand (hauteur ≥ distance / 20).
 - Tout est fait de formes de base (boîtes, boules, cylindres, cônes, capsules, toits à deux pans) fondues entre elles, avec des matières calculées. Pas de texture, pas de modèle, pas de texte lisible, pas de personnage, rien qui bouge.
-- Le sol est un relief doux (ondulations, une pente le long du trajet) : pas de falaise, pas de marche, pas de pont, pas de grotte. La vraie eau n'existe que sous l'horizon (« lointain.eau ») ; une eau proche (bassin, canal, rive) se fait avec un SOL sombre, uni et brillant, voir la règle 8.
+- Le sol est un relief doux (ondulations, une pente le long du trajet) : pas de falaise, pas de marche, pas de pont, pas de grotte. La vraie eau n'existe que sous l'horizon (« lointain.eau ») et ne se voit que si le sol descend vers elle (relief.pente -0.1 à -0.15, lointain.hauteur 0.1 : une plage, une côte) ; une eau proche (bassin, canal, rive) se fait avec un SOL sombre, uni et brillant, voir la règle 8.
 - La lumière : soleil (ou lune), ciel, brume, et la lampe du téléphone la nuit. « lumineux » brille mais n'éclaire presque pas autour : la nuit, seules la lampe (15 m) et les choses lumineuses se voient. La nuit, la brume éclairée par la lampe devient un voile gris qui mange tout : brume 0.003 à 0.006 la nuit, jamais plus de 0.01.
 - Recettes de matière prêtes : ${recettes.join(', ')}.
 - Coût : 4 couches de semis, 8 objets, 64 formes d'objets en tout, 6 formes par élément de semis. Le répété (immeubles, arbres, voitures, tombes, piliers, bateaux) va en semis ; l'unique (une maison précise, une horloge, une brouette) en objet.`;
@@ -692,7 +698,7 @@ export async function construire(entree, deps) {
     const v = versions[versions.length - 1];
     let images = null, vues = [];
     if (deps.images && moteur.capturer) {
-      vues = choisirVues(v.fiche, moteur.geo(), 3);
+      vues = choisirVues(v.fiche, moteur.geo(), typeof deps.images === 'number' ? Math.max(1, Math.min(3, deps.images)) : 3);   // limits().images.maxCount
       etape({ etape: 'capture', tour, texte: `Repérage : ${vues.length} vues le long du trajet…` });
       try { const caps = await moteur.capturer(vues, { signal }); images = caps.filter(c => c && c.blob && c.moyenne > 2).map(c => c.blob); derniereVues = caps; }
       catch (e) { if (e && e.code === 'cancelled') throw e; images = null; }

@@ -123,6 +123,15 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .carte-form input{flex:1 1 180px;min-width:0;padding:9px 12px}
 .carte-hist summary{font:500 12px/1.4 var(--f-mono);color:var(--ink-dim);cursor:pointer;padding:4px 0}
 .carte-hist ul{margin:4px 0 0;padding-left:16px;font:400 11.5px/1.45 var(--f-mono);color:var(--ink-dim)}
+/* commandes du bas : trois boutons au pouce ; le reste (réglages, essais du moteur) dans « Plus », qui s'ouvre au-dessus */
+.commandes{flex-wrap:nowrap;max-width:100%}
+.commandes button{white-space:nowrap}
+.outils[hidden]{display:none}
+.outils{pointer-events:auto;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:30em;padding:10px;border-radius:18px;
+  background:rgba(14,17,13,.82);border:1px solid var(--line);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.outils button{padding:11px 14px;font-size:14px;min-height:44px}
+#plus[aria-expanded="true"]{color:var(--ink);border-color:var(--ink)}
+.banque-liste .groupe{font:500 11.5px/1 var(--f-mono);color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;padding:10px 2px 2px}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 @media (prefers-reduced-motion:reduce){button.pulse{animation:none}}
 </style>
@@ -139,15 +148,18 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
     <input id="msg" type="text" autocomplete="off" enterkeyhint="send" placeholder="Dis-lui quoi faire…" aria-label="Ce que tu dis, au porteur de la caméra ou pour décrire un monde">
     <button type="submit" id="envoi">Dire</button>
   </form>
-  <div class="row">
-    <button id="parler" type="button">Lui parler</button>
-    <button id="monde" type="button">Décrire un monde</button>
-    <button id="lieu" type="button" class="ghost" aria-controls="banque" aria-expanded="false">Scènes</button>
+  <div id="outils" class="outils" role="group" aria-label="Autres commandes" hidden>
+    <button id="monde" type="button" class="ghost">Décrire un monde</button>
     <button id="mesurer" type="button" class="ghost">Mesurer</button>
     <button id="suivi" type="button" class="ghost" aria-pressed="true" hidden>Suivi du téléphone : oui</button>
-    <button id="v2" type="button" class="ghost" aria-pressed="false" hidden title="Essai : tourner des panoramiques, puis les projeter">Moteur v2</button>
     <button id="qualite" type="button" class="ghost" aria-pressed="false" title="Mobile : téléphone moyen. Complète : ordinateur, pleine résolution.">Qualité : mobile</button>
+    <button id="v2" type="button" class="ghost" aria-pressed="false" hidden title="Essai : tourner des panoramiques, puis les projeter">Moteur v2</button>
     <button id="v3" type="button" class="ghost" aria-pressed="false" title="Essai : semer des grains au lieu de lancer des rayons">Moteur v3</button>
+  </div>
+  <div class="row commandes" id="commandes">
+    <button id="parler" type="button">Lui parler</button>
+    <button id="lieu" type="button" aria-controls="banque" aria-expanded="false">Scènes</button>
+    <button id="plus" type="button" class="ghost" aria-controls="outils" aria-expanded="false">Plus</button>
   </div>
 </div>
 <div id="mesure" hidden>
@@ -1646,6 +1658,7 @@ function demi(fo, ech = 1, commeMoteur = false) {
   const ca = Math.abs(Math.cos((fo.cap || 0) * Math.PI / 180)), sa = Math.abs(Math.sin((fo.cap || 0) * Math.PI / 180));
   return [t[0] * ca + t[2] * sa, t[1], t[0] * sa + t[2] * ca];
 }
+const demiForme = demi;                                            // controler() appelle « demi » le demi-champ
 const basseForme = fo => (fo.p ? fo.p[1] : 0) - demi(fo)[1] < 2.1;   // ce qui barre le passage : les parties basses
 /* Boîte englobante d'un assemblage de formes, dans son repère (y = 0 au sol). commeMoteur : la règle de packSemis. */
 function emprise(formes, ech = 1, commeMoteur = false) {
@@ -1702,16 +1715,21 @@ function controler(fiche, geo, opts = {}) {
       }
     }
     const depart = (() => { const c = points[0], dx = pos.x - c.x, dz = pos.z - c.z; return { distance: +Math.hypot(dx, dz).toFixed(1), angle: Math.round(rel(Math.atan2(dx, dz) - c.yaw) * 180 / Math.PI) }; })();
+    // en travers du trajet, dans le repère de l'objet : x (face au porteur) ou z (« oriente » trajet, face à l'axe)
+    const ech = clampN(o.echelle, 0.1, 5, 1), travers = fo => { const i = o.oriente === 'trajet' ? 2 : 0, c = clampN(o.cote, -20, 20, 0) + (fo.p ? clampN(fo.p[i], -40, 40, 0) : 0) * ech, r = demiForme(fo, ech)[i]; return [c - r, c + r]; };
+    const couvre = e.bas > 2.1 && (o.formes || []).some(fo => { const [a, b] = travers(fo); return a <= -hw && b >= hw; });   // plafond, toit, passerelle au-dessus du trajet
     const el = { id: o.id, nom, genre: 'objet', devant: o.devant, cote: o.cote, largeur: +e.larg.toFixed(1), hauteur: +e.haut.toFixed(1), depart, premier, meilleure, caches: [] };
+    if (couvre) { el.au_dessus = true; dire('info', o.id, `${nom} : au-dessus du trajet, de ${e.bas.toFixed(1)} à ${e.haut.toFixed(1)} m (plafond, toit, passerelle)`); }
     if (o.visible === false) { el.cache_au_depart = true; dire('info', o.id, `${nom} : caché au départ (le récit le montrera)`); }
-    if (!meilleure) dire('erreur', o.id, `${nom} : jamais dans le champ depuis le trajet (départ : ${depart.distance} m, ${depart.angle}° ; le champ fait ±${Math.round(demi * 180 / Math.PI)}° en portrait${P.nuit && !lumineux(o.formes) ? ', et la nuit la lampe ne porte qu\'à ' + P.eclaire + ' m' : ''}). Rapproche-le de l'axe : |cote| ≤ 0,5 × devant.`);
+    if (couvre) {}                                                  // une enveloppe : se juge sur les vues, pas sur son centre
+    else if (!meilleure) dire('erreur', o.id, `${nom} : jamais dans le champ depuis le trajet (départ : ${depart.distance} m, ${depart.angle}° ; le champ fait ±${Math.round(demi * 180 / Math.PI)}° en portrait${P.nuit && !lumineux(o.formes) ? ', et la nuit la lampe ne porte qu\'à ' + P.eclaire + ' m' : ''}). Rapproche-le de l'axe : |cote| ≤ 0,5 × devant.`);
     else if (!premier || premier.z > 20) dire('avertissement', o.id, `${nom} : n'entre dans le champ qu'à partir de z = ${premier.z} m ; depuis le départ il est à ${depart.angle}°, hors champ`);
     if (meilleure && meilleure.taille_deg < 3) dire('avertissement', o.id, `${nom} : trop petit pour se lire (${meilleure.taille_deg}° au mieux, à ${meilleure.distance} m)`);
     if (e.haut > 60) dire('erreur', o.id, `${nom} : ${e.haut.toFixed(0)} m de haut, invraisemblable`);
     if (e.haut < 0.05) dire('erreur', o.id, `${nom} : sous le sol`);
-    if (e.bas > 0.4 && !lumineux(o.formes)) dire('avertissement', o.id, `${nom} : flotte à ${e.bas.toFixed(1)} m du sol`);
-    const eb = emprise((o.formes || []).filter(basseForme), clampN(o.echelle, 0.1, 5, 1));
-    if (kit !== 1 && eb.haut > 0.3 && Math.abs(o.cote) - (o.oriente === 'trajet' ? eb.prof : eb.larg) / 2 < couloir) dire('avertissement', o.id, `${nom} : barre le passage (cote ${o.cote}, ${(o.oriente === 'trajet' ? eb.prof : eb.larg).toFixed(1)} m en travers) ; le porteur le contournera ou s'arrêtera devant`);
+    if (e.bas > 0.4 && !couvre && !lumineux(o.formes)) dire('avertissement', o.id, `${nom} : flotte à ${e.bas.toFixed(1)} m du sol`);
+    const basses = (o.formes || []).filter(fo => basseForme(fo) && (fo.p ? fo.p[1] : 0) + demiForme(fo)[1] > 0.3), eb = emprise(basses, ech);
+    if (kit !== 1 && basses.some(fo => { const [a, b] = travers(fo); return a < couloir && b > -couloir; })) dire('avertissement', o.id, `${nom} : barre le passage (cote ${o.cote}, ${(o.oriente === 'trajet' ? eb.prof : eb.larg).toFixed(1)} m en travers) ; le porteur le contournera ou s'arrêtera devant`);
     if (kit === 0) {                                                // forêt : les arbres poussent partout hors du sentier, sauf « degage »
       if ((o.degage || 0) < e.rayon * 0.9) dire('erreur', o.id, `${nom} : en forêt, degage ${o.degage || 0} m < rayon ${e.rayon.toFixed(1)} m : des arbres poussent au travers. Mets degage ≥ ${Math.ceil(e.rayon + 1)}`);
       if (meilleure) { const m = masqueForet(Math.max(0, meilleure.distance - (o.degage || 0))); if (m > 0.2) { el.caches.push('arbres'); dire('avertissement', o.id, `${nom} : environ ${Math.round(m * 100)} % de la vue masquée par les troncs à ${meilleure.distance} m ; rapproche-le du sentier ou éclaircis la forêt`); } }
@@ -1857,7 +1875,7 @@ const MOTEUR_TEXTE = (recettes) => `LE MOTEUR (lis tout : c'est ce qu'il sait mo
 - Le porteur part de z = 0 sur l'axe du trajet et marche le long du trajet vers les z croissants (« devant »), sur 40 à 80 m, en regardant surtout devant lui. Le joueur peut tourner la tête, mais ce qu'il voit d'abord est le cône devant.
 - Un objet n'est dans le champ en approchant que si |cote| ≤ 0,55 × (devant − z) : un objet à cote 11 et devant 15 n'est JAMAIS vu en marchant. Pour se lire au premier coup d'œil : devant 10 à 35, |cote| ≤ 0,5 × devant, et assez grand (hauteur ≥ distance / 20).
 - Tout est fait de formes de base (boîtes, boules, cylindres, cônes, capsules, toits à deux pans) fondues entre elles, avec des matières calculées. Pas de texture, pas de modèle, pas de texte lisible, pas de personnage, rien qui bouge.
-- Le sol est un relief doux (ondulations, une pente le long du trajet) : pas de falaise, pas de marche, pas de pont, pas de grotte. La vraie eau n'existe que sous l'horizon (« lointain.eau ») ; une eau proche (bassin, canal, rive) se fait avec un SOL sombre, uni et brillant, voir la règle 8.
+- Le sol est un relief doux (ondulations, une pente le long du trajet) : pas de falaise, pas de marche, pas de pont, pas de grotte. La vraie eau n'existe que sous l'horizon (« lointain.eau ») et ne se voit que si le sol descend vers elle (relief.pente -0.1 à -0.15, lointain.hauteur 0.1 : une plage, une côte) ; une eau proche (bassin, canal, rive) se fait avec un SOL sombre, uni et brillant, voir la règle 8.
 - La lumière : soleil (ou lune), ciel, brume, et la lampe du téléphone la nuit. « lumineux » brille mais n'éclaire presque pas autour : la nuit, seules la lampe (15 m) et les choses lumineuses se voient. La nuit, la brume éclairée par la lampe devient un voile gris qui mange tout : brume 0.003 à 0.006 la nuit, jamais plus de 0.01.
 - Recettes de matière prêtes : ${recettes.join(', ')}.
 - Coût : 4 couches de semis, 8 objets, 64 formes d'objets en tout, 6 formes par élément de semis. Le répété (immeubles, arbres, voitures, tombes, piliers, bateaux) va en semis ; l'unique (une maison précise, une horloge, une brouette) en objet.`;
@@ -2098,7 +2116,7 @@ async function construire(entree, deps) {
     const v = versions[versions.length - 1];
     let images = null, vues = [];
     if (deps.images && moteur.capturer) {
-      vues = choisirVues(v.fiche, moteur.geo(), 3);
+      vues = choisirVues(v.fiche, moteur.geo(), typeof deps.images === 'number' ? Math.max(1, Math.min(3, deps.images)) : 3);   // limits().images.maxCount
       etape({ etape: 'capture', tour, texte: `Repérage : ${vues.length} vues le long du trajet…` });
       try { const caps = await moteur.capturer(vues, { signal }); images = caps.filter(c => c && c.blob && c.moyenne > 2).map(c => c.blob); derniereVues = caps; }
       catch (e) { if (e && e.code === 'cancelled') throw e; images = null; }
@@ -2272,7 +2290,8 @@ function creerAtelier(deps) {
   Promise.resolve(deps.db).then(db => { if (db) brancher(db); }).catch(() => {});
 
   /* ---------------------------------------------------------------- panneau */
-  function ouvrir() { panneau.hidden = false; document.body.classList.add('banque-ouverte'); $('lieu').setAttribute('aria-expanded', 'true'); rendre(); setTimeout(() => $('banque-fermer').focus(), 30); puce.hidden = true; }
+  function ouvrir(o = {}) { panneau.hidden = false; document.body.classList.add('banque-ouverte'); $('lieu').setAttribute('aria-expanded', 'true'); rendre(); puce.hidden = true;
+    setTimeout(() => { if (o.nouvelle) { panneau.scrollTop = 0; $('banque-desc').focus(); } else $('banque-fermer').focus(); }, 30); }
   function fermer() { panneau.hidden = true; document.body.classList.remove('banque-ouverte'); $('lieu').setAttribute('aria-expanded', 'false'); if (dicteeOn && deps.arreterDictee) deps.arreterDictee(); rendrePuce(); }
   $('banque-fermer').onclick = () => { fermer(); $('lieu').focus(); };
   panneau.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); fermer(); $('lieu').focus(); } });
@@ -2289,7 +2308,8 @@ function creerAtelier(deps) {
   }
   function vignette(d) {
     const b = el('div', 'carte-vignette'); b.setAttribute('aria-hidden', 'true');
-    if (d.vignette) { const im = el('img'); im.alt = ''; im.src = d.vignette; b.append(im); }
+    const src = d.vignette || (d.lectureSeule && deps.vignettes && deps.vignettes(d.id));   // scène du jeu : vignette prise quand on y est passé
+    if (src) { const im = el('img'); im.alt = ''; im.src = src; b.append(im); }
     else { const a = (d.fiche && d.fiche.ambiance) || {}, nuit = a.soleil && a.soleil.hauteur < -1; b.classList.add(nuit ? 'nuit' : 'jour'); }
     return b;
   }
@@ -2297,8 +2317,11 @@ function creerAtelier(deps) {
     if (panneau.hidden) return;
     const tous = [...docs, ...embarquees], focusId = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null;
     liste.replaceChildren();
+    const groupe = t => { const g = el('li', 'groupe', t); g.setAttribute('aria-hidden', 'true'); liste.append(g); };
+    groupe('Mes scènes' + (docs.length ? ' (' + docs.length + ')' : ''));
     if (!docs.length) liste.append(el('li', 'vide', 'Aucune scène créée pour l\'instant. Décris un lieu ci-dessus : Claude l\'écrit, le moteur le rend, Claude le relit.'));
     for (const d of tous) {
+      if (d === embarquees[0]) groupe('Scènes du jeu');
       const li = el('li', 'carte' + (courante === d.id ? ' courante' : '') + (ouvert === d.id ? ' ouverte' : '')), b = el('button', 'carte-tete');
       b.type = 'button'; b.dataset.id = d.id; b.setAttribute('aria-expanded', String(ouvert === d.id));
       const txt = el('div', 'carte-txt'); txt.append(el('strong', '', d.titre), el('span', 'carte-meta', (d.lectureSeule ? 'Scène du jeu' : date(d.modifie) + ' · ' + (SOURCE[d.source] || d.source)) + (courante === d.id ? ' · en cours' : '')));
@@ -2371,7 +2394,7 @@ function creerAtelier(deps) {
   async function executer(j) {
     const sample = deps.sample();
     let images = false;
-    if (sample && sample.limits && !deps.sansImages) { try { const l = await sample.limits(); images = !!(l && l.images); } catch (_) { images = false; } }
+    if (sample && sample.limits && !deps.sansImages) { try { const l = await sample.limits(); images = l && l.images && l.images.maxCount > 0 && (l.images.mediaTypes || ['image/jpeg']).includes('image/jpeg') ? l.images.maxCount : 0; } catch (_) { images = 0; } }
     j.images = images;
     try {
       const r = await C.construire(j.entree, { sample, images, moteur: deps.moteur, signal: j.ctl.signal, alea: Math.random,
@@ -2465,7 +2488,7 @@ function creerAtelier(deps) {
     });
   }
 
-  return { ouvrir, fermer, basculer: () => (panneau.hidden ? ouvrir() : fermer()), creer, retoucher, regenerer, dupliquer, choisir: id => { const d = docs.find(x => x.id === id) || embarquees.find(x => x.id === id); if (d) choisir(d); return !!d; },
+  return { ouvrir, fermer, rafraichir: rendre, basculer: () => (panneau.hidden ? ouvrir() : fermer()), creer, retoucher, regenerer, dupliquer, choisir: id => { const d = docs.find(x => x.id === id) || embarquees.find(x => x.id === id); if (d) choisir(d); return !!d; },
     dictee, banque: () => banque, docs: () => docs, job: () => job, attendre: () => new Promise(ok => { const t = setInterval(() => { if (!job || job.termine) { clearInterval(t); ok(job); } }, 200); }) };
 }
 
@@ -7913,7 +7936,13 @@ function hud(now){
 }
 
 /* ------------------------------------------------------------------ commandes directes */
-$("lieu").onclick=()=>atelier.basculer();                   // la banque de scènes (constructeur de monde)
+$("lieu").onclick=()=>{ fermerOutils(); atelier.basculer(); };   // la banque de scènes (constructeur de monde)
+/* « Plus » : les commandes de réglage et d'essai du moteur, rangées au-dessus de la rangée du bas pour qu'elle tienne au pouce. */
+function fermerOutils(){ $("outils").hidden=true; $("plus").setAttribute("aria-expanded","false"); }
+$("plus").onclick=()=>{ const on=$("outils").hidden; $("outils").hidden=!on; $("plus").setAttribute("aria-expanded",String(on)); if(on){ const b=[...$("outils").querySelectorAll("button")].find(x=>!x.hidden); if(b) b.focus(); } };
+$("outils").addEventListener("keydown",e=>{ if(e.key==="Escape"){ e.stopPropagation(); fermerOutils(); $("plus").focus(); } });
+$("outils").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b&&!b.hasAttribute("aria-pressed")) setTimeout(fermerOutils,0); });   // un interrupteur laisse le menu ouvert : on voit son nouvel état
+document.addEventListener("pointerdown",e=>{ if(!$("outils").hidden&&!e.target.closest("#outils,#plus")) fermerOutils(); });
 let dragId=null, px=0, py=0;
 canvas.addEventListener("pointerdown",e=>{ dragId=e.pointerId; px=e.clientX; py=e.clientY; canvas.setPointerCapture(e.pointerId); canvas.classList.add("drag"); });
 canvas.addEventListener("pointermove",e=>{ if(e.pointerId!==dragId) return;
@@ -8091,8 +8120,10 @@ const LEX={
 };
 function mondeLexique(texte){                                 // secours sans IA
   const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-  const bati=/\bville|\brue|avenue|boulevard|quartier|immeuble|centre-ville|san francisco|new york|\bvillage|hameau|bourg|cimetiere/.test(t);
+  if(/interieur|entrepot|hangar|usine|couloir|\bsalle|\bhall\b|parking souterrain|\bcave\b|sous-sol|tunnel/.test(t)) return mondeInterieur(texte,t);
+  const bati=/\bville|\brue|ruelle|venelle|impasse|avenue|boulevard|quartier|immeuble|centre-ville|san francisco|new york|\bvillage|hameau|bourg|cimetiere/.test(t);
   if(bati) return mondeBati(texte,t);
+  if(/plage|bord de mer|littoral|ocean|\bmer\b|crique/.test(t)) return mondePlage(texte,t);
   const f={ titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:/desert|dune|sable|sahara|erg|plage/.test(t)?"dunes":"foret",
     ambiance:{soleil:{azimut:-33,hauteur:21}}, foret:{}, dunes:{} };
   const a=f.ambiance;
@@ -8109,8 +8140,31 @@ function mondeLexique(texte){                                 // secours sans IA
   if(/dense|epais|touffu|jungle|sombre/.test(t)){ f.foret.densite=.95; f.foret.feuillage=1.3; }
   else if(/clairsem|clairiere|ouvert|lande/.test(t)){ f.foret.densite=.3; f.foret.feuillage=.6; }
   if(/sans rocher/.test(t)){ f.foret.rochers=0; } else if(/rocher|roche|pierre|gres|chaos|caillou/.test(t)){ f.foret.rochers=1.4; f.dunes.rochers=1; }
-  f.note="Sans Claude, je ne lis que des mots-clés : désert, nuit, matin, soir, brume, saison, dense, rochers, ville, rue, village, cimetière. Les objets demandent Claude.";
+  f.note="Sans Claude, je ne lis que des mots-clés : désert, plage, montagne, nuit, matin, soir, brume, saison, dense, rochers, ville, rue, ruelle, village, cimetière, intérieur. Les objets demandent Claude.";
   return f;
+}
+function soleilLexique(t){ return /nuit|minuit|nocturne|obscur/.test(t)?{azimut:120,hauteur:-10}:/aube|matin|lever/.test(t)?{azimut:80,hauteur:6}:/soir|couch|crepuscule|apres-midi/.test(t)?{azimut:-100,hauteur:10}:{azimut:-30,hauteur:40}; }
+function mondePlage(texte,t){                                  // plage : sable, mer à l'horizon, parasols
+  const so=soleilLexique(t);
+  return { titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:"nu",
+    relief:{amplitude:.5,echelle:90,pente:-.02}, trajet:{sinuosite:.2,largeur:2.5,creux:.02,bord:"irregulier"},
+    matieres:{ "lex-sable":{base:"sable-dunes",couleur:"#d8c6a2"} }, surfaces:{sol:"lex-sable",trajet:"sable-dunes"},
+    lointain:{hauteur:.5,decoupe:0,eau:"#3d6b78"},
+    ambiance:{saison:"ete",meteo:/gris|couvert|pluie|brume/.test(t)?"voile":"clair",soleil:so,brume:/brume|brouillard/.test(t)?.03:.005,lampe:so.hauteur<0},
+    semis:/hiver|nuit|desert|vide|sauvage/.test(t)?[]:[{ id:"parasols", nom:"parasols", cellule:[6,6], rotation:10, trajet:{min:3,max:16}, densite:.5, groupes:.4, tourne:30, penche:6,
+      palette:["#d23c32","#2f6fb0","#f0c43a","#ece6da"], formes:[ {f:"cylindre",p:[0,1.1,0],taille:[.06,2.2,.06],couleur:"#e8e4dc",matiere:"metal"}, {f:"cone",p:[0,2.25,0],taille:[2.2,.5,2.2],couleur:"palette",matiere:"tissu"} ] }],
+    note:"Sans Claude : du sable, la mer à l'horizon et des parasols. La vague et l'eau proche demandent Claude." };
+}
+function mondeInterieur(texte,t){                              // intérieur : murs en rangée, piliers, plafond posé au-dessus du trajet
+  const nuit=/nuit|obscur|noir|abandonn/.test(t);
+  return { titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:"nu",
+    relief:{amplitude:0,echelle:300,pente:0,niveler:true}, trajet:{sinuosite:0,largeur:4,creux:0,bord:"net"}, surfaces:{sol:"beton",trajet:"beton"},
+    ambiance:{saison:"automne",meteo:"voile",soleil:{azimut:120,hauteur:nuit?-10:30},lampe:true,brume:.004},
+    semis:[ { id:"murs", nom:"murs", cellule:[8,1], trajet:{rangee:true,min:7}, densite:1, formes:[ {f:"boite",p:[0,3.5,0],taille:[8,7,.8],couleur:"#6a4a3a",matiere:"brique"} ] },
+            { id:"piliers", nom:"piliers", cellule:[8,1], trajet:{rangee:true,min:2.6}, densite:1, formes:[ {f:"boite",p:[0,3.5,0],taille:[.5,7,.5],couleur:"#8a867e",matiere:"beton"} ] },
+            { id:"neons", nom:"néons", cellule:[12,1], trajet:{rangee:true,min:1.2,cote:"gauche"}, densite:.7, formes:[ {f:"boite",p:[0,6.4,0],taille:[1.6,.1,.18],couleur:"#dfeeff",matiere:"lumineux"} ] } ],
+    objets:[ { id:"plafond", nom:"plafond", devant:40, cote:0, oriente:"trajet", formes:[ {f:"boite",p:[-20,7.2,0],taille:[40,.4,16],couleur:"#3a3836",matiere:"beton"}, {f:"boite",p:[20,7.2,0],taille:[40,.4,16],couleur:"#3a3836",matiere:"beton"} ] } ],
+    note:"Sans Claude, un intérieur est une grande salle : murs, piliers, plafond et néons. Le mobilier demande Claude." };
 }
 function mondeBati(texte,t){                                  // ville, rue, village, cimetière : un monde nu composé de semis
   const nuit=/nuit|minuit|nocturne|obscur/.test(t), soir=/soir|couch|crepuscule|apres-midi/.test(t);
@@ -8119,7 +8173,11 @@ function mondeBati(texte,t){                                  // ville, rue, vil
       soleil:nuit?{azimut:120,hauteur:-10}:soir?{azimut:-110,hauteur:9}:{azimut:-40,hauteur:30}, brume:/brouillard|brume/.test(t)?.03:.008 },
     matieres:{ "lex-facade":LEX.facade }, semis:[] };
   const pente=/colline|pente|san francisco|montee|butte/.test(t);
-  if(/cimetiere/.test(t)){
+  if(/ruelle|venelle|impasse/.test(t)){                       // ruelle : façades hautes et serrées, pas de voitures
+    Object.assign(f,{ relief:{amplitude:.5,echelle:200,pente:pente?.12:.04,niveler:true}, trajet:{sinuosite:.25,largeur:3,creux:.03,bord:"net"}, surfaces:{sol:"paves",trajet:"paves"} });
+    const m=LEX.maison(6,12,false); m.trajet={rangee:true,min:1.9}; m.hauteur=[1,1.3]; m.palette=["#c98f52","#d6a35e","#b9734a","#d8b27a","#bfb2a0"]; f.semis.push(m);
+    f.semis.push(Object.assign({},LEX.lampadaire,{cellule:[14,1],trajet:{rangee:true,min:1.2,cote:"gauche"},formes:LEX.lampadaire.formes.map(x=>Object.assign({},x,{p:[x.p[0],x.p[1]-1,x.p[2]-.4]}))}));
+  } else if(/cimetiere/.test(t)){
     Object.assign(f,{ relief:{amplitude:1,echelle:120}, trajet:{sinuosite:.2,largeur:2.4,creux:.05,bord:"net"}, surfaces:{sol:"herbe",trajet:"gravier"} });
     f.semis.push(LEX.tombe); f.lointain={hauteur:4,decoupe:.3};
   } else if(/village|hameau|bourg/.test(t)){
@@ -8184,11 +8242,24 @@ const capacite=nom=>window.claude&&window.claude.use?Promise.resolve().then(()=>
 const atelier=ATELIER.creerAtelier({ C:CONSTRUCTEUR, embarquees:FICHES, stockage, db:capacite("db"), sansImages:!!CFG.sansImages,
   moteur:{ appliquer:f=>applyFiche(CONSTRUCTEUR.resoudreFiche(f)), geo:()=>({pathX,terrainH,kit:S.kit}), recettes:Object.keys(MAT_LIB.recettes), capturer:capturerVues, lexique:t=>mondeLexique(t) },
   sample:()=>sampler, oublierClaude:()=>{ sampler=null; },
-  appliquer:(f,d)=>{ if(d&&d.index!==undefined) ficheIdx=d.index; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); },   // « oriente » des objets traduit en cap
+  appliquer:(f,d)=>{ if(d&&d.index!==undefined) ficheIdx=d.index; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); if(d&&d.lectureSeule&&!VIGN[d.id]) prendreVignette(d.id); },   // « oriente » des objets traduit en cap
+  vignettes:id=>VIGN[id]||"",
   sceneVoulue:window.__CFG?null:(()=>{ try{ return localStorage.getItem("bodycam-scene"); }catch(_){ return null; } })(),
   dire:(t,bref)=>say(t,bref),
   dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
-  occupe:on=>{ $("monde").disabled=on; } });
+  occupe:()=>{} });
+/* Vignettes des scènes du jeu (scenes/*.json) : prises une fois, quand on y passe, et gardées dans ce navigateur (8 × ~6 Ko). */
+const VIGN=(()=>{ try{ const v=JSON.parse(localStorage.getItem("bodycam-vignettes")||"{}"); return v&&typeof v==="object"?v:{}; }catch(_){ return {}; } })();
+let vignetteJeton=0;
+async function prendreVignette(id){
+  const k=++vignetteJeton;
+  try{ await attendreImage(4,20000); }catch(_){ return; }
+  if(k!==vignetteJeton||(atelier.job()&&!atelier.job().termine)) return;    // une autre scène entre-temps, ou une fabrication qui tient la caméra
+  const im=await lireImage(120); if(im.url) URL.revokeObjectURL(im.url);
+  if(k!==vignetteJeton||im.moyenne<3) return;
+  VIGN[id]=im.vignette; try{ localStorage.setItem("bodycam-vignettes",JSON.stringify(VIGN)); }catch(_){}
+  atelier.rafraichir();
+}
 function creerMonde(texte){                                     // « Décrire un monde » : la fabrication part en tâche de fond
   if(!atelier.creer(texte)) return Promise.resolve(null);
   say("Je fabrique ce monde. Tu peux suivre la fabrication en haut de l'écran.",true);
@@ -8213,14 +8284,13 @@ function setFrozen(v,m){
   if(!v && listening && dict) dict.stop().catch(()=>{});
   frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v;
   $("parler").textContent=v&&mode==="parler"?"Reprendre":"Lui parler";
-  $("monde").textContent=v&&mode==="monde"?"Annuler":"Décrire un monde";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
   if(v){ $("msg").value=""; $("hint").classList.add("off"); setTimeout(()=>$("msg").focus(),50); }
 }
 // Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
 $("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
-$("monde").onclick=()=>{ const on=!(frozen&&mode==="monde"); setFrozen(on,"monde"); };
+$("monde").onclick=()=>{ fermerOutils(); if(frozen) setFrozen(false); atelier.ouvrir({nouvelle:true}); };   // la description se tape dans la banque de scènes
 $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
   const t=$("msg").value.trim(); if(!t) return;
@@ -8567,7 +8637,7 @@ function quitterLibre(){ if(meneurLibre&&meneur){ journal(); meneur=null; clearI
     if(meneurLibre) quitterLibre();
     else if(meneur) say(docile?"Mode debug : il prendra effet à la prochaine partie (Rejouer).":"Mode debug coupé à la prochaine partie.",true);
     dbgOn=docile; dbgEl.hidden=!dbgOn; if(!dbgOn) dbgEl.textContent=""; };
-  $("parler").parentNode.appendChild(b); maj(); setTimeout(()=>{ if(docile){ dbgOn=true; dbgEl.hidden=false; } },0); }
+  $("outils").appendChild(b); maj(); setTimeout(()=>{ if(docile){ dbgOn=true; dbgEl.hidden=false; } },0); }
 function jouerHistoire(id){
   const h=HIST.find(x=>x.id===id)||(id===undefined||id===true?HIST.find(x=>MENEUR.ficheDe(x)):null);
   if(!h){ console.warn("Histoire inconnue :",id,"— disponibles :",HIST.map(x=>x.id)); return null; }
@@ -8594,7 +8664,7 @@ const dbgEl=document.body.appendChild(document.createElement("div")); dbgEl.id="
   chip.addEventListener("pointerdown",()=>{ const now=performance.now(); n=now-t<450?n+1:1; t=now; if(n<3) return; n=0;
     dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=meneur&&dbgOn?meneur.debug():""; try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }); }
 if(HIST.some(x=>MENEUR.ficheDe(x))){ const b=document.createElement("button"); b.type="button"; b.id="histoire"; b.textContent="Jouer l'histoire";
-  $("monde").before(b); b.onclick=()=>jouerHistoire(); }
+  $("outils").prepend(b); b.onclick=()=>{ fermerOutils(); jouerHistoire(); }; }
 /* Journal de partie : ce que le joueur peut copier et envoyer. Chaque tour : ce qu'il a dit, le verdict du sas,
    la pensée, les actions, le délai de Claude ou le secours ; plus les temps et la fin. Lisible sans outil. */
 let dernierJournal="";

@@ -227,3 +227,44 @@ test('oriente « trajet » : traduit en cap, la face avant regarde l\'axe, des d
   }
   assert.equal(r.objets[2].cap, undefined);
 });
+
+/* ------------------------------------------------------------------ demandes variées (tests/scenes-variees.mjs) */
+import { VARIEES } from './scenes-variees.mjs';
+
+test('demandes variées : ruelle, chalet à l\'aube, plage, cimetière de nuit, intérieur passent la chaîne et donnent des lieux distincts', async () => {
+  const signatures = [];
+  for (const v of VARIEES) {
+    const sample = fauxSample([v.plan, v.fiche, { note: 8, defauts: [], fini: true, changements: {} }], { images: true });
+    const moteur = fauxMoteur({ capturer: async vues => vues.map(x => ({ blob: { taille: 1000 }, url: 'blob:x', vignette: 'data:image/jpeg;base64,AAAA', moyenne: 60, legende: x.legende })) });
+    const r = await construire({ description: v.demande }, { sample, images: 3, moteur });
+    assert.equal(r.fiche.titre, v.fiche.titre, v.nom);
+    assert.deepEqual(pertes(v.fiche, r.fiche), [], v.nom + ' : rien de jeté à la validation');
+    assert.equal(r.constat.erreurs, 0, v.nom + ' : ' + texteConstat(r.constat));
+    assert.ok(sample.appels[0].consigne.includes(JSON.stringify(v.demande)), v.nom + ' : la demande part en donnée');
+    assert.equal(sample.appels[2].opts.images.length, 3, v.nom + ' : relecture sur trois vues');
+    const f = r.fiche, a = f.ambiance;
+    signatures.push(JSON.stringify([f.surfaces, a.soleil.hauteur < 0, a.soleil.hauteur < 8, !!(f.lointain && f.lointain.eau), f.lointain && f.lointain.hauteur > 10, (f.semis || []).map(s => s.id).sort()]));
+  }
+  assert.equal(new Set(signatures).size, VARIEES.length, 'cinq lieux distincts');
+  const nuit = VARIEES.filter(v => v.fiche.ambiance.soleil.hauteur < 0);
+  for (const v of nuit) { const c = controler(validerFiche(v.fiche), null); assert.ok(!c.lignes.some(l => /nuit noire|voile gris/.test(l.texte)), v.nom + ' : nuit lisible'); }
+});
+
+test('contrôle : un porche laisse passer, un plafond est au-dessus du trajet (pas « flottant »), un mur en travers barre', () => {
+  const geo = null, ruelle = VARIEES.find(v => v.nom === 'ruelle').fiche, hangar = VARIEES.find(v => v.nom === 'entrepot').fiche;
+  const c1 = controler(validerFiche(ruelle), geo);
+  assert.ok(!c1.lignes.some(l => l.id === 'porche' && /barre/.test(l.texte)), texteConstat(c1));
+  const c2 = controler(validerFiche(hangar), geo);
+  assert.ok(c2.lignes.some(l => l.id === 'plafond' && /au-dessus du trajet/.test(l.texte)));
+  assert.ok(!c2.lignes.some(l => l.id === 'plafond' && /flotte|jamais|hors champ/.test(l.texte)), texteConstat(c2));
+  assert.ok(c2.lignes.some(l => l.id === 'fond' && /barre le passage/.test(l.texte)), 'le mur du fond barre bien le passage');
+  const c3 = controler(validerFiche({ kit: 'nu', objets: [{ id: 'lampe', devant: 10, cote: 0, formes: [{ f: 'boule', p: [0, 4, 0], taille: [0.4, 0.4, 0.4], matiere: 'mat' }] }] }), geo);
+  assert.ok(c3.lignes.some(l => l.id === 'lampe' && /flotte/.test(l.texte)), 'un petit objet en l\'air flotte toujours');
+});
+
+test('chaîne : le nombre de vues suit limits().images.maxCount', async () => {
+  const sample = fauxSample([{ titre: 'p' }, VARIEES[2].fiche, { note: 8, fini: true, changements: {} }], { images: true });
+  const moteur = fauxMoteur({ capturer: async vues => vues.map(x => ({ blob: {}, moyenne: 60, legende: x.legende })) });
+  await construire({ description: 'plage' }, { sample, images: 2, moteur });
+  assert.equal(sample.appels[2].opts.images.length, 2);
+});

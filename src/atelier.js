@@ -27,7 +27,8 @@ export function creerAtelier(deps) {
   Promise.resolve(deps.db).then(db => { if (db) brancher(db); }).catch(() => {});
 
   /* ---------------------------------------------------------------- panneau */
-  function ouvrir() { panneau.hidden = false; document.body.classList.add('banque-ouverte'); $('lieu').setAttribute('aria-expanded', 'true'); rendre(); setTimeout(() => $('banque-fermer').focus(), 30); puce.hidden = true; }
+  function ouvrir(o = {}) { panneau.hidden = false; document.body.classList.add('banque-ouverte'); $('lieu').setAttribute('aria-expanded', 'true'); rendre(); puce.hidden = true;
+    setTimeout(() => { if (o.nouvelle) { panneau.scrollTop = 0; $('banque-desc').focus(); } else $('banque-fermer').focus(); }, 30); }
   function fermer() { panneau.hidden = true; document.body.classList.remove('banque-ouverte'); $('lieu').setAttribute('aria-expanded', 'false'); if (dicteeOn && deps.arreterDictee) deps.arreterDictee(); rendrePuce(); }
   $('banque-fermer').onclick = () => { fermer(); $('lieu').focus(); };
   panneau.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); fermer(); $('lieu').focus(); } });
@@ -44,7 +45,8 @@ export function creerAtelier(deps) {
   }
   function vignette(d) {
     const b = el('div', 'carte-vignette'); b.setAttribute('aria-hidden', 'true');
-    if (d.vignette) { const im = el('img'); im.alt = ''; im.src = d.vignette; b.append(im); }
+    const src = d.vignette || (d.lectureSeule && deps.vignettes && deps.vignettes(d.id));   // scène du jeu : vignette prise quand on y est passé
+    if (src) { const im = el('img'); im.alt = ''; im.src = src; b.append(im); }
     else { const a = (d.fiche && d.fiche.ambiance) || {}, nuit = a.soleil && a.soleil.hauteur < -1; b.classList.add(nuit ? 'nuit' : 'jour'); }
     return b;
   }
@@ -52,8 +54,11 @@ export function creerAtelier(deps) {
     if (panneau.hidden) return;
     const tous = [...docs, ...embarquees], focusId = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null;
     liste.replaceChildren();
+    const groupe = t => { const g = el('li', 'groupe', t); g.setAttribute('aria-hidden', 'true'); liste.append(g); };
+    groupe('Mes scènes' + (docs.length ? ' (' + docs.length + ')' : ''));
     if (!docs.length) liste.append(el('li', 'vide', 'Aucune scène créée pour l\'instant. Décris un lieu ci-dessus : Claude l\'écrit, le moteur le rend, Claude le relit.'));
     for (const d of tous) {
+      if (d === embarquees[0]) groupe('Scènes du jeu');
       const li = el('li', 'carte' + (courante === d.id ? ' courante' : '') + (ouvert === d.id ? ' ouverte' : '')), b = el('button', 'carte-tete');
       b.type = 'button'; b.dataset.id = d.id; b.setAttribute('aria-expanded', String(ouvert === d.id));
       const txt = el('div', 'carte-txt'); txt.append(el('strong', '', d.titre), el('span', 'carte-meta', (d.lectureSeule ? 'Scène du jeu' : date(d.modifie) + ' · ' + (SOURCE[d.source] || d.source)) + (courante === d.id ? ' · en cours' : '')));
@@ -126,7 +131,7 @@ export function creerAtelier(deps) {
   async function executer(j) {
     const sample = deps.sample();
     let images = false;
-    if (sample && sample.limits && !deps.sansImages) { try { const l = await sample.limits(); images = !!(l && l.images); } catch (_) { images = false; } }
+    if (sample && sample.limits && !deps.sansImages) { try { const l = await sample.limits(); images = l && l.images && l.images.maxCount > 0 && (l.images.mediaTypes || ['image/jpeg']).includes('image/jpeg') ? l.images.maxCount : 0; } catch (_) { images = 0; } }
     j.images = images;
     try {
       const r = await C.construire(j.entree, { sample, images, moteur: deps.moteur, signal: j.ctl.signal, alea: Math.random,
@@ -220,6 +225,6 @@ export function creerAtelier(deps) {
     });
   }
 
-  return { ouvrir, fermer, basculer: () => (panneau.hidden ? ouvrir() : fermer()), creer, retoucher, regenerer, dupliquer, choisir: id => { const d = docs.find(x => x.id === id) || embarquees.find(x => x.id === id); if (d) choisir(d); return !!d; },
+  return { ouvrir, fermer, rafraichir: rendre, basculer: () => (panneau.hidden ? ouvrir() : fermer()), creer, retoucher, regenerer, dupliquer, choisir: id => { const d = docs.find(x => x.id === id) || embarquees.find(x => x.id === id); if (d) choisir(d); return !!d; },
     dictee, banque: () => banque, docs: () => docs, job: () => job, attendre: () => new Promise(ok => { const t = setInterval(() => { if (!job || job.termine) { clearInterval(t); ok(job); } }, 200); }) };
 }

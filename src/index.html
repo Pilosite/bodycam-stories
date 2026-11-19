@@ -127,6 +127,15 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .carte-form input{flex:1 1 180px;min-width:0;padding:9px 12px}
 .carte-hist summary{font:500 12px/1.4 var(--f-mono);color:var(--ink-dim);cursor:pointer;padding:4px 0}
 .carte-hist ul{margin:4px 0 0;padding-left:16px;font:400 11.5px/1.45 var(--f-mono);color:var(--ink-dim)}
+/* commandes du bas : trois boutons au pouce ; le reste (réglages, essais du moteur) dans « Plus », qui s'ouvre au-dessus */
+.commandes{flex-wrap:nowrap;max-width:100%}
+.commandes button{white-space:nowrap}
+.outils[hidden]{display:none}
+.outils{pointer-events:auto;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:30em;padding:10px;border-radius:18px;
+  background:rgba(14,17,13,.82);border:1px solid var(--line);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.outils button{padding:11px 14px;font-size:14px;min-height:44px}
+#plus[aria-expanded="true"]{color:var(--ink);border-color:var(--ink)}
+.banque-liste .groupe{font:500 11.5px/1 var(--f-mono);color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;padding:10px 2px 2px}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 @media (prefers-reduced-motion:reduce){button.pulse{animation:none}}
 </style>
@@ -145,15 +154,18 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
     <input id="msg" type="text" autocomplete="off" enterkeyhint="send" placeholder="Dis-lui quoi faire…" aria-label="Ce que tu dis, au porteur de la caméra ou pour décrire un monde">
     <button type="submit" id="envoi">Dire</button>
   </form>
-  <div class="row">
-    <button id="parler" type="button">Lui parler</button>
-    <button id="monde" type="button">Décrire un monde</button>
-    <button id="lieu" type="button" class="ghost" aria-controls="banque" aria-expanded="false">Scènes</button>
+  <div id="outils" class="outils" role="group" aria-label="Autres commandes" hidden>
+    <button id="monde" type="button" class="ghost">Décrire un monde</button>
     <button id="mesurer" type="button" class="ghost">Mesurer</button>
     <button id="suivi" type="button" class="ghost" aria-pressed="true" hidden>Suivi du téléphone : oui</button>
-    <button id="v2" type="button" class="ghost" aria-pressed="false" hidden title="Essai : tourner des panoramiques, puis les projeter">Moteur v2</button>
     <button id="qualite" type="button" class="ghost" aria-pressed="false" title="Mobile : téléphone moyen. Complète : ordinateur, pleine résolution.">Qualité : mobile</button>
+    <button id="v2" type="button" class="ghost" aria-pressed="false" hidden title="Essai : tourner des panoramiques, puis les projeter">Moteur v2</button>
     <button id="v3" type="button" class="ghost" aria-pressed="false" title="Essai : semer des grains au lieu de lancer des rayons">Moteur v3</button>
+  </div>
+  <div class="row commandes" id="commandes">
+    <button id="parler" type="button">Lui parler</button>
+    <button id="lieu" type="button" aria-controls="banque" aria-expanded="false">Scènes</button>
+    <button id="plus" type="button" class="ghost" aria-controls="outils" aria-expanded="false">Plus</button>
   </div>
 </div>
 <div id="mesure" hidden>
