@@ -1634,7 +1634,7 @@ $("voix-inter").onclick=()=>{ const on=voixInter(!voixP.actif()); try{ localStor
 $("taire").onclick=()=>voixP.taire();
 for(const id of ["parler","mic","banque-dicter"]) if($(id)) $(id).addEventListener("click",()=>voixP.taire());   // le joueur prend la parole : il se tait
 $("msg").addEventListener("input",()=>voixP.taire());
-capacite("dictation").then(d=>{ if(d) d.onState(({state})=>{ if(state==="listening") voixP.taire(); }); });
+capacite("dictation").then(d=>{ if(d&&typeof d.onState==="function") d.onState(({state})=>{ if(state==="listening") voixP.taire(); }); });
 addEventListener("pointerdown",e=>{ if(!(e.target.closest&&e.target.closest("#dire,#parler,#mic,#taire,#voix-inter"))) voixP.geste(); },true);   // premier son : après un geste du joueur
 addEventListener("keydown",e=>{ if(e.key!=="Escape"&&!(e.target.closest&&e.target.closest("input,textarea"))) voixP.geste(); },true);
 window.voix={ dire:t=>voixP.dire(t), taire:()=>voixP.taire(), actif:v=>v===undefined?voixP.actif():voixInter(!!v), etat:()=>voixP.etat() };
