@@ -497,7 +497,7 @@ Une **suite** est une liste d'étapes datées, programmée par le meneur. Elle n
 |---|---|
 | `dans_s` | secondes depuis le début de la suite (le gel du joueur les met en pause) |
 | `ambiance` | `brume` (et `lampe` si le cadre le permet), ramenée dans les plages de `consequences.ambiance` |
-| `objet` | sur `@` (l'objet fabriqué), `@2`, `@3` (ceux ajoutés par la suite) ou un id : `echelle` (0,2 à 4) avec `en_s` (grandit en plusieurs fois, une mise à jour par seconde), `vacille`, `lumineux: false` (s'éteint : les formes lumineuses deviennent mates et sombres), `decale`, `retirer` |
+| `objet` | sur `@` (l'objet fabriqué), `@2`, `@3` (ceux ajoutés par la suite) ou un id : `echelle` (0,2 à 4) avec `en_s` (grandit en plusieurs fois, une mise à jour par seconde), `vacille`, `lumineux: false` (s'éteint : les formes lumineuses deviennent mates et sombres, et celles qui vacillent, les flammes, retombent à ras du sol), `decale`, `retirer` |
 | `ajoute` | un nouvel objet (8 formes au plus) près d'un autre (`pres_de`, `decale`) |
 | `pensee` | ce que le porteur se dit alors (filtrée comme toute pensée) |
 | `fin` | ouvre une fin, seulement si elle figure dans `consequences.fins` et qu'elle est ouverte |
@@ -536,4 +536,7 @@ Les trois textes partent dans la consigne du personnage (pour qu'il pressente de
 - Budget de consigne porté à **10 500 caractères** (la consigne à vide passe de 6 600 à 8 500 avec `fabrique`, `posture`, `viser`, les traces et le cadre des suites).
 - Les objets sont placés par la page au moment où l'accessoiriste répond, par rapport au porteur à cet instant (il est en général immobile : il fait son geste).
 - Sans Claude, la phrase « allume un feu » passe aussi par le lexique de la page, qui y lit « allume » (la lampe) : le secours d'un geste reconnu ignore désormais la scène du lexique.
+- `buildShapes` ne place aucun objet à moins de 2 m du départ du trajet (`devant` borné à 2..90) : une trace faite au tout premier pas apparaît un peu plus loin. À lever côté moteur si cela gêne.
+- « Regarde le feu » ne fabrique pas un second feu : le secours des gestes ignore les phrases de regard et de défaire.
+- Défaire une trace après la fin de sa suite éteint aussi ce que la suite a fait apparaître (les feuilles embrasées).
 - La preuve (`node tools/meneur2.mjs`) fait tourner la page avec `nowalk` : Lina ne repart pas d'elle-même, pour garder le feu dans le cadre.

@@ -86,6 +86,9 @@ test('sans Claude : « fais un feu de camp » fait un feu, qui dégénère ; « 
   assert.ok(ordres.some(o => o.type === 'actions' && o.actions.some(a => a.type === 'posture' && a.hauteur === 0.5)), 'elle s\'accroupit');
   const cree = ordres.find(o => o.type === 'objet' && o.op === 'creer');
   assert.ok(cree && cree.objet.formes.some(f => f.matiere === 'lumineux' && f.vacille > 0), 'un feu qui vacille');
+  await m.voix('regarde le feu'); await flush();
+  assert.equal(ordres.filter(o => o.type === 'objet' && o.op === 'creer').length, 1, '« regarde le feu » ne fait pas un second feu');
+  assert.equal(ordres.filter(o => o.type === 'actions').pop().actions[0].objet, 'fab-1', 'il le vise');
   await avancer(40);
   assert.ok(ordres.some(o => o.type === 'objet' && o.op === 'creer' && o.pres_de === 'fab-1'), 'au bout de 30 s, les feuilles prennent');
   assert.ok(ordres.some(o => o.type === 'scene' && o.scene.brume >= 0.02));
@@ -101,6 +104,16 @@ test('sans Claude : « fais un feu de camp » fait un feu, qui dégénère ; « 
   assert.ok(!monde.perception().objets.find(x => x.id === 'fab-1').lumineux || true);
   const trace = JSON.parse(JSON.stringify(m.trace()));
   assert.deepEqual(rejouer(ANLN, trace), m.partie(), 'rejeu identique');
+});
+
+test('défaire après la fin de la suite éteint aussi ce que la suite a fait apparaître', async () => {
+  const { m, ordres, avancer } = partieMain();
+  await avancer(1); await m.voix('fais un feu de camp'); await flush();
+  await avancer(100);
+  assert.ok(m.trace().evenements.some(e => e.type === 'suite_finie'));
+  await m.voix('éteins le feu'); await flush(); await avancer(30);
+  for (const id of ['fab-1', 'fab-2']) assert.ok(ordres.some(o => o.type === 'objet' && o.op === 'modifier' && o.id === id && o.lumineux === false), id);
+  assert.equal(ordres.filter(o => o.type === 'scene').pop().scene.brume, 0.015);
 });
 
 test('« fais caca sur le chemin » puis « regarde-la » : accroupie, une trace nommée, et le regard se pose dessus', async () => {

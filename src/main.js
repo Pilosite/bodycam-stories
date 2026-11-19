@@ -1779,7 +1779,7 @@ function objetMeneur(o){
   else { const x=Object.assign({},L[i]);
     if(o.echelle!==undefined) x.echelle=clampN(o.echelle,.1,5,1);
     if(Array.isArray(o.decale)){ const b=posObjet(x), q=versFiche(b.x+(+o.decale[0]||0),b.z+(+o.decale[1]||0)); x.devant=q.devant; x.cote=q.cote; }
-    if(o.vacille!==undefined||o.lumineux===false) x.formes=x.formes.map(f=>f.matiere!=="lumineux"?f:o.lumineux===false?Object.assign({},f,{matiere:"mat",couleur:"#1f1a16",vacille:0}):Object.assign({},f,{vacille:clampN(o.vacille,0,1,0)}));
+    if(o.vacille!==undefined||o.lumineux===false) x.formes=x.formes.map(f=>f.matiere!=="lumineux"?f:o.lumineux===false?Object.assign({},f,{matiere:"mat",couleur:"#1f1a16",vacille:0},f.vacille>0?{p:[f.p[0],f.p[1]*.12,f.p[2]],taille:[f.taille[0]*.9,f.taille[1]*.12,f.taille[2]*.9]}:{}):Object.assign({},f,{vacille:clampN(o.vacille,0,1,0)}));
     L[i]=x; }
   fiche=Object.assign({},fiche,{objets:L}); buildShapes(fiche);
 }

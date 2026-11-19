@@ -72,6 +72,7 @@ if (quoi !== 'caca') {
 if (quoi !== 'feu') {
   await page.evaluate(() => balade.jouer('avant-la-nuit'));      // une nouvelle partie : le budget d'objets repart
   await jeuA(4); await libre();
+  await dire('avance 6'); await libre();                         // buildShapes ne pose rien à moins de 2 m du départ du trajet
   await dire('fais caca sur le chemin');
   await jusqua(async () => (await corps()).haut < 0.55, 30); await capture('caca-1-accroupie', 2500);
   await libre(); await capture('caca-2-relevee');

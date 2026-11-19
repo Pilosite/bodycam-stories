@@ -649,6 +649,7 @@ export const SECOURS_GESTES = [
 /* Le geste reconnu dans une phrase (secours), ou null. */
 export function secoursGeste(texte) {
   const t = sansAccents(texte || '');
+  if (/\b(regarde|vois|observe|montre|fixe|etein|etouff|arros|pietin|ramasse|enleve|demonte|defais)/.test(t)) return null;   // « regarde le feu » ne fait pas un second feu
   return SECOURS_GESTES.find(g => g.mots.test(t)) || null;
 }
 /* Les gestes du corps et du regard reconnus sans Claude : se baisser, se relever, s'asseoir, regarder une chose. */
@@ -964,7 +965,7 @@ export function creerMeneur(o) {
     let objet = dem.fabrique && isObj(r) ? validerObjet(r.objet, Math.min(R.OBJET_FORMES_MAX, partie.monde.formes_libres)) : null;
     let suite = isObj(r) ? validerSuite(r.suite, cadre, R) : null, source = 'ia';
     if (dem.fabrique && !objet) {                               // Claude absent, lent ou illisible : le secours par mots-clés, sinon rien
-      const g = secoursGeste(dem.fabrique.nom + ' ' + dem.fabrique.quoi + ' ' + dem.texte);
+      const g = secoursGeste(dem.fabrique.nom) || secoursGeste(dem.fabrique.quoi + ' ' + dem.texte);
       if (g) { objet = validerObjet(g.objet, Math.min(R.OBJET_FORMES_MAX, partie.monde.formes_libres)); suite = suite || validerSuite(g.suite, cadre, R); source = 'secours';
         if (objet && !dem.fabrique.distance) dem.fabrique.distance = g.distance; }
     }
@@ -1050,7 +1051,8 @@ export function creerMeneur(o) {
     const t = sansAccents(id0);
     const c = vivant(id0) || partie.monde.crees.find(x => !x.retire && sansAccents(x.nom).includes(t) && t.length > 2);
     if (!c) { log('defaire_inconnu', { id: id0 }); return; }
-    const suites = partie.monde.suites.filter(s => s.etat === 'active' && Object.values(s.refs).includes(c.id));
+    // ses suites, en cours ou finies : défaire le feu éteint aussi les feuilles qu'il a embrasées
+    const suites = partie.monde.suites.filter(s => (s.etat === 'active' || s.etat === 'finie') && !/-defaite$/.test(s.id) && Object.values(s.refs).includes(c.id));
     for (const s of suites) {
       s.etat = 'defaite'; log('suite_annulee', { id: s.id, par: c.id });
       const etapes = s.si_defait.length ? s.si_defait
