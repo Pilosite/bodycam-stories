@@ -632,7 +632,7 @@ Un modèle = `nom`, `mots` (ce qui le désigne), `quoi` (description pour l'acce
 
 ### 15.2 L'échelle
 
-`formesModele(modele, phrase)` : règle `masse` : une masse dite donne le volume (densité du modèle, 1,05), donc l'envergure, proportions gardées. Le volume est celui de la réunion réelle des formes (`volumeFormes` : une grille de points, mêmes formes et mêmes repères que `sdPrim`), pas la somme des formes qui se chevauchent. Crotte de référence : 14 cm, 0,44 L ; « de 5 kg » : 31 cm. Sans masse : une longueur ou une comparaison dite, « petit » (× 0,6), « gros » (× 1,6), « énorme » (× 2,5), bornées par `min_m` et `max_m` du modèle. **Le détail des matières ne grossit pas** : les recettes sont en mètres, dans le repère de la forme ; une crotte de 5 kg a le même grain et les mêmes bosses qu'une de 14 cm. Les segments (les capsules) grossissent avec elle : ce sont des formes. Le cadrage suit la taille (`planCadrage`, §14.2) : 69 cm accroupi et zoom 2,2 pour la normale, 1 m et zoom 1,4 pour celle de 5 kg.
+`formesModele(modele, phrase)` : règle `masse` : une masse dite donne le volume (densité du modèle, 1,05), donc l'envergure, proportions gardées. Le volume est celui de la réunion réelle des formes (`volumeFormes` : une grille de points, mêmes formes et mêmes repères que `sdPrim`), pas la somme des formes qui se chevauchent. Crotte de référence : 14 cm, 0,44 L ; « de 5 kg » : 31 cm. Sans masse : une longueur ou une comparaison dite, « petit », « gros », « énorme » (facteurs `petit`, `gros`, `enorme` de l'`echelle` du modèle, par défaut 0,85, 3,5 et 5 ; voir §15.6), bornées par `min_m` et `max_m` du modèle. **Le détail des matières ne grossit pas** : les recettes sont en mètres, dans le repère de la forme ; une crotte de 5 kg a le même grain et les mêmes bosses qu'une de 14 cm. Les segments (les capsules) grossissent avec elle : ce sont des formes. Le cadrage suit la taille (`planCadrage`, §14.2) : 69 cm accroupi et zoom 2,2 pour la normale, 1 m et zoom 1,4 pour celle de 5 kg.
 
 Une chose plus grosse que 20 cm posée « dessous » est poussée hors du corps du porteur, marge comprise (`horsDuCorps`) ; une petite tombe aux talons, comme avant.
 
@@ -659,6 +659,25 @@ Un vocabulaire de « mains du porteur » (deux avant-bras et mains en formes att
 - Rien n'a tourné avec le vrai Claude : la qualité de ses `etapes` et de ses `ramasse`, et le respect de « pas de forme à soi quand le modèle existe », restent à voir. Le Claude simulé de `tools/demo.mjs` répond exprès mal (trois boules huit fois trop grandes) : c'est la bibliothèque qui fait l'image.
 - Tout a été rendu en logiciel (SwiftShader), jamais sur un GPU ni sur le téléphone de Toine.
 - Pendant un façonnage, un état intermédiaire peut avoir plus de formes que le résultat (16 contre 8) : si le moteur est presque plein (64 formes), la chose peut disparaître le temps de cet état (`buildShapes` saute un objet qui ne tient pas).
+
+### 15.6 Le parcours joué devant du monde : petite, énorme, bonhomme (retour de Toine, Samsung, v3, vrai Claude)
+
+« La crotte géante ressemble à rien » : un volume brun lisse qui remplit la moitié de l'écran, vu de tout près ; puis un bonhomme géant, caméra collée dessus, ni bras ni yeux. Rejoué avec l'ancien code (monde de papier, Claude simulé qui nomme les choses comme un vrai) :
+
+- **Le modèle ne servait pas** dès que Claude nommait la chose autrement : « bouse », « merde », « étron » n'étaient pas dans ses mots, ni dans `PETIT_CORPS` ; la chose venait alors des formes de Claude, bornées à 6 m (× 2,5 pour « géant »). Et « géante » (féminin) ne déclenchait même pas « énorme ».
+- **Rien ne garantissait de la voir entière** : `planCadrage` visait le sixième de l'image, sans vérifier qu'une grande chose y tenait ; le corps pouvait rester dans le cercle d'une chose posée « dessous » ; la recette `pate-organique` d'une chose faite en cours de partie n'était jamais chargée (elle retombait en « mat », lisse).
+- **Le bonhomme visait la mauvaise chose** : l'id que propose Claude (la petite, essai) passait avant la phrase du joueur.
+
+Corrigé, sans aucun cas propre à la crotte (des données et des règles générales) :
+
+- **Reconnaissance** (`modeleNomme`) : le premier nom, sinon un mot du modèle dans le nom, la description ou la phrase du joueur (sauf modèle ramassable). Mots élargis dans `modeles.json`. « énorme, géant(e), gigantesque, colossal, monstrueux… » (`ENORME`) : facteur du modèle (`echelle.enorme`, `gros`, `petit`), toujours borné par `max_m` ; sans modèle, × 2,5 seulement si la nature de la chose est connue (`bornesTaille`). Crotte : petite ≈ 12 cm, énorme ≈ 77 cm.
+- **Pose** (`horsDuCorps`, `placeLibre`) : plus large que 25 cm, une chose est posée DEVANT lui (son rayon + marge + 25 cm), jamais sur une autre chose ni sur un obstacle connu. `planTrajet` : un corps qui se trouve dans une chose en sort d'abord (`sortie`).
+- **Cadrage** (`planCadrage(taille, oeil, haut)`, `tientDansImage`) : la projection équidistante du capteur ; il dézoome, puis recule et se relève jusqu'à ce que la chose tienne ENTIÈRE avec 20 % de marge, en portrait (téléphone) comme en 16/9 (ordinateur). Testé de 5 cm à 3 m. Le cadrage du résultat d'un façonnage repart de la nouvelle envergure.
+- **Façonner « avec », « avec ça », « fais-en un »** (`designerTrace`) : la phrase désigne (« la grosse », « la petite »), sinon la DERNIÈRE chose faite, même si Claude propose un autre id (`cible_corrigee`). Un modèle `transforme` peut dire son `besoin` (« des bâtons et des cailloux ») : s'il n'est pas dans la réponse, il décide seul d'aller le chercher (`chercher_seul`).
+- **Matière du bonhomme** : `dominante` prend la matière qui fait le plus de VOLUME (avant : la paire matière-couleur la plus fréquente) ; la page recharge les recettes quand une chose en nomme une pas encore chargée.
+- **Lisible à grande échelle** : le boudin a 21 segments de couleurs alternées, et `pate-organique` a une couche de bosses plus large (échelle 14 au lieu de 260) en plus du grain.
+
+Tests : `tests/demo.test.mjs` (« parcours de la démo », quatre formulations du joueur × trois réponses de Claude, et le cadrage de 5 cm à 3 m). Dans la page : `node tools/demo.mjs`, scénario par défaut, scène 09 (`PHRASES='…|…|…'` pour d'autres phrases).
 
 ## 16. Le corps ne traverse rien
 
