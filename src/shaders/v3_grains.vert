@@ -91,6 +91,8 @@ bool semeA(out Grain g){
   float u=rnd()*(aT+aB.x+aB.y+aB.z+aB.w);
   float s=cote(aT+aB.x+aB.y+aB.z+aB.w,parM2(pied,uNb.x)*CA*CA);
   vec3 lp, nl; float coeur=0.;                               // repère de la cellule (f.x, y, f.y)
+  bool pres=uVue==0 && procheA(id);                         // tronc et cœur dessinés en boîte (v3_proches) : seules les branches restent en grains
+  if(pres && (u<aT || u>=aT+aB.x+aB.y+aB.z)) return false;
   if(u<aT){
     float y=mix(-.3,A.H,rnd()), yc=clamp(y,-1.,A.H);
     vec2 ax=A.o+A.lean*yc; float r=rayonA(A,y);
@@ -127,7 +129,7 @@ bool semeA(out Grain g){
 bool semeB(out Grain g){
   float dh; vec2 xz=tireSol(dh);
   vec2 id=floor((RB*xz+17.3)/CB);
-  PercheB B; if(!percheB(id,B)) return false;
+  PercheB B; if(!percheB(id,B) || (uVue==0 && procheP(id))) return false;
   vec2 c=(id+.5)*CB;
   vec2 pied=(c+B.o-17.3)*RB;
   vec3 vv=versVue(vec3(pied.x,terrainH(pied)+1.5,pied.y));

@@ -94,12 +94,12 @@ const ptEnCours=()=>{ const l=lances[varCourante()]; return !!(l&&l.marque&&!pro
 function progMonde(){ if(!compilerPT(varCourante(),true)) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
 if(!bureau && !PT_KO) compilerPT(0);                            // téléphone : compilé d'emblée, comme avant
 if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
-/* La sonde de collision a son propre petit programme (v3_sonde.frag : la distance au décor, map(), rien d'autre). Il se compile
-   sans bloquer dès le départ, sur toutes les machines, y compris celles où le lanceur de rayons ne se compile pas : sans lui,
-   le porteur traversait tout en v3. Tant qu'il n'est pas prêt, la sonde passe par le lanceur de rayons s'il est là. */
+/* La sonde de collision peut avoir son propre petit programme (v3_sonde.frag : la distance au décor, map(), rien d'autre),
+   qui se compile là où le lanceur de rayons ne se compile pas. Il n'est compilé qu'avec l'option v3sonde : le porteur ne
+   bouge que sur ordre du récit. Sans lui ni lanceur de rayons, la sonde rend « rien » (aucun obstacle). */
 const SONDE={lance:null,p:null};
-function sondeProg(){
-  if(SONDE.p) return SONDE.p;
+function sondeProg(){                                           // option v3sonde : le joueur ne déplace jamais le porteur, elle n'est pas compilée par défaut
+  if(SONDE.p) return SONDE.p; if(!CFG.v3sonde) return null;
   if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.lance=lancer(FS_V3SONDE); }
   if(!fini(SONDE.lance)) return null;
   SONDE.p=finir(SONDE.lance); SONDE.lance=null; etapeGL("  compilé : sonde de collision"); return SONDE.p;
@@ -785,7 +785,7 @@ const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG
   n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*SH_ROWS), maxPt:64, kf:CFG.v3kf||2.4,
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420},          // dmax : 150 m quand l'eau est à l'horizon (au-delà, le lanceur de rayons ne touche plus rien : c'est la mer)
   tap:{N:CFG.v3tapisN||512, L:Math.min(8,CFG.v3tapisL||7), s0:CFG.v3tapisS0||.01, budget:CFG.v3tapisBudget||32768, bias:CFG.v3tapisBias!==undefined?CFG.v3tapisBias:-.5, lv:[], f:[], t0:null, t1:null, cuits:0} };
-function v3Init(){                                             // rend vrai quand les huit programmes sont prêts (compilation sans bloquer)
+function v3Init(){                                             // rend vrai quand tous les programmes sont prêts (compilation sans bloquer)
   if(V3.gp) return true;
   if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
     const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
@@ -986,15 +986,16 @@ function v3Partage(N,vue,p){
   return {nA,nB,nR,nF,nP,nS,R,traits:0,part:[nA,nA+nB,nA+nB+nR,nA+nB+nR+nF],partO:pO,partS:pS,total:pS[3]};
 }
 /* Éléments proches (v3_proches.vert) : une fenêtre fixe d'emplacements autour de la caméra. Toutes les formes des objets
-   (64 au plus), 5 × 5 cellules de blocs, et pour chaque couche de semis la fenêtre de cellules qui couvre une dizaine de
+   (64 au plus), 5 × 5 cellules de blocs, 3 × 3 cellules d'arbres (le tronc, et le cœur des conifères), 5 × 5 de perches, et pour chaque couche de semis la fenêtre de cellules qui couvre une dizaine de
    mètres (au plus 2 cellules de part et d'autre, une ou deux rangées par rive). Option v3proches (false : tout en grains). */
-const PRX_VPS=6*3*3*6;
+const PRX_VPS=6*5*5*6;                                          // sommets par emplacement (v3_proches.vert : NS = 5)
 function v3Proches(){
   const on=CFG.v3proches!==false&&CFG.v3proches!==0;
-  const r={on,o:0,b:0,n:[0,0,0,0],fin:[0,0,0,0],total:0};
+  const r={on,o:0,b:0,a:0,p:0,n:[0,0,0,0],fin:[0,0,0,0],total:0};
   if(!on) return r;
   r.o=S.objRows||0; r.b=S.kitP[1]>0?25:0;
-  let c=r.o+r.b;
+  r.a=S.kit===0&&S.kitP[0]>0?9:0; r.p=S.kit===0&&S.kitP[0]>0&&S.houp[3]>0?25:0;   // troncs (3 × 3 cellules), perches (5 × 5)
+  let c=r.o+r.b+r.a+r.p;
   for(let k=0;k<4;k++){
     if(k<S.semN){ const o=(SEM0+k*SEM_L)*16, rg=shapesData[o+7]>.5, A=[shapesData[o],shapesData[o+1]], cn=shapesData[(SEM0+k*SEM_L+1)*16+6];
       const n=Math.max(0,Math.min(2,Math.ceil(10/(rg?A[1]:Math.max(A[0],A[1])))-0)), w=2*n+1;
@@ -1090,7 +1091,7 @@ function v3Image(p){
   // les éléments proches, en boîtes (v3_proches) : avant les grains, ils couvrent les grandes surfaces proches sans trou
   const px=v3Proches();
   if(px.total>0){ u=G.proches.u; gl.useProgram(G.proches.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
-    gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
+    gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
     gl.drawArrays(gl.TRIANGLES,0,px.total*PRX_VPS); }
   const pc=v3Partage(V3.grains,0,p); V3.parts=pc;
   for(const P of [G.grains,G.grainsF]){
@@ -1926,6 +1927,8 @@ if(CFG.histoire) jouerHistoire(CFG.histoire===true?undefined:CFG.histoire);   //
 if(CFG.seed){ setSeed(CFG.seed); cam.x=S.kit!==1?pathX(0):0; }
 if(CFG.z!==undefined){ cam.z=CFG.z; if(S.kit!==1){ cam.x=pathX(cam.z); cam.yaw=pathYaw(cam.z); } }
 if(CFG.yaw!==undefined) cam.yaw+=CFG.yaw;
+if(CFG.dx!==undefined) cam.x+=CFG.dx;                            // tests : écart au trajet (m) et cap absolu (radians, 0 = +z)
+if(CFG.cap!==undefined) cam.yaw=CFG.cap;
 if(CFG.pitch!==undefined) cam.pitch=CFG.pitch;
 if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
@@ -1938,5 +1941,5 @@ $("v3").onclick=()=>v3Basculer(!V3.on);
 if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
 if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();
-sondeProg();                                                     // la sonde se compile dès le départ, sans bloquer
+sondeProg();                                                     // option v3sonde : la sonde se compile dès le départ, sans bloquer
 requestAnimationFrame(frame);

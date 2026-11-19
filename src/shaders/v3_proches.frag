@@ -1,7 +1,7 @@
 #version 300 es
 // Moteur v3 : les éléments proches (voir v3_proches.vert). Chaque pixel de la boîte englobante suit son rayon (même
 // fisheye que l'ombrage) et cherche la forme exacte par la distance du lanceur de rayons (sdPrim et le repère de
-// l'élément, ou blocForme pour un bloc de grès) : 20 pas au plus, puis la normale par quatre évaluations, dans la même
+// l'élément, blocForme pour un bloc de grès, sdTreeA et sdTreeB pour un tronc ou une perche) : 20 pas au plus, puis la normale par quatre évaluations, dans la même
 // boucle (un seul appel déplié). Sortie au format du tampon G des grains : l'ombrage ne fait pas de différence.
 precision highp float; precision highp int; precision highp sampler2D;
 #include "monde.glsl"
@@ -28,7 +28,8 @@ void main(){
     float dd;
     if(vK.x==0) dd=(sdPrim(primLocal(p,row),a.w,b.xyz)-ee.y)*.8;
     else if(vK.x==1) dd=(sdPrim(primLocal(semisLocal(p,e),row),a.w,b.xyz)-ee.y)*sc;
-    else dd=blocForme(blocLocal(p,terrainH(p.xz),vId,B),B)*.72;
+    else if(vK.x==2) dd=blocForme(blocLocal(p,terrainH(p.xz),vId,B),B)*.72;
+    else { vec4 inf; dd=vK.x==3?sdTreeA(p,terrainH(p.xz),inf):sdTreeB(p,terrainH(p.xz),inf); }
     if(touche){ gv[nn]=dd; nn++; }
     else if(dd<.0006*t+.0004) touche=true;
     else { t+=dd; if(t>tmax || i>=19) break; }
@@ -39,7 +40,9 @@ void main(){
   vec3 q=p; float code;
   if(vK.x==0) code=4.+.5*(float(row)/128.);
   else if(vK.x==1) code=6.+.125*float(vK.z);
-  else { q=blocLocal(p,terrainH(p.xz),vId,B); code=3.; }
+  else if(vK.x==2){ q=blocLocal(p,terrainH(p.xz),vId,B); code=3.; }
+  else { vec4 inf; if(vK.x==3){ sdTreeA(p,terrainH(p.xz),inf); code=1.+.5*(fract(inf.w)*.999+(inf.w>1.5?1.:0.)); }   // mêmes codes que les grains (v3_grains.vert)
+    else { sdTreeB(p,terrainH(p.xz),inf); code=2.+.5*inf.w; } q=inf.xyz; }
   gl_FragDepth=clamp(t/400.,0.,1.);
   g0=vec4(q,code); g1=vec4(n,t);
 }

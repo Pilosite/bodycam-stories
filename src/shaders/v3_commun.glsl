@@ -9,6 +9,7 @@ out vec3 vDx;                // variation des coordonnées de recette par pixel,
 out vec3 vDy;
 out vec2 vDd;                // variation de la distance par pixel
 out float vSz;               // côté du grain, en pixels
+out float vOk;               // maillage du sol : 1 si le sommet se projette ; un triangle dont un sommet ne se projette pas est jeté
 /* Découpe des grains posés sur une forme de base (objets, semis) : le grain est un carré de l'écran posé sur le plan
    tangent ; chaque pixel retrouve son point dans le repère de la forme et le fragment est jeté s'il sort de la forme.
    Un grain peut alors être grand sans déborder : un mur vu de face est couvert, ses arêtes restent nettes. */
@@ -31,7 +32,7 @@ bool projette(vec3 P, float marge, out vec4 pos, out float dist, out float ang){
   pos=vec4(puv*2.*uRes.y/uRes+uJit,clamp(dist/DMAX,0.,1.)*2.-1.,1.);
   return true;
 }
-void sansGrain(){ vQ=vec3(0.); vN=vec3(0.,1.,0.); vCode=-1.; vDist=0.; vDx=vec3(0.); vDy=vec3(0.); vDd=vec2(0.); vSz=0.;
+void sansGrain(){ vQ=vec3(0.); vN=vec3(0.,1.,0.); vCode=-1.; vDist=0.; vDx=vec3(0.); vDy=vec3(0.); vDd=vec2(0.); vSz=0.; vOk=1.;
   vL=vec3(0.); vLx=vec3(0.); vLy=vec3(0.); vB=vec4(0.); vT=vec2(-1.,0.); }
 /* Éléments proches (v3_proches.vert) : les formes des objets, les éléments de semis et les blocs de grès des cellules
    voisines de la caméra ne sont pas semés en grains mais dessinés en boîtes englobantes, chaque pixel cherchant la forme
@@ -46,4 +47,6 @@ bool procheS(int k, vec2 id, ElemS e){
   vec2 c=floor(semisG(uCamPos.xz,e)/e.A.xy);
   return max(abs(id.x-c.x),abs(id.y-c.y))<=float(n);
 }
+bool procheA(vec2 id){ vec2 c=floor(RA*uCamPos.xz/CA); return uPrx==1 && max(abs(id.x-c.x),abs(id.y-c.y))<=1.; }
+bool procheP(vec2 id){ vec2 c=floor((RB*uCamPos.xz+17.3)/CB); return uPrx==1 && max(abs(id.x-c.x),abs(id.y-c.y))<=2.; }
 bool procheB(vec2 id){ vec2 c=floor(uCamPos.xz/CC); return uPrx==1 && max(abs(id.x-c.x),abs(id.y-c.y))<=2.; }

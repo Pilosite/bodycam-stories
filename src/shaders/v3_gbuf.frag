@@ -13,7 +13,7 @@ precision highp float; precision highp int; precision highp sampler2D;
 #include "monde.glsl"
 #endif
 in vec3 vQ; in vec3 vN; flat in float vCode; in float vDist; in vec3 vDx; in vec3 vDy; in vec2 vDd; in float vSz;
-in vec3 vL; in vec3 vLx; in vec3 vLy; in vec4 vB; in vec2 vT;
+in vec3 vL; in vec3 vLx; in vec3 vLy; in vec4 vB; in vec2 vT; in float vOk;
 uniform int uPts;            // 1 = grains (points), 0 = maillage du sol
 layout(location=0) out vec4 g0;   // coordonnées de recette (ou couleur d'une feuille), élément
 layout(location=1) out vec4 g1;   // normale, distance
@@ -26,6 +26,7 @@ void main(){
 #else
   if(uPts==1){ vec2 pc=gl_PointCoord-.5; if(vSz>2.5 && dot(pc,pc)>.25) discard;   // grain rond : plus de confettis carrés aux silhouettes
     vec2 o=pc*vSz; o.y=-o.y; q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o); }
+  else if(vOk<.9999) discard;                                // triangle du sol dont un sommet ne se projette pas (v3_sol.vert)
 #endif
   g0=vec4(q,vCode); g1=vec4(normalize(vN),d);
 }

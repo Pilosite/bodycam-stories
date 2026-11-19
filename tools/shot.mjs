@@ -7,6 +7,7 @@
 // Options lues par la page (window.__CFG) :
 //   still    fige le grain et le tremblement de main      nohud    masque l'interface
 //   z        position le long du sentier, en mètres       yaw, pitch   orientation de départ
+//   dx       écart à l'axe du trajet (m)                  cap      cap absolu du corps (radians, 0 = +z)
 //   w, h     résolution interne forcée                    maxSpp   nombre de passes maximum
 //   prevOnly reste en aperçu de mouvement                 scene    fiche de lieu qui remplace celle du build
 //   seed     graine du monde                              lookYaw  regard tourné (radians), level  niveau de mouvement
