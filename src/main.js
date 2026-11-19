@@ -511,7 +511,9 @@ function frame(now){
   simulate(dt);
   walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
   const p=pose(); lastPose=p;
-  if(V2.on) v2Frame(p,dt);
+  const v2pret=V2.on&&!sceneDirty&&V2.panos.some(o=>o.t);         // tant qu'aucun panoramique n'est tourné, on garde l'image du moteur actuel : jamais d'écran noir
+  if(V2.on&&!v2pret){ if(sceneDirty) v2Vider(); v2Tourner(V2.budget); }
+  if(v2pret) v2Frame(p,dt);
   else if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
   else if(n<MAXS){
     const t0=performance.now(); let done=false;
@@ -519,7 +521,7 @@ function frame(now){
     if(done && (n<14||n%4===0)) postFX(hist);
   }
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
-  display(V2.on?V2.out||V2.tgt||dummy:hist,(now-startT)/1000);
+  display(v2pret?V2.out||hist:hist,(now-startT)/1000);
   hud(now);
 }
 let lastHud=0;
