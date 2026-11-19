@@ -1,0 +1,43 @@
+{ "version": 0, "id": "essai-san-francisco", "titre": "Rue en pente, San Francisco, fin d'après-midi",
+  "inspiration": "Une rue raide de Russian Hill qui descend vers la baie, bordée de maisons victoriennes colorées et mitoyennes",
+  "graine": 1906, "kit": "nu",
+  "relief": { "amplitude": 2.5, "echelle": 260, "pente": -0.28, "niveler": true },
+  "trajet": { "sinuosite": 0, "largeur": 9, "creux": 0.16, "bord": "net" },
+  "matieres": {
+    "victorienne": { "base": "facade", "couleur": "forme",
+      "motif": { "type": "fenetres", "largeur": 0.95, "hauteur": 1.9, "pas": 2.1, "etage": 3.3, "allege": 0.75, "cadre": 0.11, "rdc": 2.9, "allumees": 0.3,
+                 "couleur": "#1d2328", "cadre_couleur": "#eee9dc", "lumiere": "#ffcf8a", "opacite": 1 },
+      "taches": [ { "couleur": "#000000", "force": 0.2, "echelle": [0.5, 9, 0.5], "seuils": [0.4, 0.75] } ],
+      "salissure": { "force": 0.3, "hauteur": 0.6 } },
+    "chaussee-sf": { "base": "chaussee", "couleur": "#55524e", "motif": { "type": "marquage", "axe": "double", "largeur": 0.12, "couleur": "#c7a83c", "bords": 4.2 } }
+  },
+  "surfaces": { "sol": "dalles", "trajet": "chaussee-sf" },
+  "ambiance": { "saison": "ete", "meteo": "clair", "soleil": { "azimut": -115, "hauteur": 13 }, "brume": 0.008 },
+  "lointain": { "hauteur": 3, "decoupe": 0.25, "neige": 0, "couleur": "#7f8c86", "couleur_bas": "#5d6b5e", "eau": "#2f4b57" },
+  "semis": [
+    { "id": "maisons", "nom": "maisons victoriennes mitoyennes", "cellule": [6.6, 12], "trajet": { "rangee": true, "min": 6, "cote": "deux" },
+      "densite": 1, "hauteur": [0.85, 1.3], "teinte": 0.12,
+      "palette": ["#d8bf72", "#94b2c6", "#c4826f", "#e6dfcc", "#8ea585", "#a98fb8"],
+      "formes": [
+        { "f": "boite", "p": [0, 4.6, -0.65], "taille": [6.4, 9.2, 10.5], "couleur": "palette", "matiere": "victorienne" },
+        { "f": "boite", "p": [1.1, 5.7, 5.0], "taille": [2.4, 5.6, 1.0], "couleur": "palette", "matiere": "victorienne" },
+        { "f": "boite", "p": [0, 9.45, -0.4], "taille": [6.5, 0.5, 11], "couleur": "#ebe6da", "matiere": "mat" },
+        { "f": "boite", "p": [-1.5, 1.15, 4.66], "taille": [2.6, 2.3, 0.1], "couleur": "#4a4038", "matiere": "planches" },
+        { "f": "boite", "p": [1.7, 0.45, 5.25], "taille": [1.6, 0.9, 1.2], "couleur": "#8c877c", "matiere": "beton" } ] },
+    { "id": "voitures", "nom": "voitures garées le long du trottoir", "cellule": [5.8, 2.6], "trajet": { "rangee": true, "min": 2.15 },
+      "densite": 0.7, "pose": "pente", "tourne": 3, "teinte": 0.1,
+      "palette": ["#9a9fa5", "#c8c8c2", "#e3e3df", "#7a2a26", "#3b5274", "#8a8676", "#2e3136"],
+      "formes": [
+        { "f": "boite", "p": [0, 0.68, 0], "taille": [4.4, 0.78, 1.78], "couleur": "palette", "matiere": "metal", "arrondi": 0.12 },
+        { "f": "boite", "p": [-0.25, 1.35, 0], "taille": [2.3, 0.62, 1.58], "couleur": "#1b1e22", "matiere": "verre", "arrondi": 0.14 },
+        { "f": "cylindre", "p": [1.35, 0.33, 0], "taille": [0.66, 1.84, 0.66], "penche": [90, 0], "couleur": "#151515", "matiere": "mat" },
+        { "f": "cylindre", "p": [-1.35, 0.33, 0], "taille": [0.66, 1.84, 0.66], "penche": [90, 0], "couleur": "#151515", "matiere": "mat" } ] },
+    { "id": "reverberes", "nom": "réverbères au bord du trottoir", "cellule": [21, 3.8], "trajet": { "rangee": true, "min": 3.1 },
+      "densite": 1,
+      "formes": [
+        { "f": "cylindre", "p": [0, 3.6, 0.1], "taille": [0.16, 7.2, 0.16], "couleur": "#3d4044", "matiere": "metal" },
+        { "f": "boite", "p": [0, 7.05, 0.85], "taille": [0.1, 0.1, 1.5], "couleur": "#3d4044", "matiere": "metal" },
+        { "f": "boite", "p": [0, 6.95, 1.55], "taille": [0.3, 0.16, 0.45], "couleur": "#fff1d0", "matiere": "lumineux" } ] }
+  ],
+  "histoire": { "pitch": "Sam descend la rue vers la baie en cherchant le numéro d'une maison bleue.", "temps": [] }
+}

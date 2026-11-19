@@ -113,24 +113,24 @@ void main(){
       if(dot(gn,rd)>0.) gn=-gn;
       // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
       vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
-      int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.);
+      int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
       if(id==0){                                             // sol, et trajet par-dessus
         r0=uSurf.x; hs=0.;
-        if(uSurf.y!=uSurf.x){ w=smoothstep(1.15,.55,abs(q.x-pathX(q.z))+.5*(fbm(q.xz*.8+3.)-.5)); r1=uSurf.y;
+        if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(q.x-pathX(q.z))+(uTraj.w>0.?uTraj.w*(fbm(q.xz*.8+3.)-.5):0.)); r1=uSurf.y;
           if(w>=1.) r0=r1; else if(w>0.) nr=2; }
       }
       else if(id==3) r0=uSurf.z;
-      else if(id==4){ vec3 qr; r0=matProp(q,gn,vec4(0.,0.,0.,floor(par*128.+.5)),alb,n,spec,emis,qr); q=qr; }
+      else if(id==4){ vec3 qr; r0=matProp(q,gn,vec4(0.,0.,0.,floor(par*128.+.5)),false,alb,n,spec,emis,qr,nr0,rot); q=qr; }
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
       if(r0>=0){
-        vec3 A=vec3(0.), T=vec3(0.); float SP=0.;
+        vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
         for(int k=0;k<2;k++){
           if(k>=nr) break;
-          vec3 a, tt; float sp; recette(k==0?r0:r1,q,gn,hs,rot,a,tt,sp);
+          vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,nr0,hs,rot,a,tt,sp,em);
           float wk=nr==1?1.:(k==0?1.-w:w);
-          A+=a*wk; T+=tt*wk; SP+=sp*wk;
+          A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
         }
-        alb=A; n=normalize(gn+T); spec=SP;
+        alb=A; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
       }
       col=lumiere(p,gn,n,alb,spec,rd)+alb*emis*8.;
       if(uVoir==1) col=vec3(ombreSoleil(p,gn));

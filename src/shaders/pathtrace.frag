@@ -10,40 +10,61 @@ out vec4 outCol;
 float gT;                    // distance du premier impact, gardée pour la reprojection
 
 #include "monde.glsl"
+uniform vec2  uTerK;       // pas de marche sur le relief : partout, et près d'un bord de trajet raide (0 = inutile)
+uniform float uYTop;       // hauteur au-dessus du plan de pente au-delà de laquelle il n'y a plus rien
+uniform vec3  uSolAlb;     // couleur du sol vue par l'éclairage indirect
 
 float map(vec3 p){
   float th=terrainH(p.xz);
   float y=p.y-th;
-  float d=y*.88;
+  float d=y*(uTerK.y>0. && abs(gAx-.5*(uCreux.y+uCreux.z))<abs(uCreux.y-uCreux.z)*.5+.3?uTerK.y:uTerK.x);   // pas réduit près d'un bord de trajet raide
   vec4 nf;
+#if !NU
   if(uKit==0){
     if(y<19.) d=min(d,sdTreeA(p,th,nf)); else d=min(d,y-17.8);
     if(y<12.) d=min(d,sdTreeB(p,th,nf)); else d=min(d,y-11.3);
   }
   if(uKitP.y>0.){ if(y<4.5) d=min(d,sdRock(p,th,nf)); else d=min(d,y-3.9); }
+#endif
+#if SEMIS
+  for(int k=0;k<uSemN;k++){                                  // une seule évaluation de semis, dans une boucle : le compilateur n'en déplie qu'une.
+    float tp=uSemTop[k];                                     // En rendu logiciel, ce code coûte même quand il ne s'exécute pas : d'où la variante SEMIS.
+    if(y<tp+1.){ vec4 si; d=min(d,sdSemis(p,k,nf,si)); } else d=min(d,y-tp);   // au-dessus de la couche : borne simple, jamais nulle
+  }
+#endif
   if(uObjN>0) d=min(d,sdProps(p,nf));
   return d;
 }
 int objId(vec3 p, out vec4 info){
   float th=terrainH(p.xz); float d=(p.y-th)*.88; int id=0; info=vec4(0.,0.,0.,th); vec4 nf;
   float d1;
+#if !NU
   if(uKit==0){
     d1=sdTreeA(p,th,nf); if(d1<d){ d=d1; id=1; info=nf; }
     d1=sdTreeB(p,th,nf); if(d1<d){ d=d1; id=2; info=nf; }
   }
   if(uKitP.y>0.){ d1=sdRock(p,th,nf); if(d1<d){ d=d1; id=3; info=nf; } }
+#endif
+#if SEMIS
+  for(int k=0;k<uSemN;k++){
+    vec4 si; d1=sdSemis(p,k,nf,si); if(d1<d){ d=d1; id=5; info=nf; gInst=si; }
+  }
+#endif
   if(uObjN>0){ d1=sdProps(p,nf); if(d1<d){ d=d1; id=4; info=nf; } }
   return id;
 }
-vec3 calcN(vec3 p, float t){ vec2 e=vec2(1.,-1.)*(.0006*t+.0008);
-  return normalize(e.xyy*map(p+e.xyy)+e.yyx*map(p+e.yyx)+e.yxy*map(p+e.yxy)+e.xxx*map(p+e.xxx)); }
+vec3 calcN(vec3 p, float t){ vec2 e=vec2(1.,-1.)*(.0006*t+.0008); vec3 n=vec3(0.);
+  for(int i=0;i<4;i++){                                      // un seul appel à map dans la boucle : le compilateur n'en déplie pas quatre copies
+    vec3 o=i==0?e.xyy:i==1?e.yyx:i==2?e.yxy:e.xxx; n+=o*map(p+o); }
+  return normalize(n); }
 
 float march(vec3 ro, vec3 rd, float tmax, int steps){
   float t=.02;
   for(int i=0;i<130;i++){
     if(i>=steps) break;
     vec3 p=ro+rd*t;
-    if(rd.y>0. && p.y>23.) return -1.;
+    if(rd.y>0. && p.y-uRel.z*p.z>uYTop) return -1.;
+    gTol=.0012*t+.0008;
     float d=map(p);
     if(d<.0012*t+.0008) return t;
     t+=d;
@@ -56,7 +77,8 @@ float shadow(vec3 ro, vec3 rd, float tmax, int steps){
   for(int i=0;i<56;i++){
     if(i>=steps) break;
     vec3 p=ro+rd*t;
-    if(rd.y>0. && p.y>23.) break;
+    if(rd.y>0. && p.y-uRel.z*p.z>uYTop) break;
+    gTol=.002*t+.001;
     float d=map(p);
     if(d<.002*t+.001) return 0.;
     t+=max(d,.03);
@@ -171,7 +193,8 @@ vec3 Li(vec3 ro, vec3 rd){
   }
   vec3 p=ro+rd*t; vec4 info; int id=objId(p,info);
   vec3 n=calcN(p,t);
-  vec3 alb=id==0?vec3(.24,.15,.07):id==3?vec3(.34,.33,.29):id==4?texelFetch(uShapes,ivec2(2,int(info.w)),0).rgb*(texelFetch(uShapes,ivec2(2,int(info.w)),0).a>6.5?9.:1.):vec3(.11,.095,.08);
+  float ma=id>=4?texelFetch(uShapes,ivec2(2,int(info.w)),0).a:0.;
+  vec3 alb=id==0?uSolAlb:id==3?vec3(.34,.33,.29):id>=4?formeCol(int(info.w),fract(info.w)/.9)*(ma>6.5&&ma<7.5?9.:1.):vec3(.11,.095,.08);
   vec3 c=alb*vec3(.20,.21,.20)*uSky;
   float ndl=max(dot(n,uSunDir),0.);
   if(ndl>0.){ vec3 po=p+n*.02; float vis=shadow(po,uSunDir,50.,30); if(vis>0.) c+=alb*SUN*ndl*vis*canopyT(po,uSunDir); }
@@ -210,7 +233,11 @@ vec3 render(vec3 ro, vec3 rd){
   float tS=march(ro,rd,150.,uQ==0?90:130);
   float tmax=tS<0.?400.:tS;
   float tl; vec3 ln; vec3 la;
+#if NU
+  int kind=0; tl=0.; ln=vec3(0.); la=vec3(0.);
+#else
   int kind=foliage(ro,rd,tmax,tl,ln,la);
+#endif
   vec3 col; float t;
   if(kind==1){
     t=tl; col=shadeLeaf(ro+rd*t,ln,la,rd);
@@ -218,7 +245,7 @@ vec3 render(vec3 ro, vec3 rd){
     t=tl; if(dot(ln,rd)>0.) ln=-ln; col=lightSurf(ro+rd*t,ln,ln,la,.05,rd);
   } else if(tS<0.){
     gT=1e4;
-    vec3 c=rd.y>0.?skyCol(rd):fogCol(rd);
+    vec3 c=rd.y>0.?skyCol(rd):uEau.w>0.?eauLoin(rd):fogCol(rd);
     if(uLoin.w>0. && rd.y>-.02) c=lointain(rd,c);
     if(uTorch>0.) c+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.07;
     return c;
@@ -228,28 +255,28 @@ vec3 render(vec3 ro, vec3 rd){
     vec3 gn=calcN(p,t);
     vec3 alb; vec3 n=gn; float spec; float emis=0.;
     // Quelle recette pour cette surface ? Un seul appel à recette() plus bas : le shader reste compact.
-    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.);
+    int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=p; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
     if(id==0){                                               // sol, et trajet par-dessus
       r0=uSurf.x; hs=0.;
-      if(uSurf.y!=uSurf.x){ w=smoothstep(1.15,.55,abs(p.x-pathX(p.z))+.5*(fbm(p.xz*.8+3.)-.5)); r1=uSurf.y;
+      if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(p.x-pathX(p.z))+(uTraj.w>0.?uTraj.w*(fbm(p.xz*.8+3.)-.5):0.)); r1=uSurf.y;
         if(w>=1.) r0=r1; else if(w>0.) nr=2; }
     }
     else if(id==3){ r0=uSurf.z; q=info.xyz; }
-    else if(id==4) r0=matProp(p,gn,info,alb,n,spec,emis,q);
+    else if(id>=4){ for(int i=0;i<(id>=4?1:0);i++) r0=matProp(p,gn,info,id==5,alb,n,spec,emis,q,nr0,rot); }   // garde en boucle : sautée en rendu logiciel quand aucun pixel n'est une forme
     else if(id==1 && info.w>1.5){                            // cœur de feuillage d'un conifère
       alb=leafCol(p,vnoise3(p*5.))*(.5+.6*vnoise3(p*vec3(8.,13.,8.))); spec=.02;
       n=normalize(gn+(vec3(vnoise3(p*17.),vnoise3(p*17.+7.),vnoise3(p*17.+13.))-.5)*.9);
     }
     else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz; hs=info.y; rot=id==1?RA:RB; }
     if(r0>=0){
-      vec3 A=vec3(0.), T=vec3(0.); float SP=0.;
+      vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
       for(int k=0;k<2;k++){
         if(k>=nr) break;
-        vec3 a, tt; float sp; recette(k==0?r0:r1,q,gn,hs,rot,a,tt,sp);
+        vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,nr0,hs,rot,a,tt,sp,em);
         float wk=nr==1?1.:(k==0?1.-w:w);
-        A+=a*wk; T+=tt*wk; SP+=sp*wk;
+        A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
       }
-      alb=A; n=normalize(gn+T); spec=SP;
+      alb=A; n=normalize(gn+T); spec=SP; emis=EM;
     }
     col=lightSurf(p,gn,n,alb,spec,rd)+alb*emis*8.;
   }

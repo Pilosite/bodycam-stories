@@ -36,7 +36,7 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 
 ## Organisation
 
-- `src/shaders/pathtrace.frag` : le lanceur de rayons et sa lumière. Le monde lui-même (terrain, arbres, grès, canopée, dunes, ciel) est dans `src/shaders/monde.glsl`, les matières dans `recette.glsl`, l'accumulation dans `reprojection.glsl` : le build les insère (`#include "…"`) dans `pathtrace.frag` et dans les shaders du moteur v3 (`v3_*`), qui sèment le même monde.
+- `src/shaders/pathtrace.frag` : le lanceur de rayons et sa lumière. Le monde lui-même (relief et trajet réglables, arbres, grès, semis, canopée, dunes, ciel, lointain, eau) est dans `src/shaders/monde.glsl`, les matières dans `recette.glsl`, l'accumulation dans `reprojection.glsl` : le build les insère (`#include "…"`) dans `pathtrace.frag` et dans les shaders du moteur v3 (`v3_*`), qui sèment le même monde. Les variantes `SEMIS` et `NU` ne concernent que le lanceur de rayons ; `monde.glsl` les vaut 0 par défaut.
 - `src/shaders/camera.frag` : le capteur (fisheye, exposition, grain, compression, coins sombres).
 - `src/main.js` : boucle de rendu, reprojection temporelle, porteur de la caméra, voix dans sa tête, API `window.balade`.
 - `src/meneur.js` : le meneur de jeu (`docs/meneur-de-jeu.md`), module pur sans DOM, testé par `npm test` (`tests/`). Le build l'embarque avec `histoires/*.json`. Essai sur artefact : `docs/essai-meneur.md`.
@@ -50,7 +50,8 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 
 - Les formules de terrain et de sentier existent en double, en GLSL et en JS (`terrainH`, `pathX`). Toute modification se fait des deux côtés.
 - Les paramètres d'un objet de cellule (`arbreA`, `percheB`, `blocGres`…) sont des fonctions de `monde.glsl`, lues par le lanceur de rayons et par le semeur v3 : on change la fonction, jamais une copie.
-- Un objet par cellule de grille (arbres, perches, rochers). Chaque objet reste à l'intérieur de sa cellule avec une marge, sinon le lancer de rayons saute par-dessus.
+- Un objet par cellule de grille (arbres, perches, rochers, éléments de semis). Chaque objet reste à l'intérieur de sa cellule avec une marge, sinon le lancer de rayons saute par-dessus.
+- En rendu logiciel, tout code présent dans `map()` coûte à chaque pas de rayon, même jamais exécuté. Ce qui ne sert qu'à certains mondes passe par une variante fixe du shader (`#define SEMIS`, `#define NU`, choisies par `progMonde`), jamais par du code généré.
 - Pas d'accent grave ni de `${` dans les shaders : le build les insère dans des gabarits JS.
 - Les champs des fiches sont en français, sans accents dans les clés.
 - Tout aléa du monde dérive de la graine. Même fiche, même monde.
@@ -63,12 +64,12 @@ Fait : forêt (sentier, grès, pins, chênes, bouleaux, canopée), dunes, jour, 
 
 Non vérifié : les performances sur un vrai téléphone. Tous les tests ont tourné en rendu logiciel. La seule mesure réelle est une capture de Toine sur son Samsung, avec l'ancienne version.
 
-Faiblesses connues : sol proche de la caméra, pas de sous-bois, rochers trop lisses de près, feuilles de canopée en disques, pas de kit urbain ni d'intérieur, pas de son.
+Faiblesses connues : sol proche de la caméra, pas de sous-bois, rochers trop lisses de près, feuilles de canopée en disques, pas d'intérieur, pas de lumière ponctuelle, pas de son.
 
-Chantier en cours : `docs/refonte-monde-generique.md`. Étapes 1 (référence gelée) et 2 (matières en recettes) faites ; prochaine : semis génériques. Les kits `foret` et `dunes` et les objets en formes sont des étapes, pas la cible : la cible est un vocabulaire générique (relief, semis, matières, volumes) dans lequel la forêt elle-même n'est qu'une fiche.
+Chantier en cours : `docs/refonte-monde-generique.md`. Étapes 1 (référence gelée) et 2 (matières en recettes) faites ; étape 3 commencée : semis génériques, relief et trajet réglables, kit `nu`, motifs `fenetres` et `marquage` (fiches 06 à 08 de `scenes/`, copiées de `essais/san-francisco.json`, `village-nuit.json`, `cimetiere.json`). Reste : réécrire arbres et rochers en semis. Les kits `foret` et `dunes` et les objets en formes sont des étapes, pas la cible : la cible est un vocabulaire générique (relief, semis, matières, volumes) dans lequel la forêt elle-même n'est qu'une fiche.
 
 Essai du moteur v2 (« tourner, puis projeter ») : bouton « Moteur v2 », option `v2` ; résultats dans `docs/moteur-v2.md`, poses comparées par `node tools/v2essai.mjs out/v2`.
 
-Essai n° 1 du moteur v3 (« on ne trace plus, on sème ») : bouton « Moteur v3 », option `v3` ; compte rendu dans `docs/moteur-v3.md`, planche et test du triptyque par `node tools/v3essai.mjs out/v3`.
+Essai n° 1 du moteur v3 (« on ne trace plus, on sème ») : bouton « Moteur v3 », option `v3` ; compte rendu dans `docs/moteur-v3.md`, planche et test du triptyque par `node tools/v3essai.mjs out/v3`. Le semeur ne connaît pas encore les semis, le relief réglable ni le kit nu : sur ces fiches le bouton est désactivé et la page reste sur le lanceur de rayons (`v3Refus` dans `src/main.js`, liste dans `docs/moteur-v3.md`).
 
 Autres pistes : `docs/rendu.md` et `docs/contrat-histoire.md`.
