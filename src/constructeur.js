@@ -130,8 +130,12 @@ export function pertes(brute, valide) {
    Les objets et couches de semis sont désignés par leur id : null retire, un id nouveau ajoute (avec ses formes), sinon on fusionne.
    Les objets se fusionnent champ par champ ; un tableau (formes, palette, p, taille) se remplace en entier ; null efface un champ. */
 export const PATCH_CLES = ['titre', 'inspiration', 'graine', 'kit', 'foret', 'dunes', 'relief', 'trajet', 'surfaces', 'matieres', 'semis', 'objets', 'lointain', 'ambiance', 'camera', 'note'];
-export const PATCH_MAX = { caracteres: 16000, feuilles: 160, elements: 8 };
-function feuilles(v) { if (Array.isArray(v)) return v.reduce((s, x) => s + feuilles(x), 0); if (isObj(v)) return Object.values(v).reduce((s, x) => s + feuilles(x), 0) || 1; return 1; }
+export const PATCH_MAX = { caracteres: 16000, feuilles: 120, elements: 8 };
+function feuilles(v) {                                            // valeurs changées ; une forme remplacée compte pour une
+  if (Array.isArray(v)) return v.reduce((s, x) => s + feuilles(x), 0);
+  if (isObj(v)) return Object.entries(v).reduce((s, [k, x]) => s + (k === 'formes' && Array.isArray(x) ? x.length : feuilles(x)), 0) || 1;
+  return 1;
+}
 export function validerPatch(p) {
   const erreurs = [];
   if (!isObj(p)) return { ok: false, erreurs: ['pas un objet JSON'], changements: {} };
@@ -154,7 +158,7 @@ export function validerPatch(p) {
   let ok = true;
   if (taille > PATCH_MAX.caracteres) { erreurs.push(`retouche trop grosse (${taille} caractères) : ce n'est plus une retouche`); ok = false; }
   if (nf > PATCH_MAX.feuilles) { erreurs.push(`retouche trop étendue (${nf} valeurs) : change moins de choses à la fois`); ok = false; }
-  return { ok, erreurs, changements: ok ? ch : {}, pourquoi: String(p.pourquoi || '').slice(0, 300), note: Number.isFinite(Number(p.note)) ? clampN(p.note, 0, 10, 5) : null,
+  return { ok, erreurs, refus: ok ? '' : erreurs.join(' ; '), changements: ok ? ch : {}, pourquoi: String(p.pourquoi || '').slice(0, 300), note: Number.isFinite(Number(p.note)) ? clampN(p.note, 0, 10, 5) : null,
     fini: p.fini === true, defauts: (Array.isArray(p.defauts) ? p.defauts : []).slice(0, 8).map(x => String(x).slice(0, 200)), vide: !Object.keys(ok ? ch : {}).length };
 }
 function fusion(a, b) {
@@ -221,14 +225,27 @@ export function resoudreFiche(f, geo) {
   });
   return c;
 }
-/* Boîte englobante d'un assemblage de formes, dans son repère (y = 0 au sol). */
-export function emprise(formes, ech = 1) {
+/* Demi-étendues d'une forme dans le repère de l'objet. Une forme penchée : le moteur la compte comme une boule de son rayon
+   pour la faire tenir dans sa cellule (packSemis) ; pour la vue, un quart de tour se lit comme un échange d'axes. */
+function demi(fo, ech = 1, commeMoteur = false) {
+  const t = (fo.taille || [1, 1, 1]).map(v => clampN(v, 0.01, 40, 1) * ech * 0.5);
+  if (fo.f === 'capsule') t[1] += t[0];
+  const pe = fo.penche || [0, 0];
+  if (pe[0] || pe[1]) {
+    const droit = a => Math.abs(Math.abs(a) % 180 - 90) < 5, nul = a => Math.abs(a) < 1;
+    if (commeMoteur || !((droit(pe[0]) || nul(pe[0])) && (droit(pe[1]) || nul(pe[1])))) { const R = Math.hypot(...t); return [R, R, R]; }
+    if (droit(pe[0])) [t[1], t[2]] = [t[2], t[1]];
+    if (droit(pe[1])) [t[0], t[1]] = [t[1], t[0]];
+  }
+  const ca = Math.abs(Math.cos((fo.cap || 0) * Math.PI / 180)), sa = Math.abs(Math.sin((fo.cap || 0) * Math.PI / 180));
+  return [t[0] * ca + t[2] * sa, t[1], t[0] * sa + t[2] * ca];
+}
+const basseForme = fo => (fo.p ? fo.p[1] : 0) - demi(fo)[1] < 2.1;   // ce qui barre le passage : les parties basses
+/* Boîte englobante d'un assemblage de formes, dans son repère (y = 0 au sol). commeMoteur : la règle de packSemis. */
+export function emprise(formes, ech = 1, commeMoteur = false) {
   const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
   for (const fo of formes || []) {
-    const p = (fo.p || [0, 0, 0]).map(v => clampN(v, -40, 40, 0) * ech), t = (fo.taille || [1, 1, 1]).map(v => clampN(v, 0.01, 40, 1) * ech * 0.5);
-    const ca = Math.abs(Math.cos((fo.cap || 0) * Math.PI / 180)), sa = Math.abs(Math.sin((fo.cap || 0) * Math.PI / 180));
-    let e = [t[0] * ca + t[2] * sa, fo.f === 'capsule' ? t[1] + t[0] : t[1], t[0] * sa + t[2] * ca];
-    if (fo.penche && (fo.penche[0] || fo.penche[1])) { const R = Math.hypot(...t); e = [R, R, R]; }
+    const p = (fo.p || [0, 0, 0]).map(v => clampN(v, -40, 40, 0) * ech), e = demi(fo, ech, commeMoteur);
     for (let i = 0; i < 3; i++) { mn[i] = Math.min(mn[i], p[i] - e[i]); mx[i] = Math.max(mx[i], p[i] + e[i]); }
   }
   if (mn[0] > mx[0]) return { mn: [0, 0, 0], mx: [0, 0, 0], larg: 0, prof: 0, haut: 0, bas: 0, rayon: 0 };
@@ -287,7 +304,7 @@ export function controler(fiche, geo, opts = {}) {
     if (e.haut > 60) dire('erreur', o.id, `${nom} : ${e.haut.toFixed(0)} m de haut, invraisemblable`);
     if (e.haut < 0.05) dire('erreur', o.id, `${nom} : sous le sol`);
     if (e.bas > 0.4 && !lumineux(o.formes)) dire('avertissement', o.id, `${nom} : flotte à ${e.bas.toFixed(1)} m du sol`);
-    const eb = emprise((o.formes || []).filter(x => (x.p ? x.p[1] : 0) - (x.taille ? x.taille[1] : 1) / 2 < 2.1), clampN(o.echelle, 0.1, 5, 1));   // ce qui barre le passage : les parties basses
+    const eb = emprise((o.formes || []).filter(basseForme), clampN(o.echelle, 0.1, 5, 1));
     if (kit !== 1 && eb.haut > 0.3 && Math.abs(o.cote) - (o.oriente === 'trajet' ? eb.prof : eb.larg) / 2 < couloir) dire('avertissement', o.id, `${nom} : barre le passage (cote ${o.cote}, ${(o.oriente === 'trajet' ? eb.prof : eb.larg).toFixed(1)} m en travers) ; le porteur le contournera ou s'arrêtera devant`);
     if (kit === 0) {                                                // forêt : les arbres poussent partout hors du sentier, sauf « degage »
       if ((o.degage || 0) < e.rayon * 0.9) dire('erreur', o.id, `${nom} : en forêt, degage ${o.degage || 0} m < rayon ${e.rayon.toFixed(1)} m : des arbres poussent au travers. Mets degage ≥ ${Math.ceil(e.rayon + 1)}`);
@@ -311,7 +328,7 @@ export function controler(fiche, geo, opts = {}) {
   }
 
   for (const c of semis) {
-    const tr = c.trajet || {}, cel = Array.isArray(c.cellule) ? c.cellule : [6, 6], rg = !!tr.rangee, ec = emprise(c.formes), nom = c.nom || c.id;
+    const tr = c.trajet || {}, cel = Array.isArray(c.cellule) ? c.cellule : [6, 6], rg = !!tr.rangee, ec = emprise(c.formes, 1, true), nom = c.nom || c.id;
     const C = rg ? [cel[1], cel[0]] : cel;                           // rangée : [le long, en profondeur] → axes de grille [travers, long]
     const ex = Math.max(Math.abs(ec.mn[0]), Math.abs(ec.mx[0])), ez = Math.max(Math.abs(ec.mn[2]), Math.abs(ec.mx[2]));
     const ori = c.oriente || (rg ? 'trajet' : 'aleatoire');
@@ -322,10 +339,10 @@ export function controler(fiche, geo, opts = {}) {
     const reduit = sc > fit ? fit / sc : 1, haut = ec.haut * reduit * sc * ((c.hauteur && c.hauteur[1]) || 1);
     const min = tr.min !== undefined ? tr.min : hw + 1, prof = rg ? cel[1] : 0;
     const proche = rg ? min + prof / 2 - ez * reduit : min;          // distance à l'axe du bord de l'élément le plus proche
-    const ebas = emprise((c.formes || []).filter(x => (x.p ? x.p[1] : 0) - (x.taille ? x.taille[1] : 1) / 2 < 2.1));
+    const ebas = emprise((c.formes || []).filter(basseForme));
     const procheBas = rg ? min + prof / 2 - Math.max(Math.abs(ebas.mn[2]), Math.abs(ebas.mx[2])) * reduit * sc : min;
     const el = { id: c.id, nom, genre: 'semis', rangee: rg, cellule: cel, densite: c.densite, hauteur: +haut.toFixed(1), echelle_effective: +(reduit * sc).toFixed(2), plus_proche_m: +Math.max(0, proche).toFixed(1) };
-    if (reduit < 0.85) dire('avertissement', c.id, `${nom} : l'élément ne tient pas dans sa cellule ${cel.join(' × ')} m (${(2 * gx).toFixed(1)} × ${(2 * gz).toFixed(1)} m) ; le moteur le réduit à ${Math.round(reduit * 100)} %. Agrandis la cellule ou rétrécis l'élément`);
+    if (reduit < 0.85) dire('avertissement', c.id, `${nom} : l'élément ne tient pas dans sa cellule ${cel.join(' × ')} m (${(2 * gx).toFixed(1)} × ${(2 * gz).toFixed(1)} m) ; le moteur le réduit à ${Math.round(reduit * 100)} %. Agrandis la cellule ou rétrécis l'élément` + ((c.formes || []).some(x => x.penche && (x.penche[0] || x.penche[1])) ? ' (une forme penchée compte comme une boule de son rayon : un tuyau ou une poutre couchée se fait en boîte allongée)' : ''));
     if (c.densite <= 0.05) dire('avertissement', c.id, `${nom} : densité ${c.densite}, presque rien ne pousse`);
     if (kit !== 1 && rg && procheBas < couloir && ebas.haut > 0.3) dire('erreur', c.id, `${nom} : la rangée barre le passage (bord à ${procheBas.toFixed(1)} m de l'axe, le porteur marche à moins de ${couloir.toFixed(1)} m)`);
     else if (kit !== 1 && rg && procheBas < hw - 0.2 && ebas.haut > 0.3) dire('info', c.id, `${nom} : au bord du trajet, sur sa surface (${procheBas.toFixed(1)} m de l'axe)`);
@@ -344,6 +361,7 @@ export function controler(fiche, geo, opts = {}) {
   if (P.nuit && !P.lampe && !tousFormes.some(x => x.matiere === 'lumineux') && !Object.values(f.matieres || {}).some(r => r && r.motif && r.motif.type === 'fenetres'))
     dire('erreur', '', 'nuit sans lampe ni rien de lumineux : l\'image sera noire');
   if (P.jour < 60) dire('info', '', `brume épaisse : on ne voit qu'à ${Math.round(P.jour)} m`);
+  if (P.nuit && P.lampe && clampN(f.ambiance && f.ambiance.brume, 0, 0.06, 0.011) > 0.01) dire('avertissement', '', `nuit, lampe et brume ${f.ambiance.brume} : la brume éclairée par la lampe fera un voile gris sur toute l'image ; 0.003 à 0.006 la nuit`);
   if (!objets.length && !semis.length && kit === 2) dire('erreur', '', 'monde nu sans semis ni objet : il n\'y aura que le sol');
   const nf = objets.reduce((s, o) => s + (o.formes || []).length, 0);
   const lib = new Set([...(opts.recettes || []), ...Object.keys(f.matieres || {})]);
@@ -433,8 +451,8 @@ const MOTEUR_TEXTE = (recettes) => `LE MOTEUR (lis tout : c'est ce qu'il sait mo
 - Le porteur part de z = 0 sur l'axe du trajet et marche le long du trajet vers les z croissants (« devant »), sur 40 à 80 m, en regardant surtout devant lui. Le joueur peut tourner la tête, mais ce qu'il voit d'abord est le cône devant.
 - Un objet n'est dans le champ en approchant que si |cote| ≤ 0,55 × (devant − z) : un objet à cote 11 et devant 15 n'est JAMAIS vu en marchant. Pour se lire au premier coup d'œil : devant 10 à 35, |cote| ≤ 0,5 × devant, et assez grand (hauteur ≥ distance / 20).
 - Tout est fait de formes de base (boîtes, boules, cylindres, cônes, capsules, toits à deux pans) fondues entre elles, avec des matières calculées. Pas de texture, pas de modèle, pas de texte lisible, pas de personnage, rien qui bouge.
-- Le sol est un relief doux (ondulations, une pente le long du trajet) : pas de falaise, pas de marche, pas de pont, pas de grotte, pas d'eau proche (l'eau n'existe que sous l'horizon, dans « lointain »).
-- La lumière : soleil (ou lune), ciel, brume, et la lampe du téléphone la nuit. « lumineux » brille mais n'éclaire presque pas autour : la nuit, seules la lampe (15 m) et les choses lumineuses se voient.
+- Le sol est un relief doux (ondulations, une pente le long du trajet) : pas de falaise, pas de marche, pas de pont, pas de grotte. La vraie eau n'existe que sous l'horizon (« lointain.eau ») ; une eau proche (bassin, canal, rive) se fait avec un SOL sombre, uni et brillant, voir la règle 8.
+- La lumière : soleil (ou lune), ciel, brume, et la lampe du téléphone la nuit. « lumineux » brille mais n'éclaire presque pas autour : la nuit, seules la lampe (15 m) et les choses lumineuses se voient. La nuit, la brume éclairée par la lampe devient un voile gris qui mange tout : brume 0.003 à 0.006 la nuit, jamais plus de 0.01.
 - Recettes de matière prêtes : ${recettes.join(', ')}.
 - Coût : 4 couches de semis, 8 objets, 64 formes d'objets en tout, 6 formes par élément de semis. Le répété (immeubles, arbres, voitures, tombes, piliers, bateaux) va en semis ; l'unique (une maison précise, une horloge, une brouette) en objet.`;
 
@@ -455,7 +473,7 @@ OBJET : {"id": "court-sans-accent", "nom": "ce que c'est, en mots", "devant": 2.
 SEMIS : {"id", "nom", "cellule": [a, b] m (1.5..30), "densite": 0..1, "groupes": 0..1, "groupes_echelle": m, "trajet": {"rangee": true|false, "min": m, "max": m, "cote": "deux"|"gauche"|"droite"}, "rotation": degrés, "oriente": "trajet"|"aleatoire"|"fixe", "cap", "tourne": degrés d'aléa, "echelle": [min, max], "hauteur": [min, max] (étire en hauteur), "penche": 0..25, "teinte": 0..1, "desordre": 0..1, "pose": "pente", "palette": [8 couleurs au plus], "formes": [6 au plus]}
  - Rangée ("rangee": true) : la grille suit le trajet, "cellule" = [longueur le long du trajet, profondeur] ; la rangée commence à "min" m de l'axe ; l'élément fait face au trajet : son +z regarde le trajet, son x court le long du trajet, son centre est au milieu de la cellule (donc à min + profondeur/2 de l'axe). Immeubles mitoyens : longueur de cellule = largeur de façade.
  - Grille libre (sans rangée) : arbres, buissons, tombes, piliers, rochers ; "min"/"max" = écart permis à l'axe (par défaut : hors du trajet).
- - L'élément doit tenir dans sa cellule avec 8 cm de marge (sinon le moteur le réduit) : dessine-le à l'échelle de la cellule.
+ - L'élément doit tenir dans sa cellule avec 8 cm de marge (sinon le moteur le réduit) : dessine-le à l'échelle de la cellule. Une forme penchée ("penche") y compte comme une boule de son rayon : un tuyau, une poutre, une barrière couchés dans un élément de semis se font en boîte allongée, pas en cylindre penché.
 RECETTE dérivée : {"base": "recette prête", "couleur": "#rrggbb"|"forme" (prend la couleur de la forme : avec une palette, chaque élément garde la sienne), "nuance": {"couleur", "force", "echelle"}, "taches": [{"couleur", "force", "echelle", "seuils": [a, b], "fbm": true, "hauteur": [haut, bas]}] ("#000000" = humidité, crasse), "mousse": {"couleur", "force", "dessus": [a, b]}, "salissure": {"force", "hauteur"}, "brillance": 0..1, "motif": ...}
  motifs : {"type": "fenetres", "largeur", "hauteur", "pas", "etage", "allege", "cadre", "rdc" (rez-de-chaussée à vitrines, 0 = aucun), "allumees": 0..1 (la nuit), "couleur" (vitre), "cadre_couleur", "lumiere"} (faces verticales) ; {"type": "marquage", "axe": "simple"|"double"|"aucun", "largeur", "tiret", "intervalle", "bords" (écart des lignes de rive), "passages", "couleur"} (sol, mesuré depuis l'axe du trajet) ; {"type": "planches", "couchees": true} ; {"type": "paves", "echelle": [x, y, z] (briques : [4.4, 13, 4.4])} ; "feuilles" ; "rides" ; "fissures".`;
 
@@ -466,7 +484,8 @@ const REGLES_COMPOSITION = `COMPOSER UNE SCÈNE QUI SE LIT AU PREMIER COUP D'ŒI
 4. Les mesures réelles : étage 3 m, porte 2,1 m, voiture 4,4 × 1,8 × 1,5 m, réverbère 5 à 8 m, bateau de pêche 10 × 4 m, pilier 0,5 m, banc 1,8 m. Un objet trop petit ne se voit pas ; un objet de 40 m n'est plus un objet.
 5. Des couleurs ternes, salies, des taches ; varie les éléments (palette, teinte, tourne, echelle, hauteur, densite < 1).
 6. Un intérieur : le sol est le plancher, des objets font les murs et un plafond (boîtes de 40 m au plus) au-dessus du trajet, et la lumière vient de la lampe (nuit) ou de choses lumineuses ; les rangées font les murs latéraux. Un lieu vertical : l'étirement "hauteur" des semis et un lointain haut ; on ne grimpe pas.
-7. Ce que le moteur ne sait pas faire (personnages, eau proche, texte, falaises, mouvement), tu le contournes ou tu le laisses au récit, et tu le dis dans "note".`;
+7. Ce que le moteur ne sait pas faire (personnages, texte, falaises, mouvement), tu le contournes ou tu le laisses au récit, et tu le dis dans "note".
+8. En portrait, les côtés se voient mal : ce qui est à plus de 6 m de l'axe n'entre dans le champ qu'à plus de 10 m devant. Un trajet large (plus de 8 m) remplit tout le bas de l'image : un quai, une place, une allée se font étroits (5 à 8 m) pour laisser voir ce qui les borde. Ce qui doit se lire sur le côté (eau, bateaux, vitrines) se place entre 3 et 6 m de l'axe et se signale par de la hauteur (mâts, réverbères, enseignes). Eau proche : "surfaces.sol" = une recette {"espace": "sol", "couleur": "#1c2a31", "brillance": 1, "motif": {"type": "rides", "echelle": 9, "opacite": 0.45}} à niveau du trajet, bordée d'une rangée de bordures basses ; elle se lit surtout quand on la regarde de côté.`;
 
 /* Étape a : l'intention. Claude reformule la demande en plan de scène, dans les moyens du moteur. */
 export function consignePlan(demande, ctx = {}) {
@@ -515,7 +534,7 @@ const FORMAT_PATCH = `Réponds uniquement par un objet JSON :
    "ambiance": {"brume": 0.02}, "relief": {...}, "trajet": {...}, "surfaces": {...}, "lointain": {...}, "matieres": {"nom": {...}},
    "objets": {"id-existant": {"devant": 14, "cote": 3} (seuls les champs changés ; "formes" se remplace en entier), "id-nouveau": {"nom", "devant", "cote", "formes": [...]}, "id-a-retirer": null},
    "semis": {"id-existant": {"densite": 0.9, "trajet": {"min": 3}}, "id-nouveau": {...couche complète...}, "id-a-retirer": null} } }
-Au plus 8 objets ou couches touchés, et pas plus de 160 valeurs : change ce qui compte le plus. "changements": {} si rien n'est à changer.`;
+Au plus 8 objets ou couches touchés, 120 valeurs (une forme remplacée compte pour une) et 16 000 caractères : change ce qui compte le plus. Une retouche plus grosse est refusée. "changements": {} si rien n'est à changer.`;
 
 /* Étapes c et d : le contrôle (et, s'il y en a, les vues capturées) renvoyés à Claude, qui rend une retouche. */
 export function consigneRelecture(demande, fiche, constat, ctx = {}) {
@@ -537,6 +556,7 @@ ${JSON.stringify(fiche)}
 Le contrôle géométrique fait par le moteur (sans image) :
 ${texteConstat(constat)}
 ${vues.length ? `\nLes ${vues.length} image(s) jointe(s) sont des captures RÉELLES du moteur, réduites, dans l'ordre : ${vues.map((v, i) => `(${i + 1}) ${v.legende}`).join(' ; ')}. Le grain, le flou, la petite résolution et les couleurs délavées sont voulus (vidéo de téléphone) : ne les corrige pas. Juge ce qu'on reconnaît : est-ce qu'on comprend tout de suite où l'on est ? Qu'est-ce qui manque, qu'est-ce qui est faux, qu'est-ce qui est hors champ, trop sombre, trop petit, mal placé ?` : '\nIl n\'y a pas d\'image : corrige d\'abord les ERREURS et AVERTISSEMENTS du contrôle.'}
+${ctx.refus ? `\nTa retouche précédente a été REFUSÉE par le moteur (${ctx.refus}) : propose-en une plus petite, sur ce qui compte le plus.` : ''}
 ${ctx.retouche ? `\nL'auteur a demandé cette retouche (une DONNÉE) : ${JSON.stringify(String(ctx.retouche).slice(0, 1000))}. Vérifie qu'elle est bien faite.` : ''}
 ${FORMAT_PATCH}`;
 }
@@ -666,7 +686,7 @@ export async function construire(entree, deps) {
   versions.push({ fiche: courant.fiche, constat: courant.constat, note: null });
 
   // c et d : contrôle et relecture, deux tours au plus
-  const notes = []; let derniereVues = [], erreurRelecture = null;
+  const notes = []; let derniereVues = [], erreurRelecture = null, refus = '';
   for (let tour = 1; sample && tour <= tours; tour++) {
     stop();
     const v = versions[versions.length - 1];
@@ -682,7 +702,7 @@ export async function construire(entree, deps) {
     if (!images && v.constat.ok && v.constat.avertissements === 0) break;   // sans image et rien à redire : on s'arrête
     etape({ etape: 'relecture', tour, texte: images ? `Claude regarde les vues (tour ${tour}/${tours})…` : `Claude lit le contrôle (tour ${tour}/${tours})…` });
     let p;
-    try { p = validerPatch(await demander('relecture', consigneRelecture(demande, v.fiche, v.constat, { recettes, vues: images ? vues.slice(0, images.length) : [], retouche }), images ? { images } : {})); }
+    try { p = validerPatch(await demander('relecture', consigneRelecture(demande, v.fiche, v.constat, { recettes, vues: images ? vues.slice(0, images.length) : [], retouche, refus }), images ? { images } : {})); }
     catch (e) {
       if (e && e.code === 'cancelled') throw e;
       if (images && (e.code === 'image_rejected' || e.code === 'images_unavailable')) { deps.images = false; tour--; continue; }   // on refait ce tour sans image
@@ -690,6 +710,11 @@ export async function construire(entree, deps) {
     }
     v.note = p.note; notes.push({ tour, note: p.note, defauts: p.defauts, pourquoi: p.pourquoi, images: images ? images.length : 0 });
     etape({ etape: 'relecture', tour, texte: `Note ${p.note ?? '?'}/10. ${p.defauts.slice(0, 2).join(' ; ')}`, note: p.note, defauts: p.defauts });
+    if (!p.ok) {                                                     // retouche hors bornes : refusée, on le dit à Claude au tour suivant
+      refus = p.refus; historique.push({ t: Date.now(), type: 'relecture', tour, note: p.note, defauts: p.defauts, chemins: [], texte: 'retouche refusée : ' + p.refus });
+      etape({ etape: 'relecture', tour, texte: 'Retouche refusée (' + p.refus + ')' }); continue;
+    }
+    refus = '';
     if (p.fini || p.vide) { historique.push({ t: Date.now(), type: 'relecture', tour, note: p.note, defauts: p.defauts, chemins: [] }); break; }
     const r = appliquerPatch(v.fiche, p.changements);
     historique.push({ t: Date.now(), type: 'relecture', tour, note: p.note, defauts: p.defauts, chemins: r.chemins, pourquoi: p.pourquoi });

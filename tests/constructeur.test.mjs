@@ -59,6 +59,8 @@ test('retouches : patch borné, fusion par identifiant, ajout, retrait', () => {
   assert.ok(r.chemins.includes('semis.maisons retiré') && r.chemins.includes('objets.kiosque ajouté'));
   const gros = validerPatch({ changements: { objets: Object.fromEntries(Array.from({ length: 8 }, (_, i) => ['o' + i, { formes: Array(24).fill({ f: 'boite', p: [1, 2, 3], taille: [1, 2, 3] }) }])) } });
   assert.equal(gros.ok, false, 'une réécriture déguisée en retouche est refusée'); assert.ok(gros.vide);
+  const formes = n => Array(n).fill({ f: 'boite', p: [1, 2, 3], taille: [1, 2, 3], couleur: '#123456', matiere: 'bois' });
+  assert.ok(validerPatch({ changements: { objets: { a: { formes: formes(24) }, b: { formes: formes(20) } }, semis: { c: { formes: formes(6) } } } }).ok, 'remplacer les formes de quelques objets reste une retouche');
   assert.ok(validerPatch({ changements: { objets: [{ id: 'a', devant: 3 }] } }).changements.objets.a, 'forme tableau tolérée');
   const lx = retoucheLexique('plus de brouillard et sous la neige', base);
   assert.ok(lx.changements.ambiance.brume > base.ambiance.brume); assert.equal(lx.changements.surfaces.sol, 'neige');
@@ -89,6 +91,10 @@ test('contrôle sans image : nuit noire, rangée sur la chaussée, élément tro
   const c = controler(f, geoApprochee(f));
   const txt = texteConstat(c);
   assert.ok(c.lignes.some(l => /image sera noire/.test(l.texte)), txt);
+  const voile = validerFiche({ kit: 'nu', ambiance: { soleil: { hauteur: -10 }, brume: 0.02 }, semis: [{ id: 'murs', cellule: [8, 1.5], trajet: { rangee: true, min: 4 }, formes: [boite(7, 3, 0.4), { f: 'cylindre', p: [0, 2.4, 0], taille: [0.16, 7.8, 0.16], penche: [0, 90] }] }] }, { id: 'v' });
+  const cv = controler(voile, geoApprochee(voile));
+  assert.ok(cv.lignes.some(l => /voile gris/.test(l.texte)), texteConstat(cv));
+  assert.ok(cv.lignes.some(l => l.id === 'murs' && /boule de son rayon/.test(l.texte)), 'cylindre couché dans un semis : réduit comme le moteur le fait');
   assert.ok(c.lignes.some(l => l.id === 'murs' && /barre le passage/.test(l.texte)), txt);
   assert.ok(c.lignes.some(l => l.id === 'geants' && /réduit/.test(l.texte)), txt);
   assert.ok(c.lignes.some(l => l.id === 'tour' && /derrière la rangée|jamais/.test(l.texte)), txt);
@@ -134,6 +140,15 @@ test('chaîne : une relecture qui dégrade fait garder la version d\'avant ; san
   const s2 = fauxSample([{}, bon]);
   const r2 = await construire({ description: 'x' }, { sample: s2, images: false, moteur: fauxMoteur() });
   assert.equal(s2.appels.length, 2, 'rien à redire, pas d\'image : pas de relecture'); assert.equal(r2.notes.length, 0);
+});
+
+test('chaîne : une retouche refusée est signalée au tour suivant', async () => {
+  const bon = { titre: 'B', kit: 'nu', semis: [{ id: 'murs', cellule: [6, 6], trajet: { rangee: true, min: 3 }, formes: [{ f: 'boite', p: [0, 2, 0], taille: [5, 4, 5] }] }] };
+  const enorme = { note: 3, changements: { relief: Object.fromEntries(Array.from({ length: 200 }, (_, i) => ['k' + i, i])) } };
+  const s = fauxSample([{}, bon, enorme, { note: 6, changements: { ambiance: { brume: 0.02 } } }]);
+  const r = await construire({ description: 'x' }, { sample: s, images: true, moteur: fauxMoteur({ capturer: async v => v.map(() => ({ blob: {}, moyenne: 50 })) }) });
+  assert.ok(/REFUSÉE/.test(s.appels[3].consigne)); assert.equal(r.fiche.ambiance.brume, 0.02);
+  assert.ok(r.historique.some(h => /refusée/.test(h.texte || '')));
 });
 
 test('chaîne : erreurs, annulation, sans Claude, retouche', async () => {
