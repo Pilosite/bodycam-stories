@@ -13,6 +13,9 @@
 //   v2       moteur v2 (essai : panoramiques projetés) ; options v2w, v2h, v2passes, v2q, v2pas, v2nb, v2budget,
 //            v2fill, v2trous, v2scale, v2tour décrites en tête du bloc « moteur v2 » de src/main.js. En v2, le nombre
 //            de passes attendu est le nombre de panoramiques proches terminés (3 en pratique).
+//   v3       moteur v3 (essai : le semeur) ; options grains (budget de la caméra), grainsOmbre, v3k, v3carte, v3alpha,
+//            v3max, v3detail, v3net, v3pcf, v3amb, v3voir décrites en tête du bloc « moteur v3 » de src/main.js. En v3, le
+//            nombre de passes attendu est le nombre d'images accumulées à l'arrêt.
 //
 // CHROME=/chemin/vers/chrome force l'exécutable (sinon celui de Playwright).
 import { chromium } from 'playwright';

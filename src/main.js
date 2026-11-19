@@ -11,6 +11,7 @@ const FS_DOWN = __SHADER_FS_DOWN__;
 const FS_BLUR = __SHADER_FS_BLUR__;
 const FS_CAM = __SHADER_FS_CAM__;
 const VS_V2PTS = __SHADER_VS_V2PTS__, FS_V2PTS = __SHADER_FS_V2PTS__, FS_V2CIEL = __SHADER_FS_V2CIEL__, FS_V2TROUS = __SHADER_FS_V2TROUS__;
+const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRE = __SHADER_FS_V3OMBRE__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__;
 const FICHES = __SCENES__;                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
@@ -325,7 +326,7 @@ function resize(){
   bl1=target(Math.max(8,Math.round(W*bs)),Math.max(8,Math.round(H*bs)),gl.RGBA16F,gl.LINEAR);
   bl2=target(bl1.w,bl1.h,gl.RGBA16F,gl.LINEAR);
   hist=null; n=0; row=0; mLevel=CFG.level!==undefined?CFG.level:1;
-  V2.out=null;
+  V2.out=null; if(V3.gb) v3Libere(true);
 }
 const px1=new Float32Array(4);
 function renderPass(dst,y0,rows,o,p){
@@ -500,8 +501,216 @@ function v2Prets(){                                           // panoramiques te
 }
 function v2Basculer(on){
   V2.on=on; $("v2").setAttribute("aria-pressed",String(on)); $("v2").textContent=on?"Moteur v2 · oui":"Moteur v2";
+  if(on&&V3.on) v3Basculer(false);
   if(on){ v2Init(); V2.lastPose=null; V2.out=null; } else { hist=null; v2Vider(); freeT(V2.spare); V2.spare=null; v2LibereCibles(); }
 }
+
+/* ------------------------------------------------------------------ moteur v3 (essai) : on ne trace plus, on sème
+   Voir docs/moteur-v3.md. Chaque image, à budget fixe : (1) carte d'ombres, les grains semés vus du soleil ; (2) tampon G,
+   le sol en maillage polaire puis les grains vus de la caméra (v3_grains.vert : chaque grain se pose lui-même, à partir de
+   son numéro) ; (3) une passe plein écran (v3_ombrage.frag) : recettes, lumière, ciel, accumulation reprojetée.
+   Le monde (grilles, tirages, formules) est le code GLSL du lanceur de rayons, partagé par le build (monde.glsl).
+   Options de test : v3, grains (budget de la caméra, 300 000 par défaut), grainsOmbre (budget du soleil, 60 % du précédent),
+   v3k (recouvrement des grains), v3carte (largeur de la carte d'ombres), v3alpha (part d'image neuve en mouvement),
+   v3max (images accumulées à l'arrêt), v3detail (chronomètre chaque passe : ajoute des synchronisations),
+   v3net (soleil ponctuel, sans pénombre), v3pcf (flou de lecture de la carte, en texels), v3amb (niveau de l'ambiance,
+   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres). */
+const V3={ on:!!CFG.v3, grains:CFG.grains||300000, ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||1024,
+  alpha:CFG.v3alpha||.25, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
+  n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
+  sol:{r0:.3, anneaux:96, secteurs:192, dmax:420} };
+function v3Init(){
+  if(V3.gp) return;
+  V3.gp={ grains:prog(FS_V3GBUF,VS_V3GRAINS), sol:prog(FS_V3GBUF,VS_V3SOL), ombre:prog(FS_V3OMBRE,VS_V3GRAINS), ombrage:prog(FS_V3OMBRAGE) };
+  V3.maxPt=Math.min(64,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
+  V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,72);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+}
+function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
+  if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
+    v3Libere(true);
+    const tex=()=>{ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,W,H);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST); return t; };
+    const g={w:W,h:H,t0:tex(),t1:tex(),rb:gl.createRenderbuffer(),f:gl.createFramebuffer()};
+    gl.bindRenderbuffer(gl.RENDERBUFFER,g.rb); gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,W,H);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,g.f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,g.t0,0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,g.t1,0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,g.rb);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
+    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail("Moteur v3 : tampon G incomplet.");
+    V3.gb=g; V3.A=target(W,H,ACC_FMT,gl.NEAREST); V3.B=target(W,H,ACC_FMT,gl.NEAREST); V3.hist=null; V3.n=0;
+  }
+  const smH=Math.round(V3.carte*v3CarteH()/55);               // texels carrés : la carte est moins haute que large quand le soleil est bas
+  if(!V3.sm||V3.sm.w!==V3.carte||V3.sm.h!==smH){
+    if(V3.sm){ gl.deleteTexture(V3.sm.t); gl.deleteFramebuffer(V3.sm.f); }
+    const s={w:V3.carte,h:smH,t:gl.createTexture(),f:gl.createFramebuffer()};
+    gl.bindTexture(gl.TEXTURE_2D,s.t); gl.texStorage2D(gl.TEXTURE_2D,1,gl.DEPTH_COMPONENT24,s.w,s.h);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,s.f); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.TEXTURE_2D,s.t,0);
+    gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail("Moteur v3 : carte d'ombres incomplète.");
+    V3.sm=s;
+  }
+}
+function v3CarteH(){ const y=Math.max(.05,S.sunDir[1]); return Math.min(55,Math.round((55*y+14)/5)*5); }   // demi-hauteur de la carte d'ombres (m), arrondie
+function v3Libere(seulementEcran){
+  const g=V3.gb; if(g){ gl.deleteTexture(g.t0); gl.deleteTexture(g.t1); gl.deleteRenderbuffer(g.rb); gl.deleteFramebuffer(g.f); }
+  freeT(V3.A); freeT(V3.B); V3.gb=V3.A=V3.B=V3.hist=null; V3.n=0;
+  if(!seulementEcran&&V3.sm){ gl.deleteTexture(V3.sm.t); gl.deleteFramebuffer(V3.sm.f); V3.sm=null; }
+}
+/* Demi-ouverture du cap à semer. Au loin : le plus grand écart de cap parmi les directions du bord de l'image proches de
+   l'horizon, plus une marge. Tout près : tout le tour si l'image contient le nadir ou le zénith (regard vers les pieds). */
+function v3Cap(p){
+  const m=p.mat, a=W/H, fish=1.09/(.5*Math.max(1,a)), cap=Math.atan2(m[6],m[8]);
+  const dir=(x,y)=>{ const rr=Math.hypot(x,y)||1e-5, an=rr*fish, s=Math.sin(an)/rr, l=[x*s,y*s,Math.cos(an)];
+    return [m[0]*l[0]+m[3]*l[1]+m[6]*l[2],m[1]*l[0]+m[4]*l[1]+m[7]*l[2],m[2]*l[0]+m[5]*l[1]+m[8]*l[2]]; };
+  let pole=false;
+  for(const sy of [-1,1]){                                     // zénith ou nadir dans l'image ?
+    const l=[m[1]*sy,m[4]*sy,m[7]*sy], an=Math.acos(Math.max(-1,Math.min(1,l[2]))), sxy=Math.hypot(l[0],l[1])||1e-6;
+    const u=l[0]/sxy*an/fish, v=l[1]/sxy*an/fish; if(Math.abs(u)<.5*a+.05&&Math.abs(v)<.55) pole=true; }
+  let loin=0, tout=0;
+  for(let i=0;i<64;i++){ const t=i/64*4, x=(t<1?t-.5:t<2?.5:t<3?2.5-t:-.5)*a, y=t<1?-.5:t<2?t-1.5:t<3?.5:3.5-t;
+    const d=dir(x,y); let da=Math.atan2(d[0],d[2])-cap; da=Math.abs(Math.atan2(Math.sin(da),Math.cos(da)));
+    tout=Math.max(tout,da); if(d[1]>-.35&&d[1]<.7) loin=Math.max(loin,da); }
+  if(loin===0) loin=tout;
+  return {cap,demi:Math.min(Math.PI,loin+.3),pres:pole?Math.PI:Math.min(Math.PI,tout+.3)};
+}
+function aireForme(ty,s){                                      // aire approchée d'une forme de base (demi-tailles s)
+  const [x,y,z]=s;
+  if(ty===1){ const p=1.6; return 4*Math.PI*Math.pow((Math.pow(x*y,p)+Math.pow(x*z,p)+Math.pow(y*z,p))/3,1/p); }
+  if(ty===2) return 2*Math.PI*x*2*y+2*Math.PI*x*x;
+  if(ty===3) return Math.PI*x*(x+Math.hypot(x,2*y));
+  if(ty===4) return 2*Math.PI*x*2*y+4*Math.PI*x*x;
+  return 8*(x*y+y*z+x*z);
+}
+/* Objets de la fiche : poids de chaque objet (vu de la caméra : taille apparente ; vu du soleil : taille), aire de chaque
+   forme. Rangés dans une petite texture lue par les grains. */
+function v3Semis(nb,vue,p){
+  const d=V3.semis; d.fill(0);
+  const ws=[], ai=[]; let tot=0;
+  for(let i=0;i<S.objN;i++){ const o=i*16, row=shapesData[o+4], cn=shapesData[o+5], vis=shapesData[o+7]>.5, rad=shapesData[o+3];
+    let a=0; for(let j=0;j<cn;j++){ const r=(row+j)*16; a+=aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); }
+    const dd=Math.max(1,Math.hypot(shapesData[o]-p.pos[0],shapesData[o+1]-p.pos[1],shapesData[o+2]-p.pos[2])-rad*.5);
+    const w=vis?(vue===0?rad*rad/(dd*dd):rad*rad):0; ws.push(w); ai.push(a||1); tot+=w; }
+  let cum=0;
+  for(let i=0;i<S.objN;i++){ cum+=ws[i]; d[i*4]=tot>0?cum/tot:0; d[i*4+1]=tot>0?nb*(ws[i]/tot)/ai[i]:0;
+    const o=i*16, row=shapesData[o+4], cn=shapesData[o+5]; let c=0;
+    for(let j=0;j<cn;j++){ const r=(row+j)*16, a=aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); c+=a;
+      d[(row+j)*4]=c/ai[i]; d[(row+j)*4+1]=a; } }
+  if(tot<=0) for(let i=0;i<S.objN;i++) d[i*4]=0;
+  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,1,72,gl.RGBA,gl.FLOAT,d);
+  return tot>0;
+}
+/* Partage du budget entre les familles, au prorata de la surface apparente qu'elles demandent (aire de l'objet / aire de
+   sa cellule) : le recouvrement de l'écran reste le même pour toutes. Les grains tombés dans une cellule vide sont perdus :
+   un monde plus dense en perd moins, il ne coûte pas plus. */
+function v3Partage(N,vue,p){
+  const tr=S.kit===0&&S.kitP[0]>0, pe=tr&&S.houp[3]>0, bl=S.kitP[1]>0;
+  const w=[tr?6.8/36:0, pe?.95/10.9:0, bl?3.4/72.25:0];
+  const fF=vue===0&&S.kit===0&&S.kitP[2]>0?.28:0;
+  const ob=S.objN>0&&v3Semis(1,vue,p), fP=ob?(vue===0?.12:.1):0;
+  const sw=w[0]+w[1]+w[2], solide=N*(1-fF-fP);
+  const nA=sw>0?Math.round(solide*w[0]/sw):0, nB=sw>0?Math.round(solide*w[1]/sw):0, nR=sw>0?Math.round(solide*w[2]/sw):0;
+  const nF=Math.round(N*fF), nP=ob?Math.round(N*fP):0;
+  if(ob) v3Semis(nP,vue,p);
+  if(vue===1){ const traits=Math.round(nB*.35);               // vue du soleil : les perches en traits (voir semeBTrait)
+    return {nA,nB:0,nR,nF,nP,traits,part:[nA,nA,nA+nR,nA+nR+nF],total:nA+nR+nF+nP}; }
+  return {nA,nB,nR,nF,nP,traits:0,part:[nA,nA+nB,nA+nB+nR,nA+nB+nR+nF],total:nA+nB+nR+nF+nP};
+}
+function v3Monde(u,w,h,p){                                    // uniformes de monde.glsl (mêmes valeurs que common())
+  gl.uniform2f(u.uRes||null,w,h); gl.uniform3fv(u.uCamPos||null,p.pos); gl.uniformMatrix3fv(u.uCam||null,false,p.mat);
+  gl.uniform1f(u.uFish||null,1.09/(.5*Math.max(1,w/h))); gl.uniform1f(u.uFog||null,S.fog); gl.uniform3fv(u.uSeed||null,seed);
+  gl.uniform3fv(u.uSunDir||null,S.sunDir); gl.uniform3fv(u.uSun||null,S.sun); gl.uniform3fv(u.uSky||null,S.sky); gl.uniform1f(u.uTorch||null,S.torch);
+  gl.uniform1i(u.uKit||null,S.kit); gl.uniform4fv(u.uKitP||null,S.kitP); gl.uniform1i(u.uMode||null,0);
+  gl.uniform2fv(u.uCan||null,S.can); gl.uniform4fv(u.uHoup||null,S.houp);
+  gl.uniform4fv(u.uLoin||null,S.loin); gl.uniform3fv(u.uLoinCol||null,S.loinCol); gl.uniform3fv(u.uLoinBas||null,S.loinBas);
+  if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
+  if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP); }
+}
+const px3=new Float32Array(4);
+function v3Sync(){ gl.bindFramebuffer(gl.FRAMEBUFFER,dummy.f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3); }
+function v3Image(p){
+  v3Init(); v3Cibles();
+  const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
+  const chrono=nom=>{ if(!V3.detail) return; v3Sync(); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
+  const rnd=Math.random;
+  const jit=bouge?[0,0]:[rnd()-.5,rnd()-.5];                   // décalage sous-pixel, seulement à l'arrêt
+  // soleil de cette image : tiré dans le disque solaire (pénombre par accumulation)
+  const sd0=S.sunDir, t1=normz(cross3(sd0,[0,1,0])), b1=cross3(t1,sd0), ra=CFG.v3net?0:Math.sqrt(rnd())*.011, aa=6.2832*rnd();
+  const sd=normz([0,1,2].map(i=>sd0[i]+(t1[i]*Math.cos(aa)+b1[i]*Math.sin(aa))*ra));
+  const right=normz(cross3(sd,[0,1,0])), up=cross3(right,sd);
+  const fwd=[p.mat[6],p.mat[8]], fl=Math.hypot(fwd[0],fwd[1])||1;
+  const cx=p.pos[0]+fwd[0]/fl*25, cz=p.pos[2]+fwd[1]/fl*25, C=[cx,terrainH(cx,cz)+5,cz], E=55, D=120;
+  const Ey=V3.sm.h/V3.sm.w*E;                                 // la carte vue du soleil bas est surtout large : on serre la hauteur
+  const sh=Math.hypot(sd[0],sd[2])||1, recul=Math.min(30,14/Math.max(.25,sd[1]/sh)*.5);
+  const zone=[cx+sd[0]/sh*recul*.5,cz+sd[2]/sh*recul*.5,E+recul*.5];
+  const soleilM=new Float32Array([...right,...up,...sd]), soleilE=[E,Ey,D,2*E/V3.carte];
+  const az=v3Cap(p), dmin=.35, L=Math.log(160/dmin);
+  // (1) carte d'ombres
+  const Ns=V3.ombre||Math.round(V3.grains*.6);
+  let u=G.ombre.u; gl.useProgram(G.ombre.p); v3Monde(u,W,H,p);
+  const ps=v3Partage(Ns,1,p);
+  gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); gl.uniform4iv(u.uPart,ps.part); gl.uniform1i(u.uTotal,ps.total);
+  gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
+  gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
+  gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
+  gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V3.sm.f); gl.viewport(0,0,V3.sm.w,V3.sm.h);
+  gl.clearBufferfv(gl.DEPTH,0,[1]); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
+  gl.uniform1i(u.uTrait,0);
+  if(ps.total>0) gl.drawArrays(gl.POINTS,0,ps.total);
+  if(ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
+  chrono("ombre");
+  // (2) tampon G : le sol, puis les grains
+  const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H);
+  gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
+  const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol, nSol=so.anneaux*so.secteurs*6;
+  u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc);
+  gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,so.anneaux,so.secteurs); gl.uniform1i(u.uPts,0);
+  gl.drawArrays(gl.TRIANGLES,0,nSol);
+  const pc=v3Partage(V3.grains,0,p); V3.parts=pc;
+  u=G.grains.u; gl.useProgram(G.grains.p); v3Monde(u,W,H,p);
+  gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); gl.uniform4iv(u.uPart,pc.part); gl.uniform1i(u.uTotal,pc.total);
+  gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
+  gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil,70,W*H);
+  gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
+  gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
+  if(pc.total>0) gl.drawArrays(gl.POINTS,0,pc.total);
+  gl.disable(gl.DEPTH_TEST);
+  chrono("tamponG");
+  // (3) matière, lumière, ciel, accumulation
+  const dst=V3.hist===V3.A?V3.B:V3.A;
+  u=G.ombrage.u; gl.useProgram(G.ombrage.p); v3Monde(u,W,H,p);
+  bindTex(0,g.t0,u.uG0); bindTex(1,g.t1,u.uG1); bindTex(2,V3.sm.t,u.uOmbre); bindTex(6,(V3.hist||dummy).t,u.uPrev);
+  gl.uniform1ui(u.uFrame,f); gl.uniform2fv(u.uJitPx,jit);
+  gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
+  const occ=S.kit===0?(S.kitP[0]>0?S.kitP[0]/36*.5:0)+(S.houp[3]>0?S.kitP[0]*.8*S.houp[3]/10.9*.14:0):0;   // troncs par mètre : densité × diamètre
+  gl.uniform1f(u.uOccT,occ); gl.uniform1i(u.uVoir,CFG.v3voir|0); gl.uniform1f(u.uPcf,CFG.v3pcf!==undefined?CFG.v3pcf:1); gl.uniform1f(u.uAmb,CFG.v3amb||.65);   // flou de lecture de la carte, en texels
+  const alpha=!V3.hist?1:bouge?V3.alpha:1/(V3.n+1);
+  gl.uniform1f(u.uAlpha,alpha); gl.uniform1i(u.uReproj,bouge?1:0);
+  if(V3.hist){ gl.uniform3fv(u.uPrevPos,V3.histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,V3.histPose.mat); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,W,H); draw();
+  chrono("ombrage");
+  v3Sync();                                                   // force la fin du calcul : le temps mesuré est le vrai temps GPU
+  V3.ms=performance.now()-t0; V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; V3.nImg++;
+  V3.hist=dst; V3.histPose=p; V3.n++;
+}
+function v3Frame(p,dt){
+  if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
+  else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
+  v3Image(p); frames++;
+  if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0});
+  postFX(V3.hist);
+}
+function v3Basculer(on){
+  if(on&&V2.on) v2Basculer(false);
+  V3.on=on; $("v3").setAttribute("aria-pressed",String(on)); $("v3").textContent=on?"Moteur v3 · oui":"Moteur v3";
+  if(on){ v3Init(); V3.hist=null; V3.n=0; } else { hist=null; v3Libere(false); }
+}
+const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const normz=a=>{ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; };
 
 /* ------------------------------------------------------------------ boucle */
 let lastT=0, bench=null, lastMotionMs=0; const startT=performance.now();
@@ -512,6 +721,7 @@ function frame(now){
   walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
   const p=pose(); lastPose=p;
   if(V2.on) v2Frame(p,dt);
+  else if(V3.on) v3Frame(p,dt);
   else if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
   else if(n<MAXS){
     const t0=performance.now(); let done=false;
@@ -519,7 +729,7 @@ function frame(now){
     if(done && (n<14||n%4===0)) postFX(hist);
   }
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
-  display(V2.on?V2.out||V2.tgt||dummy:hist,(now-startT)/1000);
+  display(V2.on?V2.out||V2.tgt||dummy:V3.on?V3.hist||dummy:hist,(now-startT)/1000);
   hud(now);
 }
 let lastHud=0;
@@ -529,9 +739,10 @@ function hud(now){
   $("rec").textContent=p2(Math.floor(s/60))+":"+p2(s%60);
   $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
   $("camid").textContent="CAM 07 · GRAINE "+seedN;
-  $("stat").textContent=V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
+  $("stat").textContent=V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS":V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
-  window.__state={n:CFG.auto?frames:V2.on?v2Prets():n,
+  window.__state={n:CFG.auto?frames:V2.on?v2Prets():V3.on?V3.n:n,
+    v3:V3.on?{ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
     v2:V2.on?{msProj:+V2.msProj.toFixed(1),msProjMoy:+V2.msProjAvg.toFixed(1),points:V2.pts,dessines:V2.dessines,faits:V2.faits.slice(),msParLigne:+V2.msPerRow.toFixed(2)}:undefined,W,H,mLevel,msMotion:+msMotion.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
 }
 
@@ -808,6 +1019,7 @@ async function mesurer(){
   const f=bench.slice(Math.min(10,bench.length>>2)); bench=null; queue.length=0; hold=true;
   await wait(400);
   if(V2.on) return mesurerV2(f,wait,med);
+  if(V3.on) return mesurerV3(f,wait,med);
   const n0=n, t0=performance.now(); let n1=n0, t1=t0;
   while(performance.now()-t0<14000 && n<n0+6){ await wait(100); if(n!==n1){ n1=n; t1=performance.now(); } }
   hold=false;
@@ -862,6 +1074,39 @@ async function mesurerV2(f,wait,med){
     "Un panoramique   "+(last?fx(last.s,1)+" s ("+fx(last.gpu,1)+" s de calcul)":"plus de 30 s"),
     "Derniers         "+(fa.length?fa.map(x=>fx(x.s,1)).join(" · ")+" s":"aucun"),
     "Budget           "+V2.budget+" ms par image, espacement "+fx(V2.pas,1)+" m",
+  ].join("\n");
+  $("mesure-copier").disabled=false;
+}
+/* Moteur v3 : en marche, chaque image sème le budget de grains entier ; à l'arrêt, on chronomètre aussi chaque passe. */
+async function mesurerV3(f,wait,med){
+  const out=$("mesure-txt"), fx=(v,d=1)=>v==null?"non mesuré":v.toFixed(d).replace(".",",");
+  out.textContent="Marche mesurée. Détail des passes à l'arrêt…";
+  const det=V3.detail; V3.detail=true; V3.passes={}; V3.n=0; V3.max=Math.max(V3.max,1);
+  const k0=V3.nImg; while(V3.nImg<k0+12) { V3.n=0; await wait(60); }
+  const pa=Object.assign({},V3.passes); V3.detail=det; hold=false;
+  const dt=med(f.map(x=>x.dt)), ms=med(f.map(x=>x.ms)), gr=V3.parts||{};
+  const dbg=gl.getExtension("WEBGL_debug_renderer_info"), gpu=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"inconnu";
+  const k=v=>Math.round((v||0)/1000)+" k";
+  out.textContent=[
+    "MESURE · MOTEUR V3 · "+(fiche.titre||fiche.id),
+    "",
+    "Écran            "+canvas.width+" × "+canvas.height+" (×"+(window.devicePixelRatio||1).toFixed(2)+")",
+    "Puce graphique   "+gpu,
+    "",
+    "EN MARCHE ("+f.length+" images)",
+    "Images/seconde   "+(dt?fx(1000/dt):"non mesuré"),
+    "Calcul par image "+fx(ms,1)+" ms",
+    "Résolution       "+W+" × "+H,
+    "",
+    "BUDGET DE GRAINS",
+    "Caméra           "+k(gr.total)+" (arbres "+k(gr.nA)+", perches "+k(gr.nB)+", blocs "+k(gr.nR)+", feuilles "+k(gr.nF)+", objets "+k(gr.nP)+")",
+    "Soleil           "+k(V3.ombre||V3.grains*.6)+", carte "+V3.carte+" × "+V3.carte,
+    "Sol              "+V3.sol.anneaux*V3.sol.secteurs*2+" triangles",
+    "",
+    "PAR PASSE (à l'arrêt, synchronisé)",
+    "Carte d'ombres   "+fx(pa.ombre,1)+" ms",
+    "Tampon G         "+fx(pa.tamponG,1)+" ms",
+    "Matière, lumière "+fx(pa.ombrage,1)+" ms",
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
@@ -976,6 +1221,8 @@ if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
 if(V2.on){ v2Basculer(true); window.__v2=V2; }                // accès de test (tools/v2essai.mjs)
 $("v2").onclick=()=>v2Basculer(!V2.on);
+if(V3.on){ v3Basculer(true); window.__v3=V3; window.__v3lire=(x,y)=>{ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,V3.hist.f); gl.readPixels(x,y,1,1,gl.RGBA,gl.FLOAT,b); return Array.from(b); }; }               // accès de test (tools/v3essai.mjs)
+$("v3").onclick=()=>v3Basculer(!V3.on);
 if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
 if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();

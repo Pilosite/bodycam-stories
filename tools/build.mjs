@@ -17,7 +17,21 @@ const shaders = {
   FS_V2PTS: 'v2_points.frag',
   FS_V2CIEL: 'v2_ciel.frag',
   FS_V2TROUS: 'v2_trous.frag',
+  VS_V3GRAINS: 'v3_grains.vert',   // moteur v3 (essai) : le semeur
+  VS_V3SOL: 'v3_sol.vert',
+  FS_V3GBUF: 'v3_gbuf.frag',
+  FS_V3OMBRE: 'v3_ombre.frag',
+  FS_V3OMBRAGE: 'v3_ombrage.frag',
 };
+
+// Code GLSL partagé : une ligne #include "fichier.glsl" est remplacée par le fichier (src/shaders/), une seule fois par shader.
+function inclure(src, file, vus = new Set()) {
+  return src.replace(/^#include "([\w.-]+)"\s*$/gm, (_, f) => {
+    if (vus.has(f)) return '// ' + f + ' déjà inclus';
+    vus.add(f);
+    return inclure(read('src/shaders/' + f).trimEnd(), f, vus);
+  });
+}
 
 // Toutes les fiches de scenes/ sont embarquées, par ordre alphabétique ; un JSON invalide arrête le build.
 const sceneFiles = readdirSync(join(root, 'scenes')).filter(f => f.endsWith('.json')).sort();
@@ -25,7 +39,7 @@ const scenes = sceneFiles.map(f => JSON.parse(read('scenes/' + f)));
 
 let js = read('src/main.js');
 for (const [name, file] of Object.entries(shaders)) {
-  const src = read('src/shaders/' + file).trimEnd();
+  const src = inclure(read('src/shaders/' + file).trimEnd(), file);
   if (src.includes('`') || src.includes('${')) throw new Error(file + ' : accent grave ou ${ interdit dans un shader');
   js = js.replace(`__SHADER_${name}__`, () => '`' + src + '`');
 }
