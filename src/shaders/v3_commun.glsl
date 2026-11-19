@@ -9,6 +9,14 @@ out vec3 vDx;                // variation des coordonnées de recette par pixel,
 out vec3 vDy;
 out vec2 vDd;                // variation de la distance par pixel
 out float vSz;               // côté du grain, en pixels
+/* Découpe des grains posés sur une forme de base (objets, semis) : le grain est un carré de l'écran posé sur le plan
+   tangent ; chaque pixel retrouve son point dans le repère de la forme et le fragment est jeté s'il sort de la forme.
+   Un grain peut alors être grand sans déborder : un mur vu de face est couvert, ses arêtes restent nettes. */
+out vec3 vL;                 // point du grain, repère de la forme
+out vec3 vLx;                // variation par pixel (x, y de l'écran ; texels vus du soleil)
+out vec3 vLy;
+out vec4 vB;                 // demi-tailles de la forme, arrondi
+out vec2 vT;                 // type de forme (-1 : pas de découpe), tolérance (repère de la forme)
 const float DMAX=400.;
 // Projette P ; rend false s'il est derrière ou trop loin du champ. ang : angle à l'axe de visée.
 bool projette(vec3 P, float marge, out vec4 pos, out float dist, out float ang){
@@ -23,4 +31,5 @@ bool projette(vec3 P, float marge, out vec4 pos, out float dist, out float ang){
   pos=vec4(puv*2.*uRes.y/uRes+uJit,clamp(dist/DMAX,0.,1.)*2.-1.,1.);
   return true;
 }
-void sansGrain(){ vQ=vec3(0.); vN=vec3(0.,1.,0.); vCode=-1.; vDist=0.; vDx=vec3(0.); vDy=vec3(0.); vDd=vec2(0.); vSz=0.; }
+void sansGrain(){ vQ=vec3(0.); vN=vec3(0.,1.,0.); vCode=-1.; vDist=0.; vDx=vec3(0.); vDy=vec3(0.); vDd=vec2(0.); vSz=0.;
+  vL=vec3(0.); vLx=vec3(0.); vLy=vec3(0.); vB=vec4(0.); vT=vec2(-1.,0.); }

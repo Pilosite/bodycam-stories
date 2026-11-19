@@ -1,7 +1,7 @@
 #version 300 es
 // Moteur v3 (essai) : le semeur. Un sommet = un grain. À partir de son numéro (gl_VertexID) et de la graine de l'image,
 // chaque grain choisit où il se pose dans le monde : sur un tronc, une branche, une perche, un bloc de grès, une feuille,
-// un objet de la fiche. Mêmes grilles, mêmes tirages et mêmes formules que le lanceur de rayons (monde.glsl).
+// un objet de la fiche, un élément d'une couche de semis (immeuble, voiture, tombe…). Mêmes grilles, mêmes tirages et mêmes formules que le lanceur de rayons (monde.glsl).
 // Aucun tampon de sommets, aucune étape ne parcourt la scène : chaque grain fait un travail borné.
 //
 // Répartition (vue de la caméra) : un grain d'objet posé au sol tire un cap dans le champ et une distance en progression
@@ -16,7 +16,12 @@ precision highp float; precision highp int; precision highp sampler2D;
 #include "v3_commun.glsl"
 uniform uint  uFrame;        // graine de l'image : les grains sont re-tirés à chaque image
 uniform int   uVue;          // 0 caméra (tampon G), 1 soleil (carte d'ombres)
-uniform ivec4 uPart;         // fin des tranches : arbres, perches, blocs, feuilles ; puis objets jusqu'à uTotal
+uniform ivec4 uPart;         // fin des tranches : arbres, perches, blocs, feuilles
+uniform int   uPartO;        // fin de la tranche des objets de la fiche
+uniform ivec4 uPartS;        // fin des tranches des couches de semis (4 au plus) ; uTotal = la dernière
+uniform vec4  uNbS;          // grains des couches de semis
+uniform vec4  uSemR;         // rayon horizontal d'un élément de chaque couche (m) : le cap semé s'élargit d'autant
+uniform float uKf;           // recouvrement visé sur les formes (objets, semis) : les grains y sont découpés, ils peuvent être plus grands
 uniform int   uTotal;
 uniform vec4  uAz;           // cap du regard, demi-ouverture du cap au loin, distance mini, ln(dmax / dmin)
 uniform float uAzPres;       // demi-ouverture du cap tout près (tout le tour quand on regarde ses pieds)
@@ -32,11 +37,13 @@ uniform mat3  uSoleilM;
 uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
 uniform vec3  uSd;           // direction du soleil de cette image
 uniform int   uTrait;        // vue du soleil : 1 = les perches sont semées en traits (deux sommets par grain, gl.LINES)
-uniform sampler2D uSemis;    // objets de la fiche : lignes 0-7 (poids cumulé, grains), lignes 8+ (aire cumulée dans l'objet, aire)
+uniform sampler2D uSemis;    // objets de la fiche : lignes 0-7 (poids cumulé, grains), lignes 8+ (aire cumulée dans l'objet, aire) ;
+                             // couches de semis : ligne de tête (aire de l'élément), lignes des formes (aire cumulée dans l'élément, aire)
 
 uint hu(uint x){ x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u; return (x>>22u)^x; }
 
-struct Grain { vec3 P; vec3 N; vec3 q; float code; mat2 rot; float s; };   // s : côté du grain, en mètres
+struct Grain { vec3 P; vec3 N; vec3 q; float code; mat2 rot; float s;   // s : côté du grain, en mètres
+  int row; bool sem; ElemS e; float ech; };                  // forme touchée (-1 : aucune), élément de semis, mètres du repère de la forme par mètre
 // Sur un cylindre de rayon r, le côté du grain ne dépasse pas le diamètre et le grain reste dans la silhouette :
 // un tronc fin n'est pas épaissi, il est seulement moins couvert à chaque image (l'accumulation en fait un trait fin).
 float cote(float aire, float n){ return uK*sqrt(aire/max(n,1e-6)); }
@@ -50,9 +57,20 @@ float parM2(vec2 c, float N){                                // grains attendus 
   if(uVue==0){ float d=max(distance(c,uCamPos.xz),uAz.z); return N/(d*d*2.*demiCap(d)*uAz.w); }
   return N/(3.1415927*uZone.z*uZone.z);
 }
+/* Un élément de semis peut être grand (un immeuble) : vu de près, son centre sort du cap alors que sa façade est dans
+   l'image. Le cap est élargi de l'angle sous lequel on voit son rayon R ; la densité attendue en tient compte. */
+float demiCapR(float d, float R){ return min(3.1415927,demiCap(d)+atan(R/max(d,.1))); }
+vec2 tireSolR(float R){
+  if(uVue==0){ float dh=uAz.z*exp(rnd()*uAz.w); float c=uAz.x+(2.*rnd()-1.)*demiCapR(dh,R); return uCamPos.xz+dh*vec2(sin(c),cos(c)); }
+  float c=6.2831853*rnd(), dh=uZone.z*sqrt(rnd()); return uZone.xy+dh*vec2(sin(c),cos(c));
+}
+float parM2R(vec2 c, float N, float R){
+  if(uVue==0){ float d=max(distance(c,uCamPos.xz),uAz.z); return N/(d*d*2.*demiCapR(d,R)*uAz.w); }
+  return N/(3.1415927*uZone.z*uZone.z);
+}
 vec3 versVue(vec3 P){ return uVue==0?uCamPos-P:uSd; }       // direction du spectateur (caméra ou soleil)
 
-/* ---- arbres (sdTreeA) : tronc et trois branches */
+/* ---- arbres (sdTreeA) : tronc, trois branches, et pour les conifères le cœur de feuillage (le même cône que sdTreeA) */
 bool semeA(out Grain g){
   float dh; vec2 xz=tireSol(dh);
   vec2 id=floor((RA*xz)/CA);
@@ -64,9 +82,11 @@ bool semeA(out Grain g){
   float aT=2.*A.r0*.85*(A.H+.3);
   vec4 aB=vec4(0.);
   for(int k=0;k<3;k++){ vec3 a0,a1; float rb; brancheA(A,k,a0,a1,rb); aB[k]=2.*rb*.67*length(a1-a0); }
-  float u=rnd()*(aT+aB.x+aB.y+aB.z);
-  float s=cote(aT+aB.x+aB.y+aB.z,parM2(pied,uNb.x)*CA*CA);
-  vec3 lp, nl;                                               // repère de la cellule (f.x, y, f.y)
+  float Rm=0., y0=uHoup.y, Hc=A.H+1.2-uHoup.y;               // cœur de feuillage (conifères) : rayon au pied, hauteur
+  if(uHoup.x>.5){ Rm=min(uHoup.z*(.8+.4*A.h.w),3.3-max(abs(A.o.x),abs(A.o.y)))*.74; aB.w=2.*.36*Rm*Hc; }
+  float u=rnd()*(aT+aB.x+aB.y+aB.z+aB.w);
+  float s=cote(aT+aB.x+aB.y+aB.z+aB.w,parM2(pied,uNb.x)*CA*CA);
+  vec3 lp, nl; float coeur=0.;                               // repère de la cellule (f.x, y, f.y)
   if(u<aT){
     float y=mix(-.3,A.H,rnd()), yc=clamp(y,-1.,A.H);
     vec2 ax=A.o+A.lean*yc; float r=rayonA(A,y);
@@ -74,7 +94,7 @@ bool semeA(out Grain g){
     float ph=atan(to.y,to.x)+angleVu(s,r); s=min(s,2.*r);
     vec2 e=vec2(cos(ph),sin(ph));
     lp=vec3(ax.x+r*e.x,y,ax.y+r*e.y); nl=vec3(e.x,0.,e.y);
-  } else {
+  } else if(u<aT+aB.x+aB.y+aB.z){
     u-=aT; int k=u<aB.x?0:u<aB.x+aB.y?1:2;
     vec3 a0,a1; float rb; brancheA(A,k,a0,a1,rb);
     float t=rnd(); vec3 cc=mix(a0,a1,t); float rr=mix(rb,rb*.35,t);
@@ -82,12 +102,19 @@ bool semeA(out Grain g){
     vec3 to=uVue==0?vl-(cc-vec3(A.o.x,1.5,A.o.y)):vl; to-=ax*dot(to,ax);
     float ph=atan(dot(to,e2),dot(to,e1))+angleVu(s,rr); s=min(s,2.*rr);
     nl=cos(ph)*e1+sin(ph)*e2; lp=cc+rr*nl;
+  } else {                                                   // cœur : hauteur tirée selon le rayon (plus large en bas)
+    const float cc=.92; float t=(1.-sqrt(max(1.-2.*cc*rnd()*(1.-.5*cc),0.)))/cc, y=y0+t*Hc;
+    float R=Rm*(1.-cc*t)*(.8+.2*sin(y*4.2+A.h.w*30.));
+    vec2 to=uVue==0?vl.xz:vl.xz;
+    float ph=atan(to.y,to.x)+angleVu(s,R); s=min(s,R);
+    vec2 e=vec2(cos(ph),sin(ph));
+    lp=vec3(A.o.x+R*e.x,y,A.o.y+R*e.y); nl=normalize(vec3(e.x,Rm*cc/Hc,e.y)); coeur=1.;
   }
   vec2 w=(c+lp.xz)*RA;
   g.P=vec3(w.x,terrainH(w)+lp.y,w.y);
   vec2 nw=nl.xz*RA; g.N=normalize(vec3(nw.x,nl.y,nw.y));
   float yc=clamp(lp.y,-1.,A.H); vec2 dq=lp.xz-(A.o+A.lean*yc);
-  g.q=vec3(dq.x,lp.y,dq.y); g.code=1.+.5*A.h.w; g.rot=RA;
+  g.q=vec3(dq.x,lp.y,dq.y); g.code=1.+.5*(A.h.w*.999+coeur); g.rot=RA;   // paramètre ≥ 1 : cœur de feuillage
   g.s=s;
   return true;
 }
@@ -159,9 +186,71 @@ bool semeR(out Grain g){
   return true;
 }
 
-/* ---- objets de la fiche (sdProps) : objet tiré selon son poids (calculé par la page), forme selon son aire,
-   grain posé sur la boîte englobante de la forme puis ramené sur elle (trois pas de Newton sur sdPrim).
-   Les fusions douces (« lisse ») ne sont pas suivies. */
+/* ---- formes de base (objets et éléments de semis) : un point tiré uniformément selon l'aire, sur la partie de la forme
+   tournée vers le spectateur (V : sa position si pos, sa direction sinon), dans le repère de la forme (primLocal). Même
+   géométrie que sdPrim. Rend false si rien n'est tourné vers lui. Une forme fondue dans ses voisines (« lisse ») est semée
+   sans la fusion. */
+bool surfForme(float ty, vec3 s, float ar, vec3 V, bool pos, out vec3 q, out vec3 n){
+  q=vec3(0.); n=vec3(0.,1.,0.);
+  if(ty<.5){                                                 // boîte : une des faces vues, tirée selon son aire
+    vec3 b=s+ar, sg;
+    for(int i=0;i<3;i++) sg[i]=pos?(abs(V[i])>b[i]?sign(V[i]):0.):sign(V[i]);
+    vec3 A=vec3(b.y*b.z,b.x*b.z,b.x*b.y)*abs(sg);
+    float tot=A.x+A.y+A.z; if(tot<=0.) return false;
+    float u=rnd()*tot; int ax=u<A.x?0:u<A.x+A.y?1:2;
+    q=(vec3(rnd(),rnd(),rnd())*2.-1.)*b; q[ax]=sg[ax]*b[ax]; n=vec3(0.); n[ax]=sg[ax];
+    return true;
+  }
+  if(ty<1.5){                                                // ellipsoïde
+    vec3 r=s+ar; float z=2.*rnd()-1., a=6.2831853*rnd(), c=sqrt(max(1.-z*z,0.)); vec3 d=vec3(c*cos(a),z,c*sin(a));
+    q=d*r; n=normalize(d/r); if(dot(n,pos?V-q:V)<0.){ q=-q; n=-n; }
+    return true;
+  }
+  if(ty<4.5){                                                // cylindre, cône, capsule : flanc vu, fonds ou bouts
+    float r=s.x+ar, h=s.y+(ty<2.5?ar:0.);
+    float dv=length(V.xz), arc=pos?(dv>r?acos(clamp(r/dv,0.,1.)):0.):1.5707963;   // demi-arc du flanc vu
+    float L=sqrt(r*r+4.*h*h);
+    float aF=ty<2.5?4.*arc*r*h:ty<3.5?arc*r*L:4.*arc*r*h;
+    float haut=pos?step(h,V.y):step(0.,V.y), bas=pos?step(V.y,-h):step(V.y,0.);
+    float aH=ty<2.5?3.1415927*r*r*haut:0., aB=ty<3.5?3.1415927*r*r*bas:0., aS=ty>3.5?6.2831853*r*r:0.;
+    float tot=aF+aH+aB+aS; if(tot<=0.) return false;
+    float u=rnd()*tot;
+    if(u<aF){
+      float ph=atan(V.z,V.x)+(2.*rnd()-1.)*arc, y, rr=r;
+      if(ty>2.5 && ty<3.5){ float w=1.-sqrt(1.-rnd()); y=-h+2.*h*w; rr=r*(1.-w); n=normalize(vec3(cos(ph)*2.*h,r,sin(ph)*2.*h)); }
+      else { y=(2.*rnd()-1.)*h; n=vec3(cos(ph),0.,sin(ph)); }
+      q=vec3(rr*cos(ph),y,rr*sin(ph));
+    } else if(u<aF+aH+aB){
+      float sg=u<aF+aH?1.:-1., a=6.2831853*rnd(), rr=r*sqrt(rnd());
+      q=vec3(rr*cos(a),sg*h,rr*sin(a)); n=vec3(0.,sg,0.);
+    } else {                                                 // bouts de la capsule : demi-sphères
+      float z=2.*rnd()-1., a=6.2831853*rnd(), c=sqrt(max(1.-z*z,0.)); n=vec3(c*cos(a),z,c*sin(a));
+      vec3 o=vec3(0.,n.y>0.?h:-h,0.);
+      if(dot(n,pos?V-o-n*r:V)<0.){ n=-n; o=-o; }
+      q=o+n*r;
+    }
+    return true;
+  }
+  // toit à deux pentes, faîtage le long de x : deux pans, deux pignons, le dessous
+  float l=sqrt(s.z*s.z+4.*s.y*s.y);
+  float A[5]; vec3 N[5]; vec3 O[5];
+  N[0]=vec3(0.,s.z,2.*s.y)/l; O[0]=vec3(0.,-s.y,s.z); N[1]=vec3(0.,s.z,-2.*s.y)/l; O[1]=vec3(0.,-s.y,-s.z);
+  N[2]=vec3(1.,0.,0.); O[2]=vec3(s.x,0.,0.); N[3]=vec3(-1.,0.,0.); O[3]=vec3(-s.x,0.,0.); N[4]=vec3(0.,-1.,0.); O[4]=vec3(0.,-s.y,0.);
+  float tot=0.;
+  for(int i=0;i<5;i++){ float ai=i<2?2.*s.x*l:i<4?2.*s.y*s.z:4.*s.x*s.z; A[i]=dot(N[i],pos?V-O[i]:V)>0.?ai:0.; tot+=A[i]; }
+  if(tot<=0.) return false;
+  float u=rnd()*tot; int f=4;
+  for(int i=0;i<5;i++){ if(u<A[i]){ f=i; break; } u-=A[i]; }
+  float a=rnd(), b=rnd();
+  if(f<2){ float sg=f==0?1.:-1.; q=vec3((2.*a-1.)*s.x,-s.y+2.*s.y*b,sg*s.z*(1.-b)); }
+  else if(f<4){ if(a+b>1.){ a=1.-a; b=1.-b; } vec2 t=vec2(-s.z,-s.y)+a*vec2(2.*s.z,0.)+b*vec2(s.z,2.*s.y); q=vec3(f==2?s.x:-s.x,t.y,t.x); }
+  else q=vec3((2.*a-1.)*s.x,-s.y,(2.*b-1.)*s.z);
+  n=N[f];
+  return true;
+}
+
+/* ---- objets de la fiche (sdProps) : objet tiré selon son poids (calculé par la page), forme selon son aire, point tiré
+   sur la partie de la forme tournée vers la vue (surfForme). */
 vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de primLocal
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   float c, s;
@@ -170,6 +259,7 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
   c=cos(b.w); s=sin(b.w); q.xz=vec2(c*q.x+s*q.z,-s*q.x+c*q.z);
   return dir?q:q+a.xyz;
 }
+vec3 versForme(Grain g, vec3 P){ return primLocal(g.sem?semisLocal(P,g.e):P,g.row); }   // monde -> repère de la forme du grain
 bool semeP(out Grain g){
   float u=rnd(); int oi=-1; float nO=0.;
   for(int i=0;i<8;i++){ if(i>=uObjN) break; vec4 s=texelFetch(uSemis,ivec2(0,i),0); if(u<=s.x && s.y>0.){ oi=i; nO=s.y; break; } }
@@ -178,25 +268,41 @@ bool semeP(out Grain g){
   int st=int(o1.x), cn=int(o1.y), row=st; float v=rnd(), aire=1.;
   for(int j=0;j<24;j++){ if(j>=cn) break; vec4 s=texelFetch(uSemis,ivec2(0,st+j),0); row=st+j; aire=s.y; if(v<=s.x) break; }
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
-  float z=2.*rnd()-1., ag=6.2831853*rnd(), s=sqrt(max(1.-z*z,0.));
-  vec3 d=vec3(s*cos(ag),z,s*sin(ag));
-  vec3 vw=versVue(a.xyz);
-  vec3 q=d*(b.xyz+e.y);
-  const vec2 k=vec2(1.,-1.); const float ee=.005;
-  vec3 gr=d;
-  for(int pass=0;pass<2;pass++){
-    vec3 bb=b.xyz+e.y, ad=max(abs(d),vec3(1e-4));
-    q=d*min(bb.x/ad.x,min(bb.y/ad.y,bb.z/ad.z));             // départ sur la boîte englobante (coins compris), puis Newton sur la forme
-    for(int i=0;i<3;i++){
-      gr=(k.xyy*sdPrim(q+k.xyy*ee,a.w,b.xyz)+k.yyx*sdPrim(q+k.yyx*ee,a.w,b.xyz)+k.yxy*sdPrim(q+k.yxy*ee,a.w,b.xyz)+k.xxx*sdPrim(q+k.xxx*ee,a.w,b.xyz))/(4.*ee);
-      q-=gr*(sdPrim(q,a.w,b.xyz)-e.y)/max(dot(gr,gr),1e-4);
-    }
-    if(dot(primMonde(gr,row,true),vw)>=0.) break;
-    d=-d;                                                    // face cachée : on retente de l'autre côté
-  }
-  g.P=primMonde(q,row,false); g.N=normalize(primMonde(gr,row,true));
+  vec3 V=uVue==0?primLocal(uCamPos,row):primLocal(a.xyz+uSd,row);
+  vec3 lq, ln;
+  if(!surfForme(a.w,b.xyz,e.y,V,uVue==0,lq,ln)) return false;
+  g.P=primMonde(lq,row,false); g.N=normalize(primMonde(ln,row,true));
   g.q=g.P; g.code=4.+.5*(float(row)/128.); g.rot=mat2(1.);
-  g.s=cote(aire*.5,nO*aire);    // nO : grains attendus par m² de surface de l'objet ; ils tombent tous sur la moitié tournée vers la vue
+  g.row=row; g.sem=false; g.ech=1.;
+  g.s=uKf*sqrt(aire*.5/max(nO*aire,1e-6));   // nO : grains attendus par m² de surface de l'objet ; ils tombent tous sur la moitié tournée vers la vue
+  return true;
+}
+
+/* ---- éléments des couches de semis (sdSemis) : le grain tire un point du sol (cap élargi du rayon de l'élément), prend
+   l'élément de la cellule avec les tirages de semisElem, une forme selon son aire, un point sur la partie de la forme
+   tournée vers la vue, et le ramène dans le monde (semisMonde). Le tampon G garde le point du monde : la passe de matière
+   retrouve l'élément par sdSemis, comme le lanceur de rayons. */
+bool semeS(int k, out Grain g){
+  vec2 xz=tireSolR(uSemR[k]);
+  ElemS e; vec2 id, f;
+  if(semisGrille(xz,k,e,id,f)>=0.) return false;
+  if(!semisElem(k,id,e)) return false;
+  int r0=SEM0+k*SEML, cn=int(e.K.z), row=r0+4; float v=rnd();
+  for(int j=0;j<6;j++){ if(j>=cn) break; row=r0+4+j; if(v<=texelFetch(uSemis,ivec2(0,row),0).x) break; }
+  vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), ee=texelFetch(uShapes,ivec2(3,row),0);
+  vec3 C=semisMonde(vec3(0.),e);
+  vec3 V=uVue==0?primLocal(semisLocal(uCamPos,e),row):primLocal(a.xyz+normalize(semisLocal(C+uSd,e)-semisLocal(C,e)),row);
+  vec3 lq, ln;
+  if(!surfForme(a.w,b.xyz,ee.y,V,uVue==0,lq,ln)) return false;
+  g.P=semisMonde(primMonde(lq,row,false),e);
+  vec3 t1=normalize(cross(ln,abs(ln.y)<.9?vec3(0.,1.,0.):vec3(1.,0.,0.))), t2=cross(ln,t1);
+  const float ep=.02;                                        // normale : la transformation (échelle, pente, rangée courbe) n'est pas une rotation
+  g.N=normalize(cross(semisMonde(primMonde(lq+t1*ep,row,false),e)-g.P,semisMonde(primMonde(lq+t2*ep,row,false),e)-g.P));
+  g.q=g.P; g.code=6.+.125*float(k); g.rot=mat2(1.);
+  g.row=row; g.sem=true; g.e=e; g.ech=1./(e.s*sqrt(e.sy));
+  float nE=parM2R(C.xz,uNbS[k],uSemR[k])*e.A.x*e.A.y;       // grains attendus sur cet élément à chaque image
+  float aE=texelFetch(uSemis,ivec2(0,r0),0).x*e.s*e.s*mix(1.,e.sy,.7);
+  g.s=uKf*sqrt(aE*.5/max(nE,1e-6));
   return true;
 }
 
@@ -268,36 +374,52 @@ void main(){
     gl_Position=pos; gl_PointSize=min(t,uMaxPt); vSz=gl_PointSize;
     return;
   }
-  Grain g; bool ok;
+  Grain g; bool ok; g.row=-1; g.sem=false; g.ech=1.;
   if(i<uPart.x) ok=semeA(g);
   else if(i<uPart.y) ok=semeB(g);
   else if(i<uPart.z) ok=semeR(g);
-  else ok=semeP(g);
+  else if(i<uPartO) ok=semeP(g);
+  else ok=semeS(i<uPartS.x?0:i<uPartS.y?1:i<uPartS.z?2:3,g);
   if(!ok) return;
+  if(g.row<0){ g.row=-1; g.sem=false; g.ech=1.; }
   float s=g.s;
+  bool forme=g.row>=0;
+  vec3 dv, ex, ey; float t, m, dist=0.;
   if(uVue==1){                                               // carte d'ombres : projection orthographique
     vec3 l=(g.P-uSoleilC)*uSoleilM;
-    float t=s/uSoleilE.w;
+    t=s/uSoleilE.w;
     if(t<1.){ if(rnd()>t*t) return; t=1.; }
     gl_Position=vec4(l.xy/uSoleilE.xy,clamp(-l.z/uSoleilE.z,-1.,1.),1.);
     gl_PointSize=min(t,uMaxPt);
-    return;
+    if(!forme) return;
+    dv=-uSd; m=uSoleilE.w; ex=uSoleilM[0]*m; ey=uSoleilM[1]*m;
+    vDist=clamp(-l.z/uSoleilE.z,-1.,1.)*.5+.5;
+  } else {
+    vec4 pos; float ang;
+    if(!projette(g.P,1.62,pos,dist,ang)) return;
+    dv=(g.P-uCamPos)/dist;
+    if(dot(g.N,dv)>(forme?0.:.2)) return;                    // face tournée vers l'arrière
+    float ppr=uRes.y/uFish;                                  // pixels par radian
+    t=s/dist*ppr*max(1.,ang/max(sin(ang),.05));
+    if(t<1.){ if(rnd()>t*t) return; t=1.; }
+    t=min(t,uMaxPt);
+    gl_Position=pos; gl_PointSize=t;
+    m=dist/ppr; ex=uCam[0]*m; ey=uCam[1]*m;
   }
-  vec4 pos; float dist, ang;
-  if(!projette(g.P,1.62,pos,dist,ang)) return;
-  vec3 dv=(g.P-uCamPos)/dist;
-  if(dot(g.N,dv)>.2) return;                                 // face tournée vers l'arrière
-  float ppr=uRes.y/uFish;                                    // pixels par radian
-  float t=s/dist*ppr*max(1.,ang/max(sin(ang),.05));
-  if(t<1.){ if(rnd()>t*t) return; t=1.; }
-  t=min(t,uMaxPt);
-  gl_Position=pos; gl_PointSize=t;
-  // variation des coordonnées de recette d'un pixel à l'autre du grain : déplacement dans le plan tangent, ramené le long du regard
-  float den=dot(dv,g.N); den=sign(den)*max(abs(den),.25); if(den==0.) den=-.25;
-  float m=dist/ppr;
-  vec3 ex=uCam[0]*m, ey=uCam[1]*m;
+  // variation des coordonnées d'un pixel à l'autre du grain : déplacement dans le plan tangent, ramené le long du regard.
+  // Sur une forme, le plan tangent est exact jusqu'au bord (où le fragment est découpé) : on le suit même en incidence rasante.
+  float den=dot(dv,g.N); den=sign(den)*max(abs(den),forme?.02:.25); if(den==0.) den=-.25;
   ex-=dv*dot(ex,g.N)/den; ey-=dv*dot(ey,g.N)/den;
+  vSz=gl_PointSize;
+  if(forme){
+    vec4 b=texelFetch(uShapes,ivec2(1,g.row),0), e=texelFetch(uShapes,ivec2(3,g.row),0); float ty=texelFetch(uShapes,ivec2(0,g.row),0).w;
+    vL=versForme(g,g.P); vLx=versForme(g,g.P+ex)-vL; vLy=versForme(g,g.P+ey)-vL;
+    vB=vec4(b.xyz,e.y);
+    float pl=m*g.ech;                                        // un pixel (ou un texel), en mètres du repère de la forme
+    vT=vec2(ty,(ty<.5||ty>4.5)?.7*pl:.7*pl+.3*s*g.ech);       // faces planes : découpe au pixel ; formes courbes : un peu de marge
+  }
+  if(uVue==1){ vDd=-vec2(dot(ex,uSd),dot(ey,uSd))/(2.*uSoleilE.z); return; }   // profondeur vue du soleil, par texel
   vec2 rx=g.rot*ex.xz, ry=g.rot*ey.xz;
-  vQ=g.q; vN=g.N; vCode=g.code; vDist=dist; vSz=t;
+  vQ=g.q; vN=g.N; vCode=g.code; vDist=dist;
   vDx=vec3(rx.x,ex.y,rx.y); vDy=vec3(ry.x,ey.y,ry.y); vDd=vec2(dot(ex,dv),dot(ey,dv));
 }

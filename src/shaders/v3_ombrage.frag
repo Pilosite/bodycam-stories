@@ -2,7 +2,8 @@
 // Moteur v3 (essai) : la passe plein écran. Lit le tampon G (élément, coordonnées de recette, normale, distance) et
 // évalue la matière avec la même fonction recette() que le lanceur de rayons (un seul appel), puis la lumière :
 // soleil avec la carte d'ombres semée et la transmittance statistique de la canopée, ambiance approchée (voir ambiance()).
-// Le ciel et le lointain restent un calcul par direction. Sortie au format de l'accumulation (couleur, distance),
+// La lampe du téléphone, la nuit, comme lightSurf() du lanceur de rayons, avec une ombre lue dans le tampon G (lampeOmbre).
+// Le ciel, le lointain et l'eau à l'horizon restent un calcul par direction. Sortie au format de l'accumulation (couleur, distance),
 // mélangée à l'historique reprojeté : le grain d'une image se lisse sur les suivantes.
 precision highp float; precision highp int; precision highp sampler2D;
 #include "monde.glsl"
@@ -118,6 +119,33 @@ vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts){
   return L*clamp(1.-occ,.25,1.)*uAmb;
 }
 
+/* La lampe du téléphone est à 15 cm de l'objectif : vue de la caméra, son ombre n'est qu'un liseré au bord de ce qui est
+   devant. On la cherche là où elle se voit, dans le tampon G : six points entre la surface et la lampe, projetés à l'écran ;
+   si la profondeur gardée à cet endroit est devant le point (de moins de 60 cm : un objet entre les deux, pas un mur au
+   premier plan), la lampe est cachée. Coût fixe, six lectures ; ce que l'écran ne montre pas n'ombre pas. */
+float lampeOmbre(vec3 p, vec3 Lp){
+  vec3 L=Lp-p; float dl=length(L); L/=dl;
+  float v=1.;
+  for(int i=0;i<6;i++){
+    float s=min(.03*pow(2.2,float(i))*(.8+.4*rnd()),dl*.85);
+    vec3 P=p+L*s, d=P-uCamPos; float dist=length(d);
+    vec3 dlc=(d/dist)*uCam;
+    float ang=acos(clamp(dlc.z,-1.,1.)), sxy=length(dlc.xy);
+    vec2 px=(sxy>1e-6?dlc.xy/sxy:vec2(0.))*(ang/uFish)*uRes.y+.5*uRes-uJitPx;
+    if(px.x<0. || px.y<0. || px.x>=uRes.x || px.y>=uRes.y) continue;
+    float g=texelFetch(uG1,ivec2(px),0).w;
+    float e=dist-g;
+    if(e>.02+.015*dist && e<.6) v=0.;
+  }
+  return v;
+}
+vec3 lampe(vec3 p, vec3 gn, vec3 n, vec3 alb){             // même cône et même chute que lightSurf()
+  vec3 Lp=uCamPos+uCam*vec3(.10,-.12,0.), L=Lp-p; float d2=dot(L,L), dl=sqrt(d2); L/=dl;
+  float nl=max(dot(n,L),0.), cs=dot(-L,uCam[2]);
+  float cone=smoothstep(.50,.90,cs)*(.30+.70*smoothstep(.90,.985,cs));
+  if(nl<=0. || cone<=0. || dot(gn,L)<=0.) return vec3(0.);
+  return alb*vec3(1.,.97,.90)*uTorch*cone*nl*lampeOmbre(p+gn*(.004+.0015*dl),Lp)/(d2+.3);
+}
 vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float TsCuit){   // TsCuit < 0 : à calculer
   vec3 sd=uSd;
   vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
@@ -130,6 +158,7 @@ vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float TsCui
     col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),28.));
   }
   col+=(uProf&2)!=0?alb*.3:alb*ambiance(po,gn,n,Ts);
+  if(uTorch>0.) col+=lampe(p,gn,n,alb);
   return col;
 }
 
@@ -142,13 +171,14 @@ void main(){
   float rr=length(uv), ang=rr*uFish;
   vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
   vec4 g0=texelFetch(uG0,ip,0), g1=texelFetch(uG1,ip,0);
-  float idD=floor(g0.w); bool dam=uDamier>0 && idD>=1. && idD<=4.;
+  float idD=floor(g0.w); bool dam=uDamier>0 && idD>=1. && (idD<=4. || idD==6.);
   if(dam && (((ip.x>>3)+(ip.y>>3)+int(uFrame))&1)==1){ vec3 h; if(histoireReproj(uCamPos+rd*g1.w,h)){ outCol=vec4(h,g1.w); return; } }
   vec3 col; float t;
   if(g0.w<0.){                                               // rien de semé : ciel, brume, lointain
     t=1e4;
-    col=rd.y>0.?skyCol(rd):fogCol(rd);
+    col=rd.y>0.?skyCol(rd):uEau.w>0.?eauLoin(rd):fogCol(rd);
     if(uLoin.w>0. && rd.y>-.02) col=lointain(rd,col);
+    if(uTorch>0.) col+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.07;   // la lampe dans la brume
   } else {
     t=g1.w;
     vec3 p=uCamPos+rd*t;
@@ -157,6 +187,7 @@ void main(){
     if(id==5){
       col=shadeLeaf(p,gn,g0.xyz,rd);                         // feuille : couleur portée par le grain
     } else {
+      // (le cœur de feuillage d'un conifère, id 1 et paramètre ≥ 1, et les éléments de semis, id 6, suivent render())
       if(dot(gn,rd)>0.) gn=-gn;
       // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
       vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
@@ -174,7 +205,11 @@ void main(){
           if(w>=1.) r0=r1; else if(w>0.) nr=2; }
       }
       else if(id==3) r0=uSurf.z;
-      else if(id==4){ vec3 qr; r0=matProp(q,gn,vec4(0.,0.,0.,floor(par*128.+.5)),false,alb,n,spec,emis,qr,nr0,rot); q=qr; }
+      else if(id==1 && par>=1.) matCone(p,gn,alb,n,spec);   // cœur de feuillage d'un conifère
+      else if(id==4 || id==6){                               // objet, ou élément de semis (retrouvé à partir du point du monde, comme objId()) ; un seul appel à matProp
+        vec4 info=vec4(0.,0.,0.,floor(par*128.+.5));
+        if(id==6){ vec4 inst; gTol=.002; sdSemis(q,int(par*4.+.5),info,inst); gInst=inst; }
+        vec3 qr; r0=matProp(q,gn,info,id==6,alb,n,spec,emis,qr,nr0,rot); q=qr; }
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; rot=id==1?RA:RB; }
       if(r0>=0 && (uProf&1)==0 && !((uProf&64)!=0 && id==0) && !((uProf&128)!=0 && id!=0)){
         vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
@@ -192,6 +227,7 @@ void main(){
       else if(uVoir==3) col=n*.5+.5;
     }
     col=mix(fogCol(rd),col,exp(-t*uFog));
+    if(uTorch>0.) col+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.045*(1.667-1./max(t,.6));
   }
   col=min(max(col,vec3(0.)),vec3(60.));
   if(col.x!=col.x||col.y!=col.y||col.z!=col.z) col=vec3(0.);

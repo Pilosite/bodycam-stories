@@ -279,7 +279,7 @@ float sdProps(vec3 p, out vec4 info){
    ligne 1 : (jeu x, jeu z, échelle min, max) (hauteur min, max, nombre de formes, rangées) (centre de la boîte englobante, couleurs de palette)
              (demi-tailles de la boîte englobante, suit la pente)
    lignes 2 et 3 : palette, 8 couleurs.   lignes 4 à 9 : les formes, comme celles des objets, dans le repère de l'élément.
-   Le lanceur de rayons ne compile ce code que dans sa variante SEMIS ; le semeur (moteur v3) ne sait pas encore semer ces couches. */
+   Le lanceur de rayons n'appelle ce code que dans sa variante SEMIS ; le semeur (moteur v3) sème les mêmes éléments (semeS). */
 const int SEM0=72, SEML=10;
 uniform int   uSemN;       // nombre de couches de semis
 uniform vec4  uSemTop;     // hauteur au-dessus du sol au-delà de laquelle une couche n'a plus rien
@@ -288,73 +288,104 @@ vec4 gInst;                  // élément touché : cap, échelle, étirement, a
 vec2 semMonde(vec2 g, float side, float t0, vec4 A, bool rg){   // repère de la grille -> monde
   return rg?vec2(pathX(g.y)+side*(g.x+t0),g.y):g*mat2(A.z,A.w,-A.w,A.z);
 }
-float sdSemis(vec3 p, int k, out vec4 info, out vec4 inst){
+/* Un élément de semis : tout ce que la cellule tire (présence, décalage, cap, échelle, sol dessous). Calculé par les fonctions
+   ci-dessous, en un seul endroit : sdSemis (lanceur de rayons, sonde, matière du semeur) et le semeur (v3_grains.vert)
+   s'en servent, un élément semé tombe donc là où le lanceur de rayons le voit. */
+struct ElemS { vec4 A, B, T, K, J, D, E, h2; vec2 gc, sl; vec3 th; float side, yaw, s, sy, sh; bool rg; };
+vec2 semisG(vec2 xz, ElemS e){ return e.rg?vec2(e.side*(xz.x-pathX(xz.y))-e.T.x,xz.y):mat2(e.A.z,e.A.w,-e.A.w,e.A.z)*xz; }   // monde -> repère de la grille
+// Cellule de la couche k sous le point xz du sol. Rend -1 si le point est dans la grille (id, f : cellule et position dans
+// la cellule), sinon une borne de la distance horizontale à la grille (rive exclue, trop près ou trop loin du trajet).
+float semisGrille(vec2 xz, int k, out ElemS e, out vec2 id, out vec2 f){
   int r0=SEM0+k*SEML;
-  vec4 A=texelFetch(uShapes,ivec2(0,r0),0), B=texelFetch(uShapes,ivec2(1,r0),0), T=texelFetch(uShapes,ivec2(2,r0),0);
-  info=vec4(0.); inst=vec4(0.);
-  bool rg=B.w>.5; float side=1.; vec2 g;
-  vec4 K=texelFetch(uShapes,ivec2(1,r0+1),0);
-  float marge=max(.08,1.5*gTol)+(uMode==1?50.:0.);          // jamais sous la tolérance de la marche : pas de faux impact sur une limite de cellule
-  if(rg){                                                    // rangée : la grille suit le trajet, les deux rives en miroir
-    float u=p.x-pathX(p.z); side=u<0.?-1.:1.;
-    if(T.z*side<-.5) return abs(u)+T.x+marge;                // rive exclue
-    g=vec2(abs(u)-T.x,p.z);
-    if(g.x<0.) return -g.x+marge;
-    float far=g.x-K.w*A.x; if(far>0.) return far+marge;
-  } else g=mat2(A.z,A.w,-A.w,A.z)*p.xz;
-  vec2 id=floor(g/A.xy), f=g-(id+.5)*A.xy;
-  float dOut=min(.5*A.x-abs(f.x),.5*A.y-abs(f.y))+marge;
-  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(side<0.?vec2(41.3,7.9):vec2(0.)));
-  float dens=B.x;
-  if(B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*B.z+uSeed.xy+float(k)*17.)),B.y);
-  if(h.x>=dens) return dOut;
-  vec4 J=texelFetch(uShapes,ivec2(0,r0+1),0), D=texelFetch(uShapes,ivec2(3,r0),0);
-  vec2 o=(h.yz-.5)*2.*J.xy;
-  vec2 gc=(id+.5)*A.xy+o;
-  vec2 w=semMonde(gc,side,T.x,A,rg);
-  float dx=0.;
-  if(!rg){ dx=w.x-pathX(w.y); if(abs(dx)<T.x || abs(dx)>T.y || dx*T.z<0.) return dOut; }
-  if(cleared(w)) return dOut;
-  vec4 h2=h42(id*1.37+h.yz*91.+float(k)*3.1+side);
-  float yaw=D.x;                                             // cap dans le repère de la grille
-  if(T.w<.5) yaw=h2.z*6.2832;
-  else if(T.w<1.5){
-    if(rg) yaw=-1.5708;
-    else { float sg=dx<0.?-1.:1., z=w.y, sl=uTraj.x*(.1504*cos(z*.047+uSeed.z)+.1808*cos(z*.113+1.7+uSeed.z*2.)); yaw=atan(-sg,sg*sl)-atan(A.w,A.z); }
+  e.A=texelFetch(uShapes,ivec2(0,r0),0); e.B=texelFetch(uShapes,ivec2(1,r0),0); e.T=texelFetch(uShapes,ivec2(2,r0),0);
+  e.K=texelFetch(uShapes,ivec2(1,r0+1),0);
+  e.rg=e.B.w>.5; e.side=1.; id=vec2(0.); f=vec2(0.);
+  if(e.rg){                                                  // rangée : la grille suit le trajet, les deux rives en miroir
+    float u=xz.x-pathX(xz.y); e.side=u<0.?-1.:1.;
+    if(e.T.z*e.side<-.5) return abs(u)+e.T.x;                // rive exclue
+    float gx=abs(u)-e.T.x;
+    if(gx<0.) return -gx;
+    float far=gx-e.K.w*e.A.x; if(far>0.) return far;
   }
-  yaw+=(h2.w-.5)*D.y;
-  vec4 E=texelFetch(uShapes,ivec2(3,r0+1),0);
+  vec2 g=semisG(xz,e);
+  id=floor(g/e.A.xy); f=g-(id+.5)*e.A.xy;
+  return -1.;
+}
+// L'élément de la cellule id (après semisGrille) : false si la cellule est vide (densité, groupes, bande d'écart au trajet, objet dégagé).
+bool semisElem(int k, vec2 id, inout ElemS e){
+  int r0=SEM0+k*SEML;
+  vec4 h=h42(id+uSeed.xy+vec2(13.7,71.3)*float(k+1)+(e.side<0.?vec2(41.3,7.9):vec2(0.)));
+  float dens=e.B.x;
+  if(e.B.y>0.) dens*=mix(1.,smoothstep(.3,.7,vnoise(id*e.B.z+uSeed.xy+float(k)*17.)),e.B.y);
+  if(h.x>=dens) return false;
+  e.J=texelFetch(uShapes,ivec2(0,r0+1),0); e.D=texelFetch(uShapes,ivec2(3,r0),0); e.E=texelFetch(uShapes,ivec2(3,r0+1),0);
+  e.gc=(id+.5)*e.A.xy+(h.yz-.5)*2.*e.J.xy;
+  vec2 w=semMonde(e.gc,e.side,e.T.x,e.A,e.rg);
+  float dx=0.;
+  if(!e.rg){ dx=w.x-pathX(w.y); if(abs(dx)<e.T.x || abs(dx)>e.T.y || dx*e.T.z<0.) return false; }
+  if(cleared(w)) return false;
+  e.h2=h42(id*1.37+h.yz*91.+float(k)*3.1+e.side);
+  float yaw=e.D.x;                                           // cap dans le repère de la grille
+  if(e.T.w<.5) yaw=e.h2.z*6.2832;
+  else if(e.T.w<1.5){
+    if(e.rg) yaw=-1.5708;
+    else { float sg=dx<0.?-1.:1., z=w.y, sl=uTraj.x*(.1504*cos(z*.047+uSeed.z)+.1808*cos(z*.113+1.7+uSeed.z*2.)); yaw=atan(-sg,sg*sl)-atan(e.A.w,e.A.z); }
+  }
+  e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
   for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
-    th[i]=terrainH(i==0?w:semMonde(gc+(i==1?vec2(1.,0.):vec2(0.,1.)),side,T.x,A,rg));
-    if(E.w<.5) break;
+    th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
+    if(e.E.w<.5) break;
   }
-  vec3 lp=vec3(f.x-o.x,p.y-th.x,f.y-o.y);
-  float sh=1.;
-  if(E.w>.5){                                                // suit la pente : cisaillé selon le sol sous l'élément
-    vec2 sl=th.yz-th.x;
-    lp.y-=dot(sl,lp.xz); sh=inversesqrt(1.+dot(sl,sl));
-  }
-  float c=cos(yaw), sn=sin(yaw); lp.xz=vec2(c*lp.x-sn*lp.z,sn*lp.x+c*lp.z);
-  if(rg && side<0.) lp.x=-lp.x;                              // l'autre rive : on défait le miroir
-  if(D.z>0.){ vec2 pa=(fract(h2.zw*17.31)-.5)*2.*D.z; float c1=cos(pa.x), s1=sin(pa.x), c2=cos(pa.y), s2=sin(pa.y);
+  e.th=th; e.sl=e.E.w>.5?th.yz-th.x:vec2(0.); e.sh=inversesqrt(1.+dot(e.sl,e.sl));
+  e.s=mix(e.J.z,e.J.w,e.h2.x); e.sy=mix(e.K.x,e.K.y,e.h2.y);
+  return true;
+}
+vec3 semisLocal(vec3 p, ElemS e){                            // monde -> repère de l'élément (mètres de la fiche, avant échelle)
+  vec2 d=semisG(p.xz,e)-e.gc;
+  vec3 lp=vec3(d.x,p.y-e.th.x,d.y);
+  lp.y-=dot(e.sl,lp.xz);                                     // suit la pente : cisaillé selon le sol sous l'élément
+  float c=cos(e.yaw), sn=sin(e.yaw); lp.xz=vec2(c*lp.x-sn*lp.z,sn*lp.x+c*lp.z);
+  if(e.rg && e.side<0.) lp.x=-lp.x;                          // l'autre rive : on défait le miroir
+  if(e.D.z>0.){ vec2 pa=(fract(e.h2.zw*17.31)-.5)*2.*e.D.z; float c1=cos(pa.x), s1=sin(pa.x), c2=cos(pa.y), s2=sin(pa.y);
     lp.xy=vec2(c1*lp.x+s1*lp.y,-s1*lp.x+c1*lp.y); lp.zy=vec2(c2*lp.z+s2*lp.y,-s2*lp.z+c2*lp.y); }
-  float s=mix(J.z,J.w,h2.x), sy=mix(K.x,K.y,h2.y);
-  lp/=s; lp.y/=sy;
-  float sc=s*min(1.,sy)*sh;
+  lp/=e.s; lp.y/=e.sy;
+  return lp;
+}
+vec3 semisMonde(vec3 lp, ElemS e){                           // l'inverse : repère de l'élément -> monde
+  lp.y*=e.sy; lp*=e.s;
+  if(e.D.z>0.){ vec2 pa=(fract(e.h2.zw*17.31)-.5)*2.*e.D.z; float c1=cos(pa.x), s1=sin(pa.x), c2=cos(pa.y), s2=sin(pa.y);
+    lp.zy=vec2(c2*lp.z-s2*lp.y,s2*lp.z+c2*lp.y); lp.xy=vec2(c1*lp.x-s1*lp.y,s1*lp.x+c1*lp.y); }
+  if(e.rg && e.side<0.) lp.x=-lp.x;
+  float c=cos(e.yaw), sn=sin(e.yaw); lp.xz=vec2(c*lp.x+sn*lp.z,-sn*lp.x+c*lp.z);
+  lp.y+=dot(e.sl,lp.xz);
+  vec2 w=semMonde(e.gc+lp.xz,e.side,e.T.x,e.A,e.rg);
+  return vec3(w.x,lp.y+e.th.x,w.y);
+}
+float sdSemis(vec3 p, int k, out vec4 info, out vec4 inst){
+  int r0=SEM0+k*SEML;
+  info=vec4(0.); inst=vec4(0.);
+  float marge=max(.08,1.5*gTol)+(uMode==1?50.:0.);          // jamais sous la tolérance de la marche : pas de faux impact sur une limite de cellule
+  ElemS e; vec2 id, f;
+  float bg=semisGrille(p.xz,k,e,id,f);
+  if(bg>=0.) return bg+marge;
+  float dOut=min(.5*e.A.x-abs(f.x),.5*e.A.y-abs(f.y))+marge;
+  if(!semisElem(k,id,e)) return dOut;
+  vec3 lp=semisLocal(p,e);
+  float sc=e.s*min(1.,e.sy)*e.sh;
   vec4 bc=texelFetch(uShapes,ivec2(2,r0+1),0);
-  float bb=sdBox(lp-bc.xyz,E.xyz);                           // boîte englobante : on ne détaille que de près
+  float bb=sdBox(lp-bc.xyz,e.E.xyz);                         // boîte englobante : on ne détaille que de près
   if(bb>.3) return min(bb*sc*.9,dOut);
-  float od=1e5, best=1e5, brow=0.; int cn=int(K.z);
+  float od=1e5, best=1e5, brow=0.; int cn=int(e.K.z);
   for(int j=0;j<cn;j++){
     int row=r0+4+j;
-    vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
-    float dd=sdPrim(primLocal(lp,row),a.w,b.xyz)-e.y;
+    vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), ee=texelFetch(uShapes,ivec2(3,row),0);
+    float dd=sdPrim(primLocal(lp,row),a.w,b.xyz)-ee.y;
     if(dd<best){ best=dd; brow=float(row); }
-    od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+    od=ee.x>0.?smin(od,dd,ee.x):min(od,dd);
   }
-  info=vec4(lp,brow+.9*h2.w);
-  inst=vec4(yaw,s,sy,h2.w);
+  info=vec4(lp,brow+.9*e.h2.w);
+  inst=vec4(e.yaw,e.s,e.sy,e.h2.w);
   return min(od*sc*.85,dOut);
 }
 vec3 formeCol(int row, float hv){                            // couleur d'une forme ; "palette" : une couleur par élément
@@ -364,6 +395,31 @@ vec3 formeCol(int row, float hv){                            // couleur d'une fo
   float np=texelFetch(uShapes,ivec2(2,r0+1),0).w;
   int i=int(min(floor(fract(hv*7.13)*np),np-1.));
   return texelFetch(uShapes,ivec2(i&3,r0+2+(i>>2)),0).rgb;
+}
+
+/* ---- distance au décor : tout ce qui est solide (sol, arbres, perches, blocs, semis, objets). Lue par le lanceur de rayons
+   à chaque pas, et par la sonde de collision (v3_sonde.frag, compilée avec SEMIS). */
+uniform vec2  uTerK;       // pas de marche sur le relief : partout, et près d'un bord de trajet raide (0 = inutile)
+float map(vec3 p){
+  float th=terrainH(p.xz);
+  float y=p.y-th;
+  float d=y*(uTerK.y>0. && abs(gAx-.5*(uCreux.y+uCreux.z))<abs(uCreux.y-uCreux.z)*.5+.3?uTerK.y:uTerK.x);   // pas réduit près d'un bord de trajet raide
+  vec4 nf;
+#if !NU
+  if(uKit==0){
+    if(y<19.) d=min(d,sdTreeA(p,th,nf)); else d=min(d,y-17.8);
+    if(y<12.) d=min(d,sdTreeB(p,th,nf)); else d=min(d,y-11.3);
+  }
+  if(uKitP.y>0.){ if(y<4.5) d=min(d,sdRock(p,th,nf)); else d=min(d,y-3.9); }
+#endif
+#if SEMIS
+  for(int k=0;k<uSemN;k++){                                  // une seule évaluation de semis, dans une boucle : le compilateur n'en déplie qu'une.
+    float tp=uSemTop[k];                                     // En rendu logiciel, ce code coûte même quand il ne s'exécute pas : d'où la variante SEMIS.
+    if(y<tp+1.){ vec4 si; d=min(d,sdSemis(p,k,nf,si)); } else d=min(d,y-tp);   // au-dessus de la couche : borne simple, jamais nulle
+  }
+#endif
+  if(uObjN>0) d=min(d,sdProps(p,nf));
+  return d;
 }
 
 /* ---- canopée : densité, transmittance, feuilles et branches discrètes */
@@ -411,6 +467,10 @@ vec3 leafCol(vec3 c, float h){
   vec3 ete=mix(vec3(.035,.085,.018),vec3(.075,.15,.03),h);
   vec3 aut=sp<.70?mix(vec3(.30,.15,.035),vec3(.46,.30,.06),h):mix(vec3(.50,.36,.05),vec3(.36,.38,.07),h);
   return mix(ete,aut,uKitP.w);
+}
+void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // cœur de feuillage d'un conifère, vu de près (lanceur de rayons et semeur)
+  alb=leafCol(p,vnoise3(p*5.))*(.5+.6*vnoise3(p*vec3(8.,13.,8.))); spec=.02;
+  n=normalize(gn+(vec3(vnoise3(p*17.),vnoise3(p*17.+7.),vnoise3(p*17.+13.))-.5)*.9);
 }
 
 /* ---- ciel et brume */
