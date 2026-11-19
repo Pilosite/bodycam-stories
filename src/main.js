@@ -721,11 +721,13 @@ const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]
 const normz=a=>{ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; };
 
 /* ------------------------------------------------------------------ boucle */
-let lastT=0, bench=null, lastMotionMs=0; const startT=performance.now();
+let lastT=0, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
-  const dt=Math.min(.1,(now-lastT)/1000); lastT=now;
-  simulate(dt);
+  const dt=Math.min(.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;
+  // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
+  const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=k=>{ if(!pf) return; v3Sync(); const t=performance.now(); pf[k]=t-pt; pt=t; };
+  simulate(dt); etape("sim");
   walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
   const p=pose(); lastPose=p;
   const v2pret=V2.on&&!sceneDirty&&V2.panos.some(o=>o.t);         // tant qu'aucun panoramique n'est tourné, on garde l'image du moteur actuel : jamais d'écran noir
@@ -738,9 +740,11 @@ function frame(now){
     do{ done=staticRows(p); } while(!done && performance.now()-t0<20);
     if(done && (n<14||n%4===0)) postFX(hist);
   }
+  etape("rendu");
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist,(now-startT)/1000);
-  hud(now);
+  etape("aff"); hud(now);
+  if(pf&&walking) prof.push(pf);
 }
 let lastHud=0;
 function hud(now){
@@ -1026,7 +1030,11 @@ async function mesurer(){
   setFrozen(false); hold=false; queue.length=0; look.yaw=0; look.pitch=0; cam.pitch=-.03;
   await wait(600);
   bench=[]; queue.push({type:"marcher",rest:11}); await wait(8000);
-  const f=bench.slice(Math.min(10,bench.length>>2)); bench=null; queue.length=0; hold=true;
+  const f=bench.slice(Math.min(10,bench.length>>2)); bench=null; queue.length=0;
+  await wait(300); prof=[]; queue.push({type:"marcher",rest:6}); await wait(3500);      // second passage, étape par étape
+  { const q=prof.slice(3), m=k=>med(q.map(x=>x[k]||0)), fx=v=>v.toFixed(1).replace(".",","); prof=null; queue.length=0;
+    profTexte=q.length?["","UNE IMAGE EN MARCHE, ÉTAPE PAR ÉTAPE ("+q.length+" images)","Déplacement      "+fx(m("sim"))+" ms","Rendu du monde   "+fx(m("rendu"))+" ms","Capteur, écran   "+fx(m("aff"))+" ms","Entre deux images "+fx(m("dt"))+" ms"].join("\n"):""; }
+  hold=true;
   await wait(400);
   if(V2.on) return mesurerV2(f,wait,med);
   if(V3.on) return mesurerV3(f,wait,med);
@@ -1121,7 +1129,7 @@ async function mesurerV3(f,wait,med){
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
-$("mesurer").onclick=()=>{ mesurer().catch(e=>{ hold=false; bench=null; $("mesure-txt").textContent="La mesure a échoué : "+(e&&e.message||e); }); };
+$("mesurer").onclick=()=>{ mesurer().then(()=>{ $("mesure-txt").textContent+="\n"+profTexte; }).catch(e=>{ hold=false; bench=null; $("mesure-txt").textContent="La mesure a échoué : "+(e&&e.message||e); }); };
 $("mesure-fermer").onclick=()=>{ $("mesure").hidden=true; };
 $("mesure-copier").onclick=()=>{ const t=$("mesure-txt"), b=$("mesure-copier"), ok=()=>{ b.textContent="Copié"; setTimeout(()=>b.textContent="Copier",1500); };
   const sel=()=>{ const r=document.createRange(); r.selectNodeContents(t); const s=getSelection(); s.removeAllRanges(); s.addRange(r); };
