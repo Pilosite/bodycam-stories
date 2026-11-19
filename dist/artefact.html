@@ -1283,7 +1283,7 @@ $("lieu").onclick=()=>{ ficheIdx=(ficheIdx+1)%FICHES.length; applyFiche(FICHES[f
 let dragId=null, px=0, py=0;
 canvas.addEventListener("pointerdown",e=>{ dragId=e.pointerId; px=e.clientX; py=e.clientY; canvas.setPointerCapture(e.pointerId); canvas.classList.add("drag"); });
 canvas.addEventListener("pointermove",e=>{ if(e.pointerId!==dragId) return;
-  const k=1.5/Math.max(canvas.clientWidth,canvas.clientHeight);
+  const k=3.4/Math.min(canvas.clientWidth,canvas.clientHeight);   // un glissé sur la largeur de l'écran = un demi-tour
   if(gyro.on) gyro.off-=(e.clientX-px)*k;                 // téléphone-caméra : le glisser ne fait que recaler le cap
   else { look.yaw-=(e.clientX-px)*k; look.pitch=Math.max(-1.3,Math.min(1.4,look.pitch+(e.clientY-py)*k)); }
   px=e.clientX; py=e.clientY; $("hint").classList.add("off"); });
