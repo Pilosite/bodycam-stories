@@ -9,6 +9,12 @@
 #ifndef NU
 #define NU 0                 // monde nu : ni arbres, ni rochers, ni canopée dans le code
 #endif
+#ifndef RELIEF
+#define RELIEF 0             // 1 : la fiche demande des bosses ou des buttes (relief.bosses, relief.buttes). Variante compilée à la demande :
+#endif                       // sans elle, terrainH reste celui d'avant, sans une ligne de plus (Direct3D, rendu logiciel).
+#ifndef HOUPPIER
+#define HOUPPIER 0           // 1 : la fiche décrit les houppiers (foret.houppiers) : charpentières, rameaux, masses de feuillage par arbre
+#endif
 uniform vec2  uRes;
 uniform vec3  uCamPos;
 uniform mat3  uCam;
@@ -66,6 +72,26 @@ float gAx;                   // écart au trajet du dernier point évalué par t
 float pathX(float z){ return uTraj.x*(3.2*sin(z*.047+uSeed.z)+1.6*sin(z*.113+1.7+uSeed.z*2.)); }
 float ondul(vec2 p){ vec2 q=p*uRel.y;
   return uRel.x*(1.5*sin(q.x*.041+.6+uSeed.z)*cos(q.y*.035+1.1)+.65*sin(q.x*.097+q.y*.071+2.)+.22*sin(q.x*.29-q.y*.21+uSeed.z*3.)); }
+#if RELIEF
+/* Bosses et buttes (fiche : relief.bosses, relief.buttes). Bruit de valeur sur un réseau entier, haché en entiers non signés :
+   la même formule existe dans src/main.js (terrainH) et donne exactement les mêmes nombres (Math.imul), le porteur ne flotte
+   pas au-dessus du sol dessiné. Bosses : deux octaves tournées, creux et bosses de part et d'autre du sol moyen. Buttes : un
+   bruit lent passé par un seuil doux, flanc puis plateau (une platière, une butte, un talus de colline). Le trajet les adoucit. */
+uniform vec4  uRelB;       // bosses : hauteur (m), fréquence (1/m) ; buttes : hauteur (m), fréquence (1/m)
+uniform vec4  uRelC;       // buttes : seuils du bruit (pied du flanc, bord du plateau) ; part gardée sur le trajet : bosses, buttes
+uniform vec2  uRelS;       // décalage entier du réseau (graine)
+float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)^(u.y*3812015801u);
+  x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u; x=(x>>22u)^x; return float(x>>8u)*(1./16777216.); }
+float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
+  return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
+float reliefDetail(vec2 p, float ax){
+  vec2 q=p*uRelB.y;
+  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
+  vec2 r=p*uRelB.w;
+  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
+}
+#endif
 float terrainH(vec2 p){
   if(uKit==1){                                               // dunes : crêtes vives, creux arrondis
     float a=p.x*.045+.9*sin(p.y*.021+uSeed.z)+.5*sin(p.y*.05+1.3);
@@ -75,6 +101,9 @@ float terrainH(vec2 p){
   float h=ondul(vec2(uRel.w>0.?mix(p.x,px,smoothstep(uRel.w+5.,uRel.w,gAx)):p.x,p.y));   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe (un seul appel)
   h+=uRel.z*p.y;
   h-=uCreux.x*smoothstep(uCreux.y,uCreux.z,gAx);
+#if RELIEF
+  h+=reliefDetail(p,gAx);
+#endif
   return h;
 }
 
@@ -111,7 +140,69 @@ bool arbreA(vec2 id, out ArbreA A){
   return true;
 }
 float rayonA(ArbreA A, float y){ return A.r0*(1.-.5*clamp(y/A.H,0.,1.))+A.r0*.45*exp(-max(y,0.)*2.5); }
+#if HOUPPIER
+/* ---- houppiers (fiche : foret.houppiers). Rien n'est une essence en dur : quatre ports réglés par la fiche, un par écorce
+   (arbres a et b, perches a et b, même partage que les écorces). Un port : où commence et finit le houppier sur la hauteur
+   du tronc, sa largeur, son profil (ovale ou en plateau), le nombre de charpentières, leur montée, leur retombée, les rameaux
+   de chaque charpentière, et les masses de feuillage au bout des rameaux et des charpentières (taille, remplissage, feuilles).
+   Une charpentière : deux segments (part du tronc, puis se courbe ou retombe). Tout se calcule à partir de l'arbre (tirages de
+   sa cellule) : le semeur pose ses grains dessus, vus de la caméra comme du soleil (les masses trouées laissent passer les rais). */
+uniform vec4  uHp[16];     // port e (0 arbres a, 1 arbres b, 2 perches a, 3 perches b), 4 lignes :
+                           // (bas, haut : part de la hauteur ; largeur (m) ; aplati 0 ovale, 1 plateau) (charpentières, montée, retombée, rameaux)
+                           // (masse (m), feuilles 0 à 1, taille d'une feuille (m), actif) (part de l'écorce a, -, -, -)
+struct Tige { vec2 c; mat2 M; vec2 o; vec2 lean; float H; float r0; vec4 h; int e; float wa; float wp; vec2 wd; float th; };
+vec2 axeT(Tige T, float y){ return T.o+T.lean*y+T.wa*sin(y*.6+T.wp)*T.wd; }   // axe du tronc (repère de la cellule), à la hauteur y
+bool portA(ArbreA A, out Tige T){
+  T.c=vec2(0.); T.M=RA; T.o=A.o; T.lean=A.lean; T.H=A.H; T.r0=A.r0; T.h=A.h; T.wa=0.; T.wp=0.; T.wd=vec2(1.,0.); T.th=0.;
+  T.e=fract(A.h.w*.999*3.7)<uHp[3].x?0:1;                    // même partage que l'écorce (v3_ombrage : fract(par × 3,7) < part)
+  return uHp[T.e*4+2].w>.5;
+}
+/* Charpentière k : a0 sur le tronc, am au coude, a1 au bout ; rb son rayon au départ ; d2 la direction du bout. Repère de la cellule. */
+void charpente(Tige T, int k, out vec3 a0, out vec3 am, out vec3 a1, out float rb, out vec3 d2){
+  vec4 P0=uHp[T.e*4], P1=uHp[T.e*4+1];
+  float fk=float(k), nb=max(P1.x,1.);
+  vec4 r=h42(T.h.zw*37.1+vec2(fk*7.31,fk*3.17));
+  float u=clamp((fk+.2+.6*r.x)/nb,0.,1.);                    // place dans le houppier, du bas vers le haut
+  float y=T.H*mix(P0.x,P0.y,u);
+  float prof=mix(sin(3.1416*(.15+.8*u)),.55+.45*u,P0.w);    // profil : ovale, ou en plateau (plus large en haut)
+  float L=P0.z*prof*(.7+.45*r.y);
+  float az=fk*2.39996+T.h.x*6.2832+(r.z-.5)*.9;             // angle d'or, plus un aléa
+  float el=mix(.12,1.35,P1.y)*(.75+.5*r.w)-.3*u*P0.w;
+  vec2 ax=axeT(T,y);
+  a0=vec3(ax.x,y,ax.y);
+  vec3 d1=vec3(cos(az)*cos(el),sin(el),sin(az)*cos(el));
+  am=a0+d1*L*.5;
+  float el2=el-P1.z*1.4-.12, a2=az+(r.y-.5)*.6;
+  d2=vec3(cos(a2)*cos(el2),sin(el2),sin(a2)*cos(el2));
+  a1=am+d2*L*.55;
+  rb=T.r0*mix(.62,.3,u)*(.8+.3*r.x);
+}
+/* Rameau j de la charpentière (départ, bout, rayon) ; masse de feuillage m (m = rameaux : au bout de la charpentière). */
+void rameau(Tige T, int k, int j, vec3 a0, vec3 am, vec3 a1, float rb, out vec3 s0, out vec3 s1, out float rr){
+  vec4 P1=uHp[T.e*4+1];
+  vec4 r=h42(T.h.yx*53.7+vec2(float(k)*5.1+float(j)*1.7,float(j)*9.3));
+  float t=.3+.6*(float(j)+.3+.4*r.x)/max(P1.w,1.);
+  s0=t<.5?mix(a0,am,2.*t):mix(am,a1,2.*t-1.);
+  vec3 d=t<.5?am-a0:a1-am; float L=length(a1-am)+length(am-a0); d/=max(length(d),1e-4);
+  vec3 sd=normalize(cross(d,vec3(0.,1.,0.))+vec3(0.,1e-3,0.));
+  d=normalize(d+sd*(r.y-.5)*2.4+vec3(0.,.35-P1.z*.9,0.));
+  s1=s0+d*L*.42*(.65+.6*r.z);
+  rr=rb*.38;
+}
+void masse(Tige T, int k, int m, out vec3 c, out vec3 rad){
+  vec4 P0=uHp[T.e*4], P1=uHp[T.e*4+1], P2=uHp[T.e*4+2];
+  vec3 a0, am, a1, d2; float rb; charpente(T,k,a0,am,a1,rb,d2);
+  if(m<int(P1.w)){ vec3 s0; float rr; rameau(T,k,m,a0,am,a1,rb,s0,c,rr); }
+  else c=a1+d2*P2.x*.25;
+  float M=P2.x*(.7+.6*h42(T.h.wz*21.3+vec2(float(k)*2.7,float(m)*4.1)).x);
+  c.y-=P1.z*.35*M;                                           // retombée : la masse pend
+  rad=vec3(M,M*(1.-.62*P0.w)*(1.+.7*P1.z),M);
+}
+#endif
 void brancheA(ArbreA A, int k, out vec3 a0, out vec3 a1, out float rb){   // branche k (0 à 2), dans le repère de la cellule
+#if HOUPPIER
+  Tige T; if(portA(A,T)){ vec3 d2, b1; charpente(T,k,a0,a1,b1,rb,d2); return; }   // houppier réglé : les trois premières charpentières (premier segment)
+#endif
   vec2 o=A.o; vec4 h=A.h; float H=A.H;
   float ac=atan(-o.y,-o.x);
   float fk=float(k);

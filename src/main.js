@@ -59,8 +59,9 @@ const prog=(fs,vs=VS,nom)=>{ etapeGL("compilation : "+(nom||"programme")); const
 /* Variantes fixes du même shader, choisies par #define. En rendu logiciel, le code présent coûte à chaque pas de rayon même
    quand il ne s'exécute pas : la forêt garde un programme sans semis, un monde nu un programme sans arbres. Chaque variante se
    compile une fois (en tâche de fond si le navigateur le permet), à la première fiche qui la demande : jamais de code généré par monde.
-   Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis. */
-const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+(v>>1)+"\n"):FS_PT;
+   Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis.
+   + 4 : bosses et buttes du relief (RELIEF, monde.glsl). */
+const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+((v>>1)&1)+"\n#define RELIEF "+((v>>2)&1)+"\n"):FS_PT;
 const P_DOWN=prog(FS_DOWN,VS,"halo (réduction)"), P_BLUR=prog(FS_BLUR,VS,"halo (flou)"), P_CAM=prog(FS_CAM,VS,"capteur"), P_EXPO=prog(FS_EXPO,VS,"exposition");
 const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
 /* Le shader du lanceur de rayons est très gros. Sur certains ordinateurs (Chrome sous Windows) sa compilation échoue et emporte
@@ -69,8 +70,8 @@ const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
    Sur ordinateur, on ne le compile qu'à la demande. balade.reessayerRayons() efface la marque. */
 const bureau=!matchMedia("(pointer:coarse)").matches && !CFG.mobile;
 let PT_KO=false; try{ PT_KO=localStorage.getItem("bodycam-rayons-2")==="essai"; }catch(_){}
-const progs=[null,null,null,null], lances=[];
-const varCourante=()=>(S.semN?1:0)+(S.kit===2?2:0);
+const progs=[null,null,null,null,null,null,null,null], lances=[];
+const varCourante=()=>(S.semN?1:0)+(S.kit===2?2:0)+(S.relOn?4:0);
 const ptDispo=()=>compilerPT(varCourante());                    // le lanceur de rayons peut-il dessiner le monde courant ? (le compile au besoin)
 /* Compilation sans bloquer : quand le navigateur le permet, le programme se compile sur un fil à part et on revient voir
    à chaque image s'il est prêt. Attendre le résultat d'un coup fige le processus graphique ; sur un gros shader, Chrome
@@ -99,8 +100,9 @@ if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lanc
    bouge que sur ordre du récit. Sans lui ni lanceur de rayons, la sonde rend « rien » (aucun obstacle). */
 const SONDE={lance:null,p:null};
 function sondeProg(){                                           // moteur v3 (ou option v3sonde) : compilée au départ, sans bloquer
+  if(SONDE.p&&SONDE.rel!==!!S.relOn){ SONDE.p=null; SONDE.lance=null; }   // bosses et buttes : une autre variante (RELIEF)
   if(SONDE.p) return SONDE.p; if(!CFG.v3sonde&&!(V3.on&&S.semN>0&&S.kit===2)) return null;   // forêt : troncs et blocs sont connus en JS (obstaclesConnus), on épargne ce gros programme à Direct3D ;   // en v3, le lanceur de rayons n'est pas compilé : la sonde garde le porteur hors des surfaces (§16)
-  if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.lance=lancer(FS_V3SONDE); }
+  if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.rel=!!S.relOn; SONDE.lance=lancer(FS_V3SONDE.replace("\n","\n#define RELIEF "+(S.relOn?1:0)+"\n")); }
   if(!fini(SONDE.lance)) return null;
   SONDE.p=finir(SONDE.lance); SONDE.lance=null; etapeGL("  compilé : sonde de collision"); return SONDE.p;
 }
@@ -124,7 +126,7 @@ function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture
 
 /* ------------------------------------------------------------------ scène : ce que la fiche de lieu pilote */
 const S={ can:[7,19], houp:[0,1.5,2.6,1], loin:[0,3,2,0], loinCol:[.2,.2,.21], loinBas:[.05,.07,.05], surf:[0,1,2,0], surfT:[3,4,5,6], surfP:[.45,.5], objN:0, kit:0,
-  rel:[1,1,0,0], traj:[1,.85,.3,.5], creux:[.10,1.8,.4,0], terK:[.88,0], yTop:23, pente:.22, semN:0, semTop:[0,0,0,0], objTop:0, solAlb:[.24,.15,.07], lum:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
+  rel:[1,1,0,0], relB:[0,0,0,0], relC:[0,0,1,1], relS:[0,0], relOn:false, hp:new Float32Array(64), hpC:new Float32Array(36), hpOn:false, traj:[1,.85,.3,.5], creux:[.10,1.8,.4,0], terK:[.88,0], yTop:23, pente:.22, semN:0, semTop:[0,0,0,0], objTop:0, solAlb:[.24,.15,.07], lum:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
 let fiche=null, ficheIdx=0, seedN=4821, seed=[0,0,0], sceneDirty=true;
 function setSeed(n){ seedN=n; seed=[(n*12.9898)%89,(n*78.233)%83,(n*.618034)%6.2832]; }
 function applyAmbiance(a){
@@ -172,16 +174,27 @@ const kitDe=f=>f.kit==="dunes"?1:f.kit==="nu"||(f.kit===undefined&&Array.isArray
 /* Relief et trajet : la fiche règle les formules de terrainH et pathX. Sans réglage, la forêt d'origine à l'identique. */
 function reglerRelief(f){
   S.rel=[1,1,0,0]; S.traj=[1,.85,.3,.5]; S.creux=[.10,1.8,.4,0]; S.terK=[.88,0]; S.pente=.22;
+  S.relB=[0,0,0,0]; S.relC=[0,0,1,1]; S.relS=[0,0]; S.relOn=false;
   if(S.kit===1) return;                                          // dunes : relief encore en dur
   const re=isObj(f.relief)?f.relief:null, tr=isObj(f.trajet)?f.trajet:null;
   if(!re&&!tr&&S.kit===0) return;
+  /* Bosses (creux et bosses de 5 à 30 m) et buttes (flanc puis plateau, au second plan) : reliefDetail dans monde.glsl, variante
+     RELIEF compilée seulement si la fiche en demande. hauteur en m, echelle en m (longueur d'onde), trajet : part gardée sur le trajet. */
+  const bo=re&&isObj(re.bosses)?re.bosses:null, bu=re&&isObj(re.buttes)?re.buttes:null;
+  const hB=bo?clampN(bo.hauteur,0,4,0):0, hT=bu?clampN(bu.hauteur,0,25,0):0;
+  if(hB>0||hT>0){
+    const part=bu?clampN(bu.part,0,1,.3):.3, plat=bu?clampN(bu.plat,0,1,.5):.5, s1=.78-.4*part, s0=s1-(.06+.22*(1-plat));
+    S.relB=[hB,1/(bo?clampN(bo.echelle,3,80,12):12),hT,1/(bu?clampN(bu.echelle,15,400,60):60)];
+    S.relC=[s0,s1,bo?clampN(bo.trajet,0,1,.35):.35,bu?clampN(bu.trajet,0,1,.5):.5];
+    S.relS=[seedN%997,(seedN*7)%991]; S.relOn=true;
+  }
   const amp=clampN(re&&re.amplitude,0,12,S.kit===2?.8:1.5), ech=clampN(re&&re.echelle,20,600,150), pente=clampN(re&&re.pente,-.35,.35,0);
-  const larg=clampN(tr&&tr.largeur,.6,30,1.7), hw=larg/2, net=!!(tr&&tr.bord==="net"), creux=clampN(tr&&tr.creux,0,.4,.10);
+  const larg=clampN(tr&&tr.largeur,.6,30,1.7), hw=larg/2, net=!!(tr&&tr.bord==="net"), creux=clampN(tr&&tr.creux,0,1.2,.10);   // jusqu'à 1,2 m : un sentier encaissé entre deux talus
   const niv=re&&re.niveler!==undefined?!!re.niveler:S.kit===2&&larg>=3;
   S.rel=[amp/1.5,150/ech,pente,niv?hw+2:0];
   S.traj=[clampN(tr&&tr.sinuosite,0,2,1),hw,net?.03:.3,net?0:.5];
   S.creux=[creux,hw+(net?.18:.95),net?hw:Math.max(0,hw-.45),0];
-  const g=S.rel[0]*S.rel[1]*.22+Math.abs(pente); S.pente=g;     // pente la plus forte du relief, en gros
+  const g=S.rel[0]*S.rel[1]*.22+Math.abs(pente)+(S.relOn?3*S.relB[0]*S.relB[1]+.6*S.relB[2]*S.relB[3]/Math.max(.05,S.relC[1]-S.relC[0]):0); S.pente=g;     // pente la plus forte du relief, en gros
   S.terK=[.88/Math.sqrt(1+g*g),0];
   const cg=1.5*creux/Math.max(.05,S.creux[1]-S.creux[2]);       // bord de trottoir : pas réduit seulement là
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
@@ -203,13 +216,44 @@ function applyFiche(f){
   S.loinCol=couleur(lo&&lo.couleur||"#7b7a80"); S.loinBas=couleur(lo&&lo.couleur_bas||"#3d4a3a");
   S.eau=lo&&lo.eau?[...couleur(typeof lo.eau==="string"?lo.eau:"#2c4652"),1]:[0,0,0,0];   // mer, baie ou lac sous l'horizon
   S.eye=(f.camera&&f.camera.hauteur)||1.36;
-  buildMats(f); buildShapes(f);
+  buildMats(f); reglerHouppiers(f); buildShapes(f);
   applyAmbiance(f.ambiance||{});
   if(f.ambiance&&f.ambiance.saison==="hiver") S.kitP[2]*=.15;
   cam.z=0; cam.x=S.kit!==1?pathX(0):0; cam.yaw=S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; queue.length=0; tempsFaits.length=0;
   cacheObj.clear(); (f.objets||[]).forEach(o=>{ if(o&&o.visible===false) cacheObj.add(o.id); }); buildShapes(f);
   v3Fiche();
 }
+
+/* Houppiers (foret.houppiers) : un port par écorce (arbres a et b, perches a et b, même partage). Rien n'est une essence :
+   la fiche dit où commence le houppier sur la hauteur du tronc, sa largeur, son profil, ses charpentières (nombre, montée,
+   retombée), leurs rameaux, et les masses de feuillage au bout (taille, remplissage, taille des feuilles, couleurs). Rangé dans
+   uHp et uHpC (monde.glsl, v3_grains.vert, variante HOUPPIER du moteur v3). Le lanceur de rayons n'en montre que le départ
+   des trois premières charpentières. */
+function portHoup(o,i,part){
+  const r=i*16, c=i*9;
+  if(!isObj(o)) return false;
+  const hb=Array.isArray(o.hauteur)?o.hauteur:[.45,1], bas=clampN(hb[0],0,.95,.45), haut=clampN(hb[1],bas+.03,1,1);
+  S.hp.set([bas,haut,clampN(o.largeur,.2,8,2.5),clampN(o.aplati,0,1,.3),
+    Math.round(clampN(o.branches,1,8,5)),clampN(o.montee,0,1,.5),clampN(o.retombe,0,1,.1),Math.round(clampN(o.rameaux,0,3,2)),
+    clampN(o.masse,.15,2.5,.8),clampN(o.feuilles,0,1,.5),clampN(o.taille,.02,.4,.08),1, part,0,0,0],r);
+  const cs=(Array.isArray(o.couleurs)?o.couleurs:[]).filter(x=>typeof x==="string").slice(0,3);
+  if(!cs.length) cs.push("#6b5a2a");
+  for(let k=0;k<3;k++) S.hpC.set(couleur(cs[k%cs.length]),c+3*k);
+  return true;
+}
+function reglerHouppiers(f){
+  S.hp.fill(0); S.hpC.fill(0); S.hpOn=false;
+  const h=kitDe(f)===0&&isObj(f.foret)&&isObj(f.foret.houppiers)?f.foret.houppiers:null; if(!h) return;
+  let on=false; const fam=["arbres","perches"];
+  for(let i=0;i<2;i++){ const g=isObj(h[fam[i]])?h[fam[i]]:{};
+    S.hp[(2*i)*16+12]=S.surfP[i];                                // part de l'écorce a : le port suit l'écorce
+    if(portHoup(g.a,2*i,S.surfP[i])) on=true;
+    if(portHoup(g.b,2*i+1,S.surfP[i])) on=true; }
+  S.hpOn=on;
+}
+/* Aire d'un houppier (bois et masses, m²), même estimation que aireHoup (v3_grains.vert) : partage du budget de grains. */
+function aireHoupJS(e,r0){ const r=e*16; if(S.hp[r+11]<.5) return 0;
+  return S.hp[r+4]*Math.PI*r0*.45*S.hp[r+2]*.85*(1+.16*S.hp[r+7])+S.hp[r+4]*(S.hp[r+7]+1)*8.9*S.hp[r+8]*S.hp[r+8]; }
 
 /* Objets : la fiche les décrit en formes de base, on les range dans une texture de données lue par le shader. */
 const FORMES={boite:0,boule:1,cylindre:2,cone:3,capsule:4,toit:5};
@@ -254,7 +298,7 @@ function buildShapes(f){
     S.objTop=Math.max(S.objTop,y+rad-S.rel[2]*z);
   }
   packSemis(f);
-  const terr=2.4*S.rel[0]+1;                                     // au-dessus : plus rien, le rayon qui monte s'arrête
+  const terr=2.4*S.rel[0]+1+(S.relOn?1.2*S.relB[0]+S.relB[2]:0);   // au-dessus : plus rien, le rayon qui monte s'arrête
   S.yTop=Math.max(S.kit===0?23:5,terr+Math.max(S.objTop,...S.semTop));
   gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,4,SH_ROWS,gl.RGBA,gl.FLOAT,shapesData);
   sceneDirty=true;
@@ -445,7 +489,19 @@ function terrainH(x,z){
   const px=pathX(z), ax=Math.abs(x-px);
   let h=ondul(S.rel[3]>0?x+(px-x)*sstep(S.rel[3]+5,S.rel[3],ax):x,z);   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe
   h+=S.rel[2]*z;
-  return h-S.creux[0]*sstep(S.creux[1],S.creux[2],ax);
+  h-=S.creux[0]*sstep(S.creux[1],S.creux[2],ax);
+  return S.relOn?h+reliefDetail(x,z,ax):h;
+}
+/* Bosses et buttes : la même formule que reliefDetail (monde.glsl), au bit près pour le hachage (entiers non signés, Math.imul). */
+function hR(cx,cz){ let x=(Math.imul((cx+S.relS[0]+46000)>>>0,1597334677)^Math.imul((cz+S.relS[1]+46000)>>>0,3812015801))>>>0;
+  x=(Math.imul(x,747796405)+2891336453)>>>0; x=Math.imul(((x>>>((x>>>28)+4))^x)>>>0,277803737)>>>0; x=((x>>>22)^x)>>>0; return (x>>>8)/16777216; }
+function bruitR(px,pz){ const ix=Math.floor(px), iz=Math.floor(pz); let fx=px-ix, fz=pz-iz; fx=fx*fx*(3-2*fx); fz=fz*fz*(3-2*fz);
+  const a=hR(ix,iz), b=hR(ix+1,iz), c=hR(ix,iz+1), d=hR(ix+1,iz+1); return (a+(b-a)*fx)+((c+(d-c)*fx)-(a+(b-a)*fx))*fz; }
+function reliefDetail(x,z,ax){
+  const B=S.relB, C=S.relC, qx=x*B[1], qz=z*B[1], rx=x*B[3], rz=z*B[3], hw=S.traj[1];
+  const b=(bruitR(qx,qz)-.5)*1.4+(bruitR((.8*qx-.6*qz)*2.13+31,(.6*qx+.8*qz)*2.13+17)-.5)*.6;
+  const t=sstep(C[0],C[1],bruitR(.6*rx+.8*rz-57,-.8*rx+.6*rz+83));
+  return B[0]*b*(C[2]+(1-C[2])*sstep(hw,hw+2.5,ax))+B[2]*t*(C[3]+(1-C[3])*sstep(hw+1,hw+14,ax));
 }
 
 /* ------------------------------------------------------------------ porteur de la caméra */
@@ -480,6 +536,7 @@ function common(w,h,p){
   bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP);
   gl.uniform1i(u.uKit,S.kit); gl.uniform4fv(u.uKitP,S.kitP); gl.uniform1i(u.uMode,0);
   gl.uniform4fv(u.uRel,S.rel); gl.uniform4fv(u.uTraj,S.traj); gl.uniform4fv(u.uCreux,S.creux); gl.uniform2fv(u.uTerK,S.terK); gl.uniform1f(u.uYTop,S.yTop);
+  if(u.uRelB){ gl.uniform4fv(u.uRelB,S.relB); gl.uniform4fv(u.uRelC,S.relC); gl.uniform2fv(u.uRelS,S.relS); }   // bosses et buttes (variante RELIEF)
   gl.uniform1i(u.uSemN,S.semN); gl.uniform4fv(u.uSemTop,S.semTop); gl.uniform3fv(u.uSolAlb,S.solAlb); gl.uniform1f(u.uNuit,S.lum);
   atmoUniformes(u,p,0);
   return u;
@@ -844,13 +901,16 @@ function v3Init(){                                             // rend vrai quan
   const vAtmo=S.atmo&&S.atmo[0]?1:0, vRais=vAtmo&&QUAL.full?(CFG.rais!==undefined?Math.max(0,Math.min(16,CFG.rais|0)):10):0;   // variante de l'ombrage : atmosphère, et rais en qualité complète
   if((V3.gp||V3.lance) && (V3.avecAtmo!==vAtmo||V3.avecRais!==vRais)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }
   if((V3.gp||V3.lance) && V3.avecSem!==(S.semN>0)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }   // la variante de l'ombrage dépend des semis de la fiche
+  if((V3.gp||V3.lance) && (V3.avecRel!==!!S.relOn||V3.avecHp!==!!S.hpOn)){ V3.gp=null; V3.lance=null; V3.t0prep=0; }   // bosses et buttes, houppiers : variantes RELIEF, HOUPPIER
   if(V3.gp) return true;
-  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; V3.avecSem=S.semN>0; V3.avecAtmo=vAtmo; V3.avecRais=vRais; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
+  if(!V3.lance){ V3.avecTapis=!QUAL.full&&OPT.tapis!==false; V3.avecSem=S.semN>0; V3.avecAtmo=vAtmo; V3.avecRais=vRais; V3.avecRel=!!S.relOn; V3.avecHp=!!S.hpOn; etapeGL("compilation : moteur v3 ("+(V3.avecTapis?"8 programmes, avec tapis du sol":"7 programmes")+")");
     const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
-    V3.lance={ grains:lancer(FS_V3GBUF,VS_V3GRAINS), grainsF:lancer(F(FS_V3GBUF),F(VS_V3GRAINS)), sol:lancer(FS_V3GBUF,VS_V3SOL),
-      ombre:lancer(FS_V3OMBRE,VS_V3GRAINS), ombreF:lancer(F(FS_V3OMBRE),F(VS_V3GRAINS)), proches:lancer(FS_V3PROCHES,VS_V3PROCHES),
-      ombrage:lancer(FS_V3OMBRAGE.replace("\n","\n#define TAPIS "+(V3.avecTapis?1:0)+"\n#define SEMO "+(V3.avecSem?1:0)+"\n#define ATMO "+vAtmo+"\n#define RAIS "+vRais+"\n")) };
-    if(V3.avecTapis) V3.lance.tapis=lancer(FS_V3TAPIS); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
+    // RELIEF (bosses et buttes : terrainH) partout ; HOUPPIER (charpentières et masses) dans le semeur et les proches, jamais dans l'ombrage
+    const R=src=>V3.avecRel?src.replace("\n","\n#define RELIEF 1\n"):src, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
+    V3.lance={ grains:lancer(FS_V3GBUF,Hp(VS_V3GRAINS)), grainsF:lancer(F(FS_V3GBUF),F(R(VS_V3GRAINS))), sol:lancer(FS_V3GBUF,R(VS_V3SOL)),
+      ombre:lancer(FS_V3OMBRE,Hp(VS_V3GRAINS)), ombreF:lancer(F(FS_V3OMBRE),F(R(VS_V3GRAINS))), proches:lancer(Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)),
+      ombrage:lancer(R(FS_V3OMBRAGE.replace("\n","\n#define TAPIS "+(V3.avecTapis?1:0)+"\n#define SEMO "+(V3.avecSem?1:0)+"\n#define ATMO "+vAtmo+"\n#define RAIS "+vRais+"\n"))) };
+    if(V3.avecTapis) V3.lance.tapis=lancer(R(FS_V3TAPIS)); }   // le tapis et sa lecture ne sont compilés que s'ils servent (qualité mobile)
   for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } return false; }
   const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
   // Taille maximale d'un grain : plafonnée à 64 pixels, une surface vue de très près (tronc, bloc, mur) ne pouvait plus être couverte
@@ -925,7 +985,7 @@ function v3Tapis(p){
       T.f.push(f); T.lv.push({O:[0,0],pret:false,fill:-1}); }
   }
   if(T.panne) return false;
-  const cle=JSON.stringify([seed,S.surf,S.traj,S.rel,S.creux,S.kit,matVersion,S.sunDir,S.kitP,S.can,S.houp]);   // tout ce dont dépend la cuisson
+  const cle=JSON.stringify([seed,S.surf,S.traj,S.rel,S.relB,S.relC,S.creux,S.kit,matVersion,S.sunDir,S.kitP,S.can,S.houp]);   // tout ce dont dépend la cuisson
   if(cle!==T.cle){ T.cle=cle; T.lv.forEach(l=>{ l.pret=false; l.fill=-1; }); }
   const G=V3.gp.tapis, u=G.u; gl.useProgram(G.p); v3Monde(u,N,N,p); gl.uniform1i(u.uTapN,N);
   gl.viewport(0,0,N,N); gl.enable(gl.SCISSOR_TEST);
@@ -1021,14 +1081,16 @@ function semisAire(k){                                         // aire des forme
 function v3Partage(N,vue,p){
   const tr=S.kit===0&&S.kitP[0]>0, pe=tr&&S.houp[3]>0, bl=S.kitP[1]>0;
   const coeur=S.houp[0]>.5?.36*2*2.2*14:0;                     // cœur des conifères (rayon moyen × hauteur, en gros)
-  const w=[tr?(6.8+coeur)/36:0, pe?.95/10.9:0, bl?3.4/72.25:0];
+  const hA=S.hpOn?S.surfP[0]*aireHoupJS(0,.245)+(1-S.surfP[0])*aireHoupJS(1,.245):0;   // houppiers : bois et masses de feuillage
+  const hB=S.hpOn?S.surfP[1]*aireHoupJS(2,.07)+(1-S.surfP[1])*aireHoupJS(3,.07):0;
+  const w=[tr?(6.8+coeur+hA)/36:0, pe?(.95+hB)/10.9:0, bl?3.4/72.25:0];
   const ws=[0,0,0,0], R=[0,0,0,0];
   for(let k=0;k<S.semN;k++){ const o=(SEM0+k*SEM_L)*16, A=[shapesData[o],shapesData[o+1]], dens=shapesData[o+4], rg=shapesData[o+7]>.5;
     const J=shapesData.subarray(o+16,o+32), sc=(J[2]+J[3])/2, sy=(J[4]+J[5])/2, a=semisAire(k).tot*sc*sc*(.3+.7*sy);
     const cotes=shapesData[o+10]===0?2:1, bande=rg?Math.min(1,cotes*J[7]*A[0]/40):1;
     ws[k]=.5*a*dens*(1-.5*shapesData[o+5])/(A[0]*A[1])*bande;
     R[k]=Math.hypot(J[12],J[14])*J[3]+Math.hypot(J[8],J[10])*J[3]+Math.hypot(J[0],J[1]); }   // demi-étendue horizontale de l'élément, décalage compris
-  const fF=vue===0&&S.kit===0&&S.kitP[2]>0?.28:0;
+  const fF=vue===0&&S.kit===0&&S.kitP[2]>0&&!S.hpOn?.28:0;      // avec des houppiers, les feuilles sont sur les arbres : plus de feuilles semées dans la voûte
   const ob=S.objN>0&&v3Semis(1,vue,p), fP=ob?(vue===0?(v3Proches().on?0:.12):.1):0;   // vus de la caméra, les objets sont dessinés en boîtes (v3Proches)
   if(!ob&&S.semN) v3Semis(1,vue,p);
   const sw=w[0]+w[1]+w[2]+ws[0]+ws[1]+ws[2]+ws[3], solide=N*(1-fF-fP);
@@ -1037,9 +1099,9 @@ function v3Partage(N,vue,p){
   const nF=Math.round(N*fF), nP=ob?Math.round(N*fP):0;
   if(ob) v3Semis(nP,vue,p);
   const fin=a=>{ const pS=[]; let c=a; for(let k=0;k<4;k++){ c+=nS[k]; pS.push(c); } return pS; };
-  if(vue===1){ const traits=Math.round(nB*.35);               // vue du soleil : les perches en traits (voir semeBTrait)
-    const pO=nA+nR+nF+nP, pS=fin(pO);
-    return {nA,nB:0,nR,nF,nP,nS,R,traits,part:[nA,nA,nA+nR,nA+nR+nF],partO:pO,partS:pS,total:pS[3]}; }
+  if(vue===1){ const traits=Math.round(nB*.95/(.95+hB)*.35), nBh=Math.round(nB*hB/(.95+hB));   // vue du soleil : les troncs des perches en traits (voir semeBTrait), leur houppier en grains
+    const pO=nA+nBh+nR+nF+nP, pS=fin(pO);
+    return {nA,nB:nBh,nR,nF,nP,nS,R,traits,part:[nA,nA+nBh,nA+nBh+nR,nA+nBh+nR+nF],partO:pO,partS:pS,total:pS[3]}; }
   const pO=nA+nB+nR+nF+nP, pS=fin(pO);
   return {nA,nB,nR,nF,nP,nS,R,traits:0,part:[nA,nA+nB,nA+nB+nR,nA+nB+nR+nF],partO:pO,partS:pS,total:pS[3]};
 }
@@ -1076,6 +1138,8 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
   if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP); }
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
+  if(u.uRelB){ gl.uniform4fv(u.uRelB,S.relB); gl.uniform4fv(u.uRelC,S.relC); gl.uniform2fv(u.uRelS,S.relS); }   // bosses et buttes (variante RELIEF)
+  if(u.uHp) gl.uniform4fv(u.uHp,S.hp); if(u.uHpC) gl.uniform3fv(u.uHpC,S.hpC);   // houppiers (variante HOUPPIER)
   gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
   gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);
   atmoUniformes(u,p,V3.avecRais||0);
@@ -1134,6 +1198,7 @@ function v3Image(p){
     gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
     gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
     gl.uniform1i(u.uTrait,0);
+    if(u.uOmbreG){ bindTex(9,dummy.t,u.uOmbreG); gl.uniform1i(u.uOmbreOk,0); }   // la carte se dessine : les feuilles ne la lisent pas
     if(a>de) gl.drawArrays(gl.POINTS,de,a-de);
     if(P===G.ombre&&ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
   }
@@ -1172,6 +1237,7 @@ function v3Image(p){
     gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
     gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
     gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
+    if(u.uOmbreG){ bindTex(9,V3.sm.t,u.uOmbreG); gl.uniform1i(u.uOmbreOk,1); }   // houppiers : chaque feuille lit son ombre dans la carte de cette image
     { const cap=Math.atan2(fwd[0],fwd[1]), q=Math.PI/4;       // ancre des feuilles : la position arrondie à 4 m, le cap arrondi à 45°
       gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
     gl.drawArrays(gl.POINTS,de,a-de);

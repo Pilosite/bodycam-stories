@@ -47,7 +47,7 @@ async function rendre(nom, cfg, vw, vh) {
     const p = await b.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
     const logs = []; p.on('pageerror', e => logs.push(e.message)); p.on('console', m => { if (m.type() === 'error') logs.push(m.text()); });
     await p.addInitScript(c => { window.__CFG = c; }, cfg);
-    await p.goto('file://' + join(root, 'dist/index.html'), { timeout: 600000 });
+    await p.goto('file://' + (process.env.PAGE || join(root, 'dist/index.html')), { timeout: 600000 });
     const t0 = Date.now(); let s = null;
     while ((Date.now() - t0) / 1000 < 1800) { await p.waitForTimeout(1000); s = await p.evaluate(() => window.__state || null); if (s && s.n >= PASSES) break; }
     await p.waitForTimeout(2500);                                // exposition : laisser le capteur rejoindre sa cible
