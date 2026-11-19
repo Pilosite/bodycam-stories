@@ -26,7 +26,8 @@ for (const [name, file] of Object.entries(shaders)) {
   js = js.replace(`__SHADER_${name}__`, () => '`' + src + '`');
 }
 js = js.replace('__SCENES__', () => JSON.stringify(scenes));
-if (/__SHADER_|__SCENES__/.test(js)) throw new Error('Un marqueur de build est resté dans main.js');
+js = js.replace('__MATIERES__', () => JSON.stringify(JSON.parse(read('src/matieres.json'))));
+if (/__SHADER_|__SCENES__|__MATIERES__/.test(js)) throw new Error('Un marqueur de build est resté dans main.js');
 
 const html = read('src/index.html').replace('__MAIN_JS__', () => js);
 mkdirSync(join(root, 'dist'), { recursive: true });

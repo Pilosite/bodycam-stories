@@ -33,6 +33,10 @@ Fait et vérifié en image : forêt, nuit à la lampe, dunes, netteté en mouvem
 
 Jamais mesuré : les performances sur téléphone.
 
+## Avancement de la refonte
+
+Étapes 1 et 2 faites : référence dans `ref/`, matières en recettes (`src/matieres.json`). Suite : étape 3, semis génériques.
+
 ## Le chantier suivant
 
 Toine veut que n'importe quelle demande donne un monde aussi crédible que la forêt, sans rien de prédéfini. Le plan est dans `docs/refonte-monde-generique.md`.

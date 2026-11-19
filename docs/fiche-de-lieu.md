@@ -62,6 +62,37 @@ Le moteur ne connaît aucun objet. La fiche les construit en assemblant des form
 
 Limites : 8 objets, 24 formes par objet, 64 formes en tout. Exemple complet : `scenes/05-maison-lapin.json`.
 
+## Matières : des recettes, pas du code
+
+Aucune matière n'est écrite dans le shader. Le sol, le sentier, le grès et les écorces sont des **recettes** : des données que le moteur évalue une fois par impact. La bibliothèque de départ est `src/matieres.json` (`litiere`, `sentier-sable`, `gres`, `gres-patine`, `sable-dunes`, `ecorce-chene`, `ecorce-pin`, `ecorce-bouleau`, `ecorce-chataignier`, et pour aller au-delà de la forêt `planches`, `paves`, `crepi`). Une fiche peut en ajouter ou en remplacer avec `matieres`, puis dire quelle surface prend quelle recette avec `surfaces`.
+
+```json
+"matieres": {
+  "gres-rouge": { "base": "gres", "couleur": "#a0705a", "mousse": { "force": 0.3 } }
+},
+"surfaces": { "rochers": "gres-rouge", "arbres": { "a": "ecorce-pin", "b": "ecorce-pin" } }
+```
+
+Surfaces : `sol`, `trajet`, `rochers`, `arbres` et `perches` (`{ "a", "b", "part" }` : deux écorces et la part de la première). Une forme d'objet peut aussi nommer une recette dans `matiere` (par exemple `"matiere": "planches"`). Une recette inconnue retombe sur celle du kit.
+
+Une recette s'évalue toujours dans le même ordre. Tous les champs sont facultatifs.
+
+| Champ | Sens |
+|---|---|
+| `base` | Nom d'une recette dont on hérite ; les champs donnés la complètent. |
+| `espace` | `sol` (motifs posés sur le plan, pour le sol et le trajet) ou `volume` (motifs dans la matière, pour rochers, troncs, objets). |
+| `couleur` | Couleur de base, `#rrggbb`. |
+| `nuance` | Seconde couleur par plages : `couleur`, `force`, `echelle`, `seuils`, `fbm`, `decalage`. |
+| `taches` | Jusqu'à quatre couches : `couleur`, `force`, `echelle` (nombre ou `[x, y, z]`, anisotrope), `seuils`, `fbm`, `decalage`, `biais` et `hauteur` (plus présentes vers une hauteur, comme le pied noirci d'un bouleau), `creux` (la tache est en creux), `sous_motif` (peinte avant le motif), `sur_motif` (seulement sur les éléments du motif). `#000000` assombrit : humidité, salissures. |
+| `motif` | `type` : `feuilles` (litière de cellules, `palette`, `couverture`, `taille`), `rides` (vent sur le sable), `fissures` (écorce : `seuils`, `profondeur`, `fines`, `assombrit`), `planches` (`joint`, `longueur`), `paves` (`joint`, `decalage_rangs`, `bombe`). Communs : `echelle`, `couleur` (joints, fond des fissures), `opacite`, `inclinaison`, `palette` (`[{ "couleur", "part" }]`). |
+| `variation`, `grain` | Modulation de la couleur, grande et fine : `echelle`, `force`. |
+| `mousse` | Mousse ou lichen : `couleur`, `force`, `echelle`, `seuils`, `fbm`, `dessus` (seuils sur l'orientation vers le ciel, limite décalée par `pente_bruit`, `pente_echelle`), `cote` (seuils vers le côté humide), `hauteur` (seuils sur la hauteur au-dessus du sol), `grain`, `adoucit` (efface le relief). |
+| `salissure` | Le pied s'assombrit : `force`, `hauteur` en mètres. |
+| `relief` | `motif` (profondeur du motif et des creux), `bosses` (deux bruits `{ echelle, force, fbm }`), `inclinaison` (facettes des feuilles), `grain` (`{ echelle, force }`). |
+| `brillance` | Reflet spéculaire, 0 à 1. |
+
+Le moteur borne chaque valeur avant usage. Limites : 24 recettes par lieu, 12 recettes dans une fiche.
+
 ## Décrire un monde
 
 Le bouton « Décrire un monde » fige l'image et ouvre le micro quand la page y a droit, sinon le clavier. La description part à Claude avec ce format et ses plages ; la réponse passe par `validerFiche` dans `src/main.js`, qui borne chaque valeur et jette les champs inconnus, puis le lieu est chargé et ajouté à « Lieu suivant ». Les six derniers mondes décrits sont gardés dans le navigateur.

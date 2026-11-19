@@ -27,6 +27,8 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 - `src/shaders/pathtrace.frag` : le monde (terrain, arbres, grès, canopée, dunes) et la lumière. C'est là que se joue le réalisme.
 - `src/shaders/camera.frag` : le capteur (fisheye, exposition, grain, compression, coins sombres).
 - `src/main.js` : boucle de rendu, reprojection temporelle, porteur de la caméra, voix dans sa tête, API `window.balade`.
+- `src/matieres.json` : bibliothèque de recettes de matière (sol, sentier, grès, écorces…), évaluées par `recette()` dans le shader.
+- `ref/` : vues de référence gelées ; `tools/vues.mjs` et `tools/compare.mjs` pour rendre et comparer.
 - `scenes/*.json` : fiches de lieu embarquées dans la page, format décrit dans `docs/fiche-de-lieu.md`.
 - `histoires/*.json` : contrats d'histoire, format décrit dans `docs/contrat-histoire.md`.
 - `docs/` : principes, formats, pistes de rendu. À lire avant de toucher au moteur.
@@ -38,6 +40,8 @@ node tools/shot.mjs out/vue.png '{"still":true,"nohud":true,"nowalk":true}' 10 2
 - Pas d'accent grave ni de `${` dans les shaders : le build les insère dans des gabarits JS.
 - Les champs des fiches sont en français, sans accents dans les clés.
 - Tout aléa du monde dérive de la graine. Même fiche, même monde.
+- Une matière s'ajoute en recette (données), jamais en code GLSL. `recette()` ne doit avoir qu'un seul appel dans le shader : chaque appel supplémentaire est déplié par le compilateur.
+- Après un changement de rendu : `node tools/vues.mjs out/vues && node tools/compare.mjs`, puis regarder la planche.
 
 ## État au 19 novembre 2026
 
@@ -47,6 +51,6 @@ Non vérifié : les performances sur un vrai téléphone. Tous les tests ont tou
 
 Faiblesses connues : sol proche de la caméra, pas de sous-bois, rochers trop lisses de près, feuilles de canopée en disques, pas de kit urbain ni d'intérieur, pas de son.
 
-Chantier en cours : `docs/refonte-monde-generique.md`. Les kits `foret` et `dunes` et les objets en formes sont des étapes, pas la cible : la cible est un vocabulaire générique (relief, semis, matières, volumes) dans lequel la forêt elle-même n'est qu'une fiche.
+Chantier en cours : `docs/refonte-monde-generique.md`. Étapes 1 (référence gelée) et 2 (matières en recettes) faites ; prochaine : semis génériques. Les kits `foret` et `dunes` et les objets en formes sont des étapes, pas la cible : la cible est un vocabulaire générique (relief, semis, matières, volumes) dans lequel la forêt elle-même n'est qu'une fiche.
 
 Autres pistes : `docs/rendu.md` et `docs/contrat-histoire.md`.

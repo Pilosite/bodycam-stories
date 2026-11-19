@@ -39,6 +39,12 @@ S'y ajoutent ce qui existe déjà : `ambiance`, `objets` (pour l'unique, pas pou
 
 Deuxième test : une fiche « rue de village français » écrite par Claude, sans toucher au moteur, donne une image qu'on prendrait pour une vidéo de téléphone.
 
+## Avancement
+
+- **Étape 1, fait.** Quatre vues gelées dans `ref/` (trois de forêt, une de dunes), avec `tools/vues.mjs` pour les rendre et `tools/compare.mjs` pour mesurer l'écart. Voir `ref/README.md`.
+- **Étape 2, fait.** `matGround`, `matRock`, `barkPat` et `matBark` ont disparu du shader. Un seul évaluateur, `recette()`, lit des recettes dans la texture `uMats`. Les neuf matières de la forêt et des dunes sont maintenant des données dans `src/matieres.json`, à côté de trois recettes nouvelles (`planches`, `paves`, `crepi`). Une fiche peut en ajouter (`matieres`), dire quelle surface prend laquelle (`surfaces`), et une forme d'objet peut en nommer une. Format : `docs/fiche-de-lieu.md`. Les écarts mesurés sur les vues de référence sont au niveau du bruit (`ref/bruit.txt`).
+- Leçon de compilation : chaque appel de fonction est déplié par le compilateur. `recette()` n'est appelée qu'à un seul endroit de `render()`, et les quatre évaluations du relief passent par une boucle. Avec cinq appels, le contexte WebGL était perdu en rendu logiciel. Garder cette règle pour `sdSemis` à l'étape 3.
+
 ## Ordre de travail proposé
 
 1. **Geler une référence.** Rendre trois vues de la forêt actuelle avec `tools/shot.mjs` et les garder dans `ref/`. Toute étape se compare à elles.

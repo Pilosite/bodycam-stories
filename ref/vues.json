@@ -1,0 +1,11 @@
+{
+  "passes": 24,
+  "largeur": 270,
+  "hauteur": 480,
+  "vues": [
+    { "nom": "a-sentier", "but": "sentier de sable, feuilles éparses, bloc de grès proche", "options": { "z": 22, "pitch": -0.5 } },
+    { "nom": "b-troncs", "but": "écorces de pin et de chêne, perches, litière, grès", "options": { "z": 40, "lookYaw": 1.1 } },
+    { "nom": "c-litiere", "but": "litière de feuilles, mousse, grès moussu, bord du sentier", "options": { "z": 31, "lookYaw": -0.9, "pitch": -0.2 } },
+    { "nom": "d-dunes", "but": "sable ridé par le vent, fiche des dunes", "options": { "scene": 3, "pitch": -0.25 } }
+  ]
+}

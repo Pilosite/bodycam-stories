@@ -1,0 +1,144 @@
+{
+  "recettes": {
+    "litiere": {
+      "nom": "litière de feuilles mortes, mousse par plaques",
+      "espace": "sol",
+      "couleur": "#8d6f4c",
+      "motif": {"type": "feuilles", "echelle": 15, "deformation": 0.12, "eclat": 0.5, "bord": 0.55, "recouvre": 0.8, "inclinaison": 0.5, "palette": [{"couleur": "#72533b", "part": 0.3}, {"couleur": "#9a7247", "part": 0.25}, {"couleur": "#b08d55", "part": 0.2}, {"couleur": "#8d7d65", "part": 0.15}, {"couleur": "#4c4138", "part": 0.1}], "couverture": 1, "taille": 1, "opacite": 1},
+      "taches": [{"couleur": "#000000", "force": 0.4, "echelle": 0.35, "seuils": [0.35, 0.7], "fbm": true, "decalage": 11}],
+      "grain": {"echelle": 60, "force": 0.4},
+      "mousse": {"couleur": "#3a4927", "force": 1, "echelle": 0.42, "seuils": [0.6, 0.72], "fbm": true, "decalage": 20, "grain": {"echelle": 45, "force": 0.8}, "adoucit": 0.6},
+      "relief": {"inclinaison": 0.12, "grain": {"echelle": 30, "force": 0.25}},
+      "brillance": 0.22
+    },
+    "sentier-sable": {
+      "nom": "sable tassé du sentier, feuilles éparses",
+      "espace": "sol",
+      "couleur": "#b4a997",
+      "variation": {"echelle": 3, "force": 0.3784},
+      "taches": [{"couleur": "#000000", "force": 0.38, "echelle": 0.6, "seuils": [0.45, 0.75], "fbm": true, "decalage": 5, "sous_motif": true}, {"couleur": "#000000", "force": 0.4, "echelle": 0.35, "seuils": [0.35, 0.7], "fbm": true, "decalage": 11, "sur_motif": true}],
+      "motif": {"type": "feuilles", "echelle": 15, "deformation": 0.12, "eclat": 0.5, "bord": 0.55, "recouvre": 0.8, "inclinaison": 0.5, "palette": [{"couleur": "#72533b", "part": 0.3}, {"couleur": "#9a7247", "part": 0.25}, {"couleur": "#b08d55", "part": 0.2}, {"couleur": "#8d7d65", "part": 0.15}, {"couleur": "#4c4138", "part": 0.1}], "couverture": 0.1, "couverture_bruit": 0.35, "taille": 0.32, "opacite": 0.92},
+      "grain": {"echelle": 90, "force": 0.2},
+      "relief": {"inclinaison": 0.1, "grain": {"echelle": 30, "force": 0.25}},
+      "brillance": 0.04
+    },
+    "gres": {
+      "nom": "grès de Fontainebleau, lichen, mousse côté humide",
+      "espace": "volume",
+      "couleur": "#a09d96",
+      "variation": {"echelle": 1.1, "force": 0.6},
+      "nuance": {"couleur": "#aca08d", "force": 0.35, "echelle": 4.3, "seuils": [0.4, 0.7], "fbm": true, "decalage": 5},
+      "grain": {"echelle": 60, "force": 0.3},
+      "taches": [{"couleur": "#000000", "force": 0.38, "echelle": [3, 0.5, 3], "seuils": [0.55, 0.8], "decalage": 3}, {"couleur": "#babdb0", "force": 0.7, "echelle": 7, "seuils": [0.66, 0.72], "decalage": 11}, {"couleur": "#474744", "force": 0.6, "echelle": 5, "seuils": [0.7, 0.76], "decalage": 31}],
+      "mousse": {"couleur": "#4c6530", "force": 0.9, "echelle": 0.8, "seuils": [0.38, 0.6], "fbm": true, "decalage": 3, "dessus": [0.25, 0.8], "pente_bruit": 0.7, "pente_echelle": 4.3, "pente_decalage": 5, "cote": [0.3, 0.9], "cote_force": 0.8, "adoucit": 0.5, "grain": {"echelle": 50, "force": 0.9}},
+      "salissure": {"force": 0.5, "hauteur": 0.45},
+      "relief": {"bosses": [{"echelle": 4.3, "fbm": true, "decalage": 5, "force": 0.018}, {"echelle": 18, "force": 0.0075}]},
+      "brillance": 0.04
+    },
+    "sable-dunes": {
+      "nom": "sable de dune, rides de vent",
+      "espace": "sol",
+      "couleur": "#c6ac8a",
+      "variation": {"echelle": 2, "force": 0.2083},
+      "grain": {"echelle": 160, "force": 0.14},
+      "motif": {"type": "rides", "echelle": 26, "deformation": 6, "masque": {"echelle": 0.25, "seuils": [0.25, 0.6]}, "couleur": "#bda07d", "opacite": 0.3, "inclinaison": 0.22},
+      "relief": {"grain": {"echelle": 120, "force": 0.12}},
+      "brillance": 0.1
+    },
+    "ecorce-chene": {
+      "nom": "écorce de chêne, fissures profondes",
+      "espace": "volume",
+      "couleur": "#726c65",
+      "motif": {"type": "fissures", "echelle": [26, 2.6, 26], "seuils": [0.7, 0.97], "profondeur": 0.9, "couleur": "#34312d", "fines": {"echelle": [60, 7, 60], "decalage": 4, "seuils": [0.8, 0.97], "profondeur": 0.25}},
+      "grain": {"echelle": [6, 1, 6], "force": 0.5},
+      "mousse": {"couleur": "#536338", "force": 0.75, "echelle": [6, 2, 6], "seuils": [0.35, 0.6], "decalage": 9, "cote": [-0.2, 0.7], "cote_force": 1, "hauteur": [3.2, 0.3]},
+      "relief": {"motif": 0.012},
+      "brillance": 0.06
+    },
+    "ecorce-pin": {
+      "nom": "écorce de pin sylvestre, plaques, haut du tronc orangé",
+      "espace": "volume",
+      "couleur": "#786c65",
+      "nuance": {"couleur": "#947865", "force": 1, "echelle": [9, 2, 9], "seuils": [0, 1], "decalage": 0},
+      "taches": [{"couleur": "#ba885a", "force": 1, "echelle": 0, "seuils": [0, 1], "biais": 1, "hauteur": [5, 8.5], "sous_motif": true}],
+      "motif": {"type": "fissures", "echelle": [14, 3, 14], "decalage": 2, "seuils": [0.78, 0.96], "profondeur": 1, "assombrit": 0.8},
+      "grain": {"echelle": 50, "force": 0.4},
+      "mousse": {"couleur": "#536338", "force": 0.75, "echelle": [6, 2, 6], "seuils": [0.35, 0.6], "decalage": 9, "cote": [-0.2, 0.7], "cote_force": 1, "hauteur": [3.2, 0.3]},
+      "relief": {"motif": 0.012},
+      "brillance": 0.06
+    },
+    "ecorce-bouleau": {
+      "nom": "écorce de bouleau, lenticelles, pied noirci",
+      "espace": "volume",
+      "couleur": "#d0cdc6",
+      "grain": {"echelle": [20, 3, 20], "force": 0.3},
+      "taches": [{"couleur": "#5a5551", "force": 0.7, "echelle": [12, 55, 12], "seuils": [0.72, 0.8], "creux": 0.2}, {"couleur": "#383534", "force": 1, "echelle": [7, 1.4, 7], "decalage": 2, "seuils": [0.6, 0.7], "biais": 0.35, "hauteur": [1.4, 0], "creux": 0.8}],
+      "mousse": {"couleur": "#536338", "force": 0.75, "echelle": [6, 2, 6], "seuils": [0.35, 0.6], "decalage": 9, "cote": [-0.2, 0.7], "cote_force": 1, "hauteur": [3.2, 0.3]},
+      "relief": {"motif": 0.004},
+      "brillance": 0.06
+    },
+    "ecorce-chataignier": {
+      "nom": "écorce de châtaignier, fibres verticales",
+      "espace": "volume",
+      "couleur": "#6f6a61",
+      "nuance": {"couleur": "#5a6541", "force": 0.5, "echelle": [4, 0.7, 4], "seuils": [0.4, 0.7], "decalage": 5},
+      "grain": {"echelle": [30, 2, 30], "force": 0.8},
+      "mousse": {"couleur": "#536338", "force": 0.75, "echelle": [6, 2, 6], "seuils": [0.35, 0.6], "decalage": 9, "cote": [-0.2, 0.7], "cote_force": 1, "hauteur": [3.2, 0.3]},
+      "relief": {"bosses": [{"echelle": [30, 2, 30], "force": 0.012}]},
+      "brillance": 0.06
+    },
+    "gres-patine": {
+      "nom": "grès patiné par le sable, sans mousse",
+      "base": "gres",
+      "mousse": null,
+      "taches": [{"couleur": "#000000", "force": 0.38, "echelle": [3, 0.5, 3], "seuils": [0.55, 0.8], "decalage": 3}, {"couleur": "#babdb0", "force": 0.7, "echelle": 7, "seuils": [0.66, 0.72], "decalage": 11}, {"couleur": "#474744", "force": 0.6, "echelle": 5, "seuils": [0.7, 0.76], "decalage": 31}, {"couleur": "#baa488", "force": 0.5, "echelle": 0, "seuils": [-1, 0]}]
+    },
+    "planches": {
+      "nom": "planches de bois grisé, joints sombres",
+      "espace": "volume",
+      "couleur": "#8a7a66",
+      "motif": {"type": "planches", "echelle": 7, "joint": 0.08, "longueur": 2.4, "eclat": 0.5, "couleur": "#2a231c", "opacite": 1},
+      "grain": {"echelle": [40, 4, 40], "force": 0.35},
+      "salissure": {"force": 0.35, "hauteur": 0.6},
+      "relief": {"motif": 0.006},
+      "brillance": 0.05
+    },
+    "paves": {
+      "nom": "pavés de grès, joints terreux",
+      "espace": "sol",
+      "couleur": "#8d8577",
+      "motif": {"type": "paves", "echelle": 6, "joint": 0.1, "decalage_rangs": 0.5, "eclat": 0.45, "bombe": 0.6, "couleur": "#3a342c", "opacite": 1},
+      "variation": {"echelle": 0.5, "force": 0.3},
+      "grain": {"echelle": 70, "force": 0.25},
+      "taches": [{"couleur": "#000000", "force": 0.35, "echelle": 0.4, "seuils": [0.45, 0.75], "fbm": true, "decalage": 7}],
+      "mousse": {"couleur": "#3b4c2b", "force": 0.7, "echelle": 0.5, "seuils": [0.55, 0.75], "fbm": true, "decalage": 13},
+      "relief": {"motif": 0.01, "grain": {"echelle": 40, "force": 0.08}},
+      "brillance": 0.12
+    },
+    "crepi": {
+      "nom": "crépi de façade, salissures en pied",
+      "espace": "volume",
+      "couleur": "#c9bba3",
+      "variation": {"echelle": 0.7, "force": 0.25},
+      "grain": {"echelle": 90, "force": 0.3},
+      "taches": [{"couleur": "#6d6458", "force": 0.4, "echelle": [1.5, 0.4, 1.5], "seuils": [0.55, 0.8], "fbm": true, "decalage": 3}],
+      "salissure": {"force": 0.45, "hauteur": 0.8},
+      "relief": {"bosses": [{"echelle": 60, "force": 0.002}]},
+      "brillance": 0.03
+    }
+  },
+  "surfaces": {
+    "foret": {
+      "sol": "litiere",
+      "trajet": "sentier-sable",
+      "rochers": "gres",
+      "arbres": {"a": "ecorce-pin", "b": "ecorce-chene", "part": 0.45},
+      "perches": {"a": "ecorce-bouleau", "b": "ecorce-chataignier", "part": 0.5}
+    },
+    "dunes": {
+      "sol": "sable-dunes",
+      "trajet": "sable-dunes",
+      "rochers": "gres-patine"
+    }
+  }
+}

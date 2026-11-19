@@ -1,0 +1,12 @@
+Écart après flou 4×4 (ecart_flou4, sur 255), 24 passes, 270 × 480, rendu logiciel.
+
+Vue          Plancher de bruit          Étape 2, matières en recettes
+             (ancien code rendu deux fois)
+a-sentier    1.47                       1.65
+b-troncs     1.53                       0.22
+c-litiere    1.45                       1.52
+d-dunes      0.36                       0.48
+
+Le bruit varie d'un rendu à l'autre (selon le découpage en bandes) : un écart au niveau du plancher
+ne distingue pas les deux images. Planche de l'étape 2 : etape2-comparaison.png
+(référence | recettes | écart ×4).

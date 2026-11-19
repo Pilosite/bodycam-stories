@@ -29,7 +29,7 @@ const logs = [];
 page.on('console', m => { if (m.type() === 'error') logs.push(m.text()); });
 page.on('pageerror', e => logs.push('pageerror: ' + e.message));
 await page.addInitScript(c => { window.__CFG = c; }, JSON.parse(cfgJson));
-await page.goto('file://' + join(root, 'dist/index.html'));
+await page.goto('file://' + join(root, 'dist/index.html'), { timeout: +timeout * 1000 });   // la compilation du shader peut retarder le chargement
 
 const t0 = Date.now(); let state = null; let failed = '';
 while ((Date.now() - t0) / 1000 < +timeout) {

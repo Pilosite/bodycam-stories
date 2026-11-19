@@ -48,7 +48,7 @@ function draw(){ gl.drawArrays(gl.TRIANGLES,0,3); }
 function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t); gl.uniform1i(loc,unit); }
 
 /* ------------------------------------------------------------------ scène : ce que la fiche de lieu pilote */
-const S={ objN:0, kit:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
+const S={ surf:[0,1,2,0], surfT:[3,4,5,6], surfP:[.45,.5], objN:0, kit:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
 let fiche=null, ficheIdx=0, seedN=4821, seed=[0,0,0], sceneDirty=true;
 function setSeed(n){ seedN=n; seed=[(n*12.9898)%89,(n*78.233)%83,(n*.618034)%6.2832]; }
 function applyAmbiance(a){
@@ -74,7 +74,7 @@ function applyFiche(f){
   S.kitP=S.kit===1 ? [-1,(f.dunes&&f.dunes.rochers)||0,0,1]
                    : [fo.densite!==undefined?.2+.6*fo.densite:.62, fo.rochers!==undefined?fo.rochers:1, fo.feuillage!==undefined?fo.feuillage:1, 1];
   S.eye=(f.camera&&f.camera.hauteur)||1.36;
-  buildShapes(f);
+  buildMats(f); buildShapes(f);
   applyAmbiance(f.ambiance||{});
   if(f.ambiance&&f.ambiance.saison==="hiver") S.kitP[2]*=.15;
   cam.z=0; cam.x=S.kit===0?pathX(0):0; cam.yaw=S.kit===0?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; queue.length=0; tempsFaits.length=0;
@@ -111,7 +111,7 @@ function buildShapes(f){
       const pe=Array.isArray(fo.penche)?fo.penche:[0,0], col=couleur(fo.couleur), r=(row+k)*16;
       shapesData.set([x+c*p[0]+sn*p[2], y+p[1], z-sn*p[0]+c*p[2], FORMES[fo.f],
                       t[0],t[1],t[2], yaw+clampN(fo.cap,-360,360,0)*Math.PI/180,
-                      col[0],col[1],col[2], MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
+                      col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
                       clampN(fo.lisse,0,.5,0)*ech, clampN(fo.arrondi,0,.3,0)*ech, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
       rad=Math.max(rad,Math.hypot(p[0],p[1],p[2])+Math.hypot(t[0],t[1],t[2]));
     });
@@ -120,6 +120,98 @@ function buildShapes(f){
   }
   gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,4,SH_ROWS,gl.RGBA,gl.FLOAT,shapesData);
   sceneDirty=true;
+}
+
+/* Matières : des recettes, pas du code. La bibliothèque (src/matieres.json) et la fiche (champ "matieres") les décrivent ;
+   on les range dans une texture de données lue par pathtrace.frag (fonction recette), une ligne par recette.
+   Texels d'une ligne : 0 couleur, espace | 1 variation | 2 grain | 3-5 nuance et brillance | 6-11 motif | 12-16 palette
+   | 17-32 quatre taches | 33-38 mousse | 39-40 salissure et relief | 41-44 deux bosses. */
+const MAT_LIB=__MATIERES__;
+const RT_W=48, RT_MAX=24, matData=new Float32Array(RT_W*RT_MAX*4);
+const matT=gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D,matT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,RT_W,RT_MAX);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+const MOTIFS={aucun:0,feuilles:1,rides:2,fissures:3,planches:4,paves:5};
+const matIdx=new Map();                                         // nom de recette -> ligne de la texture
+const isObj=v=>v&&typeof v==="object"&&!Array.isArray(v);
+function recettesDe(f){ return Object.assign({},MAT_LIB.recettes,isObj(f.matieres)?f.matieres:{}); }
+function resoudre(nom,lib,depth=0){                              // "base" : la recette hérite d'une autre, champ par champ
+  const r=lib[nom]; if(!isObj(r)) return null;
+  if(typeof r.base!=="string"||depth>3||r.base===nom) return r;
+  const b=resoudre(r.base,lib,depth+1); if(!b) return r;
+  const o=Object.assign({},b);
+  for(const [k,v] of Object.entries(r)) o[k]=isObj(v)&&isObj(b[k])?Object.assign({},b[k],v):v;
+  return o;
+}
+function packRecette(r,row){
+  const o=row*RT_W*4; matData.fill(0,o,o+RT_W*4);
+  const put=(i,a)=>matData.set(a.map(x=>Number.isFinite(x)?x:0),o+i*4);
+  const N=(v,a,b,d)=>clampN(v,a,b,d), Ob=v=>isObj(v)?v:{};
+  const ech=(v,d)=>Array.isArray(v)?[0,1,2].map(i=>N(v[i],0,300,d)):(v=N(v,0,300,d),[v,v,v]);
+  const seuils=(v,a,b)=>{ let s=Array.isArray(v)?[N(v[0],-2,3,a),N(v[1],-2,3,b)]:[a,b]; if(Math.abs(s[1]-s[0])<1e-3) s[1]=s[0]+1e-3; return s; };
+  const opt=v=>Array.isArray(v)?seuils(v,0,1):[0,0];            // seuils facultatifs : absents = désactivés
+  put(0,[...couleur(r.couleur),r.espace==="volume"?1:0]);
+  const va=Ob(r.variation), gr=Ob(r.grain), nu=Ob(r.nuance), mo=Ob(r.motif), re=Ob(r.relief), sa=Ob(r.salissure);
+  put(1,[...ech(va.echelle,1),N(va.force,0,1.5,0)]);
+  put(2,[...ech(gr.echelle,1),N(gr.force,0,1.5,0)]);
+  if(r.nuance){ put(3,[...couleur(nu.couleur),N(nu.force,0,1,.5)]); put(4,[...ech(nu.echelle,1),nu.fbm?1:0]); }
+  const ns=seuils(nu.seuils,.4,.7); put(5,[ns[0],ns[1],N(nu.decalage,-100,100,5),N(r.brillance,0,1,.05)]);
+  const ty=MOTIFS[mo.type]||0;
+  put(6,[ty,N(mo.opacite,0,1,1),N(mo.inclinaison,0,1,.5),N(re.motif,0,.05,0)]);
+  put(7,[...ech(mo.echelle,ty===1?15:ty===2?26:ty===4?7:ty===5?5:[20,3,20]),N(mo.decalage,-100,100,0)]);
+  if(mo.couleur!==undefined) put(8,[...couleur(mo.couleur),0]);
+  if(ty===1){ put(9,[N(mo.deformation,0,.5,.12),N(mo.eclat,0,1.5,.5),N(mo.bord,0,1,.55),N(mo.recouvre,0,1,.8)]);
+    put(10,[N(mo.couverture,0,1,1),N(mo.couverture_bruit,0,1,0),N(mo.taille,.05,1,1),0]); }
+  if(ty===2){ const mk=Ob(mo.masque), ms=seuils(mk.seuils,.25,.6);
+    put(9,[N(mo.deformation,0,20,6),N(mk.echelle,0,5,.25),ms[0],ms[1]]); put(10,[N(mo.cap,-180,180,0)*Math.PI/180,0,0,0]); }
+  if(ty===3){ const s=seuils(mo.seuils,.7,.97), fi=Ob(mo.fines), s2=seuils(fi.seuils,.8,.97);
+    put(9,[s[0],s[1],N(mo.profondeur,0,1,.9),N(mo.assombrit,0,1,0)]);
+    put(10,[s2[0],s2[1],mo.fines?N(fi.profondeur,0,1,.25):0,0]); put(11,[...ech(fi.echelle,[60,7,60]),N(fi.decalage,-100,100,4)]); }
+  if(ty===4) put(9,[N(mo.joint,.005,.45,.08),N(mo.longueur,.2,20,2.4),N(mo.eclat,0,1.5,.5),0]);
+  if(ty===5) put(9,[N(mo.joint,.005,.45,.1),N(mo.decalage_rangs,0,1,.5),N(mo.eclat,0,1.5,.45),N(mo.bombe,0,2,.6)]);
+  const pal=(Array.isArray(mo.palette)?mo.palette:[]).filter(isObj).slice(0,5);
+  if(pal.length){ const tot=pal.reduce((s,p)=>s+N(p.part,0,1,.2),0)||1; let acc=0;
+    for(let i=0;i<5;i++){ const p=pal[Math.min(i,pal.length-1)]; if(i<pal.length) acc+=N(p.part,0,1,.2)/tot; put(12+i,[...couleur(p.couleur),i>=pal.length-1?1.01:acc]); } }
+  (Array.isArray(r.taches)?r.taches:[]).filter(isObj).slice(0,4).forEach((t,k)=>{
+    const s=seuils(t.seuils,.5,.7), h=Array.isArray(t.hauteur)?[N(t.hauteur[0],-5,40,0),N(t.hauteur[1],-5,40,1)]:[0,1];
+    if(h[0]===h[1]) h[1]+=.01;
+    put(17+k*4,[...couleur(t.couleur),N(t.force,0,1,.5)]); put(18+k*4,[...ech(t.echelle,5),t.fbm?1:0]);
+    put(19+k*4,[s[0],s[1],h[0],h[1]]); put(20+k*4,[N(t.biais,-2,2,0),N(t.creux,-1,1,0),N(t.decalage,-100,100,0),t.sous_motif?1:t.sur_motif?2:0]); });
+  if(isObj(r.mousse)){ const m=r.mousse, s=seuils(m.seuils,.5,.7), g=Ob(m.grain);
+    put(33,[...couleur(m.couleur||"#3a4927"),N(m.force,0,1,.8)]); put(34,[...ech(m.echelle,.5),m.fbm?1:0]);
+    put(35,[s[0],s[1],N(m.decalage,-100,100,0),N(g.force,0,1.5,0)]);
+    put(36,[...opt(m.dessus),N(m.pente_bruit,0,2,0),N(g.echelle,0,300,50)]);
+    put(37,[...opt(m.cote),N(m.cote_force,0,1,1),N(m.adoucit,0,1,0)]);
+    const hh=Array.isArray(m.hauteur)?[N(m.hauteur[0],-5,40,0),N(m.hauteur[1],-5,40,1)]:[0,0]; put(38,[hh[0],hh[1],N(m.pente_echelle,0,100,0),N(m.pente_decalage,-100,100,0)]); }
+  const rg=Ob(re.grain);
+  put(39,[N(sa.force,0,1,0),N(sa.hauteur,.01,10,.5),N(re.inclinaison,0,1,0),N(rg.force,0,.5,0)]);
+  put(40,[N(rg.echelle,0,300,30),0,0,0]);
+  (Array.isArray(re.bosses)?re.bosses:[]).filter(isObj).slice(0,2).forEach((b,k)=>{
+    put(41+k*2,[...ech(b.echelle,4),N(b.force,0,.05,0)]); put(42+k*2,[b.fbm?1:0,N(b.decalage,-100,100,0),0,0]); });
+}
+/* Chaque surface pointe vers une recette. Les kits fixent les surfaces par défaut ; la fiche peut les remplacer (champ "surfaces"). */
+function buildMats(f){
+  const lib=recettesDe(f), kit=f.kit==="dunes"?"dunes":"foret", sf=Object.assign({},MAT_LIB.surfaces[kit]);
+  const fs=isObj(f.surfaces)?f.surfaces:{};
+  for(const k of ["sol","trajet","rochers"]) if(typeof fs[k]==="string"&&resoudre(fs[k],lib)) sf[k]=fs[k];
+  for(const k of ["arbres","perches"]) if(isObj(fs[k])) sf[k]=Object.assign({},sf[k]||{},fs[k]);
+  matIdx.clear(); matData.fill(0);
+  const use=nom=>{ if(typeof nom!=="string") return -1; if(matIdx.has(nom)) return matIdx.get(nom);
+    const r=resoudre(nom,lib); if(!r||matIdx.size>=RT_MAX) return -1; const i=matIdx.size; matIdx.set(nom,i); packRecette(r,i); return i; };
+  const ok=(nom,def)=>{ const i=use(nom); return i>=0?i:use(def); };
+  const d=MAT_LIB.surfaces[kit], ar=sf.arbres||d.arbres||{}, pe=sf.perches||d.perches||{};
+  S.surf=[ok(sf.sol,d.sol),ok(sf.trajet,d.trajet),ok(sf.rochers,d.rochers),0];
+  S.surfT=[ok(ar.a,"ecorce-pin"),ok(ar.b,"ecorce-chene"),ok(pe.a,"ecorce-bouleau"),ok(pe.b,"ecorce-chataignier")];
+  S.surfP=[clampN(ar.part,0,1,.45),clampN(pe.part,0,1,.5)];
+  for(const o of Array.isArray(f.objets)?f.objets:[]) for(const fo of (o&&Array.isArray(o.formes))?o.formes:[])   // formes qui nomment une recette
+    if(fo&&typeof fo.matiere==="string"&&isObj(lib[fo.matiere])) use(fo.matiere);
+  gl.bindTexture(gl.TEXTURE_2D,matT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,RT_W,RT_MAX,gl.RGBA,gl.FLOAT,matData);
+  sceneDirty=true;
+}
+function validerRecettes(m){                                    // la fiche ne garde que des recettes de taille raisonnable
+  if(!isObj(m)) return undefined; const out={};
+  for(const [k,v] of Object.entries(m).slice(0,12)) if(isObj(v)&&/^[a-z0-9_-]{1,30}$/.test(k)&&JSON.stringify(v).length<4000) out[k]=JSON.parse(JSON.stringify(v));
+  return Object.keys(out).length?out:undefined;
 }
 
 /* Mêmes formules que dans pathtrace.frag : à modifier des deux côtés. */
@@ -158,6 +250,7 @@ function common(w,h,p){
   gl.uniform1f(u.uFog,S.fog); gl.uniform3fv(u.uSeed,seed); gl.uniform3fv(u.uSunDir,S.sunDir);
   gl.uniform3fv(u.uSun,S.sun); gl.uniform3fv(u.uSky,S.sky); gl.uniform1f(u.uTorch,S.torch);
   bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
+  bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform2fv(u.uSurfP,S.surfP);
   gl.uniform1i(u.uKit,S.kit); gl.uniform4fv(u.uKitP,S.kitP); gl.uniform1i(u.uMode,0);
   return u;
 }
@@ -438,8 +531,13 @@ function validerFiche(f){                                     // ne garde que ce
     cap:o.cap===undefined?undefined:clampN(o.cap,-360,360,0), echelle:clampN(o.echelle,.1,5,1), degage:clampN(o.degage,0,12,0), visible:o.visible!==false,
     formes:o.formes.filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24).map(x=>({f:x.f,p:num3(x.p,0),taille:num3(x.taille,1),cap:clampN(x.cap,-360,360,0),
       penche:Array.isArray(x.penche)?[clampN(x.penche[0],-90,90,0),clampN(x.penche[1],-90,90,0)]:[0,0],
-      couleur:x.couleur, matiere:MATIERES[x.matiere]!==undefined?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)}))}:null).filter(o=>o&&o.formes.length);
+      couleur:x.couleur, matiere:MATIERES[x.matiere]!==undefined||(typeof x.matiere==="string"&&/^[a-z0-9_-]{1,30}$/.test(x.matiere))?x.matiere:"mat", lisse:clampN(x.lisse,0,.5,0), arrondi:clampN(x.arrondi,0,.3,0)}))}:null).filter(o=>o&&o.formes.length);
   if(obj.length) out.objets=obj;
+  const mats=validerRecettes(f.matieres); if(mats) out.matieres=mats;
+  if(isObj(f.surfaces)){ const s={}, fs=f.surfaces, nom=v=>typeof v==="string"?v.slice(0,30):undefined;
+    for(const k of ["sol","trajet","rochers"]) if(nom(fs[k])) s[k]=nom(fs[k]);
+    for(const k of ["arbres","perches"]) if(isObj(fs[k])) s[k]={a:nom(fs[k].a),b:nom(fs[k].b),part:clampN(fs[k].part,0,1,.5)};
+    out.surfaces=s; }
   const h=f.histoire;
   if(h&&typeof h==="object"&&h.pitch) out.histoire={ pitch:String(h.pitch).slice(0,400),
     temps:(Array.isArray(h.temps)?h.temps:[]).slice(0,4).filter(t=>t&&t.id).map(t=>({id:String(t.id).slice(0,30),quand:String(t.quand||"").slice(0,160),
@@ -478,11 +576,13 @@ Réponds uniquement par un objet JSON :
  "objets": [{"id": "mot", "nom": "ce que c'est", "devant": 2..90, "cote": -20..20, "degage": 0..12, "visible": true,
    "formes": [{"f": "boite"|"boule"|"cylindre"|"cone"|"capsule"|"toit", "p": [x, y, z], "taille": [largeur, hauteur, profondeur], "cap": degrés, "penche": [avant, côté], "couleur": "#rrggbb", "matiere": "mat"|"bois"|"pierre"|"metal"|"verre"|"pelage"|"tissu"|"tuile"|"lumineux", "lisse": 0..0.5, "arrondi": 0..0.3}]}],
  "histoire": {"pitch": "facultatif : ce qui arrive au porteur de la caméra, deux phrases", "temps": [{"id": "mot", "quand": "condition", "ce_qui_se_passe": "…", "scene": {"brume": 0..0.06, "lampe": true|false, "soleil": {"azimut": 0, "hauteur": 0}}}]},
+ "matieres": {"nom": {"base": "recette existante", "couleur": "#rrggbb", ...}}, "surfaces": {"sol": "nom", "trajet": "nom", "rochers": "nom"},
  "note": "une phrase, seulement si une partie de la demande ne peut pas être montrée"}
 Repères : une hauteur de soleil négative donne la nuit, et la lampe du téléphone s'allume. Soleil rasant entre 4 et 15. Brume : 0.003 air sec, 0.011 matin, 0.03 épais. La forêt est tempérée (pins, chênes, bouleaux, blocs de grès, sentier de sable). Les dunes sont un désert de sable.
 Objets : rien n'est prédéfini, tu construis tout ce que la demande contient (bâtiments, animaux, véhicules, mobilier, personnages, ruines…) en assemblant des formes. Huit objets au plus, 24 formes par objet, 64 formes en tout : va à l'essentiel de la silhouette, c'est filmé de loin par une mauvaise caméra.
 Repère d'un objet : mètres réels, y = 0 au sol, x vers la droite, +z = sa face avant, tournée vers celui qui arrive. "p" est le centre de la forme, "taille" ses dimensions entières (boule : diamètres ; cylindre, cône, capsule : [diamètre, hauteur, diamètre], debout ; toit : [longueur du faîtage, hauteur, largeur], à poser au-dessus des murs). "penche" incline une forme en degrés. "lisse" fond la forme dans les voisines (corps d'animal : 0.03 à 0.08). "lumineux" éclaire (fenêtre allumée, feu, écran). Portes et fenêtres : boîtes minces posées 2 cm devant le mur.
 Placement : "devant" est la distance le long du trajet depuis le départ, "cote" l'écart latéral (négatif à gauche ; moins de 1,5 = sur le sentier). Un bâtiment se pose 10 à 20 m devant, à 5 m de côté ou plus, avec "degage" égal à sa demi-largeur plus 2 pour écarter les arbres. Les temps de l'histoire peuvent faire apparaître ou disparaître des objets : "scene": {"montrer": ["id"], "cacher": ["id"]}, avec "visible": false au départ.
+Matières (facultatif) : chaque surface pointe vers une recette. Recettes prêtes : ${Object.keys(MAT_LIB.recettes).join(", ")}. Pour en faire une, pars d'une "base" et change ce qui diffère : "couleur", "nuance" {couleur, force}, "taches" [{couleur, force, echelle, seuils}], "mousse" {force} (0 = aucune), "salissure" {force, hauteur}, "brillance", "motif" {type: feuilles|rides|fissures|planches|paves, echelle, couleur}. Une forme d'objet peut nommer une recette dans "matiere" (ex. "planches", "paves", "crepi"). Garde la crédibilité : des couleurs ternes et sales plutôt que franches.
 Pour le décor il n'existe que les kits forêt et dunes : si la demande veut un autre sol ou un autre paysage (ville, mer, intérieur), choisis l'ambiance la plus proche, construis le reste en objets, garde l'idée dans "inspiration" et "histoire", et dis-le franchement dans "note".
 Le joueur dit : ${JSON.stringify(texte)}`;
     try{ f=await sampler.json(consigne,{modelTier:"default",cache:false}); }
