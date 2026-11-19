@@ -523,8 +523,8 @@ function v2Basculer(on){
    v3max (images accumulées à l'arrêt), v3detail (chronomètre chaque passe : ajoute des synchronisations),
    v3net (soleil ponctuel, sans pénombre), v3pcf (flou de lecture de la carte, en texels), v3amb (niveau de l'ambiance,
    0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres). */
-const V3={ on:!!CFG.v3, grains:CFG.grains||300000, ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||1024,
-  alpha:CFG.v3alpha||.25, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
+const V3={ on:!!CFG.v3, grains:CFG.grains||700000, ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||1024,
+  alpha:CFG.v3alpha||.18, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
   n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420} };
 function v3Init(){

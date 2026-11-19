@@ -8,6 +8,7 @@ layout(location=0) out vec4 g0;   // coordonnées de recette (ou couleur d'une f
 layout(location=1) out vec4 g1;   // normale, distance
 void main(){
   vec3 q=vQ; float d=vDist;
-  if(uPts==1){ vec2 o=(gl_PointCoord-.5)*vSz; o.y=-o.y; q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o); }
+  if(uPts==1){ vec2 pc=gl_PointCoord-.5; if(vSz>2.5 && dot(pc,pc)>.25) discard;   // grain rond : plus de confettis carrés aux silhouettes
+    vec2 o=pc*vSz; o.y=-o.y; q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o); }
   g0=vec4(q,vCode); g1=vec4(normalize(vN),d);
 }
