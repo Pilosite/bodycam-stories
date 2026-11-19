@@ -10,6 +10,7 @@ const FS_PT = __SHADER_FS_PT__;
 const FS_DOWN = __SHADER_FS_DOWN__;
 const FS_BLUR = __SHADER_FS_BLUR__;
 const FS_CAM = __SHADER_FS_CAM__;
+const VS_V2PTS = __SHADER_VS_V2PTS__, FS_V2PTS = __SHADER_FS_V2PTS__, FS_V2CIEL = __SHADER_FS_V2CIEL__, FS_V2TROUS = __SHADER_FS_V2TROUS__;
 const FICHES = __SCENES__;                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
@@ -25,7 +26,7 @@ if(!gl.getExtension("EXT_color_buffer_float") && !gl.getExtension("EXT_color_buf
 
 function sh(type,src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) fail("Erreur de compilation du shader :\n"+gl.getShaderInfoLog(s)); return s; }
-function prog(fs){ const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);
+function prog(fs,vs=VS){ const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS)) fail("Erreur de liaison du shader :\n"+gl.getProgramInfoLog(p));
   const u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
   for(let i=0;i<n;i++){ const a=gl.getActiveUniform(p,i); u[a.name.replace("[0]","")]=gl.getUniformLocation(p,a.name); }
@@ -324,6 +325,7 @@ function resize(){
   bl1=target(Math.max(8,Math.round(W*bs)),Math.max(8,Math.round(H*bs)),gl.RGBA16F,gl.LINEAR);
   bl2=target(bl1.w,bl1.h,gl.RGBA16F,gl.LINEAR);
   hist=null; n=0; row=0; mLevel=CFG.level!==undefined?CFG.level:1;
+  V2.out=null;
 }
 const px1=new Float32Array(4);
 function renderPass(dst,y0,rows,o,p){
@@ -393,6 +395,114 @@ function display(src,t){
   gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,canvas.width,canvas.height); draw();
 }
 
+/* ------------------------------------------------------------------ moteur v2 (essai) : tourner, puis projeter
+   Voir docs/moteur-v2.md. Le path tracer tourne des panoramiques équirectangulaires (uMode 2 : seule la génération du rayon
+   change) depuis des points du sentier, en avance sur le porteur, par bandes bornées dans le temps. Chaque image ne fait
+   que projeter, comme des points, les texels des panoramiques les plus proches (couleur éclairée + distance).
+   Options de test : v2, v2w/v2h (taille), v2passes, v2q (qualité du tournage : 1 = celle de l'arrêt, par défaut ; 0 = celle du mouvement, sans ombres d'arbres), v2pas (m),
+   v2nb (panoramiques dessinés), v2budget (ms de tournage par image), v2fill (rayon de dilatation, 0 = aucune),
+   v2trous (trous restants en magenta), v2scale (marge sur la taille des points), v2tour (liste imposée de z de tournage). */
+const V2={ on:!!CFG.v2, pw:CFG.v2w||1024, ph:CFG.v2h||512, passes:CFG.v2passes||4, q:CFG.v2q!==undefined?CFG.v2q:1, pas:CFG.v2pas||2.5,
+  nb:CFG.v2nb||3, max:CFG.v2max||6, budget:CFG.v2budget||12, fill:CFG.v2fill!==undefined?CFG.v2fill:2, marque:CFG.v2trous?1:0,
+  scale:CFG.v2scale||1.25, panos:[], cur:null, spare:null, row:0, msPerRow:2, gp:null, tgt:null, tgt2:null, rb:null,
+  out:null, lastPose:null, msProj:0, msProjAvg:0, nProj:0, pts:0, faits:[], maxPt:64 };
+const ID3=new Float32Array([1,0,0,0,1,0,0,0,1]);
+function v2Init(){
+  if(V2.gp) return;
+  V2.gp={ pts:prog(FS_V2PTS,VS_V2PTS), ciel:prog(FS_V2CIEL), trous:prog(FS_V2TROUS) };
+  V2.maxPt=Math.min(64,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
+}
+function v2Cibles(){                                          // cible de projection : même format que l'accumulation, plus une profondeur
+  if(V2.tgt&&V2.tgt.w===W&&V2.tgt.h===H) return;
+  v2LibereCibles();
+  V2.tgt=target(W,H,ACC_FMT,gl.NEAREST); V2.tgt2=target(W,H,ACC_FMT,gl.NEAREST);
+  V2.rb=gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER,V2.rb); gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,W,H);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V2.tgt.f); gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,V2.rb);
+  if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail("Moteur v2 : cible de projection incomplète.");
+  V2.out=null;
+}
+function v2LibereCibles(){ freeT(V2.tgt); freeT(V2.tgt2); if(V2.rb) gl.deleteRenderbuffer(V2.rb); V2.tgt=V2.tgt2=V2.rb=V2.out=null; }
+function v2Vider(){ V2.panos.forEach(p=>freeT(p.t)); V2.panos=[]; V2.cur=null; V2.row=0; V2.out=null; }
+function v2Pos(z){ const x=S.kit===0?pathX(z):cam.x; return [x,terrainH(x,z)+S.eye,z]; }   // sur le sentier, à hauteur d'œil (fiche forêt)
+function v2Voulus(){                                          // points de tournage, du plus urgent au moins urgent
+  if(Array.isArray(CFG.v2tour)) return CFG.v2tour.slice(0,V2.max).map(Number);
+  const dir=Math.cos(cam.yaw)>=0?1:-1, g=Math.round(cam.z/V2.pas), c=[];
+  for(let k=-2;k<=5;k++){ const z=+((g+k)*V2.pas).toFixed(3), dz=(z-cam.z)*dir; c.push({z,s:Math.abs(dz)+(dz<-.5*V2.pas?V2.pas:0)}); }
+  return c.sort((a,b)=>a.s-b.s).slice(0,V2.max).map(o=>o.z);
+}
+/* Tournage par bandes de lignes, dans un budget de temps par image (comme staticRows). Rend vrai si une passe s'est terminée. */
+function v2Tourner(budget){
+  const voulus=v2Voulus();
+  V2.panos=V2.panos.filter(p=>{ if(voulus.includes(p.z)) return true; if(p===V2.cur){ V2.cur=null; V2.row=0; } freeT(p.t); return false; });
+  if(!V2.cur) for(const z of voulus){
+    let p=V2.panos.find(o=>o.z===z);
+    if(!p){ p={z,pos:v2Pos(z),t:null,n:0,tw0:0,gpu:0}; V2.panos.push(p); }
+    if(p.n<V2.passes){ V2.cur=p; V2.row=0; break; }
+  }
+  const p=V2.cur; if(!p) return false;
+  if(!V2.spare) V2.spare=target(V2.pw,V2.ph,ACC_FMT,gl.NEAREST);
+  const t0=performance.now(); let fini=false;
+  do{
+    if(!p.tw0) p.tw0=performance.now();
+    const rows=Math.max(1,Math.min(V2.ph-V2.row,Math.round(budget/V2.msPerRow))), t1=performance.now();
+    const u=common(V2.pw,V2.ph,{pos:p.pos,mat:ID3});
+    gl.uniform1i(u.uMode,2); gl.uniform1i(u.uQ,V2.q); gl.uniform1f(u.uAlpha,p.n?1/(p.n+1):1); gl.uniform1i(u.uReproj,0); gl.uniform1f(u.uJit,1);
+    bindTex(0,(p.t||dummy).t,u.uPrev);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,V2.spare.f); gl.viewport(0,0,V2.pw,V2.ph);
+    gl.enable(gl.SCISSOR_TEST); gl.scissor(0,V2.row,V2.pw,rows); draw(); gl.disable(gl.SCISSOR_TEST);
+    gl.readPixels(0,V2.row,1,1,gl.RGBA,gl.FLOAT,px1);           // synchronise : le temps mesuré est le vrai temps GPU
+    const ms=performance.now()-t1; p.gpu+=ms; V2.msPerRow=Math.max(.002,V2.msPerRow*.6+(ms/rows)*.4);
+    V2.row+=rows;
+    if(V2.row>=V2.ph){                                        // passe complète : l'accumulation devient le panoramique
+      V2.row=0; const old=p.t; p.t=V2.spare; V2.spare=old; p.n++; fini=true;
+      if(p.n>=V2.passes){ V2.faits.push({z:p.z,s:(performance.now()-p.tw0)/1000,gpu:p.gpu/1000,passes:p.n}); V2.cur=null; break; }
+    }
+  } while(performance.now()-t0<budget);
+  return fini;
+}
+/* Projection : fond (ciel relu dans le panoramique le plus proche, trous ailleurs), puis les points avec test de profondeur. */
+function v2Projeter(p){
+  v2Init(); v2Cibles();
+  const pr=V2.panos.filter(o=>o.n>0).map(o=>({o,d:Math.hypot(o.pos[0]-p.pos[0],o.pos[1]-p.pos[1],o.pos[2]-p.pos[2])}))
+    .sort((a,b)=>a.d-b.d).slice(0,V2.nb).map(x=>x.o);
+  const t0=performance.now(), fish=1.09/(.5*Math.max(1,W/H)), G=V2.gp;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V2.tgt.f); gl.viewport(0,0,W,H);
+  if(pr.length){ gl.useProgram(G.ciel.p); bindTex(0,pr[0].t.t,G.ciel.u.uPano); gl.uniform2f(G.ciel.u.uRes,W,H); gl.uniform1f(G.ciel.u.uFish,fish);
+    gl.uniformMatrix3fv(G.ciel.u.uCam,false,p.mat); draw(); }
+  else gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]);
+  gl.clearBufferfv(gl.DEPTH,0,[1]);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
+  const u=G.pts.u; gl.useProgram(G.pts.p);
+  gl.uniform3fv(u.uCamPos,p.pos); gl.uniformMatrix3fv(u.uCam,false,p.mat); gl.uniform2f(u.uRes,W,H); gl.uniform1f(u.uFish,fish);
+  gl.uniform1f(u.uScale,V2.scale); gl.uniform1f(u.uMaxPt,V2.maxPt);
+  V2.pts=0;
+  pr.forEach((o,k)=>{ bindTex(0,o.t.t,u.uPano); gl.uniform3fv(u.uPanoPos,o.pos); gl.uniform1f(u.uBias,.03*k);
+    const N=o.t.w*o.t.h; gl.drawArrays(gl.POINTS,0,N); V2.pts+=N; });
+  gl.disable(gl.DEPTH_TEST);
+  V2.out=V2.tgt;
+  if(V2.fill>0||V2.marque){ const g=G.trous; gl.useProgram(g.p); bindTex(0,V2.tgt.t,g.u.uTex); gl.uniform1i(g.u.uRayon,Math.min(3,V2.fill)); gl.uniform1i(g.u.uMarque,V2.marque);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,V2.tgt2.f); draw(); V2.out=V2.tgt2; }
+  gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px1);
+  V2.msProj=performance.now()-t0; V2.msProjAvg=V2.nProj?V2.msProjAvg*.8+V2.msProj*.2:V2.msProj; V2.nProj++; V2.dessines=pr.length;
+}
+function v2Frame(p,dt){
+  if(sceneDirty){ v2Vider(); sceneDirty=false; }
+  const fini=v2Tourner(V2.budget);
+  if(fini || !V2.out || !samePose(p,V2.lastPose)){
+    v2Projeter(p); V2.lastPose=p; frames++;
+    if(bench&&walking) bench.push({dt:dt*1000,ms:V2.msProj,lvl:-1,pts:V2.pts});
+  }
+  postFX(V2.out);
+}
+function v2Prets(){                                           // panoramiques terminés parmi les plus proches voulus (pour les tests)
+  const v=v2Voulus().slice().sort((a,b)=>Math.abs(a-cam.z)-Math.abs(b-cam.z)).slice(0,V2.nb);
+  return v.filter(z=>{ const o=V2.panos.find(q=>q.z===z); return o&&o.n>=V2.passes; }).length;
+}
+function v2Basculer(on){
+  V2.on=on; $("v2").setAttribute("aria-pressed",String(on)); $("v2").textContent=on?"Moteur v2 · oui":"Moteur v2";
+  if(on){ v2Init(); V2.lastPose=null; V2.out=null; } else { hist=null; v2Vider(); freeT(V2.spare); V2.spare=null; v2LibereCibles(); }
+}
+
 /* ------------------------------------------------------------------ boucle */
 let lastT=0, bench=null, lastMotionMs=0; const startT=performance.now();
 function frame(now){
@@ -401,14 +511,15 @@ function frame(now){
   simulate(dt);
   walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
   const p=pose(); lastPose=p;
-  if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
+  if(V2.on) v2Frame(p,dt);
+  else if(!hist || sceneDirty || !samePose(p,histPose)){ motionFrame(p); postFX(hist); if(bench&&walking) bench.push({dt:dt*1000,ms:lastMotionMs,lvl:mLevel}); }
   else if(n<MAXS){
     const t0=performance.now(); let done=false;
     do{ done=staticRows(p); } while(!done && performance.now()-t0<20);
     if(done && (n<14||n%4===0)) postFX(hist);
   }
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
-  display(hist,(now-startT)/1000);
+  display(V2.on?V2.out||V2.tgt||dummy:hist,(now-startT)/1000);
   hud(now);
 }
 let lastHud=0;
@@ -418,8 +529,10 @@ function hud(now){
   $("rec").textContent=p2(Math.floor(s/60))+":"+p2(s%60);
   $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
   $("camid").textContent="CAM 07 · GRAINE "+seedN;
-  $("stat").textContent=frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
-  window.__state={n:CFG.auto?frames:n,W,H,mLevel,msMotion:+msMotion.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
+  $("stat").textContent=V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
+    :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
+  window.__state={n:CFG.auto?frames:V2.on?v2Prets():n,
+    v2:V2.on?{msProj:+V2.msProj.toFixed(1),msProjMoy:+V2.msProjAvg.toFixed(1),points:V2.pts,dessines:V2.dessines,faits:V2.faits.slice(),msParLigne:+V2.msPerRow.toFixed(2)}:undefined,W,H,mLevel,msMotion:+msMotion.toFixed(1),msPerRow,exposure,x:cam.x,z:cam.z,file:queue.length,kit:S.kit,titre:fiche.titre,nuit:S.nuit,fog:S.fog,kitP:S.kitP.slice()};
 }
 
 /* ------------------------------------------------------------------ commandes directes */
@@ -694,6 +807,7 @@ async function mesurer(){
   bench=[]; queue.push({type:"marcher",rest:11}); await wait(8000);
   const f=bench.slice(Math.min(10,bench.length>>2)); bench=null; queue.length=0; hold=true;
   await wait(400);
+  if(V2.on) return mesurerV2(f,wait,med);
   const n0=n, t0=performance.now(); let n1=n0, t1=t0;
   while(performance.now()-t0<14000 && n<n0+6){ await wait(100); if(n!==n1){ n1=n; t1=performance.now(); } }
   hold=false;
@@ -717,6 +831,37 @@ async function mesurer(){
     "",
     "MOTEUR V2, ESTIMATION",
     "Un panoramique   "+(sPass==null?"non mesuré":fx(sPass/(W*H)*5e5*4,1)+" s (500 000 points, 4 passes)"),
+  ].join("\n");
+  $("mesure-copier").disabled=false;
+}
+/* Moteur v2 : la marche ne fait que projeter (le tournage continue en tâche de fond, dans son budget par image) ;
+   à l'arrêt, on attend qu'un panoramique de plus soit tourné pour le chronométrer. */
+async function mesurerV2(f,wait,med){
+  const out=$("mesure-txt"), k0=V2.faits.length, t0=performance.now();
+  out.textContent="Marche mesurée. Tournage d'un panoramique à l'arrêt (30 s au plus)…";
+  while(performance.now()-t0<30000 && V2.faits.length===k0) await wait(200);   // porteur retenu : seul le tournage avance
+  hold=false;
+  const fx=(v,d=1)=>v==null?"non mesuré":v.toFixed(d).replace(".",",");
+  const dt=med(f.map(x=>x.dt)), ms=med(f.map(x=>x.ms)), pts=med(f.map(x=>x.pts||0));
+  const fa=V2.faits.slice(-4), last=V2.faits.length>k0?V2.faits[V2.faits.length-1]:null;
+  const dbg=gl.getExtension("WEBGL_debug_renderer_info"), gpu=dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"inconnu";
+  out.textContent=[
+    "MESURE · MOTEUR V2 · "+(fiche.titre||fiche.id),
+    "",
+    "Écran            "+canvas.width+" × "+canvas.height+" (×"+(window.devicePixelRatio||1).toFixed(2)+")",
+    "Puce graphique   "+gpu,
+    "",
+    "EN MARCHE, PROJECTION ("+f.length+" images)",
+    "Images/seconde   "+(dt?fx(1000/dt):"non mesuré"),
+    "Projection       "+fx(ms,1)+" ms par image",
+    "Points dessinés  "+Math.round(pts).toLocaleString("fr-FR")+" ("+V2.nb+" panoramiques au plus)",
+    "Résolution       "+W+" × "+H,
+    "",
+    "TOURNAGE",
+    "Panoramique      "+V2.pw+" × "+V2.ph+", "+V2.passes+" passes, qualité "+(V2.q?"fixe":"mouvement"),
+    "Un panoramique   "+(last?fx(last.s,1)+" s ("+fx(last.gpu,1)+" s de calcul)":"plus de 30 s"),
+    "Derniers         "+(fa.length?fa.map(x=>fx(x.s,1)).join(" · ")+" s":"aucun"),
+    "Budget           "+V2.budget+" ms par image, espacement "+fx(V2.pas,1)+" m",
   ].join("\n");
   $("mesure-copier").disabled=false;
 }
@@ -829,6 +974,8 @@ if(CFG.yaw!==undefined) cam.yaw+=CFG.yaw;
 if(CFG.pitch!==undefined) cam.pitch=CFG.pitch;
 if(CFG.auto) enqueue(CFG.auto);
 if(CFG.lookYaw) look.yaw=CFG.lookYaw;
+if(V2.on){ v2Basculer(true); window.__v2=V2; }                // accès de test (tools/v2essai.mjs)
+$("v2").onclick=()=>v2Basculer(!V2.on);
 if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
 if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);
 resize();

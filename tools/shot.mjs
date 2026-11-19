@@ -9,7 +9,10 @@
 //   z        position le long du sentier, en mètres       yaw, pitch   orientation de départ
 //   w, h     résolution interne forcée                    maxSpp   nombre de passes maximum
 //   prevOnly reste en aperçu de mouvement                 scene    fiche de lieu qui remplace celle du build
-//   seed     graine du monde
+//   seed     graine du monde                              lookYaw  regard tourné (radians), level  niveau de mouvement
+//   v2       moteur v2 (essai : panoramiques projetés) ; options v2w, v2h, v2passes, v2q, v2pas, v2nb, v2budget,
+//            v2fill, v2trous, v2scale, v2tour décrites en tête du bloc « moteur v2 » de src/main.js. En v2, le nombre
+//            de passes attendu est le nombre de panoramiques proches terminés (3 en pratique).
 //
 // CHROME=/chemin/vers/chrome force l'exécutable (sinon celui de Playwright).
 import { chromium } from 'playwright';
