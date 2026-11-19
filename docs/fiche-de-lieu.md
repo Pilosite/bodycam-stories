@@ -38,6 +38,8 @@ Les fiches vivent dans `scenes/*.json`. Le build les embarque toutes dans la pag
 | `foret.densite` | oui | 0 à 1. Part de cellules occupées par un arbre. |
 | `foret.rochers` | oui | 0 à 1 et plus. Abondance des blocs de grès. |
 | `foret.feuillage` | oui | 0 à 1,5. Densité de la canopée. |
+| `foret.houppier` | oui | `voute` (feuillus et pins, feuillage haut et commun) ou `cone` (conifères : un cône de feuillage par arbre, vert sombre). Réglages : `houppier_bas`, `houppier_rayon` en mètres. |
+| `foret.perches` | oui | 0 à 1. Part de jeunes troncs fins. |
 | `dunes.rochers` | oui | Abondance des blocs dans le sable, 0 par défaut. |
 | `ambiance.saison` | oui | `ete`, `automne`, `hiver`. Couleur et densité des feuilles. |
 | `ambiance.meteo` | oui | `clair` ou `voile` (soleil laiteux, ombres douces). |
@@ -92,6 +94,12 @@ Une recette s'évalue toujours dans le même ordre. Tous les champs sont faculta
 | `brillance` | Reflet spéculaire, 0 à 1. |
 
 Le moteur borne chaque valeur avant usage. Limites : 24 recettes par lieu, 12 recettes dans une fiche.
+
+## Lointain : l'horizon
+
+`lointain` décrit ce qu'on voit au-dessus des arbres : une chaîne de montagnes ou des collines, calculée par direction du regard et non tracée (coût négligeable). `hauteur` est l'angle des plus hauts sommets en degrés (collines 3 à 6, montagne 8 à 15, haute montagne vue de la vallée 18 à 30), `decoupe` la finesse des crêtes (0 à 1), `neige` la part enneigée (0 à 1), `couleur` la roche, `couleur_bas` les contreforts. Exemple : `essais/chalet-mont-blanc.json`.
+
+Limite : c'est un décor de fond. On ne peut pas y marcher, et le terrain proche reste celui du kit. Les sols `herbe` et `neige` existent en recettes.
 
 ## Décrire un monde
 

@@ -27,7 +27,10 @@ uniform int   uMode;       // 1 = sonde de collision
 uniform vec3  uProbe;
 out vec4 outCol;
 
-const float YC0=7.0, YC1=19.0;      // tranche de la canopée
+uniform vec2  uCan;        // tranche du feuillage : bas, haut
+uniform vec4  uHoup;       // houppier : forme (0 voûte commune, 1 cône par arbre), bas du cône, rayon au pied, part de perches
+#define YC0 uCan.x
+#define YC1 uCan.y
 const float CS=0.30;                // cellule de feuille
 const float CBR=1.5;                // cellule de branche
 const float SIG=0.16;               // extinction de la canopée
@@ -122,7 +125,16 @@ float sdTreeA(vec3 p, float th, out vec4 info){
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
   }
-  info=vec4(dq.x,y,dq.y,h.w);
+  float fol=0.;
+  if(uHoup.x>.5){                                            // conifère : un cœur de feuillage plein, visible et ombrant à toute distance ; les rameaux détaillés flottent autour
+    float tt=(y-uHoup.y)/(H+1.2-uHoup.y);
+    if(tt>-.15 && tt<1.15){
+      float Rc=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*clamp(tt,0.,1.))*(.8+.2*sin(y*4.2+h.w*30.))*.74;
+      float dc=max(length(f-o)-Rc,max(uHoup.y-y,y-(H+1.2)))*.55;
+      if(dc<d){ d=dc; fol=2.; }
+    }
+  }
+  info=vec4(dq.x,y,dq.y,h.w+fol);
   return min(d*.9,dOut);
 }
 
@@ -131,7 +143,7 @@ float sdTreeB(vec3 p, float th, out vec4 info){
   float dOut=.5*CB-max(abs(f.x),abs(f.y))+.22+(uMode==1?50.:0.);
   info=vec4(0.);
   vec4 h=h42(id+uSeed.xy+71.);
-  if(h.x>uKitP.x*.8) return dOut;
+  if(h.x>uKitP.x*.8*uHoup.w) return dOut;
   vec2 o=(h.yz-.5)*1.9;
   vec2 w=((id+.5)*CB+o-17.3)*RB;
   if(abs(w.x-pathX(w.y))<1.15 || cleared(w)) return dOut;
@@ -270,7 +282,23 @@ float shadow(vec3 ro, vec3 rd, float tmax, int steps){
 }
 
 /* ---- canopée : densité, transmittance, feuilles et branches discrètes */
+float coneDens(vec3 c){                                      // conifères : un cône de feuillage par arbre, étagé, du pied à la cime
+  vec2 q=RA*c.xz; vec2 id=floor(q/CA); vec2 f=q-(id+.5)*CA;
+  vec4 h=h42(id+uSeed.xy);
+  if(h.x>uKitP.x) return 0.;
+  vec2 o=(h.yz-.5)*3.8;
+  vec2 w=((id+.5)*CA+o)*RA;
+  if(abs(w.x-pathX(w.y))<1.5) return 0.;
+  float y=c.y-terrainH(w), H=11.+6.*h.w;
+  float t=(y-uHoup.y)/(H+1.2-uHoup.y);
+  if(t<0. || t>1.) return 0.;
+  float R=min(uHoup.z*(.8+.4*h.w),3.3-max(abs(o.x),abs(o.y)))*(1.-.92*t)*(.8+.2*sin(y*4.2+h.w*30.));   // l'arbre reste dans sa cellule
+  float r=length(f-o);
+  float trou=vnoise3(c*vec3(1.7,2.6,1.7)+h.w*9.);
+  return smoothstep(R,R*.7,r)*smoothstep(.12,.4,trou)*4.*uKitP.z;
+}
 float canopyDens(vec3 c){
+  if(uHoup.x>.5) return coneDens(c);
   float hp=smoothstep(YC0,YC0+2.5,c.y)*smoothstep(YC1,YC1-4.,c.y);
   if(hp<=0.) return 0.;
   float n=vnoise3(c*vec3(.21,.26,.21)+uSeed)*.7+.3*vnoise3(c*.63+7.);
@@ -289,6 +317,7 @@ float canopyT(vec3 ro, vec3 rd){
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
+  if(uHoup.x>.5) return mix(vec3(.010,.030,.014),vec3(.034,.075,.030),h)*(.7+.6*vnoise3(c*.4+uSeed));   // aiguilles : vert sombre toute l'année
   float sp=vnoise3(c*.09+uSeed+40.);
   if(sp<.42) return mix(vec3(.030,.062,.018),vec3(.055,.095,.028),h);
   vec3 ete=mix(vec3(.035,.085,.018),vec3(.075,.15,.03),h);
@@ -358,7 +387,7 @@ int foliage(vec3 ro, vec3 rd, float tmax, out float tHit, out vec3 nHit, out vec
           if(tt>t0 && tt<t1){
             vec3 q=ro+r*tt-c;
             vec3 u=normalize(cross(n,vec3(.31,.11,.9)+hc)); vec3 v=cross(n,u);
-            float la=.05+.05*hc.y;
+            float la=(.05+.05*hc.y)*(uHoup.x>.5?3.2:1.);   // conifère : des rameaux, pas des feuilles
             float x=dot(q,u)/la, y=dot(q,v)/(la*.55);
             if(x*x+y*y<1.){ tHit=tt; nHit=n; aHit=leafCol(c,hc.z); return 1; }
           }
@@ -398,6 +427,36 @@ vec3 skyBase(vec3 rd){
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
   return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+}
+/* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
+   Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
+uniform vec4 uLoin;          // hauteur du massif (tangente de l'angle), découpe des crêtes, altitude de la neige (0 à 1, au-delà : aucune), présence
+uniform vec3 uLoinCol;       // roche
+uniform vec3 uLoinBas;       // contreforts
+float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
+  vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
+  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  return s;
+}
+vec3 lointain(vec3 rd, vec3 c){
+  float az=atan(rd.x,rd.z), el=rd.y/max(length(rd.xz),1e-4);
+  if(el>uLoin.x*1.25) return c;
+  vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
+  float sa=atan(uSunDir.x,uSunDir.z);
+  for(int k=0;k<2;k++){
+    float fk=float(k), H=uLoin.x*(k==0?1.:.34);
+    float cr=H*(.42+1.15*loinCrete(az,fk));
+    float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
+    float lit=clamp(.45+.9*d*sin(sa-az)+.35*cos(sa-az),.03,1.);
+    float alt=el/max(uLoin.x,1e-4);
+    float plis=.6*vnoise(vec2(az*uLoin.y*9.+alt*7.+fk*9.,alt*9.-az*5.))+.4*vnoise(vec2(az*uLoin.y*30.-alt*16.,alt*26.+fk*3.));                            // couloirs et arêtes dans la face
+    vec3 alb=k==0?uLoinCol*(.7+.6*plis):uLoinBas*(.75+.5*plis);
+    if(k==0) alb=mix(alb,vec3(.86,.88,.92),smoothstep(uLoin.z-.05,uLoin.z+.05,alt+.5*(plis-.5)+.25*(cr/H-.7)));   // la neige tient sur les hauts, la roche perce dans les faces
+    vec3 col=alb*(uSun*lit*(.30+.15*plis)+vec3(.42,.52,.72)*uSky*.42);
+    col=mix(col,air,(k==0?.30:.14)*(1.-.5*smoothstep(0.,.8,alt)));   // le voile de l'air s'accroche au pied, les sommets en sortent
+    c=mix(c,col,smoothstep(cr+.004,cr-.004,el));
+  }
+  return c;
 }
 vec3 fogCol(vec3 rd){ float s=max(dot(rd,uSunDir),0.); return mix(vec3(.27,.31,.34)*uSky,uSun*vec3(.171,.164,.156),pow(s,5.)*.8); }
 
@@ -638,6 +697,7 @@ vec3 render(vec3 ro, vec3 rd){
   } else if(tS<0.){
     gT=1e4;
     vec3 c=rd.y>0.?skyCol(rd):fogCol(rd);
+    if(uLoin.w>0. && rd.y>-.02) c=lointain(rd,c);
     if(uTorch>0.) c+=vec3(1.,.97,.90)*uTorch*uFog*smoothstep(.72,.97,dot(rd,uCam[2]))*.07;
     return c;
   } else {
@@ -654,6 +714,10 @@ vec3 render(vec3 ro, vec3 rd){
     }
     else if(id==3){ r0=uSurf.z; q=info.xyz; }
     else if(id==4) r0=matProp(p,gn,info,alb,n,spec,emis,q);
+    else if(id==1 && info.w>1.5){                            // cœur de feuillage d'un conifère
+      alb=leafCol(p,vnoise3(p*5.))*(.5+.6*vnoise3(p*vec3(8.,13.,8.))); spec=.02;
+      n=normalize(gn+(vec3(vnoise3(p*17.),vnoise3(p*17.+7.),vnoise3(p*17.+13.))-.5)*.9);
+    }
     else { r0=id==1?(fract(info.w*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(info.w*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); q=info.xyz; hs=info.y; rot=id==1?RA:RB; }
     if(r0>=0){
       vec3 A=vec3(0.), T=vec3(0.); float SP=0.;
