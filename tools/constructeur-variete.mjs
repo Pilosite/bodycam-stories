@@ -83,13 +83,14 @@ for (const d of scenes) {
 }
 // 3. renommer, supprimer (au doigt)
 await page.evaluate(() => balade.atelier().ouvrir()); await page.waitForTimeout(300);
-const premier = scenes.find(s => s.titre.startsWith("Ruelle")) || scenes[0];
-await page.tap(`.carte-tete[data-id="${premier.id}"]`); await page.waitForTimeout(300);
+const premier = scenes.find(s => /ruelle/i.test(s.titre)) || scenes[0];
+const deplier = async id => { if (!(await page.$(`.carte.ouverte .carte-tete[data-id="${id}"]`))) await page.tap(`.carte-tete[data-id="${id}"]`); };
+await deplier(premier.id); await page.waitForTimeout(300);
 await page.screenshot({ path: join(out, 'portrait-carte.png') });
 await page.getByRole('button', { name: 'Renommer' }).tap(); await page.fill('.carte-form input', 'Ruelle de Gênes'); await page.getByRole('button', { name: 'Renommer' }).last().tap();
 await page.waitForFunction(id => balade.scenes().find(s => s.id === id)?.titre === 'Ruelle de Gênes', premier.id, { timeout: 10000 }).then(() => ok(true, 'renommée'), () => ok(false, 'renommée'));
-const dernier = scenes.find(s => s.id !== premier.id && /Entrep/.test(s.titre)) || scenes.find(s => s.id !== premier.id);
-await page.tap(`.carte-tete[data-id="${dernier.id}"]`); await page.waitForTimeout(300);
+const dernier = scenes.find(s => s.id !== premier.id && /entrep/i.test(s.titre)) || scenes.find(s => s.id !== premier.id);
+await deplier(dernier.id); await page.waitForTimeout(300);
 await page.getByRole('button', { name: 'Supprimer' }).tap(); await page.getByRole('button', { name: 'Confirmer la suppression' }).tap();
 await page.waitForFunction(id => !balade.scenes().some(s => s.id === id), dernier.id, { timeout: 10000 }).then(() => ok(true, 'supprimée'), () => ok(false, 'supprimée'));
 ok(!erreurs.length, 'pas d\'erreur dans la page (téléphone) ' + erreurs.slice(0, 3).join(' | '));

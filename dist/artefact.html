@@ -8147,9 +8147,9 @@ function soleilLexique(t){ return /nuit|minuit|nocturne|obscur/.test(t)?{azimut:
 function mondePlage(texte,t){                                  // plage : sable, mer à l'horizon, parasols
   const so=soleilLexique(t);
   return { titre:texte.charAt(0).toUpperCase()+texte.slice(1,70), inspiration:texte, kit:"nu",
-    relief:{amplitude:.5,echelle:90,pente:-.02}, trajet:{sinuosite:.2,largeur:2.5,creux:.02,bord:"irregulier"},
-    matieres:{ "lex-sable":{base:"sable-dunes",couleur:"#d8c6a2"} }, surfaces:{sol:"lex-sable",trajet:"sable-dunes"},
-    lointain:{hauteur:.5,decoupe:0,eau:"#3d6b78"},
+    relief:{amplitude:.3,echelle:90,pente:-.14}, trajet:{sinuosite:.2,largeur:2.5,creux:.02,bord:"irregulier"},   // le sol descend vers la mer : sinon on ne la voit pas
+    matieres:{ "lex-sable":{base:"sable-dunes",couleur:"#d8c6a2",motif:{type:"rides",echelle:30,deformation:6,couleur:"#cbb893",opacite:.1,inclinaison:.04}} }, surfaces:{sol:"lex-sable",trajet:"lex-sable"},
+    lointain:{hauteur:.1,decoupe:0,couleur:"#6d8f99",couleur_bas:"#5d7f89",eau:"#3d6b78"},
     ambiance:{saison:"ete",meteo:/gris|couvert|pluie|brume/.test(t)?"voile":"clair",soleil:so,brume:/brume|brouillard/.test(t)?.03:.005,lampe:so.hauteur<0},
     semis:/hiver|nuit|desert|vide|sauvage/.test(t)?[]:[{ id:"parasols", nom:"parasols", cellule:[6,6], rotation:10, trajet:{min:3,max:16}, densite:.5, groupes:.4, tourne:30, penche:6,
       palette:["#d23c32","#2f6fb0","#f0c43a","#ece6da"], formes:[ {f:"cylindre",p:[0,1.1,0],taille:[.06,2.2,.06],couleur:"#e8e4dc",matiere:"metal"}, {f:"cone",p:[0,2.25,0],taille:[2.2,.5,2.2],couleur:"palette",matiere:"tissu"} ] }],
