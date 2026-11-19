@@ -1153,7 +1153,7 @@ function simulate(dt){
   }
   if(v!==0){
     const x0=cam.x, z0=cam.z; moveBy(v*dt); walking=true;
-    look.yaw*=Math.exp(-dt/2.5); look.pitch*=Math.exp(-dt/2.5);           // en marche, le regard revient vers l'avant
+    if(!gyro.on){ look.yaw*=Math.exp(-dt/2.5); look.pitch*=Math.exp(-dt/2.5); }           // en marche, le regard revient vers l'avant
     stuck=Math.hypot(cam.x-x0,cam.z-z0)<Math.abs(v*dt)*.3?stuck+dt:0;
     if(stuck>.6){ stuck=0; queue.shift(); queue.unshift({type:"tourner",rest:(Math.random()<.5?-1:1)*.9}); }   // bloqué : il contourne
   }
@@ -1284,7 +1284,8 @@ let dragId=null, px=0, py=0;
 canvas.addEventListener("pointerdown",e=>{ dragId=e.pointerId; px=e.clientX; py=e.clientY; canvas.setPointerCapture(e.pointerId); canvas.classList.add("drag"); });
 canvas.addEventListener("pointermove",e=>{ if(e.pointerId!==dragId) return;
   const k=1.5/Math.max(canvas.clientWidth,canvas.clientHeight);
-  look.yaw-=(e.clientX-px)*k; look.pitch=Math.max(-1.3,Math.min(1.4,look.pitch+(e.clientY-py)*k));
+  if(gyro.on) gyro.off-=(e.clientX-px)*k;                 // téléphone-caméra : le glisser ne fait que recaler le cap
+  else { look.yaw-=(e.clientX-px)*k; look.pitch=Math.max(-1.3,Math.min(1.4,look.pitch+(e.clientY-py)*k)); }
   px=e.clientX; py=e.clientY; $("hint").classList.add("off"); });
 const endDrag=e=>{ if(e.pointerId===dragId){ dragId=null; canvas.classList.remove("drag"); } };
 canvas.addEventListener("pointerup",endDrag); canvas.addEventListener("pointercancel",endDrag);
@@ -1292,6 +1293,31 @@ addEventListener("keydown",e=>{ if(e.target.tagName==="INPUT") return;
   if(e.key==="ArrowLeft") look.yaw-=.06; else if(e.key==="ArrowRight") look.yaw+=.06;
   else if(e.key==="ArrowUp") look.pitch=Math.min(1.4,look.pitch+.05); else if(e.key==="ArrowDown") look.pitch=Math.max(-1.3,look.pitch-.05); });
 addEventListener("resize",resize);
+
+/* Le téléphone comme caméra : on l'oriente comme pour filmer, le regard suit. Le déplacement reste celui du porteur.
+   Demande un contexte sécurisé (https) et, sur iOS, une permission accordée sur un geste. Sans capteur, le glisser reste seul. */
+const gyro={ on:false, asked:false, yaw0:null, off:0, yaw:0, pitch:0 };
+function orientation(alpha,beta,gamma){                       // angles du téléphone (degrés) -> cap et site de sa caméra arrière
+  const k=Math.PI/360, c1=Math.cos(beta*k),s1=Math.sin(beta*k),c2=Math.cos(alpha*k),s2=Math.sin(alpha*k),c3=Math.cos(-gamma*k),s3=Math.sin(-gamma*k);
+  const ax=s1*c2*c3+c1*s2*s3, ay=c1*s2*c3-s1*c2*s3, az=c1*c2*s3-s1*s2*c3, aw=c1*c2*c3+s1*s2*s3, h=Math.SQRT1_2;
+  const x=(ax-aw)*h, y=(ay-az)*h, z=(az+ay)*h, w=(aw+ax)*h;
+  const fx=-2*(x*z+w*y), fy=-2*(y*z-w*x), fz=-(1-2*(x*x+y*y));
+  return { yaw:Math.atan2(fx,-fz), pitch:Math.asin(Math.max(-1,Math.min(1,fy))) };
+}
+function surOrientation(e){
+  if(e.alpha==null||e.beta==null) return;
+  const o=orientation(e.alpha,e.beta,e.gamma||0);
+  if(gyro.yaw0===null){ gyro.yaw0=o.yaw; gyro.yaw=0; gyro.pitch=o.pitch; gyro.on=true; $("hint").textContent="Oriente le téléphone comme pour filmer"; }
+  let d=o.yaw-gyro.yaw0-gyro.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
+  gyro.yaw+=d*.35; gyro.pitch+=(o.pitch-gyro.pitch)*.35;        // léger lissage : la main tremble déjà assez dans le capteur simulé
+  look.yaw=gyro.yaw+gyro.off; look.pitch=Math.max(-1.3,Math.min(1.4,gyro.pitch-cam.pitch));
+}
+function activerGyro(){                                        // au premier toucher : iOS n'accorde le capteur que sur un geste
+  if(gyro.asked||typeof DeviceOrientationEvent==="undefined") return; gyro.asked=true;
+  const go=()=>addEventListener("deviceorientation",surOrientation);
+  try{ if(typeof DeviceOrientationEvent.requestPermission==="function") DeviceOrientationEvent.requestPermission().then(r=>{ if(r==="granted") go(); }).catch(()=>{}); else go(); }catch(_){}
+}
+addEventListener("pointerdown",activerGyro,{passive:true});
 
 /* ------------------------------------------------------------------ voix dans sa tête
    Le monde se fige, le joueur parle, le porteur de la caméra pense à voix basse puis agit.
