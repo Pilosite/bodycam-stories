@@ -600,10 +600,11 @@ function postFX(src){
   if(lu){
     let s=0,ws=0,any=false;
     for(let y=0;y<bl1.h;y++) for(let x=0;x<bl1.w;x++){ const i=(y*bl1.w+x)*4;
-      const L=.2126*blBuf[i]+.7152*blBuf[i+1]+.0722*blBuf[i+2]; if(L>0) any=true;
+      const L=.2126*blBuf[i]+.7152*blBuf[i+1]+.0722*blBuf[i+2]; if(!(L>=0)||L===Infinity) continue;   // une valeur invalide ne doit jamais rendre l'écran noir
+      if(L>0) any=true;
       const dx=x/bl1.w-.5, dy=y/bl1.h-.5, w=1-1.6*(dx*dx+dy*dy);
       s+=w*Math.log(Math.min(L,8)+.004); ws+=w; }
-    if(any) expTarget=Math.min(S.nuit?9:14,Math.max(.25,.25/Math.exp(s/ws)));   // la nuit, le gain plafonne : le noir reste noir
+    if(any&&ws>0&&Number.isFinite(s)) expTarget=Math.min(S.nuit?9:14,Math.max(.25,.25/Math.exp(s/ws)));   // la nuit, le gain plafonne : le noir reste noir
   }
   gl.useProgram(P_BLUR.p);
   bindTex(0,bl1.t,P_BLUR.u.uTex); gl.uniform2f(P_BLUR.u.uDir,1/bl1.w,0); gl.bindFramebuffer(gl.FRAMEBUFFER,bl2.f); draw();
@@ -1042,7 +1043,9 @@ function v3Image(p){
   V3.hist=dst; V3.histPose=p; V3.n++;
 }
 function v3Frame(p,dt){
-  if(!v3Init()) return;                                        // programmes encore en compilation
+  if(!v3Init()){ const d=performance.now()-(V3.t0prep||(V3.t0prep=performance.now()));
+    if(d>2500) say(d>25000?"La préparation du moteur dure anormalement. Touche trois fois le chrono REC… ou recharge la page. Dernière étape : "+(ETAPES[ETAPES.length-1]||""):"Préparation du moteur graphique…",true);
+    return; }                                        // programmes encore en compilation
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
   v3Image(p); frames++;
@@ -1115,6 +1118,7 @@ function frame(now){
   }
   etape("rendu",v2pret?V2.out||hist:V3.on?V3.hist||hist:hist);
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
+  if(!(exposure>0)||!Number.isFinite(exposure)){ exposure=1.2; if(!(expTarget>0)) expTarget=1.2; }
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
   etape("aff",null); hud(now);
   if(pf&&walking) prof.push(pf);
