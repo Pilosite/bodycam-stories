@@ -290,7 +290,8 @@ void main(){
   if(uMode==1){                                              // sonde : distance au décor en 3 points voisins
     int ix=int(gl_FragCoord.x);
     vec3 q=uProbe+(ix==1?vec3(.05,0.,0.):ix==2?vec3(0.,0.,.05):vec3(0.));
-    outCol=vec4(map(q),0.,0.,1.); return;
+    float v=clamp((map(q)+1.)/9.,0.,1.)*255.;                // distance de -1 à 8 m sur 16 bits, dans une cible RGBA8 : relire des flottants est lent sur téléphone
+    outCol=vec4(floor(v)/255.,fract(v),0.,1.); return;
   }
   ivec2 ip=ivec2(gl_FragCoord.xy);
   rs=uint(ip.x)*1973u+uint(ip.y)*9277u+uint(uTick)*26699u+1u; rnd(); rnd();

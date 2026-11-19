@@ -1966,7 +1966,8 @@ void main(){
   if(uMode==1){                                              // sonde : distance au décor en 3 points voisins
     int ix=int(gl_FragCoord.x);
     vec3 q=uProbe+(ix==1?vec3(.05,0.,0.):ix==2?vec3(0.,0.,.05):vec3(0.));
-    outCol=vec4(map(q),0.,0.,1.); return;
+    float v=clamp((map(q)+1.)/9.,0.,1.)*255.;                // distance de -1 à 8 m sur 16 bits, dans une cible RGBA8 : relire des flottants est lent sur téléphone
+    outCol=vec4(floor(v)/255.,fract(v),0.,1.); return;
   }
   ivec2 ip=ivec2(gl_FragCoord.xy);
   rs=uint(ip.x)*1973u+uint(ip.y)*9277u+uint(uTick)*26699u+1u; rnd(); rnd();
@@ -1993,6 +1994,29 @@ uniform sampler2D uTex; uniform vec2 uDstRes; out vec4 o;
 void main(){ vec2 uv=gl_FragCoord.xy/uDstRes; vec2 st=.25/uDstRes; vec3 s=vec3(0.);
   for(int j=0;j<4;j++) for(int i=0;i<4;i++) s+=min(texture(uTex,uv+(vec2(float(i),float(j))-1.5)*st).rgb,vec3(60.));
   o=vec4(s/16.,1.); }`;
+const FS_EXPO = `#version 300 es
+// Exposition automatique tenue sur la puce graphique : une cible d'un seul texel, mise à jour à chaque passe de halo.
+// Aucune lecture vers le processeur : sur Mali-G77, relire le halo en flottants coûtait 40 ms toutes les 180 ms.
+precision highp float; precision highp sampler2D;
+uniform sampler2D uBloom;    // l'image réduite (avant flou)
+uniform sampler2D uPrev;     // l'exposition précédente
+uniform float uRate;         // part du chemin faite vers la cible à cette passe (inertie du capteur)
+uniform float uMax;          // plafond du gain (la nuit, le noir reste noir)
+out vec4 o;
+void main(){
+  float s=0., ws=0.;
+  for(int j=0;j<8;j++) for(int i=0;i<8;i++){                 // moyenne logarithmique, pondérée au centre
+    vec2 uv=(vec2(float(i),float(j))+.5)/8.;
+    float L=dot(textureLod(uBloom,uv,0.).rgb,vec3(.2126,.7152,.0722));
+    if(!(L>=0.)) L=0.;                                       // une valeur invalide ne doit jamais rendre l'écran noir
+    vec2 d=uv-.5; float w=1.-1.6*dot(d,d);
+    s+=w*log(min(L,8.)+.004); ws+=w;
+  }
+  float cible=clamp(.25/exp(s/ws),.25,uMax);
+  float prev=texelFetch(uPrev,ivec2(0),0).r;
+  float e=(prev>0. && prev<100.)?mix(prev,cible,uRate):cible;
+  o=vec4(e,cible,0.,1.);
+}`;
 const FS_BLUR = `#version 300 es
 precision highp float; precision highp sampler2D;
 uniform sampler2D uTex; uniform vec2 uDir; out vec4 o;
@@ -2004,6 +2028,8 @@ precision highp float; precision highp sampler2D;
 uniform sampler2D uTex; uniform sampler2D uBloom;
 uniform vec2 uSrcRes; uniform vec2 uOutRes;
 uniform float uExp; uniform float uTime; uniform vec3 uShake; uniform float uSoft; uniform float uGain;
+uniform sampler2D uExpoT; uniform int uExpoGpu;   // exposition tenue sur la puce (expo.frag), lue ici sans passer par le processeur
+float EX, GAIN;
 uniform int uLin;            // 1 = source filtrable (RGBA16F, LINEAR) : une lecture filtrée par la puce au lieu de quatre texelFetch
 out vec4 o;
 float h12(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
@@ -2015,7 +2041,7 @@ vec3 smp(vec2 uv){
              mix(texelFetch(uTex,ivec2(a.x,b.y),0).rgb,texelFetch(uTex,b,0).rgb,f.x),f.y);
 }
 vec3 tone(vec3 c){
-  c*=uExp;
+  c*=EX;
   float l=dot(c,vec3(.2126,.7152,.0722)); const float W=5.5;
   float l2=l*(1.+l/(W*W))/(1.+l);
   vec3 cl=c*l2/max(l,1e-5);
@@ -2023,6 +2049,8 @@ vec3 tone(vec3 c){
   return mix(cc,cl,.5);
 }
 void main(){
+  EX=uExpoGpu==1?texelFetch(uExpoT,ivec2(0),0).r:uExp; if(!(EX>0.)) EX=1.2;
+  GAIN=uExpoGpu==1?min(2.2,1.+.28*max(0.,log2(EX))):uGain;   // gain élevé = davantage de bruit capteur
   vec2 uv=gl_FragCoord.xy/uOutRes; float asp=uOutRes.x/uOutRes.y;
   vec2 q=uv-.5; q.x*=asp; float cr=cos(uShake.z), sr=sin(uShake.z); q=mat2(cr,sr,-sr,cr)*q; q.x/=asp; q=q*.955+uShake.xy;
   vec2 qa=q*vec2(asp,1.); float r2=dot(qa,qa);
@@ -2042,10 +2070,10 @@ void main(){
   float lg=clamp(dot(c,vec3(.333)),0.,1.);
   float tt=floor(uTime*24.);
   float g=h12(gl_FragCoord.xy+vec2(tt*37.1,tt*17.7))-.5;
-  c+=g*mix(.060,.020,lg)*uGain;
+  c+=g*mix(.060,.020,lg)*GAIN;
   vec2 cq=floor(gl_FragCoord.xy/3.);
   vec3 cn3=vec3(h12(cq+tt*3.1),h12(cq+tt*5.3+11.),h12(cq+tt*7.7+23.))-.5;
-  c+=cn3*.022*(1.-lg)*uGain;
+  c+=cn3*.022*(1.-lg)*GAIN;
   vec2 bq=floor(gl_FragCoord.xy/vec2(16.));                // macroblocs de compression vidéo
   c+=(vec3(h12(bq+tt*1.7),h12(bq+tt*2.9+5.),h12(bq+tt*4.1+9.))-.5)*.012;
   c=c*.985+.012;
@@ -5201,7 +5229,7 @@ try{ for(const kv of location.hash.slice(1).split("&")){ if(!kv) continue; const
   if(/^[A-Za-z0-9_]{1,24}$/.test(k)&&!(k in CFG)){ let x=v; try{ x=JSON.parse(v); }catch(_){} CFG[k]=x; } } }catch(_){}   // 0 vaut « non »
 /* Optimisations du moteur v3 en qualité mobile (docs/moteur-v3.md, « Vers 30 images par seconde »), modifiables pendant la
    marche par le bouton Mesurer pour les comparer : undefined = choix automatique (mobile oui, complète non). */
-const OPT={ tapis:CFG.v3tapis, damier:CFG.v3damier, sondeSync:!!CFG.sondeSync, expoSync:!!CFG.expoSync, v3sync:!!CFG.v3sync, capteur4:!!CFG.capteur4 };
+const OPT={ tapis:CFG.v3tapis, damier:CFG.v3damier, sondeSync:true, expoSync:!!CFG.expoSync, v3sync:!!CFG.v3sync, capteur4:!!CFG.capteur4 };
 function fail(msg){ const e=$("err"); e.style.display="flex"; e.style.userSelect="text"; e.style.webkitUserSelect="text"; e.textContent=msg+(typeof diag==="function"&&typeof gl!=="undefined"&&gl?diag():""); throw new Error(msg); }
 
 /* ------------------------------------------------------------------ WebGL */
@@ -5239,7 +5267,7 @@ const prog=(fs,vs=VS,nom)=>{ etapeGL("compilation : "+(nom||"programme")); const
    compile une fois (en tâche de fond si le navigateur le permet), à la première fiche qui la demande : jamais de code généré par monde.
    Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis. */
 const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+(v>>1)+"\n"):FS_PT;
-const P_DOWN=prog(FS_DOWN,VS,"halo (réduction)"), P_BLUR=prog(FS_BLUR,VS,"halo (flou)"), P_CAM=prog(FS_CAM,VS,"capteur");
+const P_DOWN=prog(FS_DOWN,VS,"halo (réduction)"), P_BLUR=prog(FS_BLUR,VS,"halo (flou)"), P_CAM=prog(FS_CAM,VS,"capteur"), P_EXPO=prog(FS_EXPO,VS,"exposition");
 const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
 /* Le shader du lanceur de rayons est très gros. Sur certains ordinateurs (Chrome sous Windows) sa compilation échoue et emporte
    tout le contexte WebGL. On le compile donc sous surveillance : une marque est posée avant, retirée après. Si la page meurt
@@ -5284,7 +5312,8 @@ function target(w,h,ifmt,filter){
 function freeT(x){ if(x){ gl.deleteTexture(x.t); gl.deleteFramebuffer(x.f); } }
 let ACC_FMT=gl.RGBA32F;
 { const probe=target(4,4,gl.RGBA32F,gl.NEAREST); if(!probe.ok) ACC_FMT=gl.RGBA16F; freeT(probe); }
-const dummy=target(1,1,ACC_FMT,gl.NEAREST), probeT=target(4,1,ACC_FMT,gl.NEAREST);
+const dummy=target(1,1,ACC_FMT,gl.NEAREST), probeT=target(4,1,gl.RGBA8,gl.NEAREST);
+const expoT=[target(1,1,gl.RGBA16F,gl.NEAREST),target(1,1,gl.RGBA16F,gl.NEAREST)]; let expoI=0, expoQuand=0;
 function draw(){ gl.drawArrays(gl.TRIANGLES,0,3); }
 function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t); gl.uniform1i(loc,unit); }
 
@@ -5620,7 +5649,7 @@ function common(w,h,p){
   gl.uniform1i(u.uSemN,S.semN); gl.uniform4fv(u.uSemTop,S.semTop); gl.uniform3fv(u.uSolAlb,S.solAlb); gl.uniform1f(u.uNuit,S.lum);
   return u;
 }
-const pb=new Float32Array(16);
+const pb=new Float32Array(16), pb8=new Uint8Array(16);
 /* Lecture différée d'une cible (sonde, exposition) : readPixels dans un tampon de la puce (PBO), puis une barrière (fenceSync).
    On revient voir aux images suivantes ; tant que la barrière n'est pas passée, rien n'attend. Une lecture bloquante force la
    puce à finir tout ce qui est en file (7,6 ms mesurés pour la sonde sur Mali-G77, dont presque tout est de l'attente). */
@@ -5650,8 +5679,9 @@ function probeDessin(x,y,z,cible=probeT){                      // distance au d�
 function probe(x,y,z){                                         // distance au décor, lue sur le GPU (bloquant)
   if(!progs[varCourante()]) return [9,9,9];                    // lanceur de rayons pas compilé (ordinateur en v3) : pas de collision pour l'instant
   probeDessin(x,y,z);
-  gl.readPixels(0,0,4,1,gl.RGBA,gl.FLOAT,pb);
-  return [pb[0],pb[4],pb[8]];
+  gl.readPixels(0,0,4,1,gl.RGBA,gl.UNSIGNED_BYTE,pb8);          // octets : le chemin de lecture rapide de toutes les puces
+  const d=i=>(pb8[i]+pb8[i+1]/255)/255*9-1;
+  return [d(0),d(4),d(8)];
 }
 function moveBy(dist){
   let nx=cam.x+Math.sin(cam.yaw)*dist, nz=cam.z+Math.cos(cam.yaw)*dist;
@@ -5777,7 +5807,14 @@ function postFX(src){
   // l'ancienne lecture bloquante) : sur une puce à tuiles, une lecture bloquante attend toute l'image en cours.
   if(!blBuf||blBuf.length!==bl1.w*bl1.h*4) blBuf=new Float32Array(bl1.w*bl1.h*4);
   let lu=false;
-  if(OPT.expoSync){ if(now-lastExpRead>180){ lastExpRead=now; gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf); lu=true; } }
+  if(!OPT.expoSync&&!CFG.expoDiff){                             // exposition sur la puce : un texel, aucune lecture
+    const dtE=expoQuand?Math.min(1,(now-expoQuand)/1000):1e3; expoQuand=now;
+    gl.useProgram(P_EXPO.p); bindTex(0,bl1.t,P_EXPO.u.uBloom); bindTex(1,expoT[expoI].t,P_EXPO.u.uPrev);
+    gl.uniform1f(P_EXPO.u.uRate,1-Math.exp(-dtE/.45)); gl.uniform1f(P_EXPO.u.uMax,S.nuit?9:14);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,expoT[1-expoI].f); gl.viewport(0,0,1,1); draw(); expoI=1-expoI;
+    gl.viewport(0,0,bl1.w,bl1.h);
+  }
+  else if(OPT.expoSync){ if(now-lastExpRead>180){ lastExpRead=now; gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf); lu=true; } }
   else { lu=recevoirDiff(expoL,blBuf); if(!expoL.sync&&now-lastExpRead>180){ lastExpRead=now; lireDiff(expoL,bl1,bl1.w,bl1.h,bl1.w*bl1.h*4); } }
   if(lu){
     let s=0,ws=0,any=false;
@@ -5798,6 +5835,7 @@ function display(src,t,cible){
   const u=P_CAM.u; gl.useProgram(P_CAM.p);
   bindTex(0,src.t,u.uTex); bindTex(1,bl1.t,u.uBloom);
   gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
+  bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff?0:1);
   gl.uniform1f(u.uExp,exposure); gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
   if(still) gl.uniform3f(u.uShake,0,0,0);                     // sinon : dérive de la main et balancement de la marche

@@ -3,6 +3,8 @@ precision highp float; precision highp sampler2D;
 uniform sampler2D uTex; uniform sampler2D uBloom;
 uniform vec2 uSrcRes; uniform vec2 uOutRes;
 uniform float uExp; uniform float uTime; uniform vec3 uShake; uniform float uSoft; uniform float uGain;
+uniform sampler2D uExpoT; uniform int uExpoGpu;   // exposition tenue sur la puce (expo.frag), lue ici sans passer par le processeur
+float EX, GAIN;
 uniform int uLin;            // 1 = source filtrable (RGBA16F, LINEAR) : une lecture filtrée par la puce au lieu de quatre texelFetch
 out vec4 o;
 float h12(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
@@ -14,7 +16,7 @@ vec3 smp(vec2 uv){
              mix(texelFetch(uTex,ivec2(a.x,b.y),0).rgb,texelFetch(uTex,b,0).rgb,f.x),f.y);
 }
 vec3 tone(vec3 c){
-  c*=uExp;
+  c*=EX;
   float l=dot(c,vec3(.2126,.7152,.0722)); const float W=5.5;
   float l2=l*(1.+l/(W*W))/(1.+l);
   vec3 cl=c*l2/max(l,1e-5);
@@ -22,6 +24,8 @@ vec3 tone(vec3 c){
   return mix(cc,cl,.5);
 }
 void main(){
+  EX=uExpoGpu==1?texelFetch(uExpoT,ivec2(0),0).r:uExp; if(!(EX>0.)) EX=1.2;
+  GAIN=uExpoGpu==1?min(2.2,1.+.28*max(0.,log2(EX))):uGain;   // gain élevé = davantage de bruit capteur
   vec2 uv=gl_FragCoord.xy/uOutRes; float asp=uOutRes.x/uOutRes.y;
   vec2 q=uv-.5; q.x*=asp; float cr=cos(uShake.z), sr=sin(uShake.z); q=mat2(cr,sr,-sr,cr)*q; q.x/=asp; q=q*.955+uShake.xy;
   vec2 qa=q*vec2(asp,1.); float r2=dot(qa,qa);
@@ -41,10 +45,10 @@ void main(){
   float lg=clamp(dot(c,vec3(.333)),0.,1.);
   float tt=floor(uTime*24.);
   float g=h12(gl_FragCoord.xy+vec2(tt*37.1,tt*17.7))-.5;
-  c+=g*mix(.060,.020,lg)*uGain;
+  c+=g*mix(.060,.020,lg)*GAIN;
   vec2 cq=floor(gl_FragCoord.xy/3.);
   vec3 cn3=vec3(h12(cq+tt*3.1),h12(cq+tt*5.3+11.),h12(cq+tt*7.7+23.))-.5;
-  c+=cn3*.022*(1.-lg)*uGain;
+  c+=cn3*.022*(1.-lg)*GAIN;
   vec2 bq=floor(gl_FragCoord.xy/vec2(16.));                // macroblocs de compression vidéo
   c+=(vec3(h12(bq+tt*1.7),h12(bq+tt*2.9+5.),h12(bq+tt*4.1+9.))-.5)*.012;
   c=c*.985+.012;

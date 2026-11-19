@@ -8,6 +8,7 @@
 const VS = __SHADER_VS__;
 const FS_PT = __SHADER_FS_PT__;
 const FS_DOWN = __SHADER_FS_DOWN__;
+const FS_EXPO = __SHADER_FS_EXPO__;
 const FS_BLUR = __SHADER_FS_BLUR__;
 const FS_CAM = __SHADER_FS_CAM__;
 const VS_V2PTS = __SHADER_VS_V2PTS__, FS_V2PTS = __SHADER_FS_V2PTS__, FS_V2CIEL = __SHADER_FS_V2CIEL__, FS_V2TROUS = __SHADER_FS_V2TROUS__;
@@ -22,7 +23,7 @@ try{ for(const kv of location.hash.slice(1).split("&")){ if(!kv) continue; const
   if(/^[A-Za-z0-9_]{1,24}$/.test(k)&&!(k in CFG)){ let x=v; try{ x=JSON.parse(v); }catch(_){} CFG[k]=x; } } }catch(_){}   // 0 vaut « non »
 /* Optimisations du moteur v3 en qualité mobile (docs/moteur-v3.md, « Vers 30 images par seconde »), modifiables pendant la
    marche par le bouton Mesurer pour les comparer : undefined = choix automatique (mobile oui, complète non). */
-const OPT={ tapis:CFG.v3tapis, damier:CFG.v3damier, sondeSync:!!CFG.sondeSync, expoSync:!!CFG.expoSync, v3sync:!!CFG.v3sync, capteur4:!!CFG.capteur4 };
+const OPT={ tapis:CFG.v3tapis, damier:CFG.v3damier, sondeSync:true, expoSync:!!CFG.expoSync, v3sync:!!CFG.v3sync, capteur4:!!CFG.capteur4 };
 function fail(msg){ const e=$("err"); e.style.display="flex"; e.style.userSelect="text"; e.style.webkitUserSelect="text"; e.textContent=msg+(typeof diag==="function"&&typeof gl!=="undefined"&&gl?diag():""); throw new Error(msg); }
 
 /* ------------------------------------------------------------------ WebGL */
@@ -60,7 +61,7 @@ const prog=(fs,vs=VS,nom)=>{ etapeGL("compilation : "+(nom||"programme")); const
    compile une fois (en tâche de fond si le navigateur le permet), à la première fiche qui la demande : jamais de code généré par monde.
    Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis. */
 const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+(v>>1)+"\n"):FS_PT;
-const P_DOWN=prog(FS_DOWN,VS,"halo (réduction)"), P_BLUR=prog(FS_BLUR,VS,"halo (flou)"), P_CAM=prog(FS_CAM,VS,"capteur");
+const P_DOWN=prog(FS_DOWN,VS,"halo (réduction)"), P_BLUR=prog(FS_BLUR,VS,"halo (flou)"), P_CAM=prog(FS_CAM,VS,"capteur"), P_EXPO=prog(FS_EXPO,VS,"exposition");
 const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
 /* Le shader du lanceur de rayons est très gros. Sur certains ordinateurs (Chrome sous Windows) sa compilation échoue et emporte
    tout le contexte WebGL. On le compile donc sous surveillance : une marque est posée avant, retirée après. Si la page meurt
@@ -105,7 +106,8 @@ function target(w,h,ifmt,filter){
 function freeT(x){ if(x){ gl.deleteTexture(x.t); gl.deleteFramebuffer(x.f); } }
 let ACC_FMT=gl.RGBA32F;
 { const probe=target(4,4,gl.RGBA32F,gl.NEAREST); if(!probe.ok) ACC_FMT=gl.RGBA16F; freeT(probe); }
-const dummy=target(1,1,ACC_FMT,gl.NEAREST), probeT=target(4,1,ACC_FMT,gl.NEAREST);
+const dummy=target(1,1,ACC_FMT,gl.NEAREST), probeT=target(4,1,gl.RGBA8,gl.NEAREST);
+const expoT=[target(1,1,gl.RGBA16F,gl.NEAREST),target(1,1,gl.RGBA16F,gl.NEAREST)]; let expoI=0, expoQuand=0;
 function draw(){ gl.drawArrays(gl.TRIANGLES,0,3); }
 function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t); gl.uniform1i(loc,unit); }
 
@@ -441,7 +443,7 @@ function common(w,h,p){
   gl.uniform1i(u.uSemN,S.semN); gl.uniform4fv(u.uSemTop,S.semTop); gl.uniform3fv(u.uSolAlb,S.solAlb); gl.uniform1f(u.uNuit,S.lum);
   return u;
 }
-const pb=new Float32Array(16);
+const pb=new Float32Array(16), pb8=new Uint8Array(16);
 /* Lecture différée d'une cible (sonde, exposition) : readPixels dans un tampon de la puce (PBO), puis une barrière (fenceSync).
    On revient voir aux images suivantes ; tant que la barrière n'est pas passée, rien n'attend. Une lecture bloquante force la
    puce à finir tout ce qui est en file (7,6 ms mesurés pour la sonde sur Mali-G77, dont presque tout est de l'attente). */
@@ -471,8 +473,9 @@ function probeDessin(x,y,z,cible=probeT){                      // distance au d�
 function probe(x,y,z){                                         // distance au décor, lue sur le GPU (bloquant)
   if(!progs[varCourante()]) return [9,9,9];                    // lanceur de rayons pas compilé (ordinateur en v3) : pas de collision pour l'instant
   probeDessin(x,y,z);
-  gl.readPixels(0,0,4,1,gl.RGBA,gl.FLOAT,pb);
-  return [pb[0],pb[4],pb[8]];
+  gl.readPixels(0,0,4,1,gl.RGBA,gl.UNSIGNED_BYTE,pb8);          // octets : le chemin de lecture rapide de toutes les puces
+  const d=i=>(pb8[i]+pb8[i+1]/255)/255*9-1;
+  return [d(0),d(4),d(8)];
 }
 function moveBy(dist){
   let nx=cam.x+Math.sin(cam.yaw)*dist, nz=cam.z+Math.cos(cam.yaw)*dist;
@@ -598,7 +601,14 @@ function postFX(src){
   // l'ancienne lecture bloquante) : sur une puce à tuiles, une lecture bloquante attend toute l'image en cours.
   if(!blBuf||blBuf.length!==bl1.w*bl1.h*4) blBuf=new Float32Array(bl1.w*bl1.h*4);
   let lu=false;
-  if(OPT.expoSync){ if(now-lastExpRead>180){ lastExpRead=now; gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf); lu=true; } }
+  if(!OPT.expoSync&&!CFG.expoDiff){                             // exposition sur la puce : un texel, aucune lecture
+    const dtE=expoQuand?Math.min(1,(now-expoQuand)/1000):1e3; expoQuand=now;
+    gl.useProgram(P_EXPO.p); bindTex(0,bl1.t,P_EXPO.u.uBloom); bindTex(1,expoT[expoI].t,P_EXPO.u.uPrev);
+    gl.uniform1f(P_EXPO.u.uRate,1-Math.exp(-dtE/.45)); gl.uniform1f(P_EXPO.u.uMax,S.nuit?9:14);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,expoT[1-expoI].f); gl.viewport(0,0,1,1); draw(); expoI=1-expoI;
+    gl.viewport(0,0,bl1.w,bl1.h);
+  }
+  else if(OPT.expoSync){ if(now-lastExpRead>180){ lastExpRead=now; gl.readPixels(0,0,bl1.w,bl1.h,gl.RGBA,gl.FLOAT,blBuf); lu=true; } }
   else { lu=recevoirDiff(expoL,blBuf); if(!expoL.sync&&now-lastExpRead>180){ lastExpRead=now; lireDiff(expoL,bl1,bl1.w,bl1.h,bl1.w*bl1.h*4); } }
   if(lu){
     let s=0,ws=0,any=false;
@@ -619,6 +629,7 @@ function display(src,t,cible){
   const u=P_CAM.u; gl.useProgram(P_CAM.p);
   bindTex(0,src.t,u.uTex); bindTex(1,bl1.t,u.uBloom);
   gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
+  bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff?0:1);
   gl.uniform1f(u.uExp,exposure); gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
   if(still) gl.uniform3f(u.uShake,0,0,0);                     // sinon : dérive de la main et balancement de la marche
