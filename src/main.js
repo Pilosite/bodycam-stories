@@ -155,7 +155,7 @@ function reglerRelief(f){
   if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
 }
 function applyFiche(f){
-  if(f!==fiche) errance=true;                                   // nouveau lieu : il se promène à nouveau de lui-même
+  if(f!==fiche){ errance=true; immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
@@ -194,7 +194,8 @@ function couleur(c){                                           // "#rrggbb" ou [
 }
 function buildShapes(f){
   shapesData.fill(0); S.objN=0; S.objTop=0; S.vac=[]; let row=8;
-  for(const o of (Array.isArray(f.objets)?f.objets:[]).slice(0,8)){
+  // seuls les objets visibles prennent une des 8 places (le meneur compte de même : un accessoire caché ne coûte rien)
+  for(const o of (Array.isArray(f.objets)?f.objets:[]).filter(o=>o&&!(o.visible===false||cacheObj.has(o.id))).slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
     if(!formes.length || row+formes.length>SH_ROWS) continue;
     const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), ech=clampN(o.echelle,.1,5,1);
@@ -414,7 +415,9 @@ function terrainH(x,z){
 }
 
 /* ------------------------------------------------------------------ porteur de la caméra */
-const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1 };  // le corps du porteur : seul le récit le déplace (haut : posture, part de la hauteur debout)
+// le corps du porteur : seul le récit le déplace (haut : posture, part de la hauteur debout ; elev : perché au-dessus du sol,
+// sur un arbre ou un rocher, en m ; pied : où il était au sol avant de monter ; perche : sur quoi)
+const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1, elev:0, pied:null, perche:null, zoom:1, zoomCible:1 };   // zoom : zoom numérique du téléphone (cadrer une petite chose)
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
 let frozen=false, hold=false, walkDist=0, walking=false;
@@ -423,7 +426,7 @@ function pose(){
   const yw=cam.yaw+look.yaw, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch));
   const cy=Math.cos(yw),sy=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
   const f=[sy*cp,sp,cy*cp], r=[cy,0,-sy], u=[f[1]*r[2]-f[2]*r[1],f[2]*r[0]-f[0]*r[2],f[0]*r[1]-f[1]*r[0]];
-  return { pos:[cam.x,terrainH(cam.x,cam.z)+S.eye*cam.haut+bob,cam.z], mat:new Float32Array([r[0],r[1],r[2],u[0],u[1],u[2],f[0],f[1],f[2]]) };
+  return { pos:[cam.x,terrainH(cam.x,cam.z)+S.eye*cam.haut+cam.elev+bob,cam.z], mat:new Float32Array([r[0],r[1],r[2],u[0],u[1],u[2],f[0],f[1],f[2]]) };
 }
 function samePose(a,b){ if(!a||!b) return false;
   for(let i=0;i<3;i++) if(Math.abs(a.pos[i]-b.pos[i])>1e-5) return false;
@@ -434,7 +437,7 @@ function common(w,h,p){
   const P=progMonde(), u=P.u; gl.useProgram(P.p);
   gl.uniform2f(u.uRes,w,h); gl.uniform1f(u.uTick,(tick++)%60000);
   gl.uniform3fv(u.uCamPos,p.pos); gl.uniformMatrix3fv(u.uCam,false,p.mat);
-  gl.uniform1f(u.uFish,1.09/(.5*Math.max(1,w/h)));            // 125° sur le grand côté
+  gl.uniform1f(u.uFish,1.09/(.5*Math.max(1,w/h))/cam.zoom);   // 125° sur le grand côté, divisé par le zoom
   gl.uniform1f(u.uFog,S.fog); gl.uniform3fv(u.uSeed,seed); gl.uniform3fv(u.uSunDir,S.sunDir);
   gl.uniform3fv(u.uSun,S.sun); gl.uniform3fv(u.uSky,S.sky); gl.uniform1f(u.uTorch,S.torch);
   bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
@@ -513,21 +516,31 @@ function flaner(){                                            // sans consigne, 
   if(Math.random()<.4) queue.push({type:"regarder",pitch:(Math.random()-.35)*.5},{type:"attendre",rest:2},{type:"regarder",pitch:-.03});
 }
 function simulate(dt){
+  if(Math.abs(cam.zoom/cam.zoomCible-1)>.005){                    // le zoom glisse en une seconde ; l'accumulation repart (comme un téléphone qui refait sa mise au point)
+    cam.zoom*=Math.pow(cam.zoomCible/cam.zoom,Math.min(1,dt*3)); if(Math.abs(cam.zoom/cam.zoomCible-1)<.01) cam.zoom=cam.zoomCible; sceneDirty=true; }
   walking=false; if(frozen||hold) return;
   let v=0;
   if(!queue.length){ idle+=dt;
-    if(meneur&&!meneurLibre){ if(idle>patience && !CFG.nowalk){ idle=0; patience=7; pasHistoire(); } }   // en histoire : petits pas, et elle attend la voix après chaque temps
+    if(immobile){}                                               // « arrête-toi » : il attend un autre ordre
+    else if(meneur&&!meneurLibre){ if(idle>patience && !CFG.nowalk){ idle=0; patience=7; pasHistoire(); } }   // en histoire : petits pas, et elle attend la voix après chaque temps
     else if(errance && idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
   const a=queue[0];
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
-    else if(a.type==="marcher"){ v=Math.sign(a.rest)*1.35; a.rest-=v*dt; if(a.rest*Math.sign(v)<=0) queue.shift(); }
+    else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
+    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*1.35; a.rest-=v*dt; if(a.rest*Math.sign(v)<=0) queue.shift(); }
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*dt); if(Math.abs(d)<.012) queue.shift(); }
     else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
-    else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet); if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
+    else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet);   // vers un objet : la page calcule cap et inclinaison
+      if(v&&v.raide&&!a.cadre) queue.unshift({type:"cadrer",objet:a.objet});              // presque sous lui : il recule et se baisse pour la voir
+      else if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
+    else if(a.type==="rejoindre"||a.type==="cadrer"||a.type==="monter"){ queue.shift(); queue.unshift(...planCorps(a)); }   // trajet calculé au moment de partir
+    else if(a.type==="elever"||a.type==="descendre") elever(a,dt);
+    else if(a.type==="zoom"){ cam.zoomCible=clampN(a.z,1,8,1); queue.shift(); }
     else { a.rest-=dt; if(a.rest<=0) queue.shift(); }
   }
   if(v!==0){
+    cam.pitch+=(-.03-cam.pitch)*Math.min(1,dt*1.5);              // en marchant, il regarde devant lui
     const x0=cam.x, z0=cam.z; moveBy(v*dt); walking=true;
     if(!gyro.on){ look.yaw*=Math.exp(-dt/2.5); look.pitch*=Math.exp(-dt/2.5); }           // en marche, le regard revient vers l'avant
     stuck=Math.hypot(cam.x-x0,cam.z-z0)<Math.abs(v*dt)*.3?stuck+dt:0;
@@ -545,6 +558,7 @@ const coarse=matchMedia("(pointer:coarse)").matches;
    carte d'ombres plus fine). Par défaut : complète sans écran tactile, mobile sinon. Le choix est gardé dans le navigateur. */
 var docile=!!CFG.docile; try{ if(localStorage.getItem("bodycam-docile")==="1") docile=true; }catch(_){}   // mode essai : il fait exactement ce qu'on demande
 var errance=true;                                             // il se promène de lui-même ; dès qu'on lui parle, il attend qu'on lui dise quoi faire
+var immobile=false;                                           // « arrête-toi » : ni flânerie ni petits pas tant qu'on ne lui dit pas autre chose
 var meneurLibre=false;                                        // vrai quand le meneur tourne sans histoire écrite (promenade libre)
 const QUAL={ full:CFG.full!==undefined?!!CFG.full:!coarse };
 try{ const q=localStorage.getItem("bodycam-qualite"); if(q&&CFG.full===undefined) QUAL.full=q==="1"; }catch(_){}
@@ -957,7 +971,7 @@ function v3Partage(N,vue,p){
 }
 function v3Monde(u,w,h,p){                                    // uniformes de monde.glsl (mêmes valeurs que common())
   gl.uniform2f(u.uRes||null,w,h); gl.uniform3fv(u.uCamPos||null,p.pos); gl.uniformMatrix3fv(u.uCam||null,false,p.mat);
-  gl.uniform1f(u.uFish||null,1.09/(.5*Math.max(1,w/h))); gl.uniform1f(u.uFog||null,S.fog); gl.uniform3fv(u.uSeed||null,seed);
+  gl.uniform1f(u.uFish||null,1.09/(.5*Math.max(1,w/h))/cam.zoom); gl.uniform1f(u.uFog||null,S.fog); gl.uniform3fv(u.uSeed||null,seed);
   gl.uniform3fv(u.uSunDir||null,S.sunDir); gl.uniform3fv(u.uSun||null,S.sun); gl.uniform3fv(u.uSky||null,S.sky); gl.uniform1f(u.uTorch||null,S.torch);
   gl.uniform1i(u.uKit||null,S.kit); gl.uniform4fv(u.uKitP||null,S.kitP); gl.uniform1i(u.uMode||null,0);
   gl.uniform2fv(u.uCan||null,S.can); gl.uniform4fv(u.uHoup||null,S.houp);
@@ -1245,7 +1259,7 @@ function perception(){
 }
 const clampN=(v,a,b,d)=>{ v=Number(v); return Number.isFinite(v)?Math.min(b,Math.max(a,v)):d; };
 function enqueue(actions){
-  for(const a of (Array.isArray(actions)?actions:[]).slice(0,6)){
+  for(const a of (Array.isArray(actions)?actions:[]).slice(0,8)){
     if(!a||typeof a!=="object") continue;
     if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});
     else if(a.type==="marcher") queue.push({type:"marcher",rest:clampN(a.metres,-10,30,0)});
@@ -1253,6 +1267,9 @@ function enqueue(actions){
     else if(a.type==="attendre") queue.push({type:"attendre",rest:clampN(a.secondes,0,5,1)});
     else if(a.type==="posture") queue.push({type:"posture",h:clampN(a.hauteur,.35,1,1)});
     else if(a.type==="viser"&&typeof a.objet==="string") queue.push({type:"viser",objet:a.objet.slice(0,30)});
+    else if((a.type==="rejoindre"||a.type==="cadrer")&&typeof a.objet==="string") queue.push({type:a.type,objet:a.objet.slice(0,30),sur_place:a.sur_place===true});
+    else if(a.type==="monter") queue.push({type:"monter",sur:typeof a.sur==="string"?a.sur.slice(0,30):""});
+    else if(a.type==="descendre") queue.push({type:"descendre"});
   }
 }
 function patchScene(sc){                                      // ce qu'il imagine peut changer le monde
@@ -1743,49 +1760,63 @@ const HIST=typeof HISTOIRES!=="undefined"?HISTOIRES:[];
 let meneur=null, meneurTimer=0, meneurT=0, histoireId=null;
 function objetsPercus(){                                      // distance, direction par rapport au corps, « vu » : visible, à portée, dans le champ
   const rel=a=>((a*180/Math.PI)%360+540)%360-180, yw=cam.yaw+look.yaw, out=[];
-  for(const o of (Array.isArray(fiche.objets)?fiche.objets:[]).slice(0,8)){
+  for(const o of (Array.isArray(fiche.objets)?fiche.objets:[]).slice(0,16)){
     if(!o||!o.id) continue;
     const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), a=1.15;           // même placement que buildShapes
     const x=S.kit!==1?pathX(dv)+ct:Math.sin(a)*dv+Math.cos(a)*ct, z=S.kit!==1?dv:Math.cos(a)*dv-Math.sin(a)*ct;
     const dx=x-cam.x, dz=z-cam.z, m=Math.hypot(dx,dz), dir=Math.atan2(dx,dz);
     const visible=!(o.visible===false||cacheObj.has(o.id)), lum=(o.formes||[]).some(f=>f&&f.matiere==="lumineux");
     const portee=lum?90:S.nuit?(S.torch>0?12:4):30;
-    out.push({id:o.id, nom:o.nom||o.id, m:+m.toFixed(1), angle:Math.round(rel(dir-cam.yaw)), visible, vu:visible&&m<=portee&&Math.abs(rel(dir-yw))<=50});
+    const me=mesureObjet(o);
+    out.push({id:o.id, nom:o.nom||o.id, m:+m.toFixed(1), angle:Math.round(rel(dir-cam.yaw)), visible, vu:visible&&m<=portee&&Math.abs(rel(dir-yw))<=50, taille:+me.taille.toFixed(2), haut:+me.haut.toFixed(2)});
   }
   return out;
 }
 const PATIENCE_APRES_TEMPS=45;                                 // secondes d'attente après un temps de la trame, si le joueur ne dit rien
 function percevoirMeneur(){ const p=perception(), x0=S.kit!==1?pathX(0):0;
-  p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z).toFixed(1); p.objets=objetsPercus(); return p; }
+  p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z).toFixed(1); p.objets=objetsPercus();
+  p.supports=supportsProches().map(({id,nom,m,angle,haut})=>({id,nom,m,angle,haut})); p.hauteur_m=+cam.elev.toFixed(1); return p; }
 function executer(o){                                         // les ordres du meneur, traduits pour le moteur
   if(o.type==="pensee") say(o.texte);
   else if(o.type==="scene") patchScene(o.scene);
-  else if(o.type==="actions"){ if(o.vider){ queue.length=0; patience=PATIENCE_APRES_TEMPS; } enqueue(o.actions); }   // un temps vient d'arriver : elle s'arrête et attend la voix
+  else if(o.type==="actions"){ if(o.vider){ cam.zoomCible=1; queue.length=0; patience=PATIENCE_APRES_TEMPS; } enqueue(o.actions); }   // un temps vient d'arriver : elle s'arrête et attend la voix
   else if(o.type==="pulse") $("parler").classList.toggle("pulse",!!o.on);
   else if(o.type==="figer"){ if(!frozen) setFrozen(true,"parler"); }
   else if(o.type==="arret"){ hold=true; queue.length=0; }
+  else if(o.type==="stop"){ queue.length=0; immobile=true; errance=false; }     // « arrête-toi » : tout de suite, sans attendre Claude
+  else if(o.type==="reprendre") immobile=false;
+  else if(o.type==="apercu") say(o.texte);                       // la pensée, dès qu'elle est écrite
   else if(o.type==="objet") objetMeneur(o);
   else if(o.type==="fin"){ $("fin-titre").textContent=o.titre; $("fin-texte").textContent=o.replique||""; $("fin").hidden=false; setFrozen(false); }
 }
 /* Objets du meneur (accessoiriste, suites) : ajoutés à la fiche en cours, bornés par validerFiche, rangés par buildShapes
    (une texture de données) : le lieu n'est pas rechargé. Placés par rapport au porteur, ou près d'un objet déjà là. */
-const OU_ANGLE={devant:0,pieds:0,gauche:-75,droite:75,derriere:180}, OU_M={devant:2.2,pieds:1.2,gauche:1.8,droite:1.8,derriere:2.2};
+
 function posObjet(o){ const dv=clampN(o.devant,2,90,12), ct=clampN(o.cote,-20,20,3), a=1.15;   // même placement que buildShapes
   return S.kit!==1?{x:pathX(dv)+ct,z:dv}:{x:Math.sin(a)*dv+Math.cos(a)*ct,z:Math.cos(a)*dv-Math.sin(a)*ct}; }
 function versFiche(x,z){ if(S.kit!==1) return {devant:z,cote:x-pathX(z)}; const a=1.15; return {devant:Math.sin(a)*x+Math.cos(a)*z,cote:Math.cos(a)*x-Math.sin(a)*z}; }
+const reserves=new Map();                                     // places prises au tour de voix, là où le geste a lieu
+function placeGeste(o){ const q=MENEUR.placePose(cam.x,cam.z,cam.yaw,o.ou,o.distance); return versFiche(q.x,q.z); }   // par rapport au corps, au tour de voix (MENEUR.OU_POSE)
 function objetMeneur(o){
   const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], id=o.id||(o.objet&&o.objet.id), i=L.findIndex(x=>x&&x.id===id);
+  if(o.op==="reserver"){ reserves.set(o.ref,placeGeste(o)); if(reserves.size>8) reserves.delete(reserves.keys().next().value); return; }
   if(o.op==="creer"){
-    if(i>=0||L.length>=8||!o.objet) return;
+    const visibles=L.filter(x=>x&&!(x.visible===false||cacheObj.has(x.id))).length;
+    if(i>=0||visibles>=8||!o.objet) return;
     const base=o.pres_de&&L.find(x=>x&&x.id===o.pres_de), d=Array.isArray(o.decale)?o.decale:[0,0];
     let pos;
     if(base){ const b=posObjet(base); pos=versFiche(b.x+(+d[0]||0),b.z+(+d[1]||0)); }
-    else { const a=cam.yaw+(OU_ANGLE[o.ou]||0)*Math.PI/180, m=clampN(o.distance,.4,8,OU_M[o.ou]||2.2); pos=versFiche(cam.x+Math.sin(a)*m,cam.z+Math.cos(a)*m); }
+    else if(o.reserve&&reserves.has(o.reserve)){ pos=reserves.get(o.reserve); reserves.delete(o.reserve); }
+    else pos=placeGeste(o);
     const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
     if(!v||!v[0]) return;
     v[0].id=String(id).slice(0,30); v[0].devant=pos.devant; v[0].cote=pos.cote; L.push(v[0]);
   } else if(i<0) return;
   else if(o.op==="retirer") L.splice(i,1);
+  else if(o.op==="remplacer"){                                    // retouchée sur place : mêmes id, place et cap ; d'autres formes
+    const v=validerFiche({kit:"foret",objets:[Object.assign({},L[i],{formes:o.formes})]}).objets;
+    if(!v||!v[0]||!v[0].formes||!v[0].formes.length) return;
+    L[i]=Object.assign({},L[i],{formes:v[0].formes},o.nom?{nom:String(o.nom).slice(0,60)}:{},o.echelle!==undefined?{echelle:clampN(o.echelle,.1,5,1)}:{}); }
   else { const x=Object.assign({},L[i]);
     if(o.echelle!==undefined) x.echelle=clampN(o.echelle,.1,5,1);
     if(Array.isArray(o.decale)){ const b=posObjet(x), q=versFiche(b.x+(+o.decale[0]||0),b.z+(+o.decale[1]||0)); x.devant=q.devant; x.cote=q.cote; }
@@ -1793,13 +1824,106 @@ function objetMeneur(o){
     L[i]=x; }
   fiche=Object.assign({},fiche,{objets:L}); buildShapes(fiche);
 }
-function viserObjet(id){                                       // cap (relatif au corps) et inclinaison vers un objet de la fiche
-  const o=(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===id); if(!o) return null;
-  const q=posObjet(o), dx=q.x-cam.x, dz=q.z-cam.z, m=Math.max(.3,Math.hypot(dx,dz));
-  const haut=Math.max(.1,...(o.formes||[]).map(f=>Array.isArray(f.p)?f.p[1]*clampN(o.echelle,.1,5,1):0))*.6;   // vers le milieu de l'objet
+function viserObjet(id){                                       // cap (relatif au corps) et inclinaison vers un objet de la fiche ou un support
+  const q=cibleMonde(id); if(!q) return null;
+  const dx=q.x-cam.x, dz=q.z-cam.z, m=Math.max(.3,Math.hypot(dx,dz));
+  const haut=Math.max(.05,q.milieu);                              // vers le milieu de l'objet
   let yaw=Math.atan2(dx,dz)-cam.yaw; yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));
-  const dy=terrainH(q.x,q.z)+haut-(terrainH(cam.x,cam.z)+S.eye*cam.haut);
-  return {yaw,pitch:Math.max(-1.05,Math.min(1.3,Math.atan2(dy,m)))};
+  const dy=terrainH(q.x,q.z)+haut-(terrainH(cam.x,cam.z)+S.eye*cam.haut+cam.elev);
+  return {yaw,pitch:Math.max(-1.05,Math.min(1.3,Math.atan2(dy,m))),raide:Math.atan2(dy,m)<-1.05};
+}
+/* Taille d'un objet de la fiche : envergure (m) et hauteur du dessus, échelle comprise. */
+function mesureObjet(o){ const k=clampN(o.echelle,.1,5,1), F=(o.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));
+  return { taille:MENEUR.envergure(F)*k, haut:Math.max(0,...F.map(f=>f.p[1]+f.taille[1]/2))*k, milieu:Math.max(0,...F.map(f=>f.p[1]))*k*.6+.02 }; }
+/* Ce qu'une action peut viser, rejoindre ou escalader : un objet de la fiche (id), ou un élément du monde proche (« arbre », « rocher »). */
+function cibleMonde(id){
+  const o=(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===id);
+  if(o){ const q=posObjet(o), me=mesureObjet(o); return {id, x:q.x, z:q.z, taille:me.taille, haut:me.haut, milieu:me.milieu, rayon:me.taille/2, sorte:"objet"}; }
+  const s=supportsProches().find(x=>x.id===id);
+  return s?Object.assign({milieu:Math.min(s.haut*.5,1.6),taille:s.rayon*2},s):null;
+}
+/* Les éléments du monde où l'on peut monter, les plus proches : un arbre (tronc), un rocher. Les paramètres viennent des
+   fonctions de cellule de monde.glsl (arbreA, blocGres), recopiées ici en flottants 32 bits : MÊMES FORMULES, à modifier
+   des deux côtés (comme terrainH et pathX). La sonde (balade.sonde) sert à vérifier qu'il y a bien un tronc à l'endroit dit. */
+const F32=Math.fround, fr32=x=>F32(x-Math.floor(x));
+function h42(px,py){ px=F32(px); py=F32(py);
+  let a=fr32(F32(px*F32(.1031))), b=fr32(F32(py*F32(.1030))), c=fr32(F32(px*F32(.0973))), d=fr32(F32(py*F32(.1099)));
+  const k=F32(33.33), t=F32(F32(F32(F32(a*F32(d+k))+F32(b*F32(c+k)))+F32(c*F32(a+k)))+F32(d*F32(b+k)));
+  a=F32(a+t); b=F32(b+t); c=F32(c+t); d=F32(d+t);
+  return [fr32(F32(F32(a+b)*c)),fr32(F32(F32(a+c)*b)),fr32(F32(F32(b+c)*d)),fr32(F32(F32(c+d)*a))]; }
+function h21(px,py){ px=F32(px); py=F32(py); let a=fr32(F32(px*F32(.1031))), b=fr32(F32(py*F32(.1031))), c=fr32(F32(px*F32(.1031)));
+  const k=F32(33.33), t=F32(F32(F32(a*F32(b+k))+F32(b*F32(c+k)))+F32(c*F32(a+k))); a=F32(a+t); b=F32(b+t); c=F32(c+t);
+  return fr32(F32(F32(a+b)*c)); }
+function vnoise2(x,y){ const ix=Math.floor(x), iy=Math.floor(y); let fx=x-ix, fy=y-iy; fx=fx*fx*(3-2*fx); fy=fy*fy*(3-2*fy);
+  const m=(a,b,t)=>a+(b-a)*t; return m(m(h21(ix,iy),h21(ix+1,iy),fx),m(h21(ix,iy+1),h21(ix+1,iy+1),fx),fy); }
+function degage(wx,wz){ for(const o of (Array.isArray(fiche.objets)?fiche.objets:[])){ if(!o||o.visible===false||cacheObj.has(o.id)||!(o.degage>0)) continue;
+  const q=posObjet(o); if(Math.hypot(wx-q.x,wz-q.z)<clampN(o.degage,0,12,0)) return true; } return false; }
+let supportsCache={t:-1,x:0,z:0,L:[]};
+function supportsProches(){
+  if(supportsCache.t===S.objN*1e6+seedN&&Math.hypot(cam.x-supportsCache.x,cam.z-supportsCache.z)<.3) return supportsCache.L;
+  const rel=a=>((a*180/Math.PI)%360+540)%360-180, L=[], sx=F32(seed[0]), sy=F32(seed[1]);
+  const ajoute=(id,x,z,haut,rayon)=>{ const m=Math.hypot(x-cam.x,z-cam.z); if(m<25) L.push({id,nom:id==="arbre"?"un arbre":"un rocher",x,z,m:+m.toFixed(1),angle:Math.round(rel(Math.atan2(x-cam.x,z-cam.z)-cam.yaw)),haut:+haut.toFixed(2),rayon:+rayon.toFixed(2),sorte:id}); };
+  if(S.kit===0&&S.kitP[0]>0){                                     // arbreA : grille tournée de 6 m
+    const CA=6, qx=.8776*cam.x-.4794*cam.z, qz=.4794*cam.x+.8776*cam.z, i0=Math.floor(qx/CA), j0=Math.floor(qz/CA);
+    let best=null;
+    for(let i=i0-4;i<=i0+4;i++) for(let j=j0-4;j<=j0+4;j++){
+      const h=h42(i+sx,j+sy); if(h[0]>S.kitP[0]) continue;
+      const ox=(h[1]-.5)*3.8, oz=(h[2]-.5)*3.8, vx=(i+.5)*CA+ox, vz=(j+.5)*CA+oz;
+      const wx=.8776*vx+.4794*vz, wz=-.4794*vx+.8776*vz;           // v*RA
+      if(Math.abs(wx-pathX(wz))<1.5||degage(wx,wz)) continue;
+      const m=Math.hypot(wx-cam.x,wz-cam.z); if(!best||m<best.m) best={m,x:wx,z:wz,H:11+6*h[3],r0:.16+.17*fr32(h[3]*7.31)};
+    }
+    if(best) ajoute("arbre",best.x,best.z,best.H,best.r0);
+  }
+  if(S.kit!==2&&S.kitP[1]>0){                                     // blocGres : grille de 8,5 m
+    const CC=8.5, i0=Math.floor(cam.x/CC), j0=Math.floor(cam.z/CC); let best=null;
+    for(let i=i0-3;i<=i0+3;i++) for(let j=j0-3;j<=j0+3;j++){
+      const h=h42(i+sx+13,j+sy+13), mask=vnoise2(i*.37+sx,j*.37+sy);
+      if(h[0]>(sstep(.32,.68,mask)*.9+.08)*S.kitP[1]) continue;
+      const R=.7+1.6*h[3]*h[3], ox=(h[1]-.5)*2*(.5*CC-.3-1.25*R), oz=(h[2]-.5)*2*(.5*CC-.3-1.25*R), wx=(i+.5)*CC+ox, wz=(j+.5)*CC+oz;
+      if(Math.abs(wx-pathX(wz))<R*1.1+.5||degage(wx,wz)) continue;
+      const m=Math.hypot(wx-cam.x,wz-cam.z); if(!best||m<best.m) best={m,x:wx,z:wz,top:R*.22+R*(.62+.3*fr32(h[2]*7)),r:R*Math.max(1+.25*fr32(h[1]*9),.8+.3*fr32(h[3]*11))};
+    }
+    if(best) ajoute("rocher",best.x,best.z,best.top,best.r);
+  }
+  supportsCache={t:S.objN*1e6+seedN,x:cam.x,z:cam.z,L};
+  return L;
+}
+/* Le corps autour d'une chose : y aller (rejoindre), la filmer à la bonne distance (cadrer), monter dessus (monter).
+   Distances : MENEUR.distanceArret, MENEUR.planCadrage, MENEUR.hauteurPerchee (les mêmes que dans les tests). */
+function versPoint(x,z,arret){
+  let d=Math.atan2(x-cam.x,z-cam.z)-cam.yaw; d=Math.atan2(Math.sin(d),Math.cos(d));
+  const m=Math.hypot(x-cam.x,z-cam.z)-arret, out=[{type:"tourner",rest:d}];
+  if(Math.abs(m)>.05){ if(cam.haut<.95) out.unshift({type:"posture",h:1}); out.push({type:"marcher",rest:m}); }
+  return out;
+}
+function planCorps(a){
+  const pre=cam.elev>.01&&a.type!=="monter"?[{type:"descendre"}]:[];
+  if(a.type==="monter"){
+    const L=supportsProches(), q=a.sur?cibleMonde(a.sur):L.slice().sort((p,r)=>p.m-r.m)[0];
+    if(!q){ console.warn("monter : aucun support",a.sur); return []; }
+    if(cam.perche===q.id&&cam.elev>.01) return [];                   // déjà dessus
+    return [...(cam.elev>.01?[{type:"descendre"}]:[]),...versPoint(q.x,q.z,q.rayon+.45),{type:"elever",q,h:MENEUR.hauteurPerchee(q.sorte,q.haut)},
+      ...(q.sorte==="arbre"?[{type:"tourner",rest:2.2}]:[]),{type:"regarder",pitch:-.3}];   // là-haut, il se détourne du tronc et regarde en bas
+  }
+  const q=cibleMonde(a.objet); if(!q) return [];
+  if(a.type==="rejoindre") return [...pre,...versPoint(q.x,q.z,MENEUR.distanceArret(q.taille))];
+  const pl=MENEUR.planCadrage(q.taille,S.eye), m=Math.hypot(q.x-cam.x,q.z-cam.z);
+  if(m>12) return [{type:"viser",objet:a.objet}];                    // trop loin pour y aller : il la montre d'où il est
+  if(a.sur_place) return [...pre,{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:MENEUR.zoomPour(q.taille,m,S.eye*pl.hauteur)}];   // d'où il est
+  return [...pre,...versPoint(q.x,q.z,pl.m),{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:pl.zoom}];
+}
+function elever(a,dt){                                           // monter (sur q, à la hauteur h) ou descendre (vers le pied)
+  if(a.type==="elever"&&!a.de){ const q=a.q; cam.pied={x:cam.x,z:cam.z};
+    let tx=q.x, tz=q.z;
+    if(q.sorte==="arbre"){ const dx=cam.x-q.x, dz=cam.z-q.z, l=Math.hypot(dx,dz)||1; tx=q.x+dx/l*(q.rayon+.3); tz=q.z+dz/l*(q.rayon+.3); }   // contre le tronc
+    a.de={x:cam.x,z:cam.z,e:cam.elev}; a.vers={x:tx,z:tz,e:a.h}; a.k=0; cam.perche=q.id; }
+  if(a.type==="descendre"&&!a.de){ if(cam.elev<=.01&&!cam.pied){ cam.elev=0; queue.shift(); return; }
+    a.de={x:cam.x,z:cam.z,e:cam.elev}; a.vers=cam.pied||{x:cam.x,z:cam.z}; a.vers=Object.assign({},a.vers,{e:0}); a.k=0; }
+  const dur=Math.max(1,Math.abs(a.vers.e-a.de.e)/(a.type==="elever"?.6:1.2));   // grimper prend du temps, descendre moins
+  a.k=Math.min(1,a.k+dt/dur); const k=a.k*a.k*(3-2*a.k);
+  cam.x=a.de.x+(a.vers.x-a.de.x)*k; cam.z=a.de.z+(a.vers.z-a.de.z)*k; cam.elev=a.de.e+(a.vers.e-a.de.e)*k; walkDist+=dt*.5; walking=a.k<1;
+  if(a.k>=1){ queue.shift(); if(a.type==="descendre"){ cam.elev=0; cam.pied=null; cam.perche=null; } }
 }
 /* Une forme « vacille » : son éclat tremble. On ne touche qu'aux couleurs dans la texture d'objets, sans relancer
    l'accumulation (sceneDirty) : l'image reste nette, la reprojection lisse le tremblement. Le vrai effet (lumière portée qui
@@ -1819,8 +1943,7 @@ function meneurEntendre(texte){ say("…");
   if(meneurLibre){                                             // promenade libre : une fois qu'on lui a parlé, il ne repart plus tout seul
     const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
     errance=/promene|balade-toi|balade toi|continue ta|reprends ta|comme tu veux|ou tu veux|fais ta vie/.test(t);
-    if(/stop|arrete|bouge plus|ne bouge|attends|reste la|halte/.test(t)) queue.length=0;
-  }
+  }                                                             // « stop » : c'est le meneur qui l'ordonne, en histoire comme ici
   return meneur.voix(texte); }
 function interfaceHistoire(on){
   for(const id of ["monde","lieu","mesurer","histoire","v3"]) if($(id)) $(id).hidden=on;
@@ -1831,26 +1954,7 @@ function interfaceHistoire(on){
 /* Promenade libre : pas d'histoire écrite, mais le même meneur. Le personnage y fait ce qu'on lui demande, ce qu'il fait
    apparaît et peut avoir des suites, comme dans une histoire ; simplement, rien n'est prévu d'avance et rien ne finit.
    Le contrat est fabriqué à la volée à partir du lieu courant, au premier mot du joueur. */
-function histoireLibre(f){
-  const nObj=(Array.isArray(f.objets)?f.objets:[]).length;
-  return { version:1, id:"libre", titre:String(f.titre||"Promenade").slice(0,80),
-    pitch:"Une promenade sans but dans ce lieu. Rien n'est écrit d'avance : ce que la voix propose arrive, avec ses conséquences.",
-    ton:"naturel, concret, une pointe d'humour ; le personnage commente ce qu'il fait", duree_minutes:600,
-    porteur:{ id:"sam", nom:"Sam", trait:"curieux, bon public, un peu râleur ; fait ce que la voix lui souffle et le commente à mi-voix", veut:"se promener et voir ce qui se passe",
-      craint:[], refuse:[], sait:["ce lieu : "+String(f.inspiration||f.titre||"").slice(0,160)], ignore:[], depart:{peur:0,confiance:3,agacement:0}, relances:[] },
-    voix:{ nature:"une intuition qu'il suit sans se poser de questions", gagne_la_confiance:[], perd_la_confiance:[] },
-    monde:{ epoque:"De nos jours, monde ordinaire. Lieu : "+String(f.titre||"").slice(0,80)+".",
-      existe:["tout ce qu'on voit ici", "ce qu'une personne a d'ordinaire sur elle : téléphone, briquet, clés, mouchoirs, un peu de monnaie", "ce qu'on peut ramasser ou fabriquer sur place de ses mains"],
-      n_existe_pas:["magie, pouvoirs, créatures", "tout ce qui n'est pas d'aujourd'hui"],
-      possible:["tout ce qu'une personne ordinaire peut faire de son corps et de ses mains, même absurde, trivial ou grossier"],
-      impossible:["voler, se téléporter, faire apparaître quelque chose sans le fabriquer ou l'apporter"],
-      hors_jeu:"Sam prend ça pour une idée bizarre qui lui traverse la tête : il hausse les épaules et continue. Il ne parle jamais de jeu ni de règles." },
-    secrets:[], jamais:[], lieux:[{id:"lieu",role:"unique",fiche:f}], accessoires:[], temps:[], fins:[],
-    improvisation:{ ambiance:{brume:[0,.05]}, objets_nouveaux:Math.max(0,8-nObj), permis:["tout ce que le geste demandé produit"], interdit:[] },
-    consequences:{ peut_degenerer:["tout geste peut avoir les suites qu'il aurait dans la réalité (un feu prend, un tas s'écroule, la pluie éteint)"], jusqu_ou:"quelques mètres autour du geste", exclu:["blessures montrées"], ambiance:{brume:[0,.05]}, duree_max_s:180, fins:[] },
-    limites:{ duree_minutes:600, interdits:[] },
-    reglages:{ FIN_A_L_HEURE:false, RELANCES_MAX:0 } };
-}
+function histoireLibre(f){ return MENEUR.histoireLibre(f); }   // le contrat de la promenade : src/meneur.js
 function demarrerLibre(){
   const h=histoireLibre(fiche), v=MENEUR.validerHistoire(h,{fiches:FICHES});
   if(!v.ok){ console.warn("Promenade libre : contrat refusé",v.erreurs); return false; }
@@ -1882,12 +1986,12 @@ function jouerHistoire(id){
   meneur=MENEUR.creerMeneur({ histoire:h, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
     emettre:executer });
-  histoireId=h.id; hold=false; patience=10; cam.haut=1; setFrozen(false); interfaceHistoire(true);
+  histoireId=h.id; hold=false; patience=10; cam.haut=1; cam.elev=0; immobile=false; setFrozen(false); interfaceHistoire(true);
   meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
   return meneur.partie();
 }
 function quitterHistoire(garderLieu){
-  if(!meneur) return; journal(); meneur=null; clearInterval(meneurTimer); hold=false; cam.haut=1; interfaceHistoire(false); dbgEl.textContent="";
+  if(!meneur) return; journal(); meneur=null; clearInterval(meneurTimer); hold=false; cam.haut=1; cam.elev=0; immobile=false; interfaceHistoire(false); dbgEl.textContent="";
   if(!garderLieu) applyFiche(FICHES[ficheIdx]);
 }
 /* Pour l'auteur : une ligne discrète avec le verdict du sas et le temps en cours. CFG.debug, ou trois touches rapides
@@ -1906,7 +2010,7 @@ function journal(){
   if(!meneur) return dernierJournal;
   const t=meneur.trace(), L=[], f=v=>Number(v).toFixed(1).replace(".",",");
   const dbg=gl.getExtension("WEBGL_debug_renderer_info");
-  L.push("JOURNAL · "+t.histoire+" · graine "+t.graine+" · "+(sampler?"avec Claude":"SANS Claude (secours)")+" · "+(dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"")+" · "+new Date().toISOString().slice(0,16));
+  L.push("JOURNAL · "+t.histoire+" · graine "+t.graine+" · "+(sampler?"avec Claude":"SANS Claude (secours)")+(t.reglages&&t.reglages.DOCILE?" · MODE DEBUG (il fait exactement ce qu'on demande)":"")+" · "+(dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):"")+" · "+new Date().toISOString().slice(0,16));
   const items=[];
   for(const a of t.appels||[]){
     const dit=(String(a.consigne||"").match(/La voix dit : (".*")\s*$/)||[])[1], r=a.reponse;
@@ -1917,7 +2021,8 @@ function journal(){
       const ac=(r.actions||[]).map(x=>x.type+" "+(x.degres??x.metres??x.secondes??"")).join(", "); if(ac) l+="\n    actions : "+ac;
       if(r.objet&&typeof r.objet==="object") l+="\n    objet : "+String(r.objet.nom||"")+" ("+((r.objet.formes||[]).length)+" formes)";
       if(r.suite&&typeof r.suite==="object") l+="\n    suite : "+((r.suite.etapes||[]).length)+" étapes";
-      for(const k of ["temps","fin","scene","faits","question","resume","fabrique","defaire"].concat(typeof r.suite==="string"?["suite"]:[])) if(r[k]!==undefined&&r[k]!==null&&r[k]!=="") l+="\n    "+k+" : "+(typeof r[k]==="string"?r[k]:JSON.stringify(r[k])).slice(0,300);
+      if(r.retouche&&typeof r.retouche==="object") l+="\n    retouche : "+JSON.stringify(r.retouche).slice(0,300);
+      for(const k of ["temps","fin","scene","faits","question","resume","fabrique","modifie","defaire"].concat(typeof r.suite==="string"?["suite"]:[])) if(r[k]!==undefined&&r[k]!==null&&r[k]!=="") l+="\n    "+k+" : "+(typeof r[k]==="string"?r[k]:JSON.stringify(r[k])).slice(0,300);
     }
     items.push({min:a.min,o:0,l});
   }
@@ -1951,7 +2056,10 @@ window.balade={
   percevoir:()=>meneur?percevoirMeneur():perception(),
   histoires:()=>HIST.map(h=>h.id),
   objets:()=>(Array.isArray(fiche.objets)?fiche.objets:[]).map(o=>({id:o.id,nom:o.nom,devant:+(+o.devant).toFixed(2),cote:+(+o.cote).toFixed(2),echelle:o.echelle,formes:(o.formes||[]).length,lumineux:(o.formes||[]).some(f=>f.matiere==="lumineux")})),
-  corps:()=>({x:cam.x,z:cam.z,yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut,file:queue.map(a=>a.type)}),
+  corps:()=>({x:cam.x,z:cam.z,yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut,elev:cam.elev,zoom:cam.zoom,perche:cam.perche,immobile,file:queue.map(a=>a.type)}),
+  supports:()=>supportsProches(),
+  resolution(px){ CFG.maxPx=+px||undefined; resize(); },        // pixels internes (essais : finesse d'une capture)
+  sonde:(x,y,z)=>probe(x,y,z)[0],                                // distance au décor en un point (vérifier la copie JS d'arbreA, blocGres)
   jouer:id=>jouerHistoire(id),
   quitter:()=>quitterHistoire(false),
   partie:()=>meneur?meneur.partie():null,

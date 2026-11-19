@@ -540,3 +540,76 @@ Les trois textes partent dans la consigne du personnage (pour qu'il pressente de
 - « Regarde le feu » ne fabrique pas un second feu : le secours des gestes ignore les phrases de regard et de défaire.
 - Défaire une trace après la fin de sa suite éteint aussi ce que la suite a fait apparaître (les feuilles embrasées).
 - La preuve (`node tools/meneur2.mjs`) fait tourner la page avec `nowalk` : Lina ne repart pas d'elle-même, pour garder le feu dans le cadre.
+
+## 14. Faire avec ce qui est là (19 novembre 2026, suite)
+
+Test de référence de Toine, en promenade libre : « fais une crotte sur le chemin », « éloigne-toi de 2 pas et montre-la-moi », puis « mets 2 bâtons pour les bras et 2 cailloux pour les yeux sur cette crotte ». Avant : la crotte faisait « presque un rocher » pour 3 kg, et la troisième phrase créait un second objet ailleurs (ou défaisait l'ancien et en posait un nouveau à ses pieds). Il avait aussi demandé de grimper à un arbre : rien ne s'était passé. Tout ce qui suit est générique : aucun objet ni aucune phrase en dur, le vocabulaire s'élargit.
+
+Vérification : `npm test` (`tests/sequence.test.mjs` joue la séquence avec un faux Claude dans trois variantes : il répond `modifie`, il refait une chose nouvelle, il défait et refait) ; `node tools/sequence.mjs` la joue dans la page avec un Claude simulé, captures et journal dans `out/sequence/`.
+
+### 14.1 Modifier une chose sur place
+
+- **Contrat de sortie** : un champ `modifie` `{objet: id, quoi}` à côté de `fabrique`. La consigne dit : chose NOUVELLE → `fabrique` ; chose DÉJÀ LÀ (tes traces, ce que tu vois) qu'on complète, décore, repeint, casse, déplace → `modifie`, sans la refaire ni la défaire.
+- **La page corrige Claude** (`preparerModif`) : un tour qui fabrique une chose dont le nom ou la phrase désigne une trace déjà là (« sur cette crotte », « autour du feu »), sans « autre », « nouveau », « encore », devient une modification (`fabrique_vers_modifie`) ; un tour qui défait et fabrique en même temps devient une transformation (`transformation` : même id, même place, les suites de l'ancienne s'arrêtent sans jouer `si_defait`). La cible se désigne par id, par un mot de son nom (« crott » pour « crotte sur le chemin »), ou par un pronom (« cette », « dessus », « la ») : la trace la plus récente.
+- **L'accessoiriste** reçoit les formes actuelles de la chose, numérotées, dans son repère, avec son envergure, et rend `{"retouche": {ajoute, modifie: [{i, champs}], retire: [i], nom, decale}}` (`validerRetouche`, 24 formes au plus par objet). Ce qui est ajouté reste à la mesure de la chose : une forme plus grande que 1,2 fois l'envergure est réduite autour du centre de la chose (`proportionner`). Une transformation peut aussi revenir en objet entier.
+- **Ordre au moteur** : `{type: "objet", op: "remplacer", id, formes, nom}`. Même id, même place, même cap ; `buildShapes` remet la texture d'objets à jour sans recharger le lieu. Les objets de la fiche se retouchent de la même façon (`partie.monde.retouches`).
+- **Secours sans Claude** (`SECOURS_RETOUCHES`) : des parties décrites *relativement* à la chose visée (bras de chaque côté, yeux sur le devant, chapeau dessus), en part de sa taille. Ce sont des données : des bras vont sur une crotte comme sur un rocher.
+- **Trace** : `modif_demandee`, `objet_modifie` (source `ia` ou `secours`), `modif_ratee`, `fabrique_vers_modifie`, `transformation`, `echelle`.
+
+### 14.2 Rejoindre, cadrer
+
+Trois actions de plus, calculées par la page (l'IA ne devine aucune distance ni aucun angle) :
+
+| Action | Ce que fait la page |
+|---|---|
+| `rejoindre` `{objet}` | se tourne vers la chose et marche jusqu'à `distanceArret(taille)` (55 cm pour une petite chose, la moitié de l'envergure plus 45 cm sinon) ; descend d'abord s'il est perché |
+| `cadrer` `{objet}` | se place à `planCadrage(taille).m` (40 cm sous 12 cm ; sinon 0,45 m + 1,6 × l'envergure, jusqu'à 9 m), recule s'il est trop près, se baisse (0,35 sous 12 cm, 0,5 sous 35 cm, 0,75 sous 80 cm), la vise, puis **zoome** pour qu'elle tienne au moins un sixième de la hauteur d'image (zoom numérique du téléphone, 8 × au plus) ; au-delà de 12 m, il la vise seulement |
+| `monter`, `descendre` | §14.5 |
+
+- Une modification d'une chose à plus de 1,2 m commence par `rejoindre` ; une chose de moins de 90 cm, par se baisser, attendre, se relever.
+- **Le zoom** (`cam.zoom`) divise le champ du capteur (`uFish`, lanceur de rayons et moteur v3) ; il glisse en une seconde et l'accumulation repart, comme un téléphone qui refait sa mise au point. Il revient à 1 dès qu'il marche ou qu'un nouvel ordre arrive. Sans lui, une chose de 3 cm vue accroupi à 40 cm ne fait que 4 % de la hauteur d'image avec le grand angle de 125° (cas réel : « fais une petite crotte par terre, retourne-toi et montre-la-moi » ; il n'avait rien vu). Le zoom numérique d'un vrai téléphone perd en finesse ; ici il en gagne (le champ est vraiment resserré) : à revoir si l'image paraît trop nette.
+- **Après toute création ou modification, le résultat est cadré** (`cadrage` dans la trace), une fois les gestes du tour finis. Pas pendant un « arrête-toi » : il la vise seulement.
+- Les formules (`distanceArret`, `planCadrage`, `hauteurPerchee`) sont dans `src/meneur.js`, lues par la page et par le monde de papier des tests.
+
+### 14.3 L'échelle
+
+- L'accessoiriste écrit d'abord `envergure_m` (sa plus grande dimension réelle), puis les formes ; sa consigne donne des tailles de référence (main 18 cm, chaussure 28 cm, chaise 90 cm…) et la règle masse → volume (1 kg de matière organique ≈ 1 litre ≈ une boule de 12 cm ; 3 kg ≈ 18 cm).
+- La page ramène les formes à l'envergure déclarée si elles s'en écartent de plus de 30 % (Claude écrit souvent des formes cohérentes entre elles mais plusieurs fois trop grandes), puis les tient dans des bornes tirées des mots de la demande, sans IA (`bornesTaille`) : une masse (3 kg : 11 à 40 cm), une comparaison avec une chose connue (`TAILLES_CONNUES` : « de la taille d'une noix » : 2 à 5 cm, « gros comme un poing »), une longueur (« 3 m » : 2,1 à 3,9 m), une chose qui sort du corps (40 cm au plus), qui tient dans la main (50 cm au plus), « petit », « énorme ». La mise à l'échelle se fait autour du point d'appui au sol : la chose reste posée.
+- **Où se pose la chose, par rapport au corps** (`OU_POSE`, `placePose`) : `devant` (2,2 m), `pieds` (50 cm devant), `dessous` (à l'aplomb, 12 cm derrière : ce qui tombe du corps), `derriere` (80 cm), `gauche`, `droite` (90 cm), `main` (38 cm devant : le moteur ne sait pas encore attacher une chose à la main, elle est posée au bout du bras) ; `distance` en mètres si la phrase la dit. L'IA choisit selon le geste (la consigne : « ce qui tombe de toi, dessous ; ce que tu poses des mains, pieds ou devant ») ; la page corrige une pose `pieds` ou `devant` d'une chose qui sort du corps (`pose_corrigee`). Avant, `pieds` posait la crotte 1,2 m devant la caméra : il s'accroupissait et elle apparaissait devant lui.
+- **Viser une chose presque sous lui** (inclinaison au-delà de 60°) devient la cadrer : il recule et se baisse. « Montre-la-moi » cadre toujours (distance, hauteur, zoom) ; après un déplacement demandé dans le même tour (« éloigne-toi de 2 pas et montre-la-moi »), il cadre d'où il est (`sur_place`).
+- **La place se prend au tour de voix** : `{op: "reserver", ref, ou, distance}` part avec les gestes ; la création, 5 à 25 s plus tard, utilise cette place (`reserve`) même s'il a bougé entre-temps.
+
+### 14.4 Budget : recycler plutôt que refuser
+
+- Seuls les objets **visibles** occupent les 8 places et les 64 formes du moteur (`buildShapes` ne range plus les objets cachés ; le meneur les compte de même, `recompter`).
+- Quand le moteur est plein, la plus ancienne trace sans suite en cours est retirée pour faire place (`RECYCLER: true`, `objet_recycle` dans la trace) ; les accessoires montrés par la trame passent avant les traces. `objets_nouveaux` reste le budget de l'auteur pour une histoire ; la promenade libre le met à 99 (`OBJETS_PARTIE_MAX`).
+- `histoireLibre(fiche)` (le contrat de la promenade) est désormais dans `src/meneur.js`, partagé par la page et les tests.
+
+### 14.5 Monter, descendre
+
+- **Perception** : la page calcule l'arbre et le rocher les plus proches (25 m au plus) et les donne au meneur (`supports` : id `arbre` ou `rocher`, distance, direction, hauteur), plus `taille` et `haut` des objets perçus et `hauteur_m` (à quelle hauteur il est perché). La consigne dit « Autour, pour monter : un arbre (arbre), 4 m, à droite, 12,7 m de haut ».
+- **D'où viennent les arbres et les rochers** : `supportsProches()` dans `main.js` recopie `arbreA` et `blocGres` de `monde.glsl` (et leurs aléas `h42`, `h21`, `vnoise`) en flottants 32 bits. **Mêmes formules, à modifier des deux côtés**, comme `terrainH` et `pathX`. `tools/sequence.mjs` vérifie avec la sonde du moteur (`balade.sonde`) qu'il y a bien de la matière à l'endroit calculé.
+- **Action** `monter` `{sur: "arbre" | "rocher" | id | ""}` (vide : le plus proche) : la page y marche, puis s'élève (`cam.elev`, 0,6 m/s) : contre le tronc à `hauteurPerchee` (le quart de l'arbre, entre 1,2 et 3,2 m), ou sur le dessus d'un rocher ou d'une chose. `descendre` le ramène à l'endroit d'où il est monté ; une marche le fait descendre d'abord. `posture` (s'accroupir, s'asseoir) reste l'action du corps sur place.
+- Une action `monter` sans support connu est jetée (`monter_sans_support` dans la trace). Le secours comprend « grimpe à l'arbre », « monte sur le rocher », « escalade », « descends ».
+
+### 14.6 « Arrête-toi », partout
+
+- `estStop` reconnaît « stop », « arrête-toi », « arrête », « ne bouge plus », « attends », « reste là », « halte », « arrête de marcher »… (et pas « arrête le feu »). Dès que la phrase arrive, **avant l'appel à Claude**, le meneur émet `{type: "stop"}` : la page vide la file et ne repart plus d'elle-même (ni flânerie en promenade, ni petits pas en histoire) jusqu'à la phrase suivante (`reprendre`). Ce qui déplace (marcher, rejoindre, monter, tourner, cadrer) est retiré de la réponse de Claude à un stop (`stop_filtre`).
+
+### 14.7 Mode debug (DOCILE)
+
+En plus de §13 : la page ajoute ce que la réponse a oublié pour reculer ou s'éloigner (« éloigne-toi de 2 pas » : 1,4 m), rejoindre (« retourne vers elle »), monter et descendre, et la retouche (« mets des bâtons sur cette crotte » sans `modifie` dans la réponse). Le journal de partie l'indique dans son en-tête (« MODE DEBUG ») et la trace par l'événement `mode_debug`.
+
+### 14.8 Latence
+
+- **Un geste sûr part tout de suite**, pendant que Claude répond : se baisser, viser une chose (`geste_immediat` dans la trace). Seulement ce qui ne se répète pas mal quand la réponse arrive (une posture refaite ne bouge pas ; un « tourne de 90° » refait tournerait deux fois : il attend la réponse).
+- **La pensée au fil de l'eau** : l'appel du tour de voix passe `onPensee` à l'échantillonneur ; s'il le prend en charge, la pensée s'affiche dès qu'elle est écrite (`apercu`), avant les gestes. Non vérifié : on ne sait pas si l'échantillonneur de la page publiée appelle ce rappel.
+- **Consigne plus courte** : les rubriques vides du contrat ne partent plus, et les règles d'écriture sont resserrées. En promenade, la consigne fait environ 6 000 caractères (8 500 avant §13 dans une histoire).
+
+### 14.9 Pas fait, pas vérifié
+
+- Rien n'a tourné avec le vrai Claude : les tests et `tools/sequence.mjs` utilisent des Claude simulés. La qualité des retouches de l'accessoiriste (des bâtons qui tiennent vraiment *sur* la chose) reste à voir sur des parties réelles.
+- Les latences réelles ne sont pas mesurées ; `onPensee` peut n'avoir aucun effet.
+- Le moteur v3 lit la même texture d'objets mais n'a pas été vérifié avec `remplacer` ni avec une caméra perchée.
+- Perché, il n'y a pas de collision avec les branches ; les arbres du kit forêt n'ont pas de branches basses : il grimpe le long d'un tronc nu.
+- Les éléments de semis (maisons, tombes, voitures…) ne sont pas encore des supports : dans les mondes sans arbres ni rochers codés (kit nu), seuls les objets en formes servent de support.

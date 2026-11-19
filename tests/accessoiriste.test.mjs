@@ -23,14 +23,14 @@ test('obéissant : un têtu dont le sas accepte la demande est forcé de la fair
   assert.ok(ordres.some(o => o.type === 'objet' && o.op === 'creer'), 'et le feu existe (secours par mots-clés)');
   const rt = partieMain({ demander: claudes.tetu({}), reglages: { CARACTERE: 'retif' } });
   await rt.avancer(1); await rt.m.voix('fais un feu de camp'); await rt.avancer(1);
-  assert.ok(!rt.ordres.some(o => o.type === 'objet'), 'rétif : le premier refus tient');
+  assert.ok(!rt.ordres.some(o => o.type === 'objet' && o.op !== 'reserver'), 'rétif : le premier refus tient');
 });
 
 test('la consigne pousse à faire, et décrit fabrique, suite, posture et viser', () => {
   const h = normaliserHistoire(ANLN), p = creerPartie(ANLN), perc = compacter(mondePapier(ANLN).perception());
   const c = consigne(h, p, perc, { type: 'voix', texte: 'fais caca sur le chemin' }, reglagesDe(h));
   assert.match(c, /LE FAIT tout de suite/);
-  assert.match(c, /même absurde, trivial, grossier/);
+  assert.match(c, /même absurde, grossier/); assert.match(c, /"modifie"/); assert.match(c, /rejoindre objet/);
   assert.match(c, /"fabrique"/); assert.match(c, /posture hauteur/); assert.match(c, /viser objet/);
   assert.match(c, /Ce qui te coûte \(tu le fais quand même/);
   assert.match(c, /Interdits de l'auteur : violence montrée/);
@@ -51,7 +51,7 @@ test('accessoiriste avec Claude : la pensée part d\'abord, l\'objet ensuite, en
   await avancer(1);
   await m.voix('fais un feu de camp');
   const iP = ordres.findIndex(o => o.type === 'pensee' && /Un feu/.test(o.texte));
-  assert.ok(iP >= 0 && !ordres.some(o => o.type === 'objet'), 'la pensée est là, l\'objet pas encore');
+  assert.ok(iP >= 0 && !ordres.some(o => o.type === 'objet' && o.op !== 'reserver'), 'la pensée est là, l\'objet pas encore');
   assert.deepEqual(tiers, ['quick', 'default']);
   lacher(); await flush(); await flush();
   const cree = ordres.find(o => o.type === 'objet' && o.op === 'creer');
@@ -120,10 +120,11 @@ test('« fais caca sur le chemin » puis « regarde-la » : accroupie, une trace
   const { m, monde, ordres, avancer } = partieMain();
   await avancer(3);
   await m.voix('fais caca sur le chemin'); await flush();
-  const a = ordres.filter(o => o.type === 'actions').pop().actions;
+  const a = ordres.filter(o => o.type === 'actions' && o.vider).pop().actions;
   assert.deepEqual(a.filter(x => x.type === 'posture').map(x => x.hauteur), [0.45, 1], 'accroupie puis relevée');
   const cree = ordres.find(o => o.type === 'objet' && o.op === 'creer');
-  assert.equal(cree.objet.nom, 'crotte sur le chemin'); assert.equal(cree.ou, 'pieds');
+  assert.equal(cree.objet.nom, 'crotte sur le chemin'); assert.equal(cree.ou, 'dessous', 'ce qui tombe du corps est à l\'aplomb');
+  assert.ok(ordres.slice(ordres.indexOf(cree)).some(o => o.type === 'actions' && o.actions.some(x => x.type === 'cadrer' && x.objet === 'fab-1')), 'puis la trace est cadrée');
   await avancer(12);
   monde.yaw += 2; monde.file.length = 0;                          // elle s'est retournée entre-temps
   await m.voix('regarde-la'); await flush();
@@ -154,7 +155,7 @@ test('objet raté : réponse illisible ou lente de l\'accessoiriste, sans mot-cl
   await avancer(1);
   await m.voix('sculpte un ours'); await avancer(2);
   await m.voix('sculpte un autre ours'); await avancer(30);
-  assert.ok(!ordres.some(o => o.type === 'objet'));
+  assert.ok(!ordres.some(o => o.type === 'objet' && o.op !== 'reserver'));
   const st = m.trace().appels.filter(a => a.type === 'objet').map(a => a.statut);
   assert.deepEqual(st, ['invalide', 'delai']);
   assert.equal(m.trace().evenements.filter(e => e.type === 'objet_rate').length, 2);

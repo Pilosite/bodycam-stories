@@ -128,7 +128,7 @@ test('étape 5 : sur « refuse », le sas jette les effets ; il coûte de la con
   await m.voix('sors ton drone');
   const p = m.partie();
   assert.equal(p.porteur.confiance, CARACTERE === 'retif' ? c0 - 1 : c0, 'COUT_HORS_MONDE : 1 en rétif, 0 en obéissant');
-  assert.ok(!ordres.some(o => o.type === 'objet'), 'rien ne se fabrique sur un refus');
+  assert.ok(!ordres.some(o => o.type === 'objet' && o.op !== 'reserver'), 'rien ne se fabrique sur un refus');
   assert.ok(!p.faits.some(f => /drone/.test(f.t)));
   assert.ok(!ordres.some(o => o.type === 'scene' && o.scene.brume === 0.02));
   assert.ok(ordres.some(o => o.type === 'pensee' && o.texte === 'Un drone ? Très drôle.'), 'le refus reste dans la fiction');

@@ -1,6 +1,6 @@
 // Outils de test du meneur : un monde de papier, de faux Claude, de faux joueurs, et une partie simulée en accéléré.
 import { readFileSync } from 'node:fs';
-import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES } from '../src/meneur.js';
+import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour } from '../src/meneur.js';
 
 export const lireHistoire = f => JSON.parse(readFileSync(new URL('../histoires/' + f, import.meta.url), 'utf8'));
 export const ANLN = lireHistoire('avant-la-nuit.json');
@@ -24,17 +24,34 @@ export function lexiqueTest(texte) {
 
 /* ------------------------------------------------------------------ le monde de papier
    Le sentier est droit : z le long du trajet, x l'écart latéral (négatif à gauche). Mêmes vitesses que la page. */
-export function mondePapier(histoire, { graine = 7, flaner = true } = {}) {
+export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], rochers = [] } = {}) {
   const h = normaliserHistoire(histoire), fiche = ficheDe(h) || { objets: [] }, r = rng(graine);
-  const objets = (fiche.objets || []).map(o => ({ id: o.id, nom: o.nom, x: o.cote || 0, z: o.devant || 0,
+  const objets = (fiche.objets || []).map(o => ({ id: o.id, nom: o.nom, x: o.cote || 0, z: o.devant || 0, formesL: o.formes || [], echelle: o.echelle || 1,
     lumineux: (o.formes || []).some(f => f.matiere === 'lumineux') }));
   const caches = new Set((fiche.objets || []).filter(o => o.visible === false).map(o => o.id));
-  const w = { x: 0, z: 0, yaw: 0, haut: 1, objets, file: [], idle: 0, nuit: false, lampe: false, brume: 0.009, fin: null, ordres: [], pensees: [], flaner };
+  const w = { x: 0, z: 0, yaw: 0, haut: 1, elev: 0, zoom: 1, objets, file: [], idle: 0, nuit: false, lampe: false, brume: 0.009, fin: null, ordres: [], pensees: [], flaner,
+    reserves: {}, immobile: false, arbres, rochers };
+  const taille = o => envergure(o.formesL || []) * (o.echelle || 1);
+  // supports : l'arbre et le rocher les plus proches (comme supportsProches dans main.js)
+  const supports = () => [['arbre', arbres], ['rocher', rochers]].map(([id, L]) => {
+    const b = L.map(s => Object.assign({ m: Math.hypot(s.x - w.x, s.z - w.z) }, s)).sort((a, c) => a.m - c.m)[0];
+    if (!b) return null;
+    let ang = (Math.atan2(b.x - w.x, b.z - w.z) - w.yaw) * 180 / Math.PI; ang = ((ang + 540) % 360) - 180;
+    return { id, nom: id, m: b.m, angle: ang, haut: b.haut, x: b.x, z: b.z, rayon: b.rayon || 0.3 };
+  }).filter(Boolean);
+  const versPoint = (x, z, arret) => {                          // se tourner vers un point et marcher jusqu'à « arret » mètres
+    let d = Math.atan2(x - w.x, z - w.z) - w.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+    const m = Math.hypot(x - w.x, z - w.z) - arret;
+    return [{ type: 'tourner', rest: d }, ...(Math.abs(m) > 0.05 ? [{ type: 'marcher', rest: m }] : [])];
+  };
   w.executer = o => {
     w.ordres.push(o);
+    if (o.type === 'actions' && o.vider) w.zoom = 1;
     if (o.type === 'pensee') w.pensees.push(o);
     else if (o.type === 'fin') w.fin = o;
     else if (o.type === 'arret') { w.flaner = false; w.file.length = 0; }
+    else if (o.type === 'stop') { w.file.length = 0; w.immobile = true; }
+    else if (o.type === 'reprendre') w.immobile = false;
     else if (o.type === 'scene') {
       const s = o.scene || {};
       (s.montrer || []).forEach(id => caches.delete(id)); (s.cacher || []).forEach(id => caches.add(id));
@@ -43,20 +60,26 @@ export function mondePapier(histoire, { graine = 7, flaner = true } = {}) {
       if (typeof s.brume === 'number') w.brume = s.brume;
     } else if (o.type === 'objet') {                              // l'accessoiriste et les suites : comme objetMeneur dans main.js
       const i = objets.findIndex(x => x.id === (o.id || (o.objet && o.objet.id)));
+      const place = () => placePose(w.x, w.z, w.yaw, o.ou, o.distance);
+      if (o.op === 'reserver') { w.reserves[o.ref] = place(); return; }
       if (o.op === 'creer') {
-        if (objets.length >= 8) return;
+        if (objets.filter(x => !caches.has(x.id)).length >= 8) return;
         let x, z; const base = o.pres_de && objets.find(b => b.id === o.pres_de);
         if (base) { x = base.x + (o.decale ? o.decale[0] : 0); z = base.z + (o.decale ? o.decale[1] : 0); }
-        else { const a = w.yaw + ({ devant: 0, pieds: 0, gauche: -75, droite: 75, derriere: 180 }[o.ou] || 0) * Math.PI / 180, m = o.distance || 2.2;
-          x = w.x + Math.sin(a) * m; z = w.z + Math.cos(a) * m; }
-        objets.push({ id: o.objet.id, nom: o.objet.nom, x, z, formes: o.objet.formes.length, echelle: 1, lumineux: o.objet.formes.some(f => f.matiere === 'lumineux') });
+        else ({ x, z } = (o.reserve && w.reserves[o.reserve]) || place());
+        objets.push({ id: o.objet.id, nom: o.objet.nom, x, z, formes: o.objet.formes.length, formesL: o.objet.formes, echelle: 1, lumineux: o.objet.formes.some(f => f.matiere === 'lumineux') });
       } else if (i < 0) return;
       else if (o.op === 'retirer') objets.splice(i, 1);
-      else { if (o.echelle !== undefined) objets[i].echelle = o.echelle; if (o.lumineux === false) objets[i].lumineux = false; }
+      else if (o.op === 'remplacer') { objets[i].formesL = o.formes; objets[i].formes = o.formes.length; if (o.nom) objets[i].nom = o.nom; if (o.echelle !== undefined) objets[i].echelle = o.echelle;
+        objets[i].lumineux = o.formes.some(f => f.matiere === 'lumineux'); w.remplaces = (w.remplaces || 0) + 1; }
+      else { if (o.echelle !== undefined) objets[i].echelle = o.echelle; if (o.lumineux === false) objets[i].lumineux = false;
+        if (o.decale) { objets[i].x += o.decale[0]; objets[i].z += o.decale[1]; } }
     } else if (o.type === 'actions') {
       if (o.vider) w.file.length = 0;
       for (const a of o.actions) {
-        if (a.type === 'viser') w.file.push({ type: 'viser', objet: a.objet });
+        if (a.type === 'viser' || a.type === 'rejoindre' || a.type === 'cadrer') w.file.push({ type: a.type, objet: a.objet, sur_place: a.sur_place });
+        else if (a.type === 'monter') w.file.push({ type: 'monter', sur: a.sur });
+        else if (a.type === 'descendre') w.file.push({ type: 'descendre' });
         else if (a.type === 'posture') w.file.push({ type: 'posture', rest: a.hauteur });
         else if (a.type === 'tourner') w.file.push({ type: 'tourner', rest: a.degres * Math.PI / 180 });
         else if (a.type === 'marcher') w.file.push({ type: 'marcher', rest: a.metres });
@@ -65,7 +88,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true } = {}) {
     }
   };
   w.step = dt => {
-    if (!w.file.length) { w.idle += dt; if (w.flaner && w.idle > 2.5) { w.idle = 0;          // il se promène le long du sentier
+    if (!w.file.length) { w.idle += dt; if (w.flaner && !w.immobile && w.idle > 2.5) { w.idle = 0;          // il se promène le long du sentier
       const avant = Math.cos(w.yaw) >= 0, cible = avant ? Math.atan2(-w.x * 0.3, 1) : Math.PI + Math.atan2(w.x * 0.3, 1);
       let d = cible - w.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
       w.file.push({ type: 'tourner', rest: d + (r() - 0.5) * 0.3 }, { type: 'marcher', rest: 6 + r() * 9 }, { type: 'attendre', rest: 1.5 + r() * 3 }); } }
@@ -73,9 +96,34 @@ export function mondePapier(histoire, { graine = 7, flaner = true } = {}) {
     const a = w.file[0]; if (!a) return;
     if (a.type === 'viser') {                                 // la page calcule le cap vers l'objet, pas l'IA
       const ob = objets.find(x => x.id === a.objet); w.file.shift();
+      if (ob && !a.cadre && Math.atan2(1.36 * w.haut + w.elev, Math.hypot(ob.x - w.x, ob.z - w.z)) > 1.05) { w.file.unshift({ type: 'cadrer', objet: a.objet }); return; }   // presque sous lui (comme main.js)
       if (ob) { let d = Math.atan2(ob.x - w.x, ob.z - w.z) - w.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); w.file.unshift({ type: 'tourner', rest: d }); w.vise = a.objet; }
       return;
     }
+    if (a.type === 'rejoindre' || a.type === 'cadrer') {           // comme main.js : la page calcule le trajet, l'arrêt et le cadrage
+      w.file.shift();
+      const ob = objets.find(x => x.id === a.objet) || supports().find(x => x.id === a.objet); if (!ob) return;
+      const t = ob.formesL ? taille(ob) : ob.rayon * 2, pl = planCadrage(t);
+      const pre = w.elev > 0 ? [{ type: 'descendre' }] : [];
+      if (a.type === 'rejoindre') w.file.unshift(...pre, ...versPoint(ob.x, ob.z, distanceArret(t)));
+      else if (a.sur_place) w.file.unshift(...pre, { type: 'posture', rest: pl.hauteur }, { type: 'viser', objet: a.objet, cadre: true }, { type: 'zoom', rest: zoomPour(t, Math.hypot(ob.x - w.x, ob.z - w.z), 1.36 * pl.hauteur) });
+      else w.file.unshift(...pre, ...versPoint(ob.x, ob.z, pl.m), { type: 'posture', rest: pl.hauteur }, { type: 'viser', objet: a.objet, cadre: true }, { type: 'zoom', rest: pl.zoom });
+      w.cadre = a.type === 'cadrer' ? a.objet : w.cadre;
+      return;
+    }
+    if (a.type === 'monter') {
+      w.file.shift();
+      const L = supports(), s = a.sur ? L.find(x => x.id === a.sur) || objets.find(x => x.id === a.sur) : L.sort((p, q) => p.m - q.m)[0];
+      if (!s) return;
+      const sorte = s.formesL ? 'objet' : s.id, haut = s.formesL ? Math.max(0, ...s.formesL.map(f => f.p[1] + f.taille[1] / 2)) : s.haut;
+      w.file.unshift(...versPoint(s.x, s.z, (s.rayon || 0.3) + 0.35), { type: 'elever', rest: hauteurPerchee(sorte, haut), sur: s.id });
+      return;
+    }
+    if (a.type === 'elever') { w.elev = a.rest; w.perche = a.sur; w.file.shift(); return; }
+    if (a.type === 'descendre') { w.elev = 0; w.perche = null; w.file.shift(); return; }
+    if (a.type === 'marcher' && w.elev > 0) { w.elev = 0; w.perche = null; }   // il descend avant de marcher
+    if (a.type === 'zoom') { w.zoom = a.rest; w.file.shift(); return; }
+    if (a.type === 'marcher') w.zoom = 1;
     if (a.type === 'posture') { w.haut = a.rest; w.file.shift(); return; }
     if (a.type === 'tourner') { const d = Math.sign(a.rest) * Math.min(Math.abs(a.rest), 1.5 * dt); w.yaw += d; a.rest -= d; if (Math.abs(a.rest) < 1e-3) w.file.shift(); }
     else if (a.type === 'marcher') { const v = Math.sign(a.rest) * 1.35, s = Math.abs(a.rest) < Math.abs(v * dt) ? a.rest : v * dt;
@@ -84,13 +132,14 @@ export function mondePapier(histoire, { graine = 7, flaner = true } = {}) {
   };
   w.perception = () => ({
     lieu: fiche.titre, avance_m: w.z, depart_m: Math.hypot(w.x, w.z), sur_le_sentier: Math.abs(w.x) < 1.3, obstacle_devant_m: null,
-    lumiere: w.nuit ? 'nuit' : 'jour', lampe: w.lampe, brume: w.brume,
+    lumiere: w.nuit ? 'nuit' : 'jour', lampe: w.lampe, brume: w.brume, hauteur_m: w.elev,
+    supports: supports().filter(s => s.m < 25).map(({ id, nom, m, angle, haut }) => ({ id, nom, m, angle, haut })),
     objets: objets.map(o => {
       const dx = o.x - w.x, dz = o.z - w.z, m = Math.hypot(dx, dz);
       let ang = (Math.atan2(dx, dz) - w.yaw) * 180 / Math.PI; ang = ((ang + 540) % 360) - 180;
       const portee = o.lumineux ? REGLAGES.VU_LUMINEUX_M : w.nuit ? (w.lampe ? REGLAGES.VU_LAMPE_M : 4) : REGLAGES.VU_JOUR_M;
       const visible = !caches.has(o.id);
-      return { id: o.id, nom: o.nom, m, angle: ang, visible, vu: visible && m <= portee && Math.abs(ang) <= REGLAGES.VU_ANGLE };
+      return { id: o.id, nom: o.nom, m, angle: ang, visible, vu: visible && m <= portee && Math.abs(ang) <= REGLAGES.VU_ANGLE, taille: taille(o) };
     }),
   });
   w.caches = caches;
