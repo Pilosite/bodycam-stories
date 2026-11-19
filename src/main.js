@@ -326,6 +326,10 @@ let W=0,H=0, pairs=[], bl1,bl2;
 let hist=null, histPose=null, lastPose=null, n=0, row=0, sDst=null, sReproj=0, tick=0, frames=0;
 let mLevel=0, msMotion=50, msPerRow=.25, exposure=1.2, expTarget=1.2, lastExpRead=0;
 const coarse=matchMedia("(pointer:coarse)").matches;
+/* Qualité : « mobile » tient un téléphone moyen ; « complète » est faite pour un ordinateur (pleine résolution, bien plus de grains,
+   carte d'ombres plus fine). Par défaut : complète sans écran tactile, mobile sinon. Le choix est gardé dans le navigateur. */
+const QUAL={ full:CFG.full!==undefined?!!CFG.full:!coarse };
+try{ const q=localStorage.getItem("bodycam-qualite"); if(q&&CFG.full===undefined) QUAL.full=q==="1"; }catch(_){}
 const MAXS=CFG.maxSpp||400;
 function pairAt(i){ if(!pairs[i]){ const w=Math.max(2,Math.round(W*LEVELS[i])), h=Math.max(2,Math.round(H*LEVELS[i]));
   pairs[i]={a:target(w,h,ACC_FMT,gl.NEAREST),b:target(w,h,ACC_FMT,gl.NEAREST)}; } return pairs[i]; }
@@ -333,7 +337,7 @@ function resize(){
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const cw=Math.max(2,Math.round(canvas.clientWidth*dpr)), ch=Math.max(2,Math.round(canvas.clientHeight*dpr));
   canvas.width=cw; canvas.height=ch;
-  const maxPx=CFG.maxPx||(coarse?250000:440000);
+  const maxPx=CFG.maxPx||(QUAL.full?2000000:coarse?250000:440000);   // mode complet : jusqu'à la pleine résolution de l'écran
   const s=Math.min(1,Math.sqrt(maxPx/(cw*ch)));
   W=CFG.w||Math.max(2,Math.round(cw*s)); H=CFG.h||Math.max(2,Math.round(ch*s));
   pairs.forEach(p=>{ if(p){ freeT(p.a); freeT(p.b); } }); pairs=[]; freeT(bl1); freeT(bl2);
@@ -530,7 +534,7 @@ function v2Basculer(on){
    v3max (images accumulées à l'arrêt), v3detail (chronomètre chaque passe : ajoute des synchronisations),
    v3net (soleil ponctuel, sans pénombre), v3pcf (flou de lecture de la carte, en texels), v3amb (niveau de l'ambiance,
    0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres). */
-const V3={ on:!!CFG.v3, grains:CFG.grains||700000, ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||1024,
+const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:700000), ombre:CFG.grainsOmbre||0, k:CFG.v3k||1.8, carte:CFG.v3carte||(QUAL.full?2048:1024),
   alpha:CFG.v3alpha||.18, max:CFG.v3max||64, detail:!!CFG.v3detail, gp:null, gb:null, sm:null, A:null, B:null, hist:null, histPose:null,
   n:0, frame:0, ms:0, msMoy:0, nImg:0, passes:{}, parts:null, semisT:null, semis:new Float32Array(4*72), maxPt:64,
   sol:{r0:.3, anneaux:96, secteurs:192, dmax:420} };
@@ -692,6 +696,8 @@ function v3Image(p){
   gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil,70,W*H);
   gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
   gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
+  { const cap=Math.atan2(fwd[0],fwd[1]), q=Math.PI/4;       // ancre des feuilles : la position arrondie à 4 m, le cap arrondi à 45°
+    gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
   if(pc.total>0) gl.drawArrays(gl.POINTS,0,pc.total);
   gl.disable(gl.DEPTH_TEST);
   chrono("tamponG");
@@ -718,6 +724,13 @@ function v3Frame(p,dt){
   v3Image(p); frames++;
   if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,t:performance.now()});
   postFX(V3.hist);
+}
+function qualite(full){                                        // bascule mobile / complète : tout se réalloue à la nouvelle taille
+  QUAL.full=!!full; try{ localStorage.setItem("bodycam-qualite",full?"1":"0"); }catch(_){}
+  if(!CFG.grains) V3.grains=full?2500000:700000;
+  if(!CFG.v3carte) V3.carte=full?2048:1024;
+  v3Libere(false); resize(); sceneDirty=true;
+  $("qualite").textContent="Qualité : "+(full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(!!full));
 }
 function v3Basculer(on){
   if(on&&V2.on) v2Basculer(false);
@@ -1285,6 +1298,7 @@ if(CFG.lookYaw) look.yaw=CFG.lookYaw;
 if(V2.on){ v2Basculer(true); window.__v2=V2; }                // accès de test (tools/v2essai.mjs)
 $("v2").onclick=()=>v2Basculer(!V2.on);
 if(V3.on){ v3Basculer(true); window.__v3=V3; window.__v3lire=(x,y)=>{ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,V3.hist.f); gl.readPixels(x,y,1,1,gl.RGBA,gl.FLOAT,b); return Array.from(b); }; }               // accès de test (tools/v3essai.mjs)
+$("qualite").onclick=()=>qualite(!QUAL.full); $("qualite").textContent="Qualité : "+(QUAL.full?"complète":"mobile"); $("qualite").setAttribute("aria-pressed",String(QUAL.full));
 $("v3").onclick=()=>v3Basculer(!V3.on);
 if(CFG.say) setTimeout(()=>entendre(CFG.say),400);
 if(CFG.world) setTimeout(()=>creerMonde(CFG.world),400);

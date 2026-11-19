@@ -25,6 +25,7 @@ uniform vec3  uZone;         // vue du soleil : centre (xz) et rayon du disque s
 uniform vec4  uNb;           // grains des tranches : arbres, perches, blocs, feuilles
 uniform float uK;            // recouvrement visé (côté du grain = uK × l'écart moyen entre grains)
 uniform float uMaxPt;
+uniform vec4  uAncre;        // feuilles en marche : ancre du tirage dans le monde (x, z), 1 = actif, cap du secteur
 uniform vec2  uFeuil;        // feuilles : profondeur de tranche au plus, pixels de l'écran
 uniform vec3  uSoleilC;      // carte d'ombres : centre, base (droite, haut, vers le soleil), demi-largeur et profondeur
 uniform mat3  uSoleilM;
@@ -205,11 +206,18 @@ bool semeP(out Grain g){
    est touchée à presque chaque image et dessinée à sa taille ; une feuille lointaine l'est rarement, et elle est alors
    agrandie (jusqu'à 1,8 fois, 5 pixels au plus) pour compenser en partie. */
 bool semeF(out vec4 pos, out float taille){
-  vec2 uv=(vec2(rnd(),rnd())-.5)*vec2(uRes.x/uRes.y,1.);
-  float rr=length(uv), ang=rr*uFish;
-  vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
+  vec3 O=uCamPos, rd;
+  if(uAncre.z>.5){                                           // en marche : tirage accroché au monde. Les mêmes grains retombent sur les mêmes
+    O=vec3(uAncre.x,uCamPos.y,uAncre.y);                     // feuilles d'une image à l'autre, au lieu d'un feuillage qui grésille.
+    float az=uAncre.w+(rnd()-.5)*3.9, se=rnd()*.98, ce=sqrt(1.-se*se);
+    rd=vec3(sin(az)*ce,se,cos(az)*ce);
+  } else {
+    vec2 uv=(vec2(rnd(),rnd())-.5)*vec2(uRes.x/uRes.y,1.);
+    float rr=length(uv), ang=rr*uFish;
+    rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
+  }
   float ry=abs(rd.y)<1e-4?1e-4:rd.y;
-  float ta=(YC0-uCamPos.y)/ry, tb=(YC1-uCamPos.y)/ry;
+  float ta=(YC0-O.y)/ry, tb=(YC1-O.y)/ry;
   float t0=max(min(ta,tb),0.), t1=min(min(max(ta,tb),150.),t0+uFeuil.x);
   if(t1<=t0) return false;
   t0=max(t0,2.);
@@ -218,7 +226,7 @@ bool semeF(out vec4 pos, out float taille){
   vec3 cell, hc; bool ok=false;
   for(int k=0;k<3;k++){                                      // trois essais : la plupart des cellules sont vides
     t=t0*exp(rnd()*lr);
-    cell=floor((uCamPos+rd*t)/CS);
+    cell=floor((O+rd*t)/CS);
     hc=h33(cell+uSeed);
     if(hc.x<canopyDens((cell+.5)*CS)*LEAFP){ ok=true; break; }
   }
@@ -253,7 +261,9 @@ void main(){
   if(i>=uTotal) return;
   if(i>=uPart.z && i<uPart.w){
     vec4 pos; float t;
-    if(uVue!=0 || !semeF(pos,t)) return;
+    if(uVue!=0) return;
+    if(uAncre.z>.5){ rs=hu(uint(gl_VertexID)*2654435761u+97u); rnd(); }   // graine fixe : le tirage ne dépend plus de l'image
+    if(!semeF(pos,t)) return;
     if(t<1.){ if(rnd()>t*t) return; t=1.; }
     gl_Position=pos; gl_PointSize=min(t,uMaxPt); vSz=gl_PointSize;
     return;
