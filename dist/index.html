@@ -4015,11 +4015,18 @@ function probe(x,y,z){                                         // distance au d�
 }
 function moveBy(dist){
   let nx=cam.x+Math.sin(cam.yaw)*dist, nz=cam.z+Math.cos(cam.yaw)*dist;
-  const R=.42, [d,dx,dz]=probe(nx,terrainH(nx,nz)+.75,nz);
+  // La sonde de collision lit un pixel sur la puce graphique, ce qui la force à tout finir : 16 ms par image mesurés sur Mali-G77.
+  // On ne sonde donc qu'une fois tous les 120 ms (16 cm de marche), un demi-mètre devant ; près d'un obstacle, à chaque image.
+  const R=.42, now=performance.now();
+  if(now-sonde.t>120 || sonde.d<R+.25){ const a=.5*Math.sign(dist||1); sonde.t=now;
+    const sx=nx+Math.sin(cam.yaw)*(sonde.d<R+.25?0:a), sz=nz+Math.cos(cam.yaw)*(sonde.d<R+.25?0:a);
+    [sonde.d,sonde.dx,sonde.dz]=probe(sx,terrainH(sx,sz)+.75,sz); sonde.loin=!(sonde.d<R+.25); }
+  const d=sonde.loin?Math.max(sonde.d,R):sonde.d, dx=sonde.dx, dz=sonde.dz;
   if(d<R){ let gx=(dx-d)/.05, gz=(dz-d)/.05; const l=Math.hypot(gx,gz)||1; nx+=gx/l*(R-d); nz+=gz/l*(R-d); }
   cam.x=nx; cam.z=nz; walkDist+=Math.abs(dist);
 }
 let idle=0, stuck=0;
+const sonde={t:-1e9,d:9,dx:9,dz:9,loin:true};
 let patience=10;                                               // secondes d'immobilité avant qu'elle reparte d'elle-même, en histoire
 function pasHistoire(){                                        // quatre mètres le long du sentier, puis elle s'arrête : le rythme laisse la place au joueur
   const want=S.kit===0?pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0):cam.yaw;
@@ -4462,10 +4469,11 @@ const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]
 const normz=a=>{ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; };
 
 /* ------------------------------------------------------------------ boucle */
-let lastT=0, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
+let lastT=0, vide=null, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;
+  if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
   const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=k=>{ if(!pf) return; v3Sync(); const t=performance.now(); pf[k]=t-pt; pt=t; };
   simulate(dt); etape("sim");
@@ -4774,7 +4782,8 @@ async function mesurer(){
   const f=bench.slice(Math.min(10,bench.length>>2)); bench=null; queue.length=0;
   await wait(300); prof=[]; queue.push({type:"marcher",rest:6}); await wait(3500);      // second passage, étape par étape
   { const q=prof.slice(3), m=k=>med(q.map(x=>x[k]||0)), fx=v=>v.toFixed(1).replace(".",","); prof=null; queue.length=0;
-    profTexte=q.length?["","UNE IMAGE EN MARCHE, ÉTAPE PAR ÉTAPE ("+q.length+" images)","Déplacement      "+fx(m("sim"))+" ms","Rendu du monde   "+fx(m("rendu"))+" ms","Capteur, écran   "+fx(m("aff"))+" ms","Entre deux images "+fx(m("dt"))+" ms"].join("\n"):""; }
+    vide=[]; await wait(1500); const dv=med(vide.slice(5)); vide=null;
+    profTexte=q.length?["","UNE IMAGE EN MARCHE, ÉTAPE PAR ÉTAPE ("+q.length+" images)","Déplacement      "+fx(m("sim"))+" ms","Rendu du monde   "+fx(m("rendu"))+" ms","Capteur, écran   "+fx(m("aff"))+" ms","Entre deux images "+fx(m("dt"))+" ms","","CADENCE DE LA PAGE, SANS RIEN CALCULER","Images/seconde   "+(dv?fx(1000/dv):"non mesuré")+" ("+(location.hostname||"fichier local")+")"].join("\n"):""; }
   hold=true;
   await wait(400);
   if(V2.on) return mesurerV2(f,wait,med);
