@@ -39,7 +39,7 @@ export const REGLAGES = {
   // elle arrivait 6 à 8 s plus tard et redisait la réplique).
   IA_APRES_TEMPS: false,
   BUDGET_CONSIGNE: 10500,          // caractères, vérifié par un test (conception : 7 000 ; 9 000 à l'étape 7 ; 10 500 depuis l'accessoiriste, consigne à vide 8 500)
-  BUDGET_ATELIER: 6000,            // consigne de l'accessoiriste
+  BUDGET_ATELIER: 9000,            // consigne de l'accessoiriste (6 000 avant la bibliothèque de modèles, qui y ajoute un exemple)
   RELANCES_S: [25, 40, 60],        // délais de silence avant chaque relance
   RELANCES_MAX: 3,                 // relances sans réponse du joueur avant qu'il se taise
   ANTICIPATION_S: 5,               // l'appel de relance part ce temps avant l'échéance
@@ -59,6 +59,11 @@ export const REGLAGES = {
   // Quand le moteur est plein, la plus ancienne trace sans suite en cours est retirée pour faire place (true), sinon refus.
   RECYCLER: true,
   SUITE_ETAPES_MAX: 8, SUITE_DUREE_MAX_S: 300, SUITES_ACTIVES_MAX: 2,
+  // Bibliothèque de modèles de référence (§15) : 'base' (la page prend le modèle qui correspond à la demande, à l'échelle
+  // demandée, plutôt que les formes de Claude), 'exemple' (Claude le reçoit seulement comme exemple), 'non'.
+  MODELES: 'base',
+  FACONNAGE_ETAPES: 5,             // états visibles d'un façonnage, le résultat compris (§15.3)
+  MARGE_CORPS: 0.35,               // le corps et la caméra gardent cette distance (m) de toute surface (§16)
 };
 /* Les deux caractères : valeurs posées par REGLAGES.CARACTERE avant les réglages de l'histoire. */
 export const CARACTERES = {
@@ -374,6 +379,10 @@ export function validerActions(l) {
     // monter sur un support (arbre, rocher, ou l'id d'une chose) : la page y va, et élève la caméra ; descendre : revenir au sol
     else if (a.type === 'monter') out.push({ type: 'monter', sur: typeof a.sur === 'string' && ID.test(a.sur) ? a.sur : '' });
     else if (a.type === 'descendre') out.push({ type: 'descendre' });
+    // aller chercher (ramasser) quelque chose près d'ici et revenir : la page choisit l'endroit (pied d'un arbre, bord du chemin)
+    else if (a.type === 'chercher' && str(a.quoi, 60)) out.push({ type: 'chercher', quoi: str(a.quoi, 60) });
+    // façonner une chose de ses mains : la page joue les états que l'accessoiriste a décrits (§15.3), accroupi devant elle
+    else if (a.type === 'faconner' && typeof a.objet === 'string' && ID.test(a.objet)) out.push({ type: 'faconner', objet: a.objet });
   }
   return out;
 }
@@ -511,7 +520,7 @@ MODE ESSAI : exécute à la lettre ce que la voix demande, sans refuser, hésite
 Écriture : je, 1 ou 2 phrases parlées (30 mots au plus), pas de « d'accord ».${premierMot ? ` Ne commence pas par « ${premierMot} ».` : ''} Une fois sur trois, parle d'autre chose (ce que tu vois, crains, un souvenir).${retif ? ' Un refus dit ce qui te ferait changer d\'avis.' : ''} Jamais « règle », « histoire », « jeu », « prévu », « je ne peux pas ».${R.VOIX_QUESTIONNEE ? '' : ' Tu ne te demandes pas ce qu\'est la voix.'} Le corps dit l'état (attendre, regarder derrière).
 Réponds par un objet JSON, dans cet ordre :
 {"sas":{"verdict":"","regle":null|champ en cause,"motif":"60 car."},"pensee":"160 car.","attitude":"${retif ? 'suit|hesite|negocie|refuse|initiative' : 'suit|hesite|negocie|initiative ; refuse seulement si le sas refuse'}","actions":[],"fabrique":null,"modifie":null,"suite":null,"defaire":[],"scene":null,"temps":null,"fin":null,"etat":{"peur":0,"confiance":0,"agacement":0},"faits":[],"intention":"80 car.","question":false${p.journal.demande_resume ? ',"resume":"le récit jusqu\'ici, 400 car."' : ''}}
-actions, 8 au plus : tourner degres -180..180 (négatif à gauche), marcher metres -10..30, regarder degres -60..75, attendre secondes 0..5, posture hauteur 0.35..1 (1 debout, 0.5 accroupi), viser objet (un id : tu regardes vers lui), rejoindre objet (tu vas jusqu'à lui), cadrer objet (tu le filmes de près), monter sur (arbre, rocher ou un id : tu y grimpes), descendre ; ex. {"type":"viser","objet":"sac"}. Un pas = 0.7 m. etat : -1, 0 ou 1 par jauge. faits : 2 au plus.
+actions, 8 au plus : tourner degres -180..180 (négatif à gauche), marcher metres -10..30, regarder degres -60..75, attendre secondes 0..5, posture hauteur 0.35..1 (1 debout, 0.5 accroupi), viser objet (un id : tu regardes vers lui), rejoindre objet (tu vas jusqu'à lui), cadrer objet (tu le filmes de près), monter sur (arbre, rocher ou un id : tu y grimpes), descendre, chercher quoi (tu vas le ramasser près d'ici et tu reviens) ; ex. {"type":"viser","objet":"sac"}. Un pas = 0.7 m. etat : -1, 0 ou 1 par jauge. faits : 2 au plus.
 fabrique : ${restants > 0 && R.OBJETS_NOUVEAUX ? `si le geste laisse une chose NOUVELLE et visible (feu, tas, abri, chose posée, salissure), {"nom":"court","quoi":"ce que c'est, en quoi, sa taille réelle, 120 car.","ou":"devant|pieds|dessous|derriere|gauche|droite|main"} (par rapport à ton corps : ce qui tombe de toi, dessous ; ce que tu poses des mains, pieds ou devant ; "distance": m si elle est dite). Sinon null.` : 'plus rien de nouveau ne peut apparaître : null.'} modifie : si la voix parle d'une chose DÉJÀ LÀ (tes traces, ce que tu vois) pour la compléter, décorer, repeindre, mouler, déplacer, casser : {"objet":"son id","quoi":"ce qui change, 120 car."} ; ne la refais pas en fabrique, ne la défais pas. defaire : ids de tes traces à éteindre, ramasser, détruire.${suites ? ' suite : si ce geste a des suites crédibles ici (le feu prend, l\'eau monte), en une phrase ; sinon null.' : ''}
 scene : ${amb.brume ? `brume ${amb.brume[0]}..${amb.brume[1]}` : 'rien'}${accessoires.length ? `, montrer/cacher ${J(accessoires)}` : ''} ; le reste par la pensée (bruit, odeur). temps, fin : un id ouvert, s'il se produit maintenant.`);
 
@@ -739,6 +748,21 @@ export function secoursPas(texte, cible) {
   return [];
 }
 
+/* « Va chercher des bâtons et des cailloux (et fais-en…) » : l'action chercher, sans Claude. */
+export function secoursChercher(texte) {
+  const t = sansAccents(texte || '').replace(/\s+/g, ' ');
+  const m = /\b(?:chercher|cherche|ramasser|ramasse|rapporter|rapporte|trouver|trouve)\s+(.+?)(?=\s+(?:et|puis|pour)\s+(?:fais|fait|faire|mets|met|construis|fabrique|en\b)|[,.;!?]|$)/.exec(t);
+  return m && /[a-z]{3,}/.test(m[1]) ? { type: 'chercher', quoi: m[1].trim().slice(0, 60) } : null;
+}
+/* Une chose posée là où se tient le porteur (« dessous » une chose de 30 cm) : poussée hors de son corps, marge comprise.
+   Une petite chose (moins de 20 cm) peut tomber à ses talons : elle passe sous la caméra, il s'en écarte en repartant. */
+export function horsDuCorps(pos, corps, rayon, marge = REGLAGES.MARGE_CORPS) {
+  const r = num(rayon, 0, 30, 0), dx = pos.x - corps.x, dz = pos.z - corps.z, m = Math.hypot(dx, dz), d = r + (r > 0.1 ? marge : 0.05);
+  if (m >= d) return { x: pos.x, z: pos.z };
+  const ux = m > 1e-3 ? dx / m : -Math.sin(corps.yaw || 0), uz = m > 1e-3 ? dz / m : -Math.cos(corps.yaw || 0);
+  return { x: corps.x + ux * d, z: corps.z + uz * d };
+}
+
 /* ---- Retoucher une chose déjà là (§14) : ajouter des formes dessus, en retirer, en repeindre, la déplacer, la casser.
    Même objet, même id, même place : seules les formes changent. Tout est dans le repère de l'objet (y = 0 au sol). */
 export function validerRetouche(r, formes0, R = REGLAGES) {
@@ -891,6 +915,189 @@ export function hauteurPerchee(sorte, haut) {
   return Math.round((sorte === 'arbre' ? Math.min(3.2, Math.max(1.2, h * 0.25)) : Math.min(6, h)) * 100) / 100;
 }
 
+/* ---- La bibliothèque de modèles de référence (§15) : src/modeles.json, des DONNÉES (formes, matière, envergure de référence,
+   règle d'échelle). L'accessoiriste les reçoit comme exemples ; la page les prend comme base sûre quand la demande y
+   correspond, à l'échelle demandée. Aucune fonction ci-dessous ne connaît un modèle par son nom. */
+const plate = f => f.taille[1] < 0.12 * Math.max(f.taille[0], f.taille[2]);   // forme posée à plat (tache, ombre de contact)
+/* Un point (repère de l'objet) est-il dans la forme ? Mêmes repère et formes que sdPrim et primLocal (monde.glsl). */
+function dansForme(f, x, y, z) {
+  let qx = x - f.p[0], qy = y - f.p[1], qz = z - f.p[2], c, s;
+  const yaw = (f.cap || 0) * Math.PI / 180; c = Math.cos(yaw); s = Math.sin(yaw);
+  [qx, qz] = [c * qx - s * qz, s * qx + c * qz];
+  const pe = Array.isArray(f.penche) ? f.penche : [0, 0];
+  if (pe[1]) { const w = pe[1] * Math.PI / 180; c = Math.cos(w); s = Math.sin(w); [qx, qy] = [c * qx + s * qy, -s * qx + c * qy]; }
+  if (pe[0]) { const w = pe[0] * Math.PI / 180; c = Math.cos(w); s = Math.sin(w); [qy, qz] = [c * qy + s * qz, -s * qy + c * qz]; }
+  const [a, b, d] = f.taille.map(v => v / 2);
+  if (f.f === 'boule') return (qx / a) ** 2 + (qy / b) ** 2 + (qz / d) ** 2 <= 1;
+  if (f.f === 'cylindre') return qx * qx + qz * qz <= a * a && Math.abs(qy) <= b;
+  if (f.f === 'cone') return Math.abs(qy) <= b && Math.hypot(qx, qz) <= a * Math.min(1, Math.max(0, 0.5 - qy / (2 * b)));
+  if (f.f === 'capsule') { qy -= Math.min(b, Math.max(-b, qy)); return qx * qx + qy * qy + qz * qz <= a * a; }
+  return Math.abs(qx) <= a && Math.abs(qy) <= b && Math.abs(qz) <= d;   // boîte (et toit, compté comme sa boîte)
+}
+/* Volume réel (m³) de la réunion des formes, sans les formes plates : une grille de points dans la boîte englobante. */
+export function volumeFormes(formes, n = 26) {
+  const F = liste(formes).filter(f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille) && !plate(f));
+  if (!F.length) return 0;
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const f of F) { const r = Math.hypot(...f.taille) / 2; for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], f.p[i] - r); hi[i] = Math.max(hi[i], f.p[i] + r); } }
+  const st = [0, 1, 2].map(i => (hi[i] - lo[i]) / n); let k = 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) for (let l = 0; l < n; l++) {
+    const x = lo[0] + (i + 0.5) * st[0], y = lo[1] + (j + 0.5) * st[1], z = lo[2] + (l + 0.5) * st[2];
+    if (F.some(f => dansForme(f, x, y, z))) k++;
+  }
+  return k * st[0] * st[1] * st[2];
+}
+const listeModeles = bib => isObj(bib) && isObj(bib.modeles) ? bib.modeles : isObj(bib) ? bib : {};
+/* Le modèle que nomme une phrase (le premier cité) : {id, modele} ou null. transforme : un modèle qui se fabrique À PARTIR
+   d'une chose déjà là (sa matière, son volume) ; ramassable : une chose qu'on ramasse par terre. */
+export function modeleDe(bib, texte, { transforme = false, ramassable } = {}) {
+  const t = ' ' + sansAccents(texte || '').replace(/[^a-z0-9]+/g, ' ') + ' ';
+  let best = null;
+  for (const [id, m] of Object.entries(listeModeles(bib))) {
+    if (!isObj(m) || !Array.isArray(m.formes) || !!m.transforme !== transforme) continue;
+    if (ramassable !== undefined && !!m.ramassable !== ramassable) continue;
+    const i = Math.min(...liste(m.mots).map(w => { const k = t.indexOf(' ' + sansAccents(w) + ' '); return k < 0 ? 1e9 : k; }));
+    if (i < 1e9 && (!best || i < best.i)) best = { id, modele: m, i };
+  }
+  return best ? { id: best.id, modele: best.modele } : null;
+}
+/* Les formes d'un modèle à l'échelle demandée. Règle « masse » : une masse dite (« de 5 kg ») donne le volume (densité du
+   modèle), donc l'envergure, proportions gardées. Sinon : une longueur ou une comparaison dite, « petit », « énorme » ; à
+   défaut, l'envergure de référence. Le détail des matières (recettes, en mètres) ne grossit pas avec l'objet. */
+export function formesModele(m, texte) {
+  const formes = liste(m && m.formes).map(validerForme).filter(Boolean).slice(0, REGLAGES.FORMES_PAR_OBJET);
+  if (!formes.length) return null;
+  const e0 = envergure(formes), ech = isObj(m.echelle) ? m.echelle : {};
+  const t = sansAccents(texte || '').replace(/(\d),(\d)/g, '$1.$2');
+  const kg = /(\d+(?:\.\d+)?)\s*(kg|kilos?|kilogrammes?)\b/.exec(t), g = /(\d+(?:\.\d+)?)\s*(g|grammes?)\b/.exec(t);
+  const masse = kg ? +kg[1] : g ? +g[1] / 1000 : null;
+  let k = 1, raison = 'taille de référence';
+  const [mn, mx, pq] = bornesTaille(texte);
+  if (masse && ech.regle === 'masse') {
+    const V = volumeFormes(formes);
+    if (V > 0) { k = Math.cbrt(masse / num(ech.densite, 0.1, 20, 1) / 1000 / V); raison = `${masse} kg (densité ${num(ech.densite, 0.1, 20, 1)})`; }
+  } else if (/(cm|m|metres?|comme)\b/.test(pq) || /^comme /.test(pq)) { k = (mn + mx) / 2 / e0; raison = pq; }
+  else if (/\b(enorme|geant|gigantesque|immense)\b/.test(t)) { k = 2.5; raison = 'énorme'; }
+  else if (/\b(gros|grosse|grand|grande)\b/.test(t)) { k = 1.6; raison = 'gros'; }
+  else if (/\b(minuscule|toute? petite?)\b/.test(t)) { k = 0.35; raison = 'minuscule'; }
+  else if (/\b(petit|petite|petits|petites)\b/.test(t)) { k = 0.6; raison = 'petit'; }
+  const e = e0 * k, lo = num(ech.min_m, 0.005, 30, 0.005), hi = num(ech.max_m, 0.01, 30, 30);
+  if (e < lo) k = lo / e0; else if (e > hi) k = hi / e0;
+  k = Math.round(k * 1000) / 1000;
+  return { formes: k === 1 ? formes : aEchelle(formes, k), facteur: k, envergure: Math.round(e0 * k * 1000) / 1000, raison };
+}
+/* La matière dominante d'une chose (ses formes en relief) : celle que garde ce qu'on en façonne. */
+function dominante(formes) {
+  const n = new Map();
+  for (const f of liste(formes).filter(f => !plate(f))) { const k = f.matiere + '|' + f.couleur; n.set(k, (n.get(k) || 0) + 1); }
+  const k = [...n.entries()].sort((a, b) => b[1] - a[1])[0];
+  return k ? { matiere: k[0].split('|')[0], couleur: k[0].split('|')[1] } : { matiere: 'mat', couleur: '#777777' };
+}
+/* Un modèle « transforme » appliqué à une chose : ses parties sont écrites en unité de longueur relative ; l'unité est
+   choisie pour que la masse façonnée (parties de matière "@") ait le volume de la chose ; "@" prend sa matière et sa couleur. */
+export function formesTransformees(m, source) {
+  const src = liste(source).filter(f => isObj(f) && Array.isArray(f.taille)), dom = dominante(src);
+  const parts = liste(m && m.formes).filter(isObj);
+  const masse = parts.filter(f => f.matiere === '@').map(f => Object.assign({}, f, { matiere: 'mat', couleur: '#777777' }));
+  const c = volumeFormes(masse), V = volumeFormes(src);
+  if (!(c > 0) || !(V > 0)) return null;
+  const D = Math.cbrt(V / c), r3 = v => Math.round(v * 1000) / 1000;
+  const formes = parts.map(f => validerForme(Object.assign({}, f, { p: liste(f.p).map(v => r3(v * D)), taille: liste(f.taille).map(v => r3(Math.max(0.006, v * D))),
+    matiere: f.matiere === '@' ? dom.matiere : f.matiere, couleur: f.couleur === '@' ? dom.couleur : f.couleur }))).filter(Boolean);
+  return formes.length ? { formes: formes.slice(0, REGLAGES.FORMES_PAR_OBJET), unite: r3(D) } : null;
+}
+/* Les états intermédiaires d'un façonnage (avant -> après), pour qu'on le voie se faire : la chose pétrie, la première masse
+   et le reste de la pâte, la masse façonnée, puis les ajouts, une matière après l'autre. Le dernier état est « après ». */
+export function etapesFaconnage(avant, apres, n = 5) {
+  const A = liste(avant).filter(isObj), B = liste(apres).filter(isObj);
+  if (!A.length || !B.length) return [B];
+  const base = B.filter(plate).length ? B.filter(plate) : A.filter(plate), corps = A.filter(f => !plate(f)), dom = dominante(A);
+  const masse = B.filter(f => !plate(f) && f.matiere === dom.matiere), ajouts = B.filter(f => !plate(f) && f.matiere !== dom.matiere);
+  const r3 = v => Math.round(v * 1000) / 1000;
+  const cx = corps.reduce((s, f) => s + f.p[0], 0) / Math.max(1, corps.length), cz = corps.reduce((s, f) => s + f.p[2], 0) / Math.max(1, corps.length);
+  const pose = (L, k, dy, ox, oz) => L.map(f => Object.assign({}, f, { p: [r3(ox + (f.p[0] - cx) * k), r3(dy + f.p[1] * k * 0.7), r3(oz + (f.p[2] - cz) * k)], taille: f.taille.map(v => r3(Math.max(0.006, v * k))) }));
+  const etats = [[...base, ...pose(corps, 0.95, 0, cx, cz)]];   // pétrie : écrasée, ramassée sur elle-même
+  if (masse.length) {
+    const b0 = masse[0], haut = b0.p[1] + b0.taille[1] / 2;
+    if (masse.length > 1) etats.push([...base, b0, ...pose(corps, 0.6, haut * 0.8, b0.p[0], b0.p[2])]);   // la première boule, le reste de la pâte dessus
+    etats.push([...base, ...masse]);
+    const groupes = [];
+    for (const f of ajouts) { const g = groupes.find(g => g[0].matiere === f.matiere); if (g) g.push(f); else groupes.push([f]); }
+    let acc = [...base, ...masse];
+    for (const g of groupes.slice(0, -1)) { acc = [...acc, ...g]; etats.push(acc); }
+  }
+  etats.push(B);
+  return etats.slice(Math.max(0, etats.length - Math.max(2, n))).map(L => L.slice(0, REGLAGES.FORMES_PAR_OBJET));
+}
+/* Ce qu'on ramasse (« des bâtons et des cailloux ») : les modèles ramassables que nomme la phrase, deux de chaque, en un petit tas. */
+export function ramassage(bib, texte) {
+  const t = ' ' + sansAccents(texte || '').replace(/[^a-z0-9]+/g, ' ') + ' ', formes = [], noms = [];
+  for (const [id, m] of Object.entries(listeModeles(bib))) {
+    if (!isObj(m) || !m.ramassable || !liste(m.mots).some(w => t.includes(' ' + sansAccents(w) + ' '))) continue;
+    const F = liste(m.formes).map(validerForme).filter(Boolean);
+    for (let k = 0; k < 2; k++) for (const f of F) {
+      const a = (formes.length * 2.4 + k * 1.9), r = 0.04 + 0.05 * k + 0.03 * noms.length;
+      formes.push(Object.assign({}, f, { p: [Math.round((f.p[0] + Math.cos(a) * r) * 1000) / 1000, f.p[1], Math.round((f.p[2] + Math.sin(a) * r) * 1000) / 1000], cap: Math.round((f.cap || 0) + a * 57) % 360 }));
+    }
+    noms.push(m.pluriel || m.nom || id);
+  }
+  return formes.length ? { nom: noms.join(' et ') + ' ramassés', formes: formes.slice(0, REGLAGES.AJOUT_FORMES_MAX), degage: 0 } : null;
+}
+/* Où aller chercher ce qu'on ramasse : au pied de l'arbre ou du rocher le plus proche (dans l'ordre que dit le champ « trouve »
+   du premier modèle ramassable nommé) s'il n'est pas trop loin, sinon au bord du chemin, quelques pas devant.
+   corps {x, z, yaw} ; supports [{id, x, z, rayon}] ; sentierX(z). */
+export function lieuChercher(quoi, corps, supports, sentierX = () => 0, demiLargeur = 1, bib = null) {
+  const m = modeleDe(bib, quoi, { ramassable: true }), tr = m ? liste(m.modele.trouve).filter(x => x === 'arbre' || x === 'rocher') : [];   // « trouve » : où le modèle se ramasse
+  const pref = [...tr, ...['arbre', 'rocher'].filter(x => !tr.includes(x))];
+  for (const sorte of pref) {
+    const s = liste(supports).filter(s => s && s.id === sorte && Number.isFinite(s.x)).map(s => Object.assign({ m: Math.hypot(s.x - corps.x, s.z - corps.z) }, s)).sort((a, b) => a.m - b.m)[0];
+    if (s && s.m > 2 && s.m < 12) { const k = (num(s.rayon, 0, 5, 0.3) + 0.6) / s.m;
+      return { x: s.x + (corps.x - s.x) * k, z: s.z + (corps.z - s.z) * k, ou: sorte === 'arbre' ? 'au pied d\'un arbre' : 'au pied d\'un rocher' }; }
+  }
+  const z = corps.z + Math.cos(corps.yaw) * 4, cote = corps.x >= sentierX(corps.z) ? 1 : -1;
+  return { x: sentierX(z) + cote * (demiLargeur + 0.5), z, ou: 'au bord du chemin' };
+}
+/* Le trajet du corps (§16) : de « de » vers « vers » en s'arrêtant à « arret » m, sans entrer dans aucun obstacle connu
+   (cercles {x, z, r, id} : troncs, rochers, choses), la caméra gardant « marge » m de toute surface. Un obstacle sur le
+   chemin est contourné par un point de passage à côté ; une cible dans un obstacle, ou un passage impossible : il s'arrête
+   devant (bloque : l'id de l'obstacle). Rend { points: [{x, z}…], bloque }. Fonction pure (la page et les tests). */
+export function planTrajet(de, vers, obstacles, { marge = REGLAGES.MARGE_CORPS, arret = 0, cible = null } = {}) {
+  const tous = liste(obstacles).filter(o => isObj(o) && Number.isFinite(o.x) && Number.isFinite(o.z) && o.r >= 0);
+  const tgt = cible ? tous.find(o => o.id === cible) : null;
+  const R = o => o.r + marge;
+  const obs = tous.filter(o => o !== tgt && Math.hypot(de.x - o.x, de.z - o.z) >= R(o) - 0.05);   // un obstacle où il est déjà ne le retient pas
+  const dedans = (p, sauf) => obs.find(o => o !== sauf && Math.hypot(p.x - o.x, p.z - o.z) < R(o) - 1e-3);
+  const entree = (a, b, o) => {                                  // premier point du segment qui touche le cercle élargi, un peu avant
+    const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz) || 1e-9, ux = dx / L, uz = dz / L, fx = a.x - o.x, fz = a.z - o.z;
+    const B = fx * ux + fz * uz, C = fx * fx + fz * fz - R(o) * R(o), D = B * B - C;
+    if (D < 0) return null; const t = -B - Math.sqrt(D);
+    return t < 0 || t > L ? null : { t, x: a.x + ux * Math.max(0, t - 0.05), z: a.z + uz * Math.max(0, t - 0.05) };
+  };
+  const dx = vers.x - de.x, dz = vers.z - de.z, L = Math.hypot(dx, dz) || 1e-9;
+  if (tgt) arret = Math.max(arret, tgt.r + marge);
+  let fin = { x: vers.x - dx / L * arret, z: vers.z - dz / L * arret }, bloque = null;
+  const o0 = dedans(fin);
+  if (o0) { const e = entree(de, fin, o0); fin = e ? { x: e.x, z: e.z } : { x: de.x, z: de.z }; bloque = o0.id || 'obstacle'; }
+  let pts = [{ x: de.x, z: de.z }, fin];
+  for (let it = 0; it < 10; it++) {
+    let hit = null;
+    for (let i = 0; i < pts.length - 1 && !hit; i++) {
+      let best = null;
+      for (const o of obs) { const e = entree(pts[i], pts[i + 1], o); if (e && (!best || e.t < best.e.t)) best = { o, e }; }
+      if (best) hit = Object.assign({ i }, best);
+    }
+    if (!hit) break;
+    const a = pts[hit.i], b = pts[hit.i + 1], o = hit.o, l = Math.hypot(b.x - a.x, b.z - a.z) || 1e-9, ux = (b.x - a.x) / l, uz = (b.z - a.z) / l;
+    const cote = Math.sign((o.x - a.x) * uz - (o.z - a.z) * ux) || 1, d = R(o) + 0.25;
+    const cands = [-cote, cote].map(s => ({ x: o.x + s * uz * d, z: o.z - s * ux * d }));   // à côté de l'obstacle, du côté le plus court d'abord
+    const wp = cands.find(c => !dedans(c) && Math.hypot(c.x - a.x, c.z - a.z) > 0.05);
+    if (!wp || it === 9) { pts = [...pts.slice(0, hit.i + 1), { x: hit.e.x, z: hit.e.z }]; bloque = o.id || 'obstacle'; break; }
+    pts.splice(hit.i + 1, 0, wp);
+  }
+  const r2 = v => Math.round(v * 1000) / 1000;
+  return { points: pts.slice(1).map(p => ({ x: r2(p.x), z: r2(p.z) })), bloque };
+}
+
 /* La promenade libre : pas d'histoire écrite, mais le même meneur. Le personnage fait ce qu'on lui demande, ce qu'il fait
    apparaît et peut avoir des suites ; rien n'est prévu d'avance et rien ne finit. Contrat fabriqué à partir du lieu courant. */
 export function histoireLibre(f) {
@@ -916,7 +1123,7 @@ export function histoireLibre(f) {
 }
 
 /* La consigne de l'accessoiriste : un appel en coulisse (modèle `default`), après la pensée, jamais attendu par le joueur. */
-export function consigneAtelier(h, p, perc, dem, R = REGLAGES) {
+export function consigneAtelier(h, p, perc, dem, R = REGLAGES, bib = null) {
   const nom = h.porteur.nom || h.porteur.id || 'le porteur', mo = isObj(h.monde) ? h.monde : {}, cq = h.consequences || {}, cadre = cadreDe(h, R);
   const L = a => liste(a).filter(x => typeof x === 'string').join(' ; ');
   const max = Math.max(1, Math.min(R.OBJET_FORMES_MAX, p.monde.formes_libres));
@@ -931,10 +1138,12 @@ Déjà là, de sa main : ${J(crees)}
 TAILLES RÉELLES, en mètres : noix 0.035, œuf 0.06, poing 0.1, main 0.18, chaussure 0.28, ballon 0.22, sac à dos 0.5, chaise 0.9, personne 1.7, porte 2, voiture 4.5. Masse → volume : 1 kg de matière organique ou d'eau ≈ 1 litre ≈ une boule de 12 cm ; 3 kg ≈ une boule de 18 cm ou un tas de 25 × 20 × 10 cm. "taille" = dimensions ENTIÈRES en mètres (pas des demi-tailles).
 FORME : {"f":"boite|boule|cylindre|cone|capsule|toit","p":[x,y,z] centre en m,"taille":[largeur,hauteur,profondeur] (cylindre, cône, capsule : diamètre, hauteur, diamètre, debout),"cap":degrés,"penche":[autour de x, autour de z] (un bâton couché : [0,90]),"couleur":"#rrggbb","matiere":"mat|bois|pierre|metal|verre|tissu|lumineux|ecorce-pin|...","arrondi":0..0.3,"vacille":0..1}. "lumineux" brille (flamme, braise, écran) sans éclairer autour ; "vacille" fait trembler son éclat. Couleurs ternes et salies ; flamme #ff9a3c, #ffc46a, braise #c4451c.`];
   if (mod) parties.push(`LA CHOSE, telle qu'elle est (ses formes, numérotées à partir de 0, dans son repère : y = 0 au sol, +z vers ${nom} ; envergure ${Math.round(envergure(cible.formes) * 100) / 100} m${cible.echelle !== 1 ? `, affichée × ${cible.echelle}` : ''}) : ${J(cible.formes.map((f, i) => Object.assign({ i }, f)))}
-Réponds par un objet JSON : {"retouche":{"ajoute":[formes nouvelles],"modifie":[{"i":numéro, champs qui changent}],"retire":[numéros],"nom":"nouveau nom, si elle change de nature","decale":[x,z] m si on la déplace},"suite":null}
-Même repère, MÊME ÉCHELLE : ce qu'on ajoute est proportionné à la chose (un bâton-bras sur une chose de 12 cm mesure quelques centimètres), posé dessus ou contre elle, jamais à côté. ${R.FORMES_PAR_OBJET} formes au plus en tout ; ${Math.max(0, p.monde.formes_libres)} formes nouvelles au plus.`);
+Réponds par un objet JSON : {"retouche":{"ajoute":[formes nouvelles],"modifie":[{"i":numéro, champs qui changent}],"retire":[numéros],"nom":"nouveau nom, si elle change de nature","decale":[x,z] m si on la déplace},${mod.faconner ? '"etapes":[[formes COMPLÈTES de chaque état intermédiaire du façonnage, de 2 à 4 états, dans l\'ordre où on le voit se faire]],' : ''}${mod.chercher ? `"ramasse":{"nom":"ce qu'il rapporte (${str(mod.chercher, 60)})","formes":[${R.AJOUT_FORMES_MAX} au plus, posées au sol, à taille réelle]},` : ''}"suite":null}
+Même repère, MÊME ÉCHELLE : ce qu'on ajoute est proportionné à la chose (un bâton-bras sur une chose de 12 cm mesure quelques centimètres), posé dessus ou contre elle, jamais à côté. ${R.FORMES_PAR_OBJET} formes au plus en tout ; ${Math.max(0, p.monde.formes_libres)} formes nouvelles au plus.${mod.faconner ? ' Il la façonne de ses mains : la matière reste la même et garde à peu près son volume ; ce qu\'il a ramassé sert (bras, yeux…). Les yeux et ce qui doit se lire se voient : contrastés, assez gros.' : ''}`);
   else parties.push(`Réponds par un objet JSON : {"objet":${dem.fabrique ? '{"envergure_m":sa plus grande dimension réelle, à écrire D\'ABORD,"nom":"court","degage":0..3,"formes":[]}' : 'null'},"suite":null ou {"etapes":[],"si_defait":[]}}
 OBJET : ${max} formes au plus, à taille réelle, posé au sol (y = 0 au sol), centré en x = z = 0, +z vers ${nom}.`);
+  const mex = R.MODELES === 'non' ? null : mod ? modeleDe(bib, mod.quoi + ' ' + (dem.texte || ''), { transforme: true }) : dem.fabrique ? modeleDe(bib, dem.fabrique.nom + ' ' + dem.fabrique.quoi) : null;
+  if (mex) parties.push(`MODÈLE DE RÉFÉRENCE « ${str(mex.modele.nom, 40)} » (${str(mex.modele.quoi, 200)}), à reprendre ${mod ? 'pour la chose (unité de longueur : la taille qui garde son volume ; "@" : sa matière et sa couleur)' : 'à l\'échelle de la demande'} ; règle d'échelle ${J(mex.modele.echelle || {})} : ${J(mex.modele.formes)}`);
   if (cadre.permis) parties.push(`SUITE, seulement si le geste a des suites crédibles ici (sinon null) : ${cadre.etapes_max} étapes au plus, ${cadre.duree_max_s} s au plus. ÉTAPE : {"dans_s":secondes depuis maintenant,${cadre.brume ? `"ambiance":{"brume":${cadre.brume[0]}..${cadre.brume[1]}},` : ''}"objet":{"id":"@","echelle":0.2..4,"en_s":durée du changement,"vacille":0..1,"lumineux":false,"retirer":true},"ajoute":{"pres_de":"@","decale":[x,z] m,"nom":"","formes":[${R.AJOUT_FORMES_MAX} au plus]},"pensee":"ce que ${nom} se dit alors","fin":${cadre.fins.length ? J(cadre.fins) + ' (seulement si ça clôt vraiment le récit)' : 'null'}}. "@" : ${mod ? 'la chose modifiée' : 'l\'objet fabriqué'} ; "@2", "@3" : ceux ajoutés, dans l'ordre ; ou l'id d'une chose déjà là. "si_defait" : 3 étapes au plus si on l'arrête (éteindre, démonter) ; sans elles, ce qui brille s'éteint.
 Peut dégénérer : ${L(cq.peut_degenerer)}. Jusqu'où : ${str(cq.jusqu_ou, 300)}. Exclu : ${L([...liste(cq.exclu), ...liste(h.jamais)])}.
 Choses nouvelles encore permises : ${p.monde.objets_nouveaux_restants} (l'objet en est une, chaque "ajoute" aussi).`);
@@ -957,6 +1166,7 @@ export function creerMeneur(o) {
   const h = normaliserHistoire(o.histoire);
   const R = reglagesDe(h, o.reglages), cadre = cadreDe(h, R);
   const ficheObjets = liste((ficheDe(h) || {}).objets).filter(x => isObj(x) && x.id);
+  const BIB = isObj(o.modeles) ? o.modeles : null;              // bibliothèque de modèles de référence (src/modeles.json, §15)
   const graine = (Number(o.graine) >>> 0) || 1;
   const partie = creerPartie(h, { graine });
   const entrees = [], appels = [], evenements = [];
@@ -1116,16 +1326,17 @@ export function creerMeneur(o) {
   /* -------- appliquer une réponse validée */
   function appliquerVoix(texte, v) {
     if (!v) {                                                  // secours : le lexique de la page, filtré comme une réponse
-      const s = secours(texte), rt = secoursRetouche(texte), cible = rt ? designer(texte, null, true) : null, stop = estStop(texte);
+      const s = secours(texte), stop = estStop(texte), tm = stop ? null : modeleTransforme(texte), rt = secoursRetouche(texte);
+      const cible = rt ? designer(texte, null, true) : tm ? designerTrace(texte) : null, ch = stop ? null : secoursChercher(texte);
       const g = cible || stop ? null : secoursGeste(texte), def = stop ? null : secoursDefaire(texte, partie);
-      const corps = stop ? [] : [...secoursPas(texte, designer(texte, null, true)), ...secoursVertical(texte, derniereP, designer(texte, null, false)), ...secoursCorps(texte, derniereP, partie.monde.crees)];
+      const corps = stop ? [] : [...(ch ? [ch] : secoursPas(texte, designer(texte, null, true))), ...secoursVertical(texte, derniereP, designer(texte, null, false)), ...secoursCorps(texte, derniereP, partie.monde.crees)];
       const compris = s.compris !== false && (liste(s.actions).length > 0 || isObj(s.scene)) || !!g || corps.length > 0 || !!def || !!cible || stop;
       let actions = stop ? [] : validerActions(s.actions);
       if (g || corps.length || def) actions = validerActions([...(g ? g.actions : []), ...corps, ...(def ? [{ type: 'posture', hauteur: 0.6 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }] : []), ...(g || def || corps.some(a => a.type !== 'posture') ? [] : actions)]);
       const pensee = stop ? tirer(['Je bouge plus.', 'OK. Je reste là.', 'Je m\'arrête. Quoi ?']) : cible ? tirer(['Attends… là. Et là. Voilà. Pas mal, hein ?', 'Bon. Avec ce qui traîne par terre… Voilà.']) : g ? g.pensee : def ? tirer(['Vite. De la terre dessus, je piétine, je piétine…', 'Voilà. C\'est fait. Plus rien.']) : corps.length && !liste(s.actions).length ? tirer(['Hm. Voilà.', 'Là. Tu vois ce que je vois ?', 'Bon.']) : str(s.pensee, 240);
       v = { sas: null, pensee: compris ? pensee : tirer(INCOMPRIS), attitude: compris ? 'suit' : 'hesite',
         actions, scene: g || def ? null : s.scene || null, temps: null, fin: null, etat: { peur: 0, confiance: 0, agacement: 0 },
-        faits: [], intention: '', question: false, fabrique: g ? { nom: g.nom, quoi: '', ou: g.ou } : null, suite: null, defaire: def ? [def] : [], modifie: cible ? { objet: cible, quoi: rt.quoi } : null, resume: null, secours: true };
+        faits: [], intention: '', question: false, fabrique: g ? { nom: g.nom, quoi: '', ou: g.ou } : null, suite: null, defaire: def ? [def] : [], modifie: cible ? { objet: cible, quoi: rt ? rt.quoi : str(tm.modele.nom, 60) } : null, resume: null, secours: true };
     }
     partie.sas = v.sas ? Object.assign({ min: +minutes(partie).toFixed(2) }, v.sas) : null;
     if (v.sas) log('sas', { verdict: v.sas.verdict, regle: v.sas.regle, motif: v.sas.motif, voix: texte });
@@ -1153,8 +1364,11 @@ export function creerMeneur(o) {
       if (partie.porteur.hors_monde_de_suite >= 2 && v.etat.agacement <= 0) v.etat.agacement = 1;
     } else partie.porteur.hors_monde_de_suite = 0;
     if (R.DOCILE && !v.secours && !estStop(texte)) {           // mode essai : ce que la réponse a oublié, la page le fait
-      const rt = !v.modifie && secoursRetouche(texte), cible = rt ? designer(texte, null, true) : null;
-      if (cible) { v.modifie = { objet: cible, quoi: rt.quoi }; log('docile', { modifie: cible }); }
+      const rt = !v.modifie && secoursRetouche(texte), tm = !v.modifie && !rt && modeleTransforme(texte);
+      const cible = rt ? designer(texte, null, true) : tm ? designerTrace(texte) : null;
+      if (cible) { v.modifie = { objet: cible, quoi: rt ? rt.quoi : str(tm.modele.nom, 60) }; v.fabrique = null; log('docile', { modifie: cible }); }
+      const ch = secoursChercher(texte);
+      if (ch && !liste(v.actions).some(a => a.type === 'chercher')) { v.actions = validerActions([ch, ...liste(v.actions).filter(a => a.type !== 'marcher')]); log('docile', { ajoute: ['chercher'] }); }
       const g = cible || v.modifie ? null : secoursGeste(texte);
       const deja = new Set(liste(v.actions).map(a => a.type));
       const pas = secoursPas(texte, designer(texte, null, true)).filter(a => !deja.has('marcher') && !deja.has('rejoindre'));
@@ -1264,6 +1478,13 @@ export function creerMeneur(o) {
     if (pronom && partie.monde.crees.some(c => !c.retire) && /\b(cette|cet|ce|dessus|la|le|elle|lui|ca|celle|celui)\b/.test(sansAccents(texte || ''))) return L[0].id;
     return null;
   }
+  /* Un modèle « transforme » de la bibliothèque nommé par la phrase (« fais-en un bonhomme de neige »), et la trace qu'il vise
+     (nommée, désignée, ou la plus récente : « fais-EN »). */
+  function modeleTransforme(texte) { return R.MODELES === 'non' ? null : modeleDe(BIB, texte, { transforme: true }); }
+  function designerTrace(texte) {
+    const d = designer(texte, null, true); if (d) return d;
+    const L = partie.monde.crees.filter(c => !c.retire); return L.length ? L[L.length - 1].id : null;
+  }
   /* Un tour qui touche une chose déjà là : la modifier, à sa place, plutôt que d'en refaire une à côté. */
   function preparerModif(v, texte) {
     const t = sansAccents(texte || '');
@@ -1276,12 +1497,23 @@ export function creerMeneur(o) {
       const L = connus(), traces = partie.monde.crees.filter(c => !c.retire).map(c => c.id);
       const x = L.find(x => traces.includes(x.id) && nomme(v.fabrique.nom, x.nom) && /\b(sur|dessus|contre|autour|cette|cet|ta|ton|ma|mon|sa|son)\b/.test(t))
         || (/\b(sur|dessus|contre|autour|cette|cet)\b/.test(t) ? L.find(x => nomme(texte, x.nom)) : null);
-      if (x) { v.modifie = { objet: x.id, quoi: str(v.fabrique.quoi || v.fabrique.nom, 160) }; log('fabrique_vers_modifie', { id: x.id, nom: v.fabrique.nom }); v.fabrique = null; }
+      const xt = !x && modeleTransforme(v.fabrique.nom + ' ' + v.fabrique.quoi + ' ' + texte) && traces.length ? { id: designerTrace(texte) } : null;   // « fais-en un bonhomme »
+      if (x || xt) { v.modifie = { objet: (x || xt).id, quoi: str(v.fabrique.quoi || v.fabrique.nom, 160) }; log('fabrique_vers_modifie', { id: (x || xt).id, nom: v.fabrique.nom }); v.fabrique = null; }
     }
     if (!v.modifie) return;
     const id = designer(texte, v.modifie.objet, true);
     if (!id || !formesDe(id)) { log('modifie_sans_cible', { objet: v.modifie.objet }); v.modifie = null; return; }
     v.modifie.objet = id;
+    // façonner (§15.3) : aller chercher ce qu'il faut s'il le faut, revenir, s'accroupir devant elle, la travailler (la page joue
+    // les états intermédiaires), se relever ; le cadrage du résultat vient ensuite (montrer)
+    const tm = modeleTransforme((v.modifie.quoi || '') + ' ' + texte), ch = liste(v.actions).find(a => a.type === 'chercher');
+    if (ch || tm || /\b(fais-en|faconne|faconner|modele|modeler|sculpte|sculpter|petris|petrir|transforme)\b/.test(t)) {
+      v.modifie.faconner = true; if (ch) v.modifie.chercher = ch.quoi; if (tm) v.modifie.modele = tm.id;
+      const reste = liste(v.actions).filter(a => !['chercher', 'rejoindre', 'posture', 'faconner', 'marcher', 'attendre', 'cadrer'].includes(a.type) && !(a.type === 'viser' && a.objet === id));
+      v.actions = [...(ch ? [ch] : []), { type: 'rejoindre', objet: id }, { type: 'posture', hauteur: 0.5 }, { type: 'faconner', objet: id }, { type: 'posture', hauteur: 1 }, ...reste].slice(0, 8);
+      log('faconnage', { id, chercher: ch ? ch.quoi : null, modele: tm ? tm.id : null });
+      return;
+    }
     // y aller, se baisser si la chose est au sol, faire ; le regard sur le résultat vient à la fin (montrer)
     const o = derniereP.objets.find(x => x.id === id), types = new Set(liste(v.actions).map(a => a.type)), pre = [];
     if (o && o.m > 1.2 && !types.has('rejoindre')) pre.push({ type: 'rejoindre', objet: id });
@@ -1309,7 +1541,7 @@ export function creerMeneur(o) {
       const dist = dem.fabrique.distance !== undefined ? dem.fabrique.distance : g && g.ou === dem.fabrique.ou ? g.distance : undefined;
       emettre({ type: 'objet', op: 'reserver', ref: dem.reserve, ou: dem.fabrique.ou, distance: dist });
     }
-    const c = consigneAtelier(h, partie, derniereP, dem, R);
+    const c = consigneAtelier(h, partie, derniereP, dem, R, BIB);
     atelier = { id, debut: sec, dem };
     partie.horloge.appels_coulisse = (partie.horloge.appels_coulisse || 0) + 1;
     appels.push({ id, type: dem.modifie ? 'retouche' : 'objet', min: +minutes(partie).toFixed(2), consigne: c, reponse: null, statut: 'en_vol' });
@@ -1341,7 +1573,12 @@ export function creerMeneur(o) {
     let suite = isObj(r) ? validerSuite(r.suite, cadre, R) : null, source = 'ia';
     if (dem.modifie) {                                          // retoucher ou transformer une chose déjà là
       const cib = dem.modifie.cible; let res = null;
-      if (isObj(r) && isObj(r.retouche)) {                      // la forme attendue : ce qui change sur la chose telle qu'elle est
+      const tm = dem.modifie.modele && R.MODELES === 'base' ? listeModeles(BIB)[dem.modifie.modele] : null;
+      if (tm) {                                                 // la bibliothèque : le modèle « transforme », au volume de la chose
+        const x = formesTransformees(tm, aEchelle(cib.formes, cib.echelle || 1));
+        if (x) { res = { formes: x.formes, nom: str(tm.nom, 60), entier: true }; source = 'modele'; log('modele', { id: dem.modifie.modele, unite: x.unite, objet: cib.id }); }
+      }
+      if (!res && isObj(r) && isObj(r.retouche)) {                      // la forme attendue : ce qui change sur la chose telle qu'elle est
         res = validerRetouche(r.retouche, cib.formes, R);
         if (res) res.formes = proportionner(cib.formes, res.formes);
         if (res && dem.modifie.remplace && !res.nom) res.nom = dem.modifie.nom;
@@ -1354,11 +1591,23 @@ export function creerMeneur(o) {
       if (a) a.statut = res || suite ? statut : statut === 'delai' ? 'delai' : 'invalide';
       if (partie.trame.fin) return;
       if (!res || !vivant(cib.id) && !ficheObjets.some(x => x.id === cib.id)) { log('modif_ratee', { id: cib.id }); return; }
+      if (dem.modifie.faconner) {                               // les états intermédiaires (Claude, sinon calculés) et ce qu'il a ramassé
+        const avant = res.entier ? aEchelle(cib.formes, cib.echelle || 1) : cib.formes;
+        const ia = isObj(r) ? liste(r.etapes).slice(0, 4).map(L => liste(L).map(validerForme).filter(Boolean).slice(0, R.FORMES_PAR_OBJET)).filter(L => L.length) : [];
+        res.etapes = source === 'ia' && ia.length ? [...ia, res.formes] : etapesFaconnage(avant, res.formes, R.FACONNAGE_ETAPES);
+        if (dem.modifie.chercher) res.ramasse = (isObj(r) && validerObjet(r.ramasse, R.AJOUT_FORMES_MAX)) || ramassage(BIB, dem.modifie.chercher);
+      }
       if (retoucher(cib.id, res, source, dem) && suite) programmer(suite, { '@': cib.id }, source);
       return;
     }
-    let objet = dem.fabrique && isObj(r) ? validerObjet(r.objet, R.OBJET_FORMES_MAX) : null;
-    if (objet) objet.formes = echelleObjet(objet.formes, num(r.objet.envergure_m, 0.01, 30, NaN), demande, objet.nom);
+    let objet = null;
+    // la bibliothèque : si la chose demandée est un modèle de référence, il sert de base sûre, à l'échelle demandée (§15)
+    const mf = dem.fabrique && R.MODELES === 'base' ? modeleNomme(dem.fabrique.nom) : null;
+    if (mf) { const x = formesModele(mf.modele, demande);
+      if (x) { objet = { nom: str(isObj(r) && isObj(r.objet) && r.objet.nom, 60) || dem.fabrique.nom || str(mf.modele.nom, 60), formes: x.formes, degage: 0 }; source = 'modele';
+        log('modele', { id: mf.id, envergure: x.envergure, facteur: x.facteur, raison: x.raison }); } }
+    if (!objet && dem.fabrique && isObj(r)) objet = validerObjet(r.objet, R.OBJET_FORMES_MAX);
+    if (objet && source === 'ia') objet.formes = echelleObjet(objet.formes, num(r.objet.envergure_m, 0.01, 30, NaN), demande, objet.nom);
     if (dem.fabrique && !objet) {                               // Claude absent, lent ou illisible : le secours par mots-clés, sinon rien
       const g = secoursGeste(dem.fabrique.nom) || secoursGeste(dem.fabrique.quoi + ' ' + dem.texte);
       if (g) { objet = validerObjet(g.objet, R.OBJET_FORMES_MAX); suite = suite || validerSuite(g.suite, cadre, R); source = 'secours';
@@ -1373,6 +1622,12 @@ export function creerMeneur(o) {
       if (!idObjet) suite = null;                                // une suite sans son objet n'a plus de sens
     }
     if (suite) programmer(suite, { '@': idObjet }, source);
+  }
+  /* Le modèle que nomme une chose fabriquée : par son premier nom (« crotte de 5 kg » ; pas « tas de pierres », qui n'est pas
+     un caillou). */
+  function modeleNomme(nom) {
+    const tete = (sansAccents(nom || '').match(/[a-z]{3,}/g) || []).find(m => !/^(une?|des|les|petite?s?|grande?s?|grosse?s?|gros|belle?s?|beau|vieux|vieille|enorme)$/.test(m));
+    return tete ? modeleDe(BIB, tete) : null;
   }
   /* Ce qu'on ajoute à une chose reste à sa mesure : rien de plus grand que 1,2 fois son envergure. */
   function proportionner(avant, apres) {
@@ -1398,17 +1653,22 @@ export function creerMeneur(o) {
     if (c) { c.liste = res.formes; c.formes = res.formes.length; if (res.nom) c.nom = res.nom; c.lumineux = res.formes.some(f => f.matiere === 'lumineux'); c.eteint = false; }
     else partie.monde.retouches[id] = res.formes;
     partie.monde.transitions = partie.monde.transitions.filter(t => !(dem.modifie.remplace && t.id === id));
-    emettre({ type: 'objet', op: 'remplacer', id, formes: clone(res.formes), nom: res.nom || undefined, echelle: res.entier && c ? (c.echelle = 1) : undefined });   // un objet entier est à taille réelle ; une retouche garde l'échelle
+    if (res.etapes) {                                           // façonnée : la page joue les états quand il est accroupi devant elle (§15.3)
+      let ram = null;
+      if (res.ramasse) { ram = creer(res.ramasse, { pres_de: id, decale: [0, 0], differe: id }, 'ramasse', false);   // posé près d'elle à son retour
+        if (ram) { vivant(ram).retire = true; log('objet_consomme', { id: ram, par: id }); } }   // ... et utilisé : la page le retire à la fin du façonnage
+      emettre({ type: 'objet', op: 'faconner', id, etapes: clone(res.etapes), nom: res.nom || undefined, echelle: res.entier && c ? (c.echelle = 1) : undefined, consomme: ram ? [ram] : [] });
+    } else emettre({ type: 'objet', op: 'remplacer', id, formes: clone(res.formes), nom: res.nom || undefined, echelle: res.entier && c ? (c.echelle = 1) : undefined });   // un objet entier est à taille réelle ; une retouche garde l'échelle
     if (res.decale) emettre({ type: 'objet', op: 'modifier', id, decale: res.decale });
     recompter();
-    log('objet_modifie', { id, nom: nomDe(id), formes: res.formes.length, source, remplace: !!dem.modifie.remplace });
+    log('objet_modifie', { id, nom: nomDe(id), formes: res.formes.length, source, remplace: !!dem.modifie.remplace, etapes: res.etapes ? res.etapes.length : undefined });
     ajouterFait(`${nomDe(id)} (${id}) : ${dem.modifie.quoi || 'transformé'}`, 'geste');
     if (dem.montrer) montrerObjet(id);
     return true;
   }
   function creer(objet, place, source, montrer) {
     const m = partie.monde;
-    if (m.objets_nouveaux_restants <= 0 || !liberer(1, objet.formes.length, [], false)) { log('objet_refuse', { nom: objet.nom, raison: m.objets_nouveaux_restants <= 0 ? 'budget' : 'moteur plein' }); return null; }
+    if (m.objets_nouveaux_restants <= 0 || !liberer(1, objet.formes.length, place.pres_de ? [place.pres_de] : [], false)) { log('objet_refuse', { nom: objet.nom, raison: m.objets_nouveaux_restants <= 0 ? 'budget' : 'moteur plein' }); return null; }
     const id = 'fab-' + (++m.compteur);
     m.objets_nouveaux_restants--;
     m.crees.push({ id, nom: objet.nom, min: +minutes(partie).toFixed(2), formes: objet.formes.length, liste: clone(objet.formes), echelle: 1,
@@ -1617,7 +1877,7 @@ export function creerMeneur(o) {
     return `${minutes(partie).toFixed(1)} min · temps ${der ? der.id + ' (' + der.cause + ')' : '—'} · ouverts ${ouverts.join(',') || '—'} · sas ${s ? s.verdict + (s.regle ? ' ' + s.regle : '') : '—'} · peur ${partie.porteur.peur} conf ${partie.porteur.confiance} agac ${partie.porteur.agacement}${enVol ? ' · appel ' + enVol.type : ''}${atelier ? ' · atelier' : ''}${partie.monde.crees.length ? ' · traces ' + partie.monde.crees.filter(c => !c.retire).map(c => c.id + (c.eteint ? '(éteint)' : '')).join(',') : ''}${partie.monde.suites.some(s => s.etat === 'active') ? ' · suite en cours' : ''}`;
   }
   function trace() {
-    return clone({ version: 1, histoire: h.id, empreinte: empreinte(o.histoire), graine, reglages: o.reglages || null, entrees, appels, evenements, final: partie });
+    return clone(Object.assign({ version: 1, histoire: h.id, empreinte: empreinte(o.histoire), graine, reglages: o.reglages || null }, BIB ? { modeles: empreinte(BIB) } : {}, { entrees, appels, evenements, final: partie }));
   }
   return {
     histoire: h, reglages: R, tic, voix, recevoir, recevoirObjet, debug, trace,
@@ -1631,10 +1891,11 @@ export function creerMeneur(o) {
 export function empreinte(v) { let x = 5381; for (const c of JSON.stringify(v)) x = (Math.imul(x, 33) ^ c.charCodeAt(0)) >>> 0; return x.toString(36); }
 
 /* Rejoue une trace (sans Claude) : les mêmes entrées dans le même ordre redonnent le même état final. */
-export function rejouer(histoire, trace) {
+export function rejouer(histoire, trace, { modeles = null } = {}) {   // modeles : la bibliothèque de la partie (son empreinte est dans la trace)
   if (trace.empreinte && trace.empreinte !== empreinte(histoire)) throw new Error('trace produite avec une autre version du contrat');
+  if (trace.modeles && (!modeles || empreinte(modeles) !== trace.modeles)) throw new Error('trace produite avec une autre bibliothèque de modèles');
   const secoursRejeu = liste(trace.entrees).filter(e => e.k === 'x').map(e => e.rep);
-  const m = creerMeneur({ histoire, graine: trace.graine, reglages: trace.reglages || undefined, rejeu: true, secoursRejeu });
+  const m = creerMeneur({ histoire, graine: trace.graine, reglages: trace.reglages || undefined, rejeu: true, secoursRejeu, modeles });
   let p = compacter({});
   for (const e of liste(trace.entrees)) {
     if (e.k === 't') { if (e.p) p = e.p; m.tic(e.dt, p, { gel: !!e.g }); }

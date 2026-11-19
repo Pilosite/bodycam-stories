@@ -614,3 +614,58 @@ En plus de §13 : la page ajoute ce que la réponse a oublié pour reculer ou s'
 - Le moteur v3 lit la même texture d'objets mais n'a pas été vérifié avec `remplacer` ni avec une caméra perchée.
 - Perché, il n'y a pas de collision avec les branches ; les arbres du kit forêt n'ont pas de branches basses : il grimpe le long d'un tronc nu.
 - Les éléments de semis (maisons, tombes, voitures…) ne sont pas encore des supports : dans les mondes sans arbres ni rochers codés (kit nu), seuls les objets en formes servent de support.
+
+## 15. La démonstration : une bibliothèque de modèles, l'échelle, aller chercher et façonner (19 novembre 2026, suite)
+
+Séquence de démonstration demandée par Toine : « fais une crotte » (normale, ou « de 5 kg »), puis « va chercher des bâtons et des cailloux et fais-en un bonhomme de neige » ; on doit VOIR le personnage partir, ramasser, revenir, façonner, puis le résultat cadré de près. Il voulait une crotte « photoréaliste préparée dans les assets ». Les règles 3 et 4 de `CLAUDE.md` interdisent les médias importés et les objets en dur : la réponse retenue est une **bibliothèque de modèles de référence en données**. Rien dans le code n'est propre à la crotte ni au bonhomme : `tests/demo.test.mjs` vérifie que ni les shaders, ni `main.js`, ni le meneur ne nomment un modèle.
+
+Vérification : `npm test` (`tests/demo.test.mjs`) ; `node tools/demo.mjs` joue la démo dans la page (moteur v3, Claude simulé), captures et vérifications dans `out/demo/` (format téléphone 390 × 780 et une vue PC 960 × 540). `node tools/demo.mjs 9000 120000 docile` : un Claude qui oublie gestes et objets, le mode DOCILE complète.
+
+### 15.1 La bibliothèque : `src/modeles.json`
+
+Un modèle = `nom`, `mots` (ce qui le désigne), `quoi` (description pour l'accessoiriste), `formes` (le vocabulaire de `creerMonde` : six formes, matières en recettes), `envergure_m` de référence et une règle d'`echelle`. Drapeaux : `ramassable` (une chose qu'on ramasse par terre ; `trouve` : au pied d'un arbre ou d'un rocher), `transforme` (une forme qu'on donne À une chose déjà là : ses parties sont en unité relative, `"@"` prend la matière et la couleur de la chose). Le build l'embarque (`MODELES`) ; la page le passe à `creerMeneur({ modeles })` ; une trace porte son empreinte (`rejouer(h, trace, { modeles })`).
+
+- **L'accessoiriste le reçoit comme exemple** (« MODÈLE DE RÉFÉRENCE », avec sa règle d'échelle) quand la demande le nomme. Budget de sa consigne : 9 000 caractères.
+- **La page le prend comme base sûre** (réglage `MODELES: 'base'`, par défaut) quand le premier nom de la chose fabriquée est un de ses mots (« crotte de 5 kg » oui ; « tas de pierres » n'est pas un caillou) : ses formes, à l'échelle demandée, plutôt que celles de Claude ; le nom de Claude est gardé, sa `suite` aussi (`modele` dans la trace). `'exemple'` : Claude seul décide, le modèle n'est qu'un exemple ; `'non'` : plus de bibliothèque. Sans Claude, le modèle passe avant le secours par mots-clés.
+- Quatre modèles : la crotte (boudin enroulé en deux tours : 14 capsules dont les rayons varient, bout effilé, plus une tache sombre presque cachée dessous qui fait l'ombre de contact), un bâton, un caillou clair (ramassables), et le bonhomme de neige (transforme : trois boules de la matière de la chose, deux bâtons pour les bras, deux cailloux clairs pour les yeux, sur sa face +z).
+- **Matière** : une recette de plus dans `src/matieres.json`, `pate-organique` (brun marbré, nuances sombres, grain fin, petites bosses de relief, brillance 0,6). Aucune ligne de GLSL : le vocabulaire existant (capsules, `penche`, `cap`, recettes) suffisait.
+
+### 15.2 L'échelle
+
+`formesModele(modele, phrase)` : règle `masse` : une masse dite donne le volume (densité du modèle, 1,05), donc l'envergure, proportions gardées. Le volume est celui de la réunion réelle des formes (`volumeFormes` : une grille de points, mêmes formes et mêmes repères que `sdPrim`), pas la somme des formes qui se chevauchent. Crotte de référence : 14 cm, 0,44 L ; « de 5 kg » : 31 cm. Sans masse : une longueur ou une comparaison dite, « petit » (× 0,6), « gros » (× 1,6), « énorme » (× 2,5), bornées par `min_m` et `max_m` du modèle. **Le détail des matières ne grossit pas** : les recettes sont en mètres, dans le repère de la forme ; une crotte de 5 kg a le même grain et les mêmes bosses qu'une de 14 cm. Les segments (les capsules) grossissent avec elle : ce sont des formes. Le cadrage suit la taille (`planCadrage`, §14.2) : 69 cm accroupi et zoom 2,2 pour la normale, 1 m et zoom 1,4 pour celle de 5 kg.
+
+Une chose plus grosse que 20 cm posée « dessous » est poussée hors du corps du porteur, marge comprise (`horsDuCorps`) ; une petite tombe aux talons, comme avant.
+
+### 15.3 Aller chercher, façonner
+
+Deux actions de plus, toujours calculées par la page :
+
+| Action | Ce que fait la page |
+|---|---|
+| `chercher` `{quoi}` | `lieuChercher` : au pied de l'arbre ou du rocher le plus proche (2 à 12 m, dans l'ordre que dit `trouve` du modèle ramassable nommé), sinon au bord du chemin, quatre pas devant. Il y va (trajet du §16), s'accroupit, regarde par terre, se tourne un peu, se relève. |
+| `faconner` `{objet}` | ajoutée par la page, jamais demandée à Claude. Accroupi devant la chose, il la vise ; quand l'accessoiriste a répondu, ce qu'il a rapporté est posé à côté d'elle (côté porteur), la chose est tournée face à lui (`cap`), puis ses états s'affichent un toutes les 1,1 s pendant que la caméra bouge un peu (quelqu'un qui travaille de ses mains). À la fin, ce qu'il avait rapporté disparaît (il s'en est servi). S'il attend la réponse plus de 30 s, il se relève. |
+
+- **Le meneur** (`preparerModif`) : une modification est un façonnage quand la réponse contient `chercher`, quand un modèle `transforme` est nommé, ou quand la phrase dit « fais-en », « façonne », « modèle », « sculpte »… Les gestes deviennent `chercher` (s'il y a lieu), `rejoindre`, `posture 0,5`, `faconner`, `posture 1`, et le cadrage du résultat vient après (§14.2). Une `fabrique` d'un modèle `transforme` alors qu'il y a des traces devient une modification de la plus récente (« fais-EN un bonhomme »).
+- **L'accessoiriste** peut rendre `etapes` (2 à 4 états intermédiaires, formes complètes) et `ramasse` (`{nom, formes}`, ce qu'il rapporte). Sinon, la page les calcule : `etapesFaconnage(avant, après)` (la chose pétrie, la première masse et le reste de la pâte posé dessus, la masse façonnée, puis les ajouts une matière après l'autre, puis le résultat : 5 états) et `ramassage(bibliothèque, quoi)` (deux de chaque modèle ramassable nommé, en un petit tas). Avec le modèle `transforme`, le résultat garde le volume de la chose (`formesTransformees`).
+- **Ordres au moteur** : `{op: "creer", differe: id}` (ce qu'il rapporte, gardé par la page jusqu'à son retour) et `{op: "faconner", id, etapes, nom, echelle, consomme}`. Le meneur compte l'objet ramassé comme consommé dès la réponse (`objet_consomme`). Trace : `faconnage`, `modele`, `objet_modifie` (avec `etapes`), `objet_consomme`.
+- **Mode DOCILE** : « va chercher… » sans `chercher` dans la réponse, « fais-en un bonhomme » sans `modifie` : la page les ajoute. **Sans Claude** : `secoursChercher` et la bibliothèque jouent toute la séquence.
+
+### 15.4 Les mains dans le champ : pas fait
+
+Un vocabulaire de « mains du porteur » (deux avant-bras et mains en formes attachés à la caméra) n'a pas été fait. Avec le vocabulaire actuel, une main est une boîte et quatre capsules : de 30 à 50 cm, plein cadre, sans peau, sans déformation ni sous-surface, elle ferait mannequin, et c'est exactement ce que la règle n° 1 interdit (une image sale et crédible plutôt qu'une image propre et synthétique). Il faudrait au moins une recette de peau, des formes fondues (le v3 ne suit pas `lisse`), et des poses animées : un chantier à part. Le geste se lit déjà par la caméra (accroupi, regard vers le bas, petits mouvements) et par la chose qui change.
+
+### 15.5 Ce qui n'est pas vérifié
+
+- Rien n'a tourné avec le vrai Claude : la qualité de ses `etapes` et de ses `ramasse`, et le respect de « pas de forme à soi quand le modèle existe », restent à voir. Le Claude simulé de `tools/demo.mjs` répond exprès mal (trois boules huit fois trop grandes) : c'est la bibliothèque qui fait l'image.
+- Tout a été rendu en logiciel (SwiftShader), jamais sur un GPU ni sur le téléphone de Toine.
+- Pendant un façonnage, un état intermédiaire peut avoir plus de formes que le résultat (16 contre 8) : si le moteur est presque plein (64 formes), la chose peut disparaître le temps de cet état (`buildShapes` saute un objet qui ne tient pas).
+
+## 16. Le corps ne traverse rien
+
+Demande de Toine : le personnage ne doit jamais passer à travers un rocher, un tronc, un mur, une chose fabriquée, dans aucun déplacement.
+
+- **Trajet** (`planTrajet`, `src/meneur.js`, pur) : de la position du corps vers une cible, arrêt à une distance donnée, sur des obstacles en cercles. Un obstacle sur le chemin est contourné par un point de passage à côté de lui (le côté le plus court d'abord) ; une cible dans un obstacle, ou un passage impossible, et il s'arrête devant (`bloque`) et le dit (« Je peux pas passer : un rocher, juste là. »). Une chose qu'on rejoint ou qu'on cadre n'est pas contournée : on s'arrête à sa surface plus la marge. Marge : `MARGE_CORPS` = 0,35 m. Servent : `rejoindre`, `cadrer`, `monter`, `chercher`.
+- **Obstacles connus** (`obstaclesConnus`, `src/main.js`) : troncs (`arbreA`), perches (`percheB`) et blocs (`blocGres`) recopiés de `monde.glsl` en flottants 32 bits (MÊMES FORMULES, des deux côtés), et les choses de la fiche. Les éléments de semis (murs, tombes, voitures) ne sont connus que de la sonde du moteur.
+- **Pendant la marche** (`moveBy`) : la sonde du moteur (lue en octets, jamais en flottants), comme avant, puis les obstacles connus : le corps est repoussé à la marge s'il allait y entrer. Une marche dirigée bloquée plus de 0,6 s s'arrête et il le dit (avant : il tournait au hasard, ce que fait encore la flânerie). En marche arrière et accroupi, mêmes règles. Monter à un arbre : contre le tronc, à la marge.
+- **Moteur v3** : la sonde `v3_sonde.frag` est désormais compilée dès que le v3 tourne (avant : seulement avec l'option `v3sonde`) ; sans elle et sans lanceur de rayons, il n'y avait aucune collision en v3.
+- Tests : trajet droit vers un rocher (contourné), cible dans un rocher (arrêt devant, à la marge), rejoindre une chose derrière un rocher et marche forcée droit dessus dans le monde de papier. Dans la page : `tools/demo.mjs`, dernières captures (`10-obstacle-avant`, `11-obstacle-pendant`, `12-obstacle-apres`).

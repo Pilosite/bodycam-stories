@@ -58,7 +58,7 @@ const histoires = histFiles.map(f => JSON.parse(read('histoires/' + f)));
 const meneurSrc = read('src/meneur.js');
 const exports = [...meneurSrc.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]);
 if (/^\s*import\s/m.test(meneurSrc) || /<\/script/i.test(meneurSrc)) throw new Error('src/meneur.js : pas d\'import ni de </script>');
-const meneurJs = `const MENEUR=(function(){"use strict";\n${meneurSrc.replace(/^export\s+/gm, '')}\nreturn {${exports.join(',')}};\n})();\nconst HISTOIRES=${JSON.stringify(histoires).replace(/<\//g, '<\\/')};`;
+const meneurJs = `const MENEUR=(function(){"use strict";\n${meneurSrc.replace(/^export\s+/gm, '')}\nreturn {${exports.join(',')}};\n})();\nconst HISTOIRES=${JSON.stringify(histoires).replace(/<\//g, '<\\/')};\nconst MODELES=${JSON.stringify(JSON.parse(read('src/modeles.json'))).replace(/<\//g, '<\\/')};`;   // bibliothèque de modèles de référence (§15) : des données
 // Le constructeur de monde (src/constructeur.js, module pur) et son interface (src/atelier.js) : même enveloppe, objets CONSTRUCTEUR et ATELIER.
 function embarquer(nom, fichier) {
   const src = read(fichier);
