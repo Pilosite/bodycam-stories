@@ -779,7 +779,7 @@ function v2Basculer(on){
    v3k (recouvrement des grains), v3carte (largeur de la carte d'ombres), v3alpha (part d'image neuve en mouvement),
    v3max (images accumulées à l'arrêt), v3detail (chronomètre chaque passe : ajoute des synchronisations),
    v3net (soleil ponctuel, sans pénombre), v3pcf (flou de lecture de la carte, en texels), v3amb (niveau de l'ambiance,
-   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres),
+   0,65 par défaut : réglé à l'œil sur ref/), v3voir (mise au point : 1 ombre, 2 albédo, 3 normale, 5 carte d'ombres, 6 élément de chaque pixel, magenta : rien de semé),
    v3prof (mise au point du coût de l'ombrage : 1 sans recette, 2 sans ambiance, 4 sans soleil, 8 sans pres(), 16 passe vide,
    64 sans recette au sol, 128 sans recette hors du sol).
    Optimisations de la qualité mobile (docs/moteur-v3.md, « Vers 30 images par seconde ») ; chacune se coupe pour comparer,
@@ -1169,7 +1169,9 @@ function v3Basculer(on){
   if(on){ v3Init(); V3.hist=null; V3.n=0; } else { hist=null; v3Libere(false); }
   if(typeof W==="number"&&W>0&&!CFG.w) resize();                    // la résolution interne dépend du moteur
 }
-/* Ce que le semeur ne sait pas encore rendre (liste tenue dans docs/moteur-v3.md). Rend la raison, ou "" si la fiche est rendue. */
+/* Ce que le semeur ne sait pas encore rendre (docs/moteur-v3.md, « Le v3 rend tous les mondes »). Rend la raison, ou "" si la
+   fiche est rendue. La liste est vide : semis, kit nu, dunes, relief et trajet réglés, nuit à la lampe, conifères en cône et eau
+   à l'horizon sont semés. La fonction reste le point d'entrée (bouton « Moteur v3 · pas ici », repli sur le lanceur de rayons). */
 function v3Refus(){
   return "";
 }

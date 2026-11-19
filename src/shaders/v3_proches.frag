@@ -31,7 +31,7 @@ void main(){
     else if(vK.x==2) dd=blocForme(blocLocal(p,terrainH(p.xz),vId,B),B)*.72;
     else { vec4 inf; dd=vK.x==3?sdTreeA(p,terrainH(p.xz),inf):sdTreeB(p,terrainH(p.xz),inf); }
     if(touche){ gv[nn]=dd; nn++; }
-    else if(dd<.0006*t+.0004) touche=true;
+    else if(dd<.0006*t+.0004 || (i>=19 && dd<.01*t+.004)) touche=true;   // au dernier pas, tout près de la surface (rayon rasant) : touché, pas de trou
     else { t+=dd; if(t>tmax || i>=19) break; }
   }
   if(!touche || nn<4) discard;

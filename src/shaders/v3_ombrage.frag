@@ -17,7 +17,7 @@ uniform vec3  uSoleilC;
 uniform mat3  uSoleilM;
 uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
 uniform vec3  uSd;           // direction du soleil de cette image, tirée dans le disque solaire (pénombre par accumulation)
-uniform int   uVoir;         // mise au point (option v3voir) : 1 ombre du soleil seule, 2 albédo, 3 normale, 5 carte d'ombres
+uniform int   uVoir;         // mise au point (option v3voir) : 1 ombre du soleil seule, 2 albédo, 3 normale, 5 carte d'ombres, 6 élément par pixel (magenta : rien)
 uniform float uOccT;
 uniform float uPcf;
 uniform int   uProf;         // mise au point du coût (option v3prof) : 1 sans recette, 2 sans ambiance, 4 sans soleil, 8 sans pres()
@@ -25,7 +25,9 @@ uniform float uAmb;
 /* Damier (en marche, qualité mobile, option v3damier) : les troncs, perches, rochers et objets ne sont ombrés qu'une image
    sur deux, par blocs de 8 × 8 pixels en damier alterné ; l'autre image relit l'historique reprojeté. La part d'image
    neuve de ces pixels passe à uAlphaD = 1 - (1 - a)² : même réponse dans le temps, deux fois moins de calcul.
-   Les blocs ont la taille des macroblocs de la compression vidéo du capteur : ce qui en reste passe pour elle. */
+   Les blocs ont la taille des macroblocs de la compression vidéo du capteur : ce qui en reste passe pour elle.
+   Sauf à moins de 1,5 m : en marche, l'historique d'une surface si proche change d'échelle d'une image à l'autre et les
+   blocs relus formaient un damier visible sur un tronc ou un mur (docs/moteur-v3.md, « Plus de transparence de près »). */
 uniform int   uDamier;
 uniform float uAlphaD;
 // TAPIS : variante choisie à la compilation (src/main.js). Sans tapis, ce code n'existe pas dans le programme : sur Direct3D
@@ -171,7 +173,8 @@ void main(){
   float rr=length(uv), ang=rr*uFish;
   vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
   vec4 g0=texelFetch(uG0,ip,0), g1=texelFetch(uG1,ip,0);
-  float idD=floor(g0.w); bool dam=uDamier>0 && idD>=1. && (idD<=4. || idD==6.);
+  if(uVoir==6){ float c=floor(g0.w); outCol=vec4(g0.w<0.?vec3(1.,0.,1.):c==0.?vec3(.3):c==5.?vec3(0.,.6,0.):vec3(fract(c*.37),fract(c*.61),fract(c*.83)),1.); return; }   // mise au point : élément par pixel, magenta = rien
+  float idD=floor(g0.w); bool dam=uDamier>0 && idD>=1. && (idD<=4. || idD==6.) && g1.w>1.5;   // de près (< 1,5 m), toujours ombré : l'historique relu y est trop agrandi ou rétréci, les blocs se voyaient
   if(dam && (((ip.x>>3)+(ip.y>>3)+int(uFrame))&1)==1){ vec3 h; if(histoireReproj(uCamPos+rd*g1.w,h)){ outCol=vec4(h,g1.w); return; } }
   vec3 col; float t;
   if(g0.w<0.){                                               // rien de semé : ciel, brume, lointain
