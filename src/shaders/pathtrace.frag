@@ -23,7 +23,7 @@ uniform mat3  uPrevCam;
 uniform float uAlpha;      // part d'image neuve dans le mélange
 uniform int   uReproj;     // 1 = l'historique est relu à travers l'ancienne pose
 uniform float uJit;        // anticrénelage par décalage sous-pixel (0 en mouvement)
-uniform int   uMode;       // 1 = sonde de collision
+uniform int   uMode;       // 1 = sonde de collision, 2 = tournage panoramique (moteur v2)
 uniform vec3  uProbe;
 out vec4 outCol;
 
@@ -682,9 +682,15 @@ void main(){
   ivec2 ip=ivec2(gl_FragCoord.xy);
   rs=uint(ip.x)*1973u+uint(ip.y)*9277u+uint(uTick)*26699u+1u; rnd(); rnd();
   vec2 px=gl_FragCoord.xy+(vec2(rnd(),rnd())-.5)*uJit;
-  vec2 uv=(px-.5*uRes)/uRes.y;
-  float rr=length(uv), ang=rr*uFish;                       // projection fisheye équidistante
-  vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
+  vec3 rd;
+  if(uMode==2){                                              // tournage : sphère complète en équirectangulaire, axes du monde
+    vec2 e=px/uRes; float lon=(e.x*2.-1.)*3.14159265, lat=(e.y-.5)*3.14159265;
+    rd=vec3(sin(lon)*cos(lat),sin(lat),cos(lon)*cos(lat));
+  } else {
+    vec2 uv=(px-.5*uRes)/uRes.y;
+    float rr=length(uv), ang=rr*uFish;                       // projection fisheye équidistante
+    rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
+  }
   gT=1e4;
   vec3 col=render(uCamPos,rd);
   col=min(max(col,vec3(0.)),vec3(60.));

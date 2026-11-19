@@ -53,4 +53,6 @@ Faiblesses connues : sol proche de la caméra, pas de sous-bois, rochers trop li
 
 Chantier en cours : `docs/refonte-monde-generique.md`. Étapes 1 (référence gelée) et 2 (matières en recettes) faites ; prochaine : semis génériques. Les kits `foret` et `dunes` et les objets en formes sont des étapes, pas la cible : la cible est un vocabulaire générique (relief, semis, matières, volumes) dans lequel la forêt elle-même n'est qu'une fiche.
 
+Essai du moteur v2 (« tourner, puis projeter ») : bouton « Moteur v2 », option `v2` ; résultats dans `docs/moteur-v2.md`, poses comparées par `node tools/v2essai.mjs out/v2`.
+
 Autres pistes : `docs/rendu.md` et `docs/contrat-histoire.md`.

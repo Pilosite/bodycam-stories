@@ -13,6 +13,10 @@ const shaders = {
   FS_DOWN: 'bloom_down.frag',
   FS_BLUR: 'bloom_blur.frag',
   FS_CAM: 'camera.frag',
+  VS_V2PTS: 'v2_points.vert',      // moteur v2 (essai) : projection des panoramiques
+  FS_V2PTS: 'v2_points.frag',
+  FS_V2CIEL: 'v2_ciel.frag',
+  FS_V2TROUS: 'v2_trous.frag',
 };
 
 // Toutes les fiches de scenes/ sont embarquées, par ordre alphabétique ; un JSON invalide arrête le build.

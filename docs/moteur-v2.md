@@ -78,6 +78,33 @@ Dessiner les points proches de la caméra comme de petites taches, avec test de 
 2. **Le tournage panoramique** depuis trois positions sur le sentier, puis une marche entière de 10 m en projection seule, comparée à la même marche avec le moteur actuel (`ref/` sert de juge pour l'image fixe).
 3. **La mesure sur téléphone** : images par seconde de la projection, secondes par panoramique. C'est elle qui décide.
 
+## Essai n° 2 fait (19 novembre 2026) : le projecteur
+
+Construit, en mode expérimental (bouton « Moteur v2 », option de test `v2`). Le mode actuel reste le défaut, inchangé (vue `a-sentier` : écart après flou 1,7, au niveau du plancher de bruit).
+
+**Ce qui est fait.**
+- *Tournage* : `pathtrace.frag` reçoit `uMode = 2`, qui ne change que la génération du rayon (sphère complète, équirectangulaire, axes du monde). Même shader, mêmes recettes, un seul appel à `render()`. Panoramique 1024 × 512 (524 288 points), 4 passes accumulées, qualité « arrêt » (`uQ = 1`) par défaut, couleur + distance en RGBA32F. Points de tournage sur le sentier (`pathX`, hauteur d'œil), tous les 2,5 m, le plus urgent d'abord, en avance dans le sens de la marche ; tournage par bandes de lignes, 12 ms par image au plus.
+- *Projection* : `gl.POINTS`, `gl_VertexID` + `texelFetch`, aucun tampon de sommets. Même fisheye équidistant que la caméra, test de profondeur, taille du point = distance de capture × π/H ÷ distance actuelle (×1,25, allongée en tangentiel). Les 3 panoramiques les plus proches ; à égalité de profondeur, le plus proche gagne (décalage de 3 % par rang). Sortie au format de l'accumulation : bloom, exposition et `camera.frag` inchangés.
+- *Ciel* : passe plein écran qui relit le ciel du panoramique le plus proche dans la direction du pixel ; ailleurs, un trou.
+- *Trous* : **remplissage par dilatation de 2 px** (fond le plus lointain des voisins), signalé ; `v2fill: 0, v2trous: true` les montre en magenta.
+- *Mesure* : le panneau « Mesurer » donne, en mode v2, images/s en marche, ms de projection, points dessinés, secondes par panoramique (et de calcul pur), passes et qualité.
+- `tools/v2essai.mjs` rend les mêmes poses avec les deux moteurs (départ, regard tourné de 58°, 2 m et 5 m de marche).
+
+**Ce qu'on voit** (planche `out/v2-planche.png`, rendu logiciel 270 × 480).
+- Géométrie et lumière : justes. Même sentier, mêmes ombres de troncs, même rocher, à pose égale on confond presque les deux.
+- Pointillisme : le sol et le rocher proches deviennent granuleux dès qu'on s'approche (2 m) ; les points carrés se voient sur les surfaces lisses.
+- Canopée : les feuilles hautes, captées de loin, deviennent des carrés sombres qui flottent devant le ciel. C'est le défaut le plus visible.
+- Trous : peu nombreux avec trois panoramiques autour du porteur : des liserés derrière les troncs et au bord du rocher, à 2 m et 5 m. Avec un seul panoramique (tournage en retard), non mesuré ici.
+- Bords : couleur moyennée (fond + objet) placée à une seule distance : léger halo aux silhouettes.
+- La qualité « mouvement » (`v2q: 0`) perd les ombres des arbres (ombres trop courtes en pas) : le tournage doit être en qualité « arrêt ».
+
+**Chiffres, rendu logiciel (SwiftShader, 4 cœurs), 270 × 480.**
+- Image du moteur actuel en marche (pleine résolution, qualité mouvement) : 2,6 à 5 s.
+- Image en projection (1,57 million de points, 3 panoramiques) : 0,3 à 0,6 s, soit 5 à 10 fois moins.
+- Un panoramique 1024 × 512 × 4 passes, qualité arrêt : 180 à 260 s de calcul (300 s de mur en tâche de fond) ; qualité mouvement : 150 à 165 s. En logiciel, la qualité arrêt ne coûte que 1,3 fois plus.
+
+**Estimation pour le Mali-G77, à vérifier avec le bouton.** À partir des mesures de Toine (2 M pixels/s en qualité mouvement, 0,23 M pixels/s en passe fixe) : un panoramique 4 passes coûte environ 1 s en qualité mouvement (sans ombres d'arbres) et **environ 9 s en qualité arrêt**. Le porteur marche à 1,35 m/s : un panoramique tous les 2,5 m laisse 1,9 s. Le tournage ne suit pas la marche d'un facteur 5, sauf à tourner pendant les gels et les pauses, ou à réduire (512 × 256, 2 passes, plus d'espacement). La projection, elle, devrait tenir : 1,6 million de points par image est banal pour un GPU mobile, mais les gros points proches coûtent en remplissage.
+
 ## Ce que je ne sais pas
 
 - Si un téléphone moyen tourne un panoramique en moins de quelques secondes. Tout le pari est là, et aucune recherche ne le dit : il faut mesurer.
