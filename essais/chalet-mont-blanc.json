@@ -6,9 +6,11 @@
  "graine": 7411,
  "kit": "foret",
  "foret": {
-  "densite": 0.12,
+  "densite": 0.3,
   "rochers": 0.5,
-  "feuillage": 0
+  "feuillage": 1,
+  "houppier": "cone",
+  "perches": 0.1
  },
  "surfaces": {
   "sol": "herbe",

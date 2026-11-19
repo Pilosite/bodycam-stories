@@ -38,6 +38,8 @@ Les fiches vivent dans `scenes/*.json`. Le build les embarque toutes dans la pag
 | `foret.densite` | oui | 0 à 1. Part de cellules occupées par un arbre. |
 | `foret.rochers` | oui | 0 à 1 et plus. Abondance des blocs de grès. |
 | `foret.feuillage` | oui | 0 à 1,5. Densité de la canopée. |
+| `foret.houppier` | oui | `voute` (feuillus et pins, feuillage haut et commun) ou `cone` (conifères : un cône de feuillage par arbre, vert sombre). Réglages : `houppier_bas`, `houppier_rayon` en mètres. |
+| `foret.perches` | oui | 0 à 1. Part de jeunes troncs fins. |
 | `dunes.rochers` | oui | Abondance des blocs dans le sable, 0 par défaut. |
 | `ambiance.saison` | oui | `ete`, `automne`, `hiver`. Couleur et densité des feuilles. |
 | `ambiance.meteo` | oui | `clair` ou `voile` (soleil laiteux, ombres douces). |
