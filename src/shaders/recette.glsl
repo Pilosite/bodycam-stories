@@ -23,8 +23,18 @@ const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, ce
 vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
 float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
   if(sol){ vec2 x=q.xz*s.xz+o; return fb?fbm(x):vnoise(x); }
-  vec3 x=q*s+o; return fb?fbm3(x):vnoise3(x);
+  vec3 x=q*s+o;
+#ifdef SOCLE                                                  // ombrage socle : deux octaves au lieu de quatre, même moyenne (les seuils des recettes restent justes)
+  return fb?.5*vnoise3(x)+.25*vnoise3(x*2.03+vec3(17.3,9.1,5.7))+.094:vnoise3(x);
+#else
+  return fb?fbm3(x):vnoise3(x);
+#endif
 }
+#ifdef SOCLE
+#define NTACHES 3            // ombrage socle : les trois premières taches d'une recette
+#else
+#define NTACHES 4
+#endif
 float tacheM(int r, int k, vec3 q, float hs, bool sol){     // masque de la tache k ; hs = hauteur au-dessus du sol
   vec4 b=rT(r,18+k*4), c=rT(r,19+k*4), d=rT(r,20+k*4);
   float N=dot(b.xyz,b.xyz)>0.?rN(q,b.xyz,d.z,b.w>.5,sol):0.;
@@ -108,18 +118,21 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   alb=c0.w>1.5?gFormCol:c0.rgb; tilt=vec3(0.); spec=nup.w; em=0.;
   vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
   if(nc.w>0.){ vec4 ns=rT(r,4); alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,rN(q,ns.xyz,nup.z,ns.w>.5,sol))); }
-  for(int k=0;k<4;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
+  for(int k=0;k<NTACHES;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
   int ty=int(mo.x+.5); float cover=1., mm=1.;   // mm : où le motif est posé (pour les taches sur le motif)
   if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
     vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
     float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
     float hc, on; vec3 lc;
+#ifndef SOCLE
     if(p1.w>0.){                                             // feuilles superposées : de vraies feuilles qui se recouvrent
       vec2 tc; vec3 fs=feuillesSup(wp*e.x,p1.w,rT(r,11).x,p1.z,cov,tc); hc=fs.x; on=fs.z;
       lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)))*mix(1.-p0.z,1.,smoothstep(0.,.07,fs.y));
       tilt+=vec3(tc.x,0.,tc.y)*.45*mo.z*on;                  // feuille creusée : les bords se relèvent
-    } else {                                                 // cellules de Voronoï jointives (litière d'origine)
+    } else
+#endif
+    {                                                        // cellules de Voronoï jointives (litière d'origine ; ombrage socle : toujours)
       vec3 v=voro(wp*e.x); hc=v.y;
       lc=palette(r,hc)*(1.-.5*p0.y+p0.y*h21(vec2(hc*91.,3.)));
       lc*=mix(1.-p0.z,1.,smoothstep(0.,.10,v.z));
@@ -148,7 +161,9 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     if(rT(r,12).w>0.) alb=palette(r,h21(id+.5));
     alb*=1.-.5*P.z+P.z*h21(id+3.7);
     alb=mix(alb,rT(r,8).rgb,mo.y*(1.-smoothstep(.0,.6,s)));
-  } else if(ty==6){                                          // fenêtres : grille d'étages sur les faces verticales
+  }
+#ifndef SOCLE
+  else if(ty==6){                                          // fenêtres : grille d'étages sur les faces verticales
     for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){
       vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; vec2 id; float fr;
       vec4 Q=rT(r,10);
@@ -171,14 +186,16 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     alb=mix(alb,rT(r,8).rgb,m*mo.y); mm=m;
     }
   }
+#endif
   vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*rN(q,va.xyz,0.,true,sol);
   vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*rN(q,gr.xyz,0.,false,sol);
-  for(int k=0;k<4;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)*(pl>1.5?mm:1.)); }
+  for(int k=0;k<NTACHES;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)*(pl>1.5?mm:1.)); }
   if(rel.w>0.){                                              // grain du relief : petites facettes
     float s=rT(r,40).x;
     tilt+=sol?vec3(vnoise(q.xz*s)-.5,0.,vnoise(q.xz*s+9.)-.5)*rel.w
              :(vec3(vnoise3(q*s),vnoise3(q*s+9.),vnoise3(q*s+17.))-.5)*rel.w;
   }
+#ifndef SOCLE                                                 // ombrage socle : sans relief de matière (le grain reste)
   if(mo.w!=0. || rT(r,41).w!=0. || rT(r,43).w!=0.){         // relief en hauteur : pente par différences finies
     const float e=.004; vec4 hv=vec4(0.);
     for(int i=0;i<4;i++){                                    // un seul appel dans la boucle : le compilateur n'en déplie pas quatre copies
@@ -189,6 +206,7 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     g.xz=g.xz*rot;
     tilt-=g;
   }
+#endif
   vec4 m0=rT(r,33);
   if(m0.w>0.){                                               // mousse ou lichen : par plaques, selon l'orientation et la hauteur
     vec4 m1=rT(r,34), m2=rT(r,35), m3=rT(r,36), m4=rT(r,37), m5=rT(r,38);
@@ -209,9 +227,13 @@ int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out 
   int row=int(info.w); float hv=fract(info.w)/.9;           // forme touchée, aléa de l'élément de semis
   vec3 q=primLocal(sem?info.xyz:p,row);
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), cm=texelFetch(uShapes,ivec2(2,row),0);
+#ifdef SOCLE
+  nl=n;                                                      // ombrage socle : la normale du monde oriente les motifs
+#else
   { vec4 hd=vec4(0.);                                        // normale dans le repère de la forme : c'est elle qui oriente les motifs
     for(int i=0;i<4;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
     nl=normalize(hd.yzw-hd.x+1e-6); }
+#endif
   float an=abs(nl.y)<.9&&abs(n.y)<.9?atan(n.z,n.x)-atan(nl.z,nl.x):0.;
   rot=mat2(cos(an),-sin(an),sin(an),cos(an));               // repère de la forme -> monde, pour le relief des recettes
   alb=formeCol(row,hv); nn=n; spec=.05; emis=0.;
