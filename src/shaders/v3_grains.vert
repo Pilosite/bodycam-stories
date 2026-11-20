@@ -120,7 +120,7 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
     if(dot(d/rad,vl)<0. && rnd()<.93) d=-d;                  // surtout la face vue ; un peu de l'arrière, vu par les trous
     vec3 dn=d*2.2+T.h.xyz*40.+float(k*5+m*4+b);
     float bos=1.+.55*(vnoise3(dn)-.5)+.4*(vnoise3(dn*3.1+5.3)-.5);   // contour bosselé, déchiqueté (deux échelles)
-    inner=rnd()<.1?.55+.3*rnd():.9+.15*rnd();                 // un peu de feuilles dedans : la masse a de l'épaisseur
+    inner=rnd()<.22?.5+.35*rnd():.9+.15*rnd();                 // un peu de feuilles dedans : la masse a de l'épaisseur
     lp=c+d*rad*inner*bos; nl=normalize(d/rad);
     vlc=normalize(vl);
   }
@@ -145,7 +145,10 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
   if(hc.x>pres && hc.x>.03*min(tm*4.,1.)) return false;      // paquets denses, vides francs ; quelques feuilles isolées tiennent encore
   float Ls=L*(.6+.9*h2.x);                                   // tailles variées
   g.s=1.35*Ls;
-  if(uVue==0 && rnd()>.5*s*s/(g.s*g.s)) return false;        // de près, plusieurs grains par feuille : trois en moyenne suffisent
+  if(uVue==0 && rnd()>s*s/(g.s*g.s)) return false;           // de près, plusieurs grains par feuille : six en moyenne suffisent
+  float px=uVue==0?g.s/distance(Pf,uCamPos)*uRes.y/uFish:9.; // longueur de la feuille à l'écran (pixels)
+  float gr=1.-smoothstep(2.5,9.,px);                         // au loin, la feuille ne se lit plus : on l'agrandit et l'arrondit, la masse reste pleine
+  g.s*=1.+.7*gr;
   g.P=Pf;
   int e3=T.e*3;
   g.col=(hc.y<.45?uHpC[e3]:hc.y<.8?uHpC[e3+1]:uHpC[e3+2])*(.7+.6*hc.z)*(.8+.4*hb.x);   // chaque bouquet sa teinte
@@ -163,7 +166,7 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
         nf=normalize(vp*sqrt(1.-tr*tr)-uSunDir*tr+vec3(0.,.002,0.)); g.col*=1.15; } }
   }
   g.nf=nf; g.lf=6.2831853*fract(hc.z*7.13);                  // orientation de la feuille dans l'image (v3_gbuf.frag)
-  g.fs=clamp(abs(dot(nf,v)),.18,1.);                         // vue de biais, la feuille s'amincit
+  g.fs=mix(clamp(abs(dot(nf,v)),.18,1.),1.,gr);             // vue de biais, la feuille s'amincit
   return true;
 }
 #endif
