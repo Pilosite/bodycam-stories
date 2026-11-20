@@ -24,8 +24,10 @@ void main(){
   if(sdPrim(vL+vLx*o.x+vLy*o.y,vT.x,vB.xyz)-vB.w>vT.y) discard;
   gl_FragDepth=clamp(d/400.,0.,1.);                          // même profondeur linéaire que projette() (DMAX)
 #else
-  if(uPts==1){ vec2 pc=gl_PointCoord-.5; if(vSz>2.5 && dot(pc,pc)>.25) discard;   // grain rond : plus de confettis carrés aux silhouettes
-    vec2 o=pc*vSz; o.y=-o.y; q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o); }
+  if(uPts==1){ vec2 pc=gl_PointCoord-.5;
+    if(vCode==5. && vDy.z>.5){ vec2 r=mat2(vDy.x,vDy.y,-vDy.y,vDy.x)*pc; if(vSz>2.5 && dot(r*vec2(1.,1.8),r*vec2(1.,1.8))>.25) discard; }   // feuille d'un houppier : allongée, tournée (vDy)
+    else { if(vSz>2.5 && dot(pc,pc)>.25) discard;           // grain rond : plus de confettis carrés aux silhouettes
+    vec2 o=pc*vSz; o.y=-o.y; q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o); } }
   else if(vOk<.9999) discard;                                // triangle du sol dont un sommet ne se projette pas (v3_sol.vert)
 #endif
   g0=vec4(q,vCode); g1=vec4(normalize(vN),d);

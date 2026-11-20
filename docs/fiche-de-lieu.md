@@ -41,6 +41,7 @@ Les fiches vivent dans `scenes/*.json`. Le build les embarque toutes dans la pag
 | `foret.rochers` | oui | 0 à 1 et plus. Abondance des blocs de grès. |
 | `foret.feuillage` | oui | 0 à 1,5. Densité de la canopée. |
 | `foret.houppier` | oui | `voute` (feuillus et pins, feuillage haut et commun) ou `cone` (conifères : un cône de feuillage par arbre, vert sombre). Réglages : `houppier_bas`, `houppier_rayon` en mètres. |
+| `foret.houppiers` | oui (moteur v3) | Port des arbres : charpentières, rameaux et masses de feuillage, voir « Houppiers » plus bas. Sans ce champ, les trois branches et la canopée d'avant. |
 | `foret.perches` | oui | 0 à 1. Part de jeunes troncs fins. |
 | `foret.variete` | oui | 0 à 1. Variété des troncs : chaque arbre décale les motifs de son écorce et prend sa teinte (0 : tous les troncs d'une recette identiques, comme avant). |
 | `dunes.rochers` | oui | Abondance des blocs dans le sable, 0 par défaut. |
@@ -80,10 +81,34 @@ Le sol est une somme d'ondulations, plus une pente générale le long du trajet 
 | `relief.niveler` | oui / non | Le trajet et ses abords restent de niveau en travers (une rue). Par défaut en monde nu dès que le trajet fait 3 m. |
 | `trajet.sinuosite` | 0 à 2 | 0 rue droite, 1 sentier de forêt. |
 | `trajet.largeur` | 0,6 à 30 m | Largeur de la surface `trajet` (la chaussée). |
-| `trajet.creux` | 0 à 0,4 m | Le trajet est plus bas que le sol : 0,15 avec `bord: net` donne une bordure de trottoir. |
+| `relief.bosses` | `{ hauteur, echelle, trajet }` | Creux et bosses à l'échelle du marcheur : `hauteur` 0 à 4 m (écart typique de part et d'autre du sol moyen), `echelle` 3 à 80 m (longueur d'onde), `trajet` 0 à 1 (part gardée sur le trajet : 0 le trajet reste lisse, 1 il monte et descend autant que le reste). |
+| `relief.buttes` | `{ hauteur, echelle, part, plat, trajet }` | Buttes, platières, talus de colline : un flanc puis un plateau. `hauteur` 0 à 25 m, `echelle` 15 à 400 m, `part` 0 à 1 (part du sol couverte de buttes), `plat` 0 à 1 (0 flanc doux, 1 flanc raide et dessus plat), `trajet` 0 à 1 (part gardée sous le trajet : le trajet passe plutôt entre les buttes). |
+| `trajet.creux` | 0 à 1,2 m | Le trajet est plus bas que le sol : 0,15 avec `bord: net` donne une bordure de trottoir, 0,4 à 1 un sentier encaissé entre deux talus. |
 | `trajet.bord` | `net`, `irregulier` | Limite franche (rue) ou mangée par le sol (sentier). |
 
+Bosses et buttes (moteur v3 et lanceur de rayons) sont une variante compilée à la demande (`RELIEF`) : une fiche sans elles n'en paie rien. L'ombrage v3 ne les connaît pas (voir `moteur-v3.md`, « Arbres habités et relief ») : la salissure au pied des rochers et l'occlusion près des troncs sont calculées sur le relief d'origine.
+
 Ces formules existent en double, dans le shader et dans `src/main.js` (`terrainH`, `pathX`) : la caméra, les objets et les collisions utilisent la version JS. `balade.sol(x, z)` renvoie la hauteur et l'axe calculés.
+
+## Houppiers (`foret.houppiers`)
+
+Le kit forêt a deux familles de troncs (arbres et perches), chacune avec deux écorces `a` et `b` (`surfaces.arbres`, `surfaces.perches`, même `part`). `foret.houppiers` donne un **port** par écorce : `{ "arbres": { "a": {…}, "b": {…} }, "perches": { "a": {…}, "b": {…} } }`. Rien n'est une essence : le port décrit une charpente et des masses de feuillage, que l'IA règle pour n'importe quel arbre (pin, chêne, bouleau, palmier trapu, arbre mort sans feuilles…).
+
+| Champ | Plage | Sens |
+|---|---|---|
+| `hauteur` | `[bas, haut]`, parts de la hauteur du tronc | Où partent la première et la dernière charpentière. Un pin : `[0.68, 0.97]` ; un jeune hêtre qui garde ses feuilles en bas : `[0.08, 0.72]`. |
+| `largeur` | 0,2 à 8 m | Longueur d'une charpentière au plus large. |
+| `aplati` | 0 à 1 | Profil : 0 ovale (plus large au milieu), 1 en plateau (plus large en haut, branches plus couchées). |
+| `branches` | 1 à 8 | Nombre de charpentières. |
+| `montee` | 0 à 1 | Angle de départ : 0 presque à plat, 1 presque dressée. |
+| `retombe` | 0 à 1 | La charpentière se courbe vers le bas et les masses pendent (bouleau : 0,85). |
+| `rameaux` | 0 à 3 | Rameaux par charpentière, chacun porte une masse ; une masse de plus au bout de la charpentière. |
+| `masse` | 0,15 à 2,5 m | Rayon d'une masse de feuillage. |
+| `feuilles` | 0 à 1 | Remplissage d'une masse (0 : pas de feuilles, une charpente nue ; 0,3 clairsemé ; 0,75 dense). Les masses sont trouées : le soleil passe entre elles. |
+| `taille` | 0,02 à 0,4 m | Taille d'une feuille (ou d'une touffe d'aiguilles). |
+| `couleurs` | 1 à 3 couleurs | Teintes des feuilles, tirées au hasard. |
+
+Moteur v3 seulement : le lanceur de rayons garde les trois branches et la canopée d'avant. `foret.feuillage` (canopée statistique) reste lu : avec des houppiers, le garder bas (0,2) pour que le soleil rasant ne soit pas éteint deux fois.
 
 ## Semis : des éléments répétés, définis par la fiche
 

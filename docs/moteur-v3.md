@@ -292,3 +292,31 @@ Options : `ombrage` = `"socle"` (rester au socle), `"plein"` (attendre la compl�
 - Rechargement pendant la compilation (« en cours » en mémoire) : au chargement suivant, « échec (interrompu) », aucun nouvel essai, socle, bouton visible (`recharge-page.png`).
 
 Non vérifié : rien n'a tourné sur Direct3D ni sur un vrai GPU. SwiftShader compile le socle « en 0,0 s » (la compilation y est différée au premier dessin) : les durées n'y disent rien de FXC. On ne sait pas si le socle passe sur le PC concerné ; il est trois fois plus petit déplié que l'ombrage qui y passait. Sans `KHR_parallel_shader_compile`, la compilation de la complète bloque la page le temps qu'elle dure (le délai ne peut pas l'interrompre) ; la mémoire protège quand même des plantages.
+
+## Arbres habités et relief (branche `arbres`, 20 novembre 2026)
+
+Retour sur téléphone de la fiche 09 (Champcueil à l'aube) : « les arbres sont trop dépouillés et ça manque d'un peu de relief ». Les troncs étaient des poteaux à trois branches sous une canopée de confettis (`feuillage` 0,45 : à 0,7 la canopée statistique éteignait le soleil rasant), et le sol presque plat là où le lieu réel est un chaos de buttes gréseuses.
+
+### Houppiers (`foret.houppiers`, variante `HOUPPIER` du semeur)
+
+Un port par écorce (arbres a et b, perches a et b), décrit par des nombres que l'IA écrit pour n'importe quel arbre (`fiche-de-lieu.md`, « Houppiers ») : hauteur du houppier sur le tronc, largeur, profil ovale ou en plateau, charpentières (nombre, montée, retombée), rameaux, masses de feuillage (taille, remplissage, taille des feuilles, trois couleurs). `monde.glsl` calcule la charpente (`charpente`, `rameau`, `masse`, tirages de la cellule de l'arbre) ; `v3_grains.vert` (`semeHoup`) y pose les grains :
+
+- bois : les deux segments de chaque charpentière et ses rameaux, en cylindres vus de face comme les branches d'avant ;
+- feuillage : chaque masse est faite de quatre bouquets séparés (le ciel passe entre eux), semés surtout sur leur face vue ; la feuille est fixée au monde (cellule de la taille d'une feuille, présente ou non, couleur et orientation tirées de la cellule), les trouées suivent un bruit à l'échelle du bouquet avec un seuil franc (paquets denses, vides francs), le bord de la silhouette s'effiloche ;
+- vue du soleil, les mêmes feuilles et les mêmes trouées : la carte d'ombres laisse passer les rais entre les masses, pas à travers un voile ;
+- vue de la caméra, chaque feuille lit son ombre dans la carte d'ombres de l'image (`texelFetch`, déjà semée) : à l'ombre, sa normale est couchée perpendiculaire au soleil (l'ombrage ne lui donne plus que l'ambiance) et sa couleur un peu relevée (la lumière qui traverse les feuilles voisines). Rien n'est ajouté à `v3_ombrage.frag` : la feuille passe par le `shadeLeaf` existant (code 5) ;
+- `v3_gbuf.frag` découpe la feuille d'un houppier en ellipse allongée, tournée par feuille (les feuilles de la canopée d'avant restent rondes).
+
+Le budget de grains ne change pas : l'aire du houppier (bois et masses, `aireHoup`, même estimation en JS `aireHoupJS`) entre dans le partage entre familles ; avec des houppiers, plus de feuilles de canopée semées (`fF` = 0). Le lanceur de rayons ne connaît pas les houppiers (trois branches et canopée d'avant).
+
+Fiche 09 : pin sylvestre (houppier en plateau dans le dernier tiers, vert sombre, tronc nu dessous), chêne sessile (charpentières montantes, masses rousses clairsemées), bouleau (ramure retombante, feuilles jaunes rares), jeune hêtre marcescent (feuilles rousses dès le bas). `feuillage` passe à 0,2 : la canopée statistique ne double plus l'ombre des masses.
+
+### Bosses et buttes (`relief.bosses`, `relief.buttes`, variante `RELIEF`)
+
+`reliefDetail` (`monde.glsl`, et la même formule dans `src/main.js`, au bit près : bruit de valeur sur un réseau entier haché en entiers non signés, `Math.imul` côté JS) ajoute à `terrainH` des bosses (deux octaves tournées, creux et bosses de 0,5 à 2 m sur 5 à 20 m) et des buttes (un bruit lent passé par un seuil doux : flanc puis plateau, au second plan). Le trajet garde une part réglable de chacun (le sentier monte et descend, passe entre les buttes), et `trajet.creux` va jusqu'à 1,2 m (sentier encaissé entre deux talus). Le porteur, les objets et la sonde suivent : tout passe par `terrainH`. Le pas du lanceur de rayons (`terK`) et le plafond `yTop` tiennent compte de la pente et de la hauteur ajoutées.
+
+Variante compilée seulement si la fiche en demande (`RELIEF`) : semeur, sol, proches, tapis du sol, sonde, lanceur de rayons. **Pas l'ombrage** : il garde le `terrainH` d'origine (Direct3D). Ce qu'il calcule faux sur le relief ajouté : la hauteur au-dessus du sol d'un bloc de grès (salissure et lichens au pied, décalés de la hauteur de la bosse), l'assombrissement près des troncs et des blocs (`pres`, qui n'existe pas au socle), et la hauteur de la canopée statistique hors de la carte d'ombres.
+
+### Taille de l'ombrage
+
+`node tools/ombrage-taille.mjs`, avant (main 564cab0) et après : actif, déplié et SPIR-V identiques pour les quatre variantes (socle 35 740 / 315 290 / 318 707 ; fiche 09 PC 38 708 / 1 007 645 / 534 957 ; fiche 09 mobile 39 483 / 996 737 / 541 749). Seul le source envoyé grossit (+6,3 k caractères : les sections `#if HOUPPIER` et `#if RELIEF` de `monde.glsl`, retirées par le préprocesseur).
