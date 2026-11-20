@@ -1,5 +1,5 @@
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Bodycam procédurale</title>
+<title>Bodycam Stories</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -39,6 +39,8 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
   font-size:15px;line-height:1.35;font-style:italic;color:var(--ink-dim);text-shadow:0 0 4px rgba(0,0,0,.95),0 1px 8px rgba(0,0,0,.8);opacity:0;transition:opacity .4s;
   text-wrap:balance;pointer-events:none;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .dit.on{opacity:1}
+#parler,#mic{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#parler.tenu,#mic.tenu{outline:2px solid var(--rec);outline-offset:2px}
 .dit{font-size:clamp(18px,2.7vw,30px)}.pensee{font-size:clamp(17px,2.3vw,26px)}
 @media (min-width:700px){.dit,.pensee{max-width:40em}}
 .dire{display:flex;gap:8px;width:100%;max-width:30em;pointer-events:auto}
@@ -147,12 +149,18 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   transition:opacity 2.2s ease,background-color .6s;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))}
 .ouv[hidden]{display:none}
 .ouv.ouv-fondu{opacity:0;pointer-events:none}
-.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(8vh,calc(50vh - 260px));transition:padding-top .7s ease}
+.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(5vh,calc(50vh - 340px));transition:padding-top .7s ease}
 .ouv-travail .ouv-cadre{padding-top:28px}
+.ouv-marque{margin:0 0 30px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:320px;overflow:hidden}
+.ouv-nom{margin:0 0 8px;font:600 clamp(38px,9vw,68px)/1 var(--f-ui);letter-spacing:-.025em;text-wrap:balance}
+.ouv-concept{margin:0 0 12px;font:500 clamp(11.5px,1.5vw,14px)/1.35 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--rec)}
+.ouv-expl{margin:0;max-width:34em;font:400 clamp(14.5px,1.7vw,17px)/1.5 var(--f-ui);color:var(--ink-dim);text-wrap:pretty}
+.ouv-travail .ouv-marque{max-height:0;margin:0;opacity:0}
+@media (max-height:640px){.ouv-expl{display:none}.ouv-marque{margin-bottom:18px}}
 .ouv-sur{margin:0 0 14px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
 .ouv-pt{width:7px;height:7px;border-radius:50%;background:var(--rec);box-shadow:0 0 10px var(--rec)}
-.ouv-q{margin:0 0 22px;font:600 32px/1.08 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
-@media (min-width:760px){.ouv-q{font-size:44px}}
+.ouv-q{margin:0 0 18px;font:600 24px/1.12 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
+@media (min-width:760px){.ouv-q{font-size:30px}}
 .ouv-travail .ouv-q{font-size:15px;margin:0 0 10px;color:var(--ink-dim);font-weight:500}
 .ouv-form{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:18px;padding:12px;background:rgba(243,240,232,.045)}
 .ouv-form:focus-within{border-color:rgba(243,240,232,.55)}
@@ -4620,6 +4628,11 @@ function creerOuverture(deps) {
   const racine = d.createElement('section');
   racine.id = 'ouverture'; racine.className = 'ouv'; racine.setAttribute('aria-labelledby', 'ouv-q'); racine.hidden = true;
   racine.innerHTML = `<div class="ouv-cadre">
+  <header class="ouv-marque">
+    <p class="ouv-nom">Bodycam Stories</p>
+    <p class="ouv-concept">Génération procédurale complète par intelligence artificielle</p>
+    <p class="ouv-expl">Tu décris un monde. Une IA l'écrit, le moteur le fabrique entièrement par code, sans image ni modèle 3D, et le filme comme une caméra-piéton. Puis tu parles à celui qui la porte.</p>
+  </header>
   <p class="ouv-sur"><span class="ouv-pt"></span>CAM 07 · nouveau tournage</p>
   <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>
   <form id="ouv-form" class="ouv-form" autocomplete="off">
@@ -16304,17 +16317,53 @@ function ecouter(){                                           // appelé directe
   dictBase=(dictEl||$("msg")).value.trim();
   dict.start().catch(e=>{ if(e&&e.code==="not_granted"){ dict=null; $("mic").hidden=true; } });
 }
-$("mic").onclick=()=>{ if(listening) dict.stop().catch(()=>{}); else ecouter(); };
-function setFrozen(v,m){
+$("mic").onclick=()=>{ if(appui.avaleMic){ appui.avaleMic=false; return; } if(listening) dict.stop().catch(()=>{}); else ecouter(); };
+function setFrozen(v,m,sansClavier){
   if(!v && listening && dict) dict.stop().catch(()=>{});
   frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v; if(sons) sons.baisser(v);   // le joueur parle : le bruit baisse
   $("parler").textContent=v&&mode==="parler"?"Reprendre":"Lui parler";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
-  if(v){ $("msg").value=""; $("hint").classList.add("off"); setTimeout(()=>$("msg").focus(),50); }
+  if(v){ $("msg").value=""; $("hint").classList.add("off"); if(!sansClavier) setTimeout(()=>$("msg").focus(),50); }
 }
 // Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
-$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+$("parler").onclick=()=>{ if(appui.avale){ appui.avale=false; return; } const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+/* Appuyer pour parler : tant qu'on garde le doigt (ou la souris) sur « Lui parler » ou sur « Micro », il écoute ; au relâcher, la phrase
+   part aussitôt. Un appui bref garde l'ancien comportement (ouvrir la barre, ou basculer le micro). La dictée démarre dès l'appui, dans
+   le geste même, pour que le navigateur l'accepte ; un appui bref la referme sans rien garder. */
+const appui={bouton:null,t0:0,tenu:false,minuterie:0,avale:false,ecoute:false};
+const APPUI_MS=280;
+function appuiDebut(b,e){
+  if(e.button!==undefined&&e.button!==0) return;
+  if(!dict||mode==="monde"&&frozen) return;                     // sans dictée, ou pendant « Décrire un monde » : le bouton reste un bouton
+  appui.bouton=b; appui.t0=performance.now(); appui.tenu=false;
+  try{ b.setPointerCapture(e.pointerId); }catch(_){}
+  appui.entendu=false;
+  clearTimeout(appui.minuterie);
+  appui.minuterie=setTimeout(()=>{ if(appui.bouton!==b) return; appui.tenu=true;
+    if(!frozen) setFrozen(true,"parler",true);
+    if(!listening&&dict) ecouter();                               // la souris garde son geste pendant ce court délai ; au doigt, voir appuiFin
+    b.classList.add("tenu"); $("parler").textContent="Relâche pour envoyer"; $("msg").placeholder="Je t'écoute…"; },APPUI_MS);
+}
+async function appuiFin(b,annule){
+  if(appui.bouton!==b) return; clearTimeout(appui.minuterie); appui.bouton=null; b.classList.remove("tenu");
+  if(!appui.tenu) return;                                         // appui bref : le clic qui suit fait son travail habituel
+  appui.tenu=false; appui.avale=b.id==="parler"; appui.avaleMic=b.id==="mic"; setTimeout(()=>{ appui.avale=false; appui.avaleMic=false; },400);
+  if(!annule&&dict&&!listening&&!$("msg").value.trim()){          // la dictée n'a pas pu partir pendant l'appui (au doigt, certains navigateurs
+    $("parler").textContent="Reprendre"; $("msg").placeholder="Dis-lui quoi faire…"; ecouter(); return; }   // n'acceptent le micro qu'au relâcher) : elle part ici, on touche « Dire » ou « Micro » pour finir
+  if(dict){ try{ await dict.stop(); }catch(_){} }                 // même si l'état « écoute » n'est pas remonté : on veut la phrase entière
+  for(let i=0;i<12&&listening;i++) await new Promise(r=>setTimeout(r,60));   // la fin de phrase arrive juste après l'arrêt
+  await new Promise(r=>setTimeout(r,120));
+  $("parler").textContent=frozen&&mode==="parler"?"Reprendre":"Lui parler"; $("msg").placeholder="Dis-lui quoi faire…";
+  if(annule) return;
+  if($("msg").value.trim()) $("dire").requestSubmit();            // relâché : la phrase part
+  else setTimeout(()=>$("msg").focus(),50);                       // rien entendu : la barre reste ouverte, on peut taper
+}
+for(const id of ["parler","mic"]){ const b=$(id);
+  b.addEventListener("pointerdown",e=>appuiDebut(b,e));
+  b.addEventListener("pointerup",()=>appuiFin(b,false));
+  b.addEventListener("pointercancel",()=>appuiFin(b,true));
+  b.addEventListener("contextmenu",e=>{ if(appui.bouton===b||appui.tenu) e.preventDefault(); }); }
 $("monde").onclick=()=>{ fermerOutils(); if(frozen) setFrozen(false); atelier.ouvrir({nouvelle:true}); };   // la description se tape dans la banque de scènes
 $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
