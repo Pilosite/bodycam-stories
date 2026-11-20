@@ -1,0 +1,14 @@
+# louis-absent — pattern instance
+@id louis-absent  @kind pattern-instance  @pattern absent-one  @layer base  @author toine
+
+## bind
+bind absent = louis
+bind witness = sam
+bind trace = platiere fact=f.cairn line=cairn.see
+bind trace = affut fact=f.hide line=hide.see
+bind trace = terrier fact=f.sett line=sett.see
+bind resting_place = affut
+bind truth_clue = f.sett
+bind truth = f.louis-stayed
+bind understand_line = understand
+bind absence = f.louis-dead

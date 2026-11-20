@@ -1,0 +1,27 @@
+# slow-light — pattern
+@id slow-light  @kind pattern  @layer library  @author toine  @lang en
+
+## summary
+~ No clock. Time is only the light changing; the session ends when the carrier decides, never because a resource ran out. Use it instead of ticking-clock for a contemplative story.
+
+## roles
+role keeper : character : who feels the time passing
+role wrap_line : line : what the keeper says when the scene has gone long
+
+## params
+param step = 1 : degrees of sun per minute
+param steps = 12 : how many minutes the light keeps rising
+param long_s = 900 : seconds after which the keeper starts to wrap up
+
+## principles
+~0.7 $keeper notices the light, not the time.
+
+## rules
+when clock.every(60) max $steps -> light.raise($step) {rise}
+when time.elapsed($long_s) once if not ending.any -> say($wrap_line) {wrap}
+
+## beats_hint
+hint no ending can be forced by time; every ending must come from a decision
+
+## variations
+variation dusk : the light falls instead; same rules with a negative step

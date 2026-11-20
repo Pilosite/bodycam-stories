@@ -1,0 +1,28 @@
+# trail-of-signs — pattern
+@id trail-of-signs  @kind pattern  @layer library  @author toine  @lang en
+
+## summary
+~ A line of marks leads somewhere. The carrier reads them better than the player (trade, habit, kinship), so the player depends on her eyes; the last sign asks to leave the obvious way.
+
+## roles
+role reader : character : who can read the signs
+role sign* : thing : one mark in the line (attrs: fact, line)
+role leave_fact : fact : the sign that says "leave the obvious way"
+role destination : station : where the signs lead
+
+## facts_required
+need code : fact : what the signs mean, once read
+
+## principles
+! $reader reads every sign she is shown, in her own trade words.
+~0.7 A sign misread by the player is corrected by the reader, kindly or not.
+
+## rules
+when look.at($sign) once -> reveal($sign.fact), say($sign.line) {sign-read}
+
+## beats_hint
+hint first sign early and easy; the second needs the reader's trade
+hint the last sign stands at a fork
+
+## variations
+variation false-trail : one sign was made by someone else; the reader notices the difference in hand

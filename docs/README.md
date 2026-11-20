@@ -4,6 +4,7 @@ POC documents first (English, binding), then the legacy French docs of the engin
 
 ## POC (English)
 
+- `principles.md` — the founding principles (P1 to P21), the constitution; read first
 - `architecture.md`: the contract. Nine pillars, transactions, rules, vocabulary, story pack, journal, repo layout.
 - `scope.md`: the scope ledger. What is v1, v2 and target; the station-based frame.
 - `sdlc.md`: how we build. Principles, ADRs, test levels, flow, working with agents, milestones.
@@ -12,6 +13,10 @@ POC documents first (English, binding), then the legacy French docs of the engin
 - `sandbox.md`: what belongs to the satire demo versus the generic mechanisms that stay, and how to separate them.
 - `pdl-spec.md`: the PDL specification (being written; contract first).
 - `research/models.md`: research behind ADR 0004 (which models for which tier; Jev and decision models, JEPA, embeddings, constrained decoding, the artifact and proxy modes).
+- `story-louis-round.md`: the bible of the POC story (premise, people, stations, beats, endings, tone, what must never happen).
+- `patterns.md`: the narrative pattern library, how a story binds patterns, and what swapping one changes.
+- `characters.md`: light and strong characters in PDL source, and how they feed the model tiers and fallback lines.
+- `creator-kit.md`: how a creator works on a pack with an assistant (what to read, commands, example requests and diffs).
 
 ## Legacy (French; engine and demo, kept as they are)
 

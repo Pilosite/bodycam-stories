@@ -1,0 +1,11 @@
+# louis-marks — pattern instance
+@id louis-marks  @kind pattern-instance  @pattern trail-of-signs  @layer base  @author toine
+
+## bind
+bind reader = sam
+bind sign = marque-1 fact=f.marks-private line=mark.read.1
+bind sign = chablis fact=f.marks-recent line=mark.read.2
+bind sign = ruban fact=f.marks-lead-down line=tape.read
+bind leave_fact = f.marks-lead-down
+bind destination = hide
+bind code = f.marks-meaning
