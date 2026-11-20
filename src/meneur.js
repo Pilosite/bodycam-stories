@@ -64,6 +64,10 @@ export const REGLAGES = {
   MODELES: 'base',
   FACONNAGE_ETAPES: 5,             // états visibles d'un façonnage, le résultat compris (§15.3)
   MARGE_CORPS: 0.35,               // le corps et la caméra gardent cette distance (m) de toute surface (§16)
+  ENJAMBE_M: 0.35,                 // plus bas que ça (petite chose posée, caillou, branche couchée), ça s'enjambe : jamais un obstacle de marche (§18)
+  ENJAMBE_LARGE_M: 0.4,            // ... et plus étroit que ça (une enjambée) : une galette basse mais large se contourne (§18)
+  ENJAMBE_PLAT_M: 0.15,            // ... sauf si c'est plat (moins que ça) : une pierre plate, on marche dessus, quelle que soit sa largeur (§18)
+  MARGE_PIEDS: 0.12,               // ce qui s'enjambe, on l'évite quand même d'un pas de côté si c'est facile : cette marge aux pieds (§18)
 };
 /* Les deux caractères : valeurs posées par REGLAGES.CARACTERE avant les réglages de l'histoire. */
 export const CARACTERES = {
@@ -1225,7 +1229,7 @@ export function lieuChercher(quoi, corps, supports, sentierX = () => 0, demiLarg
 export function planTrajet(de, vers, obstacles, { marge = REGLAGES.MARGE_CORPS, arret = 0, cible = null } = {}) {
   const tous = liste(obstacles).filter(o => isObj(o) && Number.isFinite(o.x) && Number.isFinite(o.z) && o.r >= 0);
   const tgt = cible ? tous.find(o => o.id === cible) : null;
-  const R = o => o.r + marge;
+  const R = o => o.r + (Number.isFinite(o.marge) ? o.marge : marge);   // une marge propre à l'obstacle (ce qui s'enjambe : les pieds, pas la caméra)
   const obs = tous.filter(o => o !== tgt && Math.hypot(de.x - o.x, de.z - o.z) >= R(o) - 0.05);   // un obstacle où il est déjà ne le retient pas
   const dedans = (p, sauf) => obs.find(o => o !== sauf && Math.hypot(p.x - o.x, p.z - o.z) < R(o) - 1e-3);
   const entree = (a, b, o) => {                                  // premier point du segment qui touche le cercle élargi, un peu avant
@@ -1263,6 +1267,69 @@ export function planTrajet(de, vers, obstacles, { marge = REGLAGES.MARGE_CORPS, 
   }
   const r2 = v => Math.round(v * 1000) / 1000;
   return { points: [...sortie, ...pts.slice(1)].map(p => ({ x: r2(p.x), z: r2(p.z) })), bloque, sortie: sortie.length > 0 };
+}
+
+/* Ce qui s'enjambe et ce qui se contourne (§18). Un obstacle connu {x, z, r, haut?} : sans hauteur (tronc), ou plus haut que
+   ENJAMBE_M, ou plus large qu'une enjambée (ENJAMBE_LARGE_M), il se contourne à la marge du corps ; plus bas (petite chose posée, pierre, branche couchée), il s'enjambe : on
+   l'évite d'un pas de côté (MARGE_PIEDS) quand c'est facile, il ne bloque jamais. */
+export const enjambable = (o, R = REGLAGES) => isObj(o) && Number.isFinite(o.haut) && o.haut < R.ENJAMBE_M && (o.haut < R.ENJAMBE_PLAT_M || num(o.r, 0, 99, 99) <= R.ENJAMBE_LARGE_M / 2);
+/* planTrajet en tenant compte de ce qui s'enjambe : d'abord en évitant tout (le bas d'un pas de côté), et si seul ce qui est bas
+   arrête le trajet, sans lui. Rend le résultat de planTrajet, plus « enjambe » (vrai si le trajet passe sur quelque chose de bas). */
+export function planTrajetSouple(de, vers, obstacles, opts = {}, R = REGLAGES) {
+  const tous = liste(obstacles).filter(isObj), cible = opts.cible || null;
+  const doux = tous.map(o => enjambable(o, R) && o.id !== cible ? Object.assign({}, o, { marge: R.MARGE_PIEDS, bas: true }) : o);
+  const p = planTrajet(de, vers, doux, opts);
+  const parBas = p.bloque && doux.some(o => o.bas && o.id === p.bloque);
+  if (!parBas) return Object.assign(p, { enjambe: false });
+  const q = planTrajet(de, vers, tous.filter(o => !enjambable(o, R) || o.id === cible), opts);
+  return Object.assign(q, { enjambe: true });
+}
+/* « Avance de N mètres », « recule » (§18) : marcher N m dans cette direction générale, en contournant ce qui est haut, en
+   enjambant ce qui est bas. corps {x, z, yaw} ; metres > 0 en avant, < 0 en arrière (même cap, il recule). On essaie la
+   direction demandée, puis des directions voisines (±15°, ±30°, ±45°, ±60°) : la première qui fait tout le trajet l'emporte ;
+   sinon celle qui va le plus loin. Rend { points, fait (m de déplacement), demande, angle (°), bloque (id de ce qui l'arrête),
+   bouche (moins d'un mètre possible dans toutes les directions voisines), enjambe, recul }. Fonction pure. */
+export const toleranceMarche = N => Math.max(0.7, 0.15 * N);       // ce qui manque à une marche sans qu'il le dise
+export function planMarche(corps, metres, obstacles, R = REGLAGES) {
+  const N = Math.abs(num(metres, -30, 30, 0)), recul = metres < 0, cap = num(corps.yaw, -1e3, 1e3, 0) + (recul ? Math.PI : 0);
+  const de = { x: corps.x, z: corps.z }, base = { points: [], fait: 0, demande: N, angle: 0, bloque: null, bouche: false, enjambe: false, recul };
+  if (N < 0.05) return base;
+  // tout droit jusqu'à ce qui est haut devant lui : s'il l'atteint à peu près au bout des N m, il s'arrête devant, c'est fait
+  const ux = Math.sin(cap), uz = Math.cos(cap);
+  let stop = N;
+  for (const o of liste(obstacles)) { if (!isObj(o) || !Number.isFinite(o.x) || enjambable(o, R)) continue;
+    const Ro = num(o.r, 0, 99, 0) + R.MARGE_CORPS, fx = de.x - o.x, fz = de.z - o.z, B = fx * ux + fz * uz, C = fx * fx + fz * fz - Ro * Ro, D = B * B - C;
+    if (C < 0 || D < 0) continue; const t = -B - Math.sqrt(D); if (t >= 0) stop = Math.min(stop, t - 0.05); }
+  if (stop >= N - toleranceMarche(N) && stop > 0.05) {
+    const p = planTrajetSouple(de, { x: de.x + ux * stop, z: de.z + uz * stop }, obstacles, {}, R), fin = p.points[p.points.length - 1] || de, fait = Math.hypot(fin.x - de.x, fin.z - de.z);
+    if (!p.bloque && fait >= N - toleranceMarche(N)) return Object.assign(base, { points: p.points, fait: Math.round(fait * 100) / 100, enjambe: !!p.enjambe });
+  }
+  const angles = [0, 15, -15, 30, -30, 45, -45, 60, -60];
+  const essais = angles.map(a => {
+    const c = cap + a * Math.PI / 180, vers = { x: de.x + Math.sin(c) * N, z: de.z + Math.cos(c) * N };
+    const p = planTrajetSouple(de, vers, obstacles, {}, R), fin = p.points.length ? p.points[p.points.length - 1] : de;
+    const fait = Math.hypot(fin.x - de.x, fin.z - de.z);
+    let long = 0, q = de; for (const r of p.points) { long += Math.hypot(r.x - q.x, r.z - q.z); q = r; }
+    if (p.bloque && long > 1.6 * fait + 2) return { a, p, fait: 0, avance: 0, complet: false };   // un trajet qui zigzague sans arriver ne compte pas
+    const avance = (fin.x - de.x) * ux + (fin.z - de.z) * uz;     // ce qu'il a gagné dans la direction demandée
+    return { a, p, fait, avance, complet: fait >= N - toleranceMarche(N) && (!p.bloque || a === 0) };   // tout droit, arrêté juste avant le bout contre ce qu'il vise : c'est fait
+  });
+  const mieux = Math.max(...essais.map(e => e.avance));            // incomplet : ce qui avance le plus dans la direction demandée, le plus droit à 30 cm près
+  const choix = essais.find(e => e.complet && !e.p.enjambe) || essais.find(e => e.complet) || essais.find(e => e.avance >= mieux - 0.3);
+  const bouche = essais.every(e => e.fait < 1);
+  const r2 = v => Math.round(v * 100) / 100;
+  return { points: choix.p.points, fait: r2(choix.fait), demande: N, angle: choix.a, bloque: choix.complet ? null : (choix.p.bloque || essais[0].p.bloque || 'obstacle'),
+    bouche, enjambe: !!choix.p.enjambe, recul };
+}
+/* Ce qu'il dit après une marche qu'il n'a pas pu faire en entier (§18) : rien s'il a fait (presque) tout ; « c'est bouché »
+   seulement s'il n'a pas pu faire un mètre ; sinon ce qu'il a fait, et ce qui l'arrête. */
+const NOMBRES = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'];
+export function texteMarche(plan, nom = null) {
+  if (!isObj(plan) || plan.demande < 0.05) return null;
+  if (plan.bouche) return nom ? `Je passe pas, là : ${nom}, partout.` : 'Je passe pas, là. C\'est bouché.';
+  if (plan.fait >= plan.demande - toleranceMarche(plan.demande)) return null;
+  const n = Math.max(1, Math.round(plan.fait)), dit = n <= 10 ? NOMBRES[n] : String(n);
+  return `J'ai fait ${n === 1 ? 'un mètre' : dit + ' mètres'}, après c'est ${nom || 'bouché'}.`;
 }
 
 /* La promenade libre : pas d'histoire écrite, mais le même meneur. Le personnage fait ce qu'on lui demande, ce qu'il fait

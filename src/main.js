@@ -610,7 +610,8 @@ function moveBy(dist){
   const d=sonde.loin?Math.max(sonde.d,R):sonde.d, dx=sonde.dx, dz=sonde.dz;
   if(d<R){ let gx=(dx-d)/.05, gz=(dz-d)/.05; const l=Math.hypot(gx,gz)||1; nx+=gx/l*(R-d); nz+=gz/l*(R-d); }
   const M=MENEUR.REGLAGES.MARGE_CORPS;                             // les obstacles connus (troncs, perches, blocs, choses) : jamais à moins de la marge (§16)
-  for(const o of obstaclesConnus()){ const ex=nx-o.x, ez=nz-o.z, m=Math.hypot(ex,ez), Ro=o.r+M;
+  for(const o of obstaclesConnus()){ if(MENEUR.enjambable(o)) continue;   // ce qui est bas s'enjambe (§18)
+    const ex=nx-o.x, ez=nz-o.z, m=Math.hypot(ex,ez), Ro=o.r+M;
     if(m<Ro&&Math.hypot(cam.x-o.x,cam.z-o.z)>=Ro-1e-3){ nx=o.x+ex/(m||1)*Ro; nz=o.z+ez/(m||1)*Ro; } }
   cam.x=nx; cam.z=nz; walkDist+=Math.abs(dist);
 }
@@ -652,8 +653,10 @@ function simulate(dt){
       if(v&&v.raide&&!a.cadre) queue.unshift({type:"cadrer",objet:a.objet});              // presque sous lui : il recule et se baisse pour la voir
       else if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
     else if(a.type==="rejoindre"||a.type==="cadrer"||a.type==="monter"||a.type==="chercher"){ queue.shift(); queue.unshift(...planCorps(a)); }   // trajet calculé au moment de partir
+    else if(a.type==="marche"){ queue.shift(); queue.unshift(...planMarchePage(a.metres)); }   // trajet calculé au moment de partir
     else if(a.type==="faconner") faconnerPas(a,dt);
     else if(a.type==="ramasser") ramasserPas(a,dt);
+    else if(a.type==="finMarche"){ queue.shift(); finMarche(a); }
     else if(a.type==="bloque"){ queue.shift(); if(!a.muet) say(a.texte||"Je passe pas, là. C'est bouché.",true); }   // il s'arrête devant, et il le dit
     else if(a.type==="elever"||a.type==="descendre") elever(a,dt);
     else if(a.type==="zoom"){ cam.zoomCible=clampN(a.z,1,8,1); queue.shift(); }
@@ -666,6 +669,11 @@ function simulate(dt){
     stuck=Math.hypot(cam.x-x0,cam.z-z0)<Math.abs(v*dt)*.3?stuck+dt:0;
     if(stuck>.6){ stuck=0; const m=queue.shift();
       if(m&&m.libre) queue.unshift({type:"tourner",rest:(Math.random()<.5?-1:1)*.9});   // en flânant, bloqué : il part ailleurs
+      else if(m&&m.ordre){ const o=m.ordre, reste=Math.abs(m.rest);   // une marche demandée, arrêtée par ce que seule la sonde connaît : il essaie à côté (§18)
+        while(queue.length&&queue[0].ordre===o) queue.shift();
+        const k=o.essais=(o.essais||0)+1, da=[0,.52,-1.05,1.57,-2.09][k];   // ±30°, ±60° autour du cap demandé (cumulés)
+        if(da!==undefined&&reste>.3){ queue.unshift({type:"tourner",rest:da,ordre:o},{type:"marcher",rest:Math.sign(m.rest)*reste,ordre:o},{type:"finMarche",ordre:o}); }
+        else queue.unshift({type:"finMarche",ordre:o,arrete:true}); }
       else{ while(queue.length&&(queue[0].type==="marcher"||queue[0].type==="tourner")) queue.shift(); queue.unshift({type:"bloque"}); } }   // dirigé : il s'arrête devant, ne traverse pas
   }
 }
@@ -1543,7 +1551,7 @@ function enqueue(actions){
   for(const a of (Array.isArray(actions)?actions:[]).slice(0,8)){
     if(!a||typeof a!=="object") continue;
     if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});
-    else if(a.type==="marcher") queue.push({type:"marcher",rest:clampN(a.metres,-10,30,0)});
+    else if(a.type==="marcher") queue.push({type:"marche",metres:clampN(a.metres,-10,30,0)});   // « avance de N m » : le trajet est calculé au moment de partir (§18)
     else if(a.type==="regarder") queue.push({type:"regarder",pitch:clampN(a.degres,-60,75,0)*Math.PI/180});
     else if(a.type==="attendre") queue.push({type:"attendre",rest:clampN(a.secondes,0,5,1)});
     else if(a.type==="posture") queue.push({type:"posture",h:clampN(a.hauteur,.35,1,1)});
@@ -2341,7 +2349,7 @@ function supportsProches(){
 const wrapA=d=>Math.atan2(Math.sin(d),Math.cos(d));
 function versPoint(x,z,arret,cible){
   const obs=obstaclesConnus(), c=cible||(obs.find(o=>Math.hypot(o.x-x,o.z-z)<.05)||{}).id||null;
-  const p=MENEUR.planTrajet({x:cam.x,z:cam.z},{x,z},obs,{arret,cible:c}), out=[];
+  const p=MENEUR.planTrajetSouple({x:cam.x,z:cam.z},{x,z},obs,{arret,cible:c}), out=[];   // ce qui est bas s'enjambe (§18)
   let px=cam.x, pz=cam.z, yaw=cam.yaw;
   p.points.forEach((q,k)=>{ const L=Math.hypot(q.x-px,q.z-pz); if(L<.05) return;
     let d=wrapA(Math.atan2(q.x-px,q.z-pz)-yaw);
@@ -2353,6 +2361,31 @@ function versPoint(x,z,arret,cible){
   out.push({type:"tourner",rest:wrapA(Math.atan2(x-px,z-pz)-yaw)});
   return out;
 }
+/* « Avance de N mètres », « recule » (§18) : il se relève, dézoome, puis marche N m dans cette direction générale, en
+   contournant ce qui est haut et en enjambant ce qui est bas (MENEUR.planMarche, sur les obstacles connus). En arrière, il
+   garde son cap et recule. Ce qu'il n'a pas pu faire, il le dit à la fin (finMarche) ; « c'est bouché » seulement s'il ne
+   peut pas faire un mètre dans aucune direction voisine (±60°). Ce que seule la sonde connaît : essais à côté (simulate). */
+function planMarchePage(metres){
+  const obs=obstaclesConnus(), p=MENEUR.planMarche({x:cam.x,z:cam.z,yaw:cam.yaw},metres,obs), recul=metres<0, cap0=cam.yaw;
+  const ordre={x:cam.x,z:cam.z,demande:p.demande,plan:p,nom:p.bloque?((obs.find(o=>o.id===p.bloque)||{}).nom||null):null};
+  const out=[]; if(cam.haut<.95) out.push({type:"posture",h:1}); out.push({type:"zoom",z:1});
+  let px=cam.x, pz=cam.z, yaw=cam.yaw;
+  for(const q of p.points){ const L=Math.hypot(q.x-px,q.z-pz); if(L<.03) continue;
+    const d=wrapA(Math.atan2(q.x-px,q.z-pz)+(recul?Math.PI:0)-yaw);
+    out.push({type:"tourner",rest:d,ordre},{type:"marcher",rest:recul?-L:L,ordre}); yaw+=d; px=q.x; pz=q.z; }
+  const fin=wrapA(cap0-yaw); if(Math.abs(fin)>.02&&p.points.length) out.push({type:"tourner",rest:fin,ordre});   // il reprend le cap demandé
+  out.push({type:"finMarche",ordre});
+  console.log("marche : "+p.demande.toFixed(1)+" m demandés, "+p.fait.toFixed(1)+" m possibles"+(p.angle?", à "+p.angle+"°":"")+(p.bloque?", arrêté par "+p.bloque:"")+(p.enjambe?", enjambe":"")+(p.bouche?", bouché":""));
+  return out;
+}
+function finMarche(a){                                           // à la fin d'une marche demandée : ce qu'il a fait, ce qui l'arrête
+  const o=a.ordre; if(!o||o.dit) return; o.dit=true;
+  const fait=Math.hypot(cam.x-o.x,cam.z-o.z), bouche=fait<1&&(o.plan.bouche||a.arrete);
+  const t=MENEUR.texteMarche({demande:o.demande,fait,bouche},o.nom);
+  journalMarche.push({demande:o.demande,fait:+fait.toFixed(2),texte:t||null}); if(journalMarche.length>20) journalMarche.shift();
+  if(t) say(t,true);
+}
+const journalMarche=[];
 /* Les obstacles connus autour du porteur (30 m), en cercles {x, z, r, id, nom} : les troncs (arbreA), les perches (percheB) et
    les blocs (blocGres) recopiés de monde.glsl (MÊMES FORMULES, à modifier des deux côtés), et les choses de la fiche. Les
    éléments de semis (murs, tombes…) ne sont connus que de la sonde du moteur (moveBy). */
@@ -2658,6 +2691,7 @@ window.balade={
   percevoir:()=>meneur?percevoirMeneur():perception(),
   histoires:()=>HIST.map(h=>h.id),
   objets:()=>(Array.isArray(fiche.objets)?fiche.objets:[]).map(o=>({id:o.id,nom:o.nom,devant:+(+o.devant).toFixed(2),cote:+(+o.cote).toFixed(2),x:+posObjet(o).x.toFixed(3),z:+posObjet(o).z.toFixed(3),echelle:o.echelle,formes:(o.formes||[]).length,lumineux:(o.formes||[]).some(f=>f.matiere==="lumineux")})),
+  marches:()=>journalMarche.slice(),   // §18 : les marches demandées, ce qu'il a fait, ce qu'il a dit
   corps:()=>({x:cam.x,z:cam.z,yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut,elev:cam.elev,zoom:cam.zoom,perche:cam.perche,immobile,file:queue.map(a=>a.type)}),
   supports:()=>supportsProches(),
   obstacles:()=>obstaclesConnus().map(o=>({id:o.id,nom:o.nom,x:+o.x.toFixed(2),z:+o.z.toFixed(2),r:+o.r.toFixed(2)})),   // §16 : ce que le corps contourne

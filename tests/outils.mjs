@@ -1,6 +1,6 @@
 // Outils de test du meneur : un monde de papier, de faux Claude, de faux joueurs, et une partie simulée en accéléré.
 import { readFileSync } from 'node:fs';
-import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour, planTrajet, lieuChercher, horsDuCorps, placeLibre } from '../src/meneur.js';
+import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour, planTrajet, planTrajetSouple, planMarche, texteMarche, enjambable, lieuChercher, horsDuCorps, placeLibre } from '../src/meneur.js';
 
 export const MODELES = JSON.parse(readFileSync(new URL('../src/modeles.json', import.meta.url), 'utf8'));
 
@@ -26,13 +26,13 @@ export function lexiqueTest(texte) {
 
 /* ------------------------------------------------------------------ le monde de papier
    Le sentier est droit : z le long du trajet, x l'écart latéral (négatif à gauche). Mêmes vitesses que la page. */
-export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], rochers = [] } = {}) {
+export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], rochers = [], semis = [] } = {}) {
   const h = normaliserHistoire(histoire), fiche = ficheDe(h) || { objets: [] }, r = rng(graine);
   const objets = (fiche.objets || []).map(o => ({ id: o.id, nom: o.nom, x: o.cote || 0, z: o.devant || 0, formesL: o.formes || [], echelle: o.echelle || 1,
     lumineux: (o.formes || []).some(f => f.matiere === 'lumineux') }));
   const caches = new Set((fiche.objets || []).filter(o => o.visible === false).map(o => o.id));
   const w = { x: 0, z: 0, yaw: 0, haut: 1, elev: 0, zoom: 1, objets, file: [], idle: 0, nuit: false, lampe: false, brume: 0.009, fin: null, ordres: [], pensees: [], flaner,
-    reserves: {}, immobile: false, arbres, rochers, differes: {}, faconnages: {}, faconnes: [], bloques: [], marge: 9, cherche: null };
+    reserves: {}, immobile: false, arbres, rochers, semis, marches: [], differes: {}, faconnages: {}, faconnes: [], bloques: [], marge: 9, cherche: null };
   const taille = o => envergure(o.formesL || []) * (o.echelle || 1);
   // supports : l'arbre et le rocher les plus proches (comme supportsProches dans main.js)
   const supports = () => [['arbre', arbres], ['rocher', rochers]].map(([id, L]) => {
@@ -42,11 +42,14 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     return { id, nom: id, m: b.m, angle: ang, haut: b.haut, x: b.x, z: b.z, rayon: b.rayon || 0.3 };
   }).filter(Boolean);
   // les obstacles connus (comme obstaclesConnus dans main.js) : troncs, rochers, choses posées ; la caméra en garde MARGE_CORPS
-  const obstacles = () => [...arbres.map((a, i) => ({ id: 'a' + i, x: a.x, z: a.z, r: a.rayon || 0.3 })), ...rochers.map((a, i) => ({ id: 'r' + i, x: a.x, z: a.z, r: a.rayon || 0.5 })),
-    ...objets.filter(o => !caches.has(o.id)).map(o => ({ id: o.id, x: o.x, z: o.z, r: taille(o) / 2 }))];
+  // les éléments de semis (cailloux, branches couchées : semis [{x, z, r, haut}]) sont connus aussi, avec leur hauteur : ils s'enjambent (§18)
+  const hautDe = o => Math.max(0, ...(o.formesL || []).map(f => f.p[1] + f.taille[1] / 2)) * (o.echelle || 1);
+  const obstacles = () => [...arbres.map((a, i) => ({ id: 'a' + i, x: a.x, z: a.z, r: a.rayon || 0.3 })), ...rochers.map((a, i) => ({ id: 'r' + i, nom: 'un rocher', x: a.x, z: a.z, r: a.rayon || 0.5, haut: a.haut })),
+    ...semis.map((a, i) => ({ id: 's' + i, x: a.x, z: a.z, r: a.r, haut: a.haut })),
+    ...objets.filter(o => !caches.has(o.id)).map(o => ({ id: o.id, nom: o.nom, x: o.x, z: o.z, r: taille(o) / 2, haut: hautDe(o) }))];
   const idA = (x, z) => (obstacles().find(o => Math.hypot(o.x - x, o.z - z) < 1e-6) || {}).id || null;
   const versPoint = (x, z, arret, cible) => {                   // le trajet de la page (planTrajet) : tourner, marcher, d'un point de passage à l'autre
-    const p = planTrajet({ x: w.x, z: w.z }, { x, z }, obstacles(), { arret, cible: cible || idA(x, z) }), out = [];
+    const p = planTrajetSouple({ x: w.x, z: w.z }, { x, z }, obstacles(), { arret, cible: cible || idA(x, z) }), out = [];
     let px = w.x, pz = w.z, yaw = w.yaw;
     for (const q of p.points) {
       const L = Math.hypot(q.x - px, q.z - pz); if (L < 0.02) continue;
@@ -111,7 +114,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
         else if (a.type === 'descendre') w.file.push({ type: 'descendre' });
         else if (a.type === 'posture') w.file.push({ type: 'posture', rest: a.hauteur });
         else if (a.type === 'tourner') w.file.push({ type: 'tourner', rest: a.degres * Math.PI / 180 });
-        else if (a.type === 'marcher') w.file.push({ type: 'marcher', rest: a.metres });
+        else if (a.type === 'marcher') w.file.push({ type: 'marche', metres: a.metres });   // le trajet au moment de partir (§18)
         else if (a.type === 'attendre') w.file.push({ type: 'attendre', rest: a.secondes });
         else if (a.type === 'chercher') w.file.push({ type: 'chercher', quoi: a.quoi });
         else if (a.type === 'faconner') w.file.push({ type: 'faconner', objet: a.objet, rest: 30 });
@@ -143,6 +146,22 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
       a.rest -= dt; if (a.rest <= 0) w.file.shift(); return;
     }
     if (a.type === 'bloque') { w.bloques.push(a.devant); w.file.shift(); return; }
+    if (a.type === 'marche') {                                   // comme planMarchePage dans main.js : se relever, dézoomer, marcher en contournant
+      w.file.shift();
+      const obs = obstacles(), p = planMarche({ x: w.x, z: w.z, yaw: w.yaw }, a.metres, obs), recul = a.metres < 0, cap0 = w.yaw;
+      const ordre = { x: w.x, z: w.z, haut0: w.haut, zoom0: w.zoom, plan: p, nom: p.bloque ? (obs.find(o => o.id === p.bloque) || {}).nom || null : null }, out = [];
+      if (w.haut < 0.95) out.push({ type: 'posture', rest: 1 }); out.push({ type: 'zoom', rest: 1 });
+      let px = w.x, pz = w.z, yaw = w.yaw;
+      for (const q of p.points) { const L = Math.hypot(q.x - px, q.z - pz); if (L < 0.03) continue;
+        let d = Math.atan2(q.x - px, q.z - pz) + (recul ? Math.PI : 0) - yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+        out.push({ type: 'tourner', rest: d }, { type: 'marcher', rest: recul ? -L : L }); yaw += d; px = q.x; pz = q.z; }
+      let f = cap0 - yaw; f = Math.atan2(Math.sin(f), Math.cos(f)); if (Math.abs(f) > 0.02 && p.points.length) out.push({ type: 'tourner', rest: f });
+      out.push({ type: 'finMarche', ordre });
+      w.file.unshift(...out); return;
+    }
+    if (a.type === 'finMarche') { w.file.shift(); const o = a.ordre, fait = Math.hypot(w.x - o.x, w.z - o.z);
+      const t = texteMarche({ demande: o.plan.demande, fait, bouche: fait < 1 && o.plan.bouche }, o.nom);
+      w.marches.push({ de: { x: o.x, z: o.z }, a: { x: w.x, z: w.z }, demande: o.plan.demande, fait, texte: t, haut0: o.haut0, zoom0: o.zoom0, plan: o.plan }); return; }
     if (a.type === 'rejoindre' || a.type === 'cadrer') {           // comme main.js : la page calcule le trajet, l'arrêt et le cadrage
       w.file.shift();
       const ob = objets.find(x => x.id === a.objet) || supports().find(x => x.id === a.objet); if (!ob) return;
@@ -172,11 +191,13 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     else if (a.type === 'marcher') { const v = Math.sign(a.rest) * 1.35, s = Math.abs(a.rest) < Math.abs(v * dt) ? a.rest : v * dt;
       let nx = w.x + Math.sin(w.yaw) * s, nz = w.z + Math.cos(w.yaw) * s;
       for (const o of obstacles()) {                             // jamais dans un obstacle : repoussé à la marge (comme moveBy dans main.js)
+        if (enjambable(o)) continue;                             // ce qui est bas s'enjambe (§18)
         const dx = nx - o.x, dz = nz - o.z, m = Math.hypot(dx, dz), R = o.r + REGLAGES.MARGE_CORPS;
         if (m < R && Math.hypot(w.x - o.x, w.z - o.z) >= R - 1e-6) { nx = o.x + dx / (m || 1) * R; nz = o.z + dz / (m || 1) * R; }
       }
       w.x = nx; w.z = nz; a.rest -= s; if (Math.abs(a.rest) < 1e-6) w.file.shift();
-      for (const o of obstacles()) w.marge = Math.min(w.marge, Math.hypot(w.x - o.x, w.z - o.z) - o.r); }
+      w.chemin = (w.chemin || []).concat([{ x: w.x, z: w.z }]).slice(-4000);
+      for (const o of obstacles()) if (!enjambable(o)) w.marge = Math.min(w.marge, Math.hypot(w.x - o.x, w.z - o.z) - o.r); }
     else { a.rest -= dt; if (a.rest <= 0) w.file.shift(); }
   };
   w.perception = () => ({
