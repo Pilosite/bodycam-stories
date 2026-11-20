@@ -160,7 +160,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   transition:opacity 2.2s ease,background-color .6s;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))}
 .ouv[hidden]{display:none}
 .ouv.ouv-fondu{opacity:0;pointer-events:none}
-.ouv-cadre{width:100%;max-width:720px;display:flex;flex-direction:column;min-height:0;padding-top:max(3vh,calc(50vh - 420px));transition:padding-top .7s ease}
+.ouv-cadre{width:100%;max-width:720px;display:flex;flex-direction:column;min-height:0;padding-top:max(2vh,calc(50vh - 430px));transition:padding-top .7s ease}
 .ouv-travail .ouv-cadre{padding-top:28px}
 .ouv-intro{position:absolute;inset:0;z-index:5;background:#000;display:flex;align-items:center;justify-content:center;padding:clamp(14px,4vw,48px);color:#f3f0e8}
 .ouv-ecran{position:relative;width:min(100%,calc((100vh - 2*clamp(14px,4vw,48px))*16/9));aspect-ratio:16/9;max-height:100%;border:1px solid rgba(243,240,232,.28);overflow:hidden;
@@ -204,10 +204,13 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .ouv-arrive .ouv-cadre{animation:ouvArrive .7s cubic-bezier(.2,.8,.2,1) .55s both}
 @keyframes ouvArrive{0%{opacity:0;transform:translateY(14px) scale(.985);filter:grayscale(1) contrast(1.8)}60%{filter:grayscale(1) contrast(1.2)}100%{opacity:1;transform:none;filter:none}}
 @media (prefers-reduced-motion:reduce){.ouv-neige,.ouv-lignes::after,.ouv-i-nom,.ouv-part .ouv-ecran,.ouv-part .ouv-coupe i,.ouv-arrive .ouv-cadre{animation:none}.ouv-part{animation:ouvPart .2s linear forwards}}
-.ouv-marque{margin:0 0 26px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:640px;overflow:hidden}
+.ouv-marque{margin:0 0 22px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:640px;overflow:hidden}
+.ouv:not(.ouv-travail){overflow-y:auto;scrollbar-width:none}
+.ouv:not(.ouv-travail) .ouv-marque,.ouv:not(.ouv-travail) .ouv-form,.ouv:not(.ouv-travail) .ouv-q,.ouv:not(.ouv-travail) .ouv-sur{flex:none}
+.ouv:not(.ouv-travail) .ouv-cadre{min-height:auto;padding-bottom:24px}
 .ouv-surtitre{margin:0 0 16px;font:500 11.5px/1 var(--f-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
 .ouv-surtitre .ouv-pt{animation:blink 1.6s steps(1) infinite}
-.ouv-nom{margin:0 0 14px;font:600 clamp(46px,10.5vw,104px)/.88 var(--f-ui);letter-spacing:-.035em;text-transform:uppercase;text-shadow:0 0 42px rgba(255,90,70,.22)}
+.ouv-nom{margin:0 0 12px;font:600 clamp(42px,8.4vw,84px)/.88 var(--f-ui);letter-spacing:-.035em;text-transform:uppercase;text-shadow:0 0 42px rgba(255,90,70,.22)}
 .ouv-nom span{color:transparent;-webkit-text-stroke:1.5px var(--ink);letter-spacing:-.02em}
 .ouv-concept{margin:0 0 14px;font:500 clamp(11.5px,1.45vw,15px)/1.35 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--rec)}
 .ouv-expl{margin:0 0 22px;max-width:36em;font:400 clamp(15px,1.6vw,18px)/1.5 var(--f-ui);color:var(--ink-dim);text-wrap:pretty}
@@ -233,7 +236,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .ouv-travail .ouv-q{font-size:15px;margin:0 0 10px;color:var(--ink-dim);font-weight:500}
 .ouv-form{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:18px;padding:12px;background:rgba(243,240,232,.045)}
 .ouv-form:focus-within{border-color:rgba(243,240,232,.55)}
-.ouv-form textarea{font:500 18px/1.4 var(--f-ui);color:var(--ink);background:transparent;border:0;resize:none;outline:none;min-height:54px;padding:4px 4px 0}
+.ouv-form textarea{font:500 16px/1.4 var(--f-ui);color:var(--ink);background:transparent;border:0;resize:none;outline:none;min-height:54px;padding:4px 4px 0}
 .ouv-form textarea::placeholder{color:rgba(243,240,232,.45)}
 .ouv-actions{display:flex;justify-content:flex-end;gap:8px}
 .ouv-actions button{min-height:44px;padding:0 20px}
