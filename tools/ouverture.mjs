@@ -37,6 +37,19 @@ for (const nom of quoi.length ? quoi : Object.keys(FORMATS)) {
   await shot('2-suggestion');
   const t0 = Date.now();
   await page.click('#ouv-go');
+  // Les vignettes de photos (ouvertures/photos/*.json) : la rafale, une observation qui s'écrit, l'épinglage près des constats.
+  const photos = await page.evaluate(() => (typeof OUVERTURES !== 'undefined' ? OUVERTURES : []).some(r => r.vignettes));
+  if (photos) {
+    await page.waitForFunction(() => document.querySelectorAll('.ouv-vg').length >= 4, null, { timeout: 600000, polling: 30 });
+    await shot('3a-rafale');
+    await page.waitForFunction(() => document.querySelectorAll('.ouv-vg.lue, .ouv-vg.ecartee').length >= 6, null, { timeout: 600000, polling: 30 });
+    await shot('3b-observations');
+    await page.waitForFunction(() => document.querySelectorAll('.ouv-epingle').length >= 3, null, { timeout: 600000, polling: 30 });
+    await shot('3c-epinglage');
+    const vg = await page.evaluate(() => ({ cartes: document.querySelectorAll('.ouv-vg').length, decodees: [...document.querySelectorAll('.ouv-vg img')].filter(i => i.complete && i.naturalWidth > 0).length, credit: (document.querySelector('.ouv-credit') || {}).textContent || '' }));
+    console.log(nom, 'vignettes', JSON.stringify(vg));
+    if (!vg.credit.includes('Wikimedia Commons') || vg.decodees < vg.cartes) echecs++;
+  }
   await page.waitForFunction(() => document.querySelectorAll('.ouv-constat').length >= 4, null, { timeout: 600000 });
   await shot('3-rejeu');
   const mentionVue = await page.evaluate(() => { const m = document.getElementById('ouv-mention'); return !!m && !m.hidden && m.textContent; });
