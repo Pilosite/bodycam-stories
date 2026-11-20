@@ -628,7 +628,7 @@ Un modèle = `nom`, `mots` (ce qui le désigne), `quoi` (description pour l'acce
 - **L'accessoiriste le reçoit comme exemple** (« MODÈLE DE RÉFÉRENCE », avec sa règle d'échelle) quand la demande le nomme. Budget de sa consigne : 9 000 caractères.
 - **La page le prend comme base sûre** (réglage `MODELES: 'base'`, par défaut) quand le premier nom de la chose fabriquée est un de ses mots (« crotte de 5 kg » oui ; « tas de pierres » n'est pas un caillou) : ses formes, à l'échelle demandée, plutôt que celles de Claude ; le nom de Claude est gardé, sa `suite` aussi (`modele` dans la trace). `'exemple'` : Claude seul décide, le modèle n'est qu'un exemple ; `'non'` : plus de bibliothèque. Sans Claude, le modèle passe avant le secours par mots-clés.
 - Quatre modèles : la crotte (boudin enroulé en deux tours : 14 capsules dont les rayons varient, bout effilé, plus une tache sombre presque cachée dessous qui fait l'ombre de contact), un bâton, un caillou clair (ramassables), et le bonhomme de neige (transforme : trois boules de la matière de la chose, deux bâtons pour les bras, deux cailloux clairs pour les yeux, sur sa face +z).
-- **Matière** : une recette de plus dans `src/matieres.json`, `pate-organique` (brun marbré, nuances sombres, grain fin, petites bosses de relief, brillance 0,6). Aucune ligne de GLSL : le vocabulaire existant (capsules, `penche`, `cap`, recettes) suffisait.
+- **Matière** : une recette de plus dans `src/matieres.json`, `pate-organique` (brun marbré, nuances sombres, grain fin, petites bosses de relief, brillance 0,45). Aucune ligne de GLSL : le vocabulaire existant (capsules, `penche`, `cap`, recettes) suffisait.
 
 ### 15.2 L'échelle
 
