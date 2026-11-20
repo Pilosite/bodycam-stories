@@ -862,3 +862,11 @@ La page (`chutesPas`, appelé par `simulate`, donc figé avec le monde) attend q
 Test : `tests/oiseaux.test.mjs` (déclenchement selon le palier et le facteur, nombre, écarts, places, cri qui descend et cale, choc petit, ambiance dans le monde de papier). Le monde de papier range les chutes à part (`w.chutes`), hors des choses.
 
 Pas fait : la chose ne bascule pas en tombant (seulement la rotation autour de la verticale et les ailes), pas de plumes, pas vérifié à l'oreille ni sur GPU.
+
+## 25. « Regarde le soleil » : ébloui, il détourne la tête (20 novembre 2026)
+
+- Vocabulaire : `regarder` accepte une direction nommée, `{"type":"regarder","vers":"soleil"}` (`DIRECTIONS_NOMMEES`) ; la page calcule cap et hauteur depuis le soleil de la fiche (`LUMIERE.regardSoleil`).
+- Sans Claude (mode démo, `reconnuLocal`) : `secoursSoleil` lit « fais deux pas et regarde le soleil », « avance un peu et… », « tourne-toi vers / lève les yeux vers le soleil » ; un pas = 0,7 m, « un peu » = deux pas ; marcher d'abord, puis regarder. Hors démo, la page tient la même suite quoi que réponde Claude.
+- La phrase dite au pic vient de la banque `EBLOUI.dire` (données ; la première fois : « T'es gentil, mais ça me cramerait les yeux. », ensuite les variantes), portée par l'action (`dire`).
+- Le geste (`soleilPas`, `src/main.js`) : 0,75 s pour tourner et lever la tête, 1,4 s ébloui avec à-coups, 0,4 s pour détourner la tête (75° du côté du sentier, regard au sol) en disant la phrase, un temps, puis retour le long du sentier. Nuit ou soleil sous l'horizon : rien.
+- Le rendu : uniforme `uEbl` de `camera.frag` (x : éblouissement — voile blanc chaud, halo et reflets amplifiés, contraste effondré, paupières en amande, léger flou ; y : persistance rétinienne et exposition qui rattrape). Sans ce geste, seul un léger effet (0,3 au plus, `LUMIERE.eblouissement`) quand le regard passe à moins de 14° du soleil. Pas de main en visière (§15.4).

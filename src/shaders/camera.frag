@@ -10,6 +10,10 @@ float EX, GAIN;
    centre — à partir du halo déjà calculé (5 lectures). uGrainPx : taille du grain en pixels de l'écran, pour qu'un écran de
    1280 × 800 garde le grain d'une vidéo et non un bruit de pixels fin. 0 et 1 en qualité mobile : rien ne change. */
 uniform float uFlare; uniform float uGrainPx;
+/* Éblouissement (la page le pilote) : x = 0..1, le soleil au centre du regard — voile blanc chaud, halo et reflets amplifiés,
+   contraste effondré, paupières plissées en amande, léger flou ; y = persistance rétinienne (tache sombre verdâtre au centre,
+   image plus sombre le temps que l'exposition rattrape). (0, 0) : rien ne change. */
+uniform vec2 uEbl;
 /* Bougé (qualité mobile, en mouvement) : uFlou = part du bougé (0 à l'arrêt, 1 en marche ou en rotation, fondu entre les deux).
    Le déplacement de chaque pixel pendant l'image est calculé ici, comme la reprojection : point du monde (distance lue dans
    l'alpha de l'accumulation) revu depuis la pose de l'image précédente (uPosA, uCamA) ; uCamC, uPosC : pose de l'image montrée.
@@ -72,11 +76,12 @@ void main(){
     float d1=smoothstep(.5,.3,max(abs(u1.x-.5),abs(u1.y-.5))), d2=smoothstep(.5,.3,max(abs(u2.x-.5),abs(u2.y-.5)));   // sans bord franc quand la source quitte l'image
     vec3 g1=d1*max(textureLod(uBloom,u1,0.).rgb*EX-1.6,0.)/EX, g2=d2*max(textureLod(uBloom,u2,0.).rgb*EX-1.6,0.)/EX;
     add+=g1*vec3(.55,.75,.45)*.11+g2*vec3(.75,.45,.9)*.05;
+    add*=1.+4.*uEbl.x;
     hdr+=add*uFlare; nb+=add*uFlare;
   }
   hdr=sain(hdr); nb=sain(nb); bl=sain(bl);
   vec3 c=tone(mix(hdr,bl,.11)), cn=tone(mix(nb,bl,.11));
-  c+=(c-cn)*mix(uGrainPx>1.?.45:.70,-.5,uFlou)*(1.-min(uSoft,1.));   // en mouvement : adoucit (bougé) au lieu d'accentuer          // grand écran : la netteté d'un téléphone en 1080p, sans liseré noir
+  c+=(c-cn)*(mix(uGrainPx>1.?.45:.70,-.5,uFlou)*(1.-min(uSoft,1.))-.9*uEbl.x);   // en mouvement : adoucit (bougé) au lieu d'accentuer          // grand écran : la netteté d'un téléphone en 1080p, sans liseré noir
   c=max(c,0.);
   /* Écrêtage du capteur : un photosite saturé ne garde pas sa teinte, tout ce qui dépasse le blanc part vers le blanc (un
      soleil brûlé est blanc, à peine chaud au bord). Borné à 1 avant la courbe en S : au-delà, c*c*(3-2c) devient négatif
@@ -86,7 +91,19 @@ void main(){
   float l=dot(c,vec3(.299,.587,.114)); c=mix(vec3(l),c,.94);
   c=pow(clamp(c,0.,1.),vec3(1./2.2));
   c=mix(c,c*c*(3.-2.*c),.30);
-  float v=r2/(.25*(asp*asp+1.)); c*=1.-.46*v*v*v;
+  float v=r2/(.25*(asp*asp+1.));
+  if(uEbl.x>0.||uEbl.y>0.){
+    float e=uEbl.x;
+    c+=tone(bl)*e*(.8+1.2*e)*vec3(1.,.9,.74);                       // halo de l'optique, amplifié (déjà lu)
+    c=mix(c,vec3(1.,.95,.85),e*e*(.3+.4*(1.-v)));                   // voile blanc chaud
+    c=mix(c,vec3(dot(c,vec3(.333)))*.7+.3,.35*e);                   // le contraste s'effondre
+    float sq=smoothstep(.3,1.,e), ax=abs(q.x)*2., ouv=mix(1.25,.34,sq)*(1.-.55*ax*ax);
+    c*=1.-.93*sq*smoothstep(ouv,ouv+.28,abs(q.y)*2.);               // paupières : une amande qui se resserre en haut et en bas
+    float tc=uEbl.y*exp(-dot(qa,qa)*20.);                           // persistance rétinienne
+    c=mix(c,c*vec3(.22,.4,.3)+vec3(0.,.025,.012),tc*.85);
+    c*=1.-.3*uEbl.y*(1.-e);                                         // l'exposition rattrape
+  }
+  c*=1.-.46*v*v*v;
   float lg=clamp(dot(c,vec3(.333)),0.,1.);
   float tt=floor(uTime*24.);
   vec2 gp=floor(gl_FragCoord.xy/max(uGrainPx,1.));
