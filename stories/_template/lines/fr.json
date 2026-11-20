@@ -1,0 +1,16 @@
+{
+  "lang": "fr",
+  "note": "Répliques de secours, dites quand aucun modèle ne répond à temps. Mêmes clés dans chaque langue.",
+  "lines": {
+    "greet": ["Bon. Ça tourne. Tu m'entends ?"],
+    "move.ok": ["J'y vais.", "D'accord."],
+    "look.ok": ["Je regarde."],
+    "touch.ok": ["Froid. Du bois humide."],
+    "commit.accept": ["D'accord. Je le ferai."],
+    "commit.amend": ["Presque. Je le ferai à ma façon."],
+    "commit.refuse": ["Non. Pas ça."],
+    "commit.keeping": ["Comme tu as dit."],
+    "clearing.arrive": ["Une clairière. Et un banc. Quelqu'un vient ici."],
+    "ending.leave": ["Ça suffit pour aujourd'hui. J'y vais."]
+  }
+}

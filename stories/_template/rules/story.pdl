@@ -1,0 +1,5 @@
+# story — rules of the story
+@id story-rules  @kind rules  @layer base  @author you  @lang en  @scope story  @horizon story
+
+## rules
+when station.entered(clearing) once -> sound(bird.call), reveal(f.clearing), say(clearing.arrive) {r.clearing}

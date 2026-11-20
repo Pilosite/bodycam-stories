@@ -1,0 +1,19 @@
+{
+  "version": 0,
+  "question": { "en": "Why did she come here this morning?", "fr": "Pourquoi est-elle venue ici ce matin ?" },
+  "beats": [
+    {
+      "id": "arrival", "name": { "en": "Arrival", "fr": "L'arrivée" },
+      "stations": ["path", "clearing"],
+      "enter": { "on": "session.start" },
+      "establish": ["f.clearing"]
+    }
+  ],
+  "endings": [
+    {
+      "id": "leave", "family": { "en": "She leaves", "fr": "Elle s'en va" },
+      "requires": ["f.clearing"], "line": "ending.leave", "trigger": "decision",
+      "when": "at the clearing, when she has decided she has seen enough"
+    }
+  ]
+}

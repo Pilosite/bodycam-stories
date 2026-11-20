@@ -7,7 +7,12 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "test": "node --test tests/*.test.mjs",
-    "shot": "node tools/build.mjs && node tools/shot.mjs"
+    "shot": "node tools/build.mjs && node tools/shot.mjs",
+    "story": "node tools/story.mjs",
+    "story:check": "node tools/story.mjs check",
+    "story:play": "node tools/story.mjs play",
+    "story:whatif": "node tools/story.mjs whatif",
+    "story:audit": "node tools/story.mjs audit"
   },
   "devDependencies": {
     "playwright": "^1.50.0"

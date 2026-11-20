@@ -1,0 +1,12 @@
+# A first session: what the voice says, and time passing.
+#   node tools/story.mjs play <pack> --script <this file>
+# `say … => verb target` pins the intent (what the translation tier would answer); without it the heuristic guesses.
+# An indented `when … -> …` under a promise is the rule she agrees to keep, in the pack's rule grammar.
+lang en
+wait 10
+say Hello? Can you hear me?
+say if you hear a bird, stop for a moment => commit wait
+  when sound(bird.call) -> body.stop, say(commit.keeping)
+say Go on, walk to the end of the path.
+say Look at the bench.
+wait 20
