@@ -4,6 +4,7 @@
 // essayée ; on note les positions avant/après, la distance faite, ce qu'il dit, et les marches demandées (balade.marches()).
 // Essais : avance de 5 mètres ; recule de 3 mètres ; va vers l'arbre ; reviens ; fais demi-tour et avance de 6 mètres ;
 // après l'énorme crotte : avance de 5 mètres ; « avance de 30 mètres » sur le sentier ; 30 m de flânerie sans rien dire.
+// DTMAX=0.033 : des pas d'image de téléphone (30 i/s) ; par défaut 0,4 s (rendu logiciel lent, grands pas).
 // V3=0 : le lanceur de rayons (sa sonde garde le corps hors des surfaces pendant la marche), au lieu du moteur v3.
 // DECALE=0.15 : après le cadrage, il recule d'autant, exactement face à elle (la distance de cadrage d'un autre écran : 0,4 à 0,7 m).
 // Usage : node tools/bouche.mjs [dist/index.html] [essais séparés par |]   (sortie : out/bouche/rapport.json et une capture par essai)
@@ -48,7 +49,7 @@ for (const essai of ESSAIS) {
     }
     const sampler = { json: c => new Promise(r => setTimeout(() => r(repondre(c)), 1500)) };
     window.claude = { use: () => Promise.resolve(sampler) };
-  }, [{ maxPx: 9000, mobile: true, still: true, graine: GRAINE, debug: true, v3: process.env.V3 !== '0', grains: 40000, dtMax: 0.4, scene: SCENE }]);
+  }, [{ maxPx: 9000, mobile: true, still: true, graine: GRAINE, debug: true, v3: process.env.V3 !== '0', grains: 40000, dtMax: +(process.env.DTMAX || 0.4), scene: SCENE }]);
   await page.goto('file://' + page0, { timeout: 900000 });
   await page.waitForFunction(() => window.balade && window.__state && window.__state.n > 2, null, { timeout: 900000 });
   const quand = (fn, arg, max = 300000) => page.waitForFunction(fn, arg, { timeout: max, polling: 250 }).then(() => true, () => false);
