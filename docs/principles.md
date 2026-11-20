@@ -12,7 +12,7 @@ The model is the **game table**, not the rule book. Around a table, a player say
 
 And every Bodycam Stories game is a game where **the player is not the player**: you are never the one who acts, you are the one who talks *with* the person who acts. This is true of every story on the platform, by construction.
 
-There are two ways to play: **living a story** and **writing one**. Both are games (P11).
+There are three ways to play, and all three are games: **living a story** (talking with the one who is there), **writing one** (P11), and **hosting one**: a person may sit in the game master's chair of a live session and steer it for the players, in place of or alongside the models (P12). What we show first is never the constraint ("you cannot act") but what it opens: immersion, and the fact that anything that can be said can happen.
 
 Under it lies one bet: **semantic engineering**. We are building a system that translates what a story is, and what a game is, into something a machine can run, starting from words.
 
@@ -51,7 +51,7 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 
 **P11. Creators are the point, and creating is a game.** The project lives if people come and write stories in it. Writing a world, watching players meet it and adjusting it must be as playable as living a story: quick to try, visible at once, never a chore of configuration. Every mechanism must be something a creator can state in words, see at work, and adjust. Most creators talk to an assistant; a few open the backend. A player who makes commitments is already writing rules: the path from player to creator is continuous.
 
-**P12. The narrative space is shared.** Stories are made by several hands. Everything in a story keeps its author, so that contributions can be layered, merged, credited and revised.
+**P12. The narrative space is shared.** Stories are made by several hands, and can be run by a person: a human game master is one more author, whose rulings go through the same channel as a model's (P16) and are journaled the same way. Play happens in sessions. Everything in a story keeps its author, so that contributions can be layered, merged, credited and revised.
 
 ## C. The engine
 

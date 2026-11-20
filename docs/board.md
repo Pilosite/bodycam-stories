@@ -35,6 +35,7 @@ Later: the satire moved behind `SATIRE=1` · phone · autonomous movement (v2).
 | Q3 | "Real-time dynamism" in v1: the world's clock runs on its own (light rises, the walker comes, the battery drains) whether or not the player speaks, even though she moves station to station? | yes | high: it shapes the session loop and the engine adapter |
 | Q4 | Is the prepared future ("the possible", "the worlds that follow") ever shown to the player, or only felt as speed and coherence? | never shown in play; visible in the creator view | medium |
 | Q6 | The opening as specification: does the real pipeline have to do web research on the place and the person (queries, sources, photos), as the opening shows? | yes as v2, served by the home node since an artifact has no web access; photos are read for research only, never shown or used as assets | medium |
+| Q7 | Hosting: a human game master on a live session. One host and one player first, or a table of several players from the start? | one host, one player, as v2; several players is target | medium: multi-player changes the session model |
 | Q5 | The story of « Louis's Round »: Louis watched a badger sett and died there of his heart; discreet, nothing supernatural. Keep it? | kept | medium: the pack is written around it |
 
 ## Assumptions adopted without an answer
