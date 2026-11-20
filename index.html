@@ -3992,7 +3992,7 @@ function programme(r, f, hasard = Math.random, controle = null) {
 /* ------------------------------------------------------------------ interface (DOM)
    deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
             construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
-            surDebut(), surFin(fiche), hasard } */
+            surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard } */
 function creerOuverture(deps) {
   const d = document, $ = id => d.getElementById(id);
   const racine = d.createElement('section');
@@ -4087,9 +4087,12 @@ function creerOuverture(deps) {
     }
     if (e.type === 'fin-etape' && b) { b.x.classList.remove('en-cours'); b.x.classList.add('fait'); return; }
     if (e.type === 'monde') {
-      const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">Le monde se construit</span></div>`);
-      // Le fondu attend une vraie image du moteur : si le GPU est lent, cette ligne reste le temps qu'il faut.
-      Promise.resolve(deps.pret ? deps.pret(45000) : null).catch(() => {}).then(() => { if (fini) return; x.classList.remove('en-cours'); x.classList.add('fait'); racine.classList.add('ouv-fondu');
+      const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">Le monde se construit</span><span class="ouv-compte"></span></div>`);
+      // Le fondu attend la première image du moteur, borné par la page (quelques secondes : au-delà, il part sur ce qui est prêt).
+      // Pendant l'attente, l'étape en cours (deps.etat) : une progression vraie, pas une roue sans fin.
+      const c = x.querySelector('.ouv-compte'), suivi = setInterval(() => { if (deps.etat) c.textContent = deps.etat(); }, 200);
+      if (deps.etat) c.textContent = deps.etat();
+      Promise.resolve(deps.pret ? deps.pret(6000) : null).catch(() => {}).then(() => { clearInterval(suivi); c.textContent = ''; if (fini) return; x.classList.remove('en-cours'); x.classList.add('fait'); racine.classList.add('ouv-fondu');
         timers.push(setTimeout(() => terminer(e.fiche), 2400)); });
       return;
     }
@@ -4180,6 +4183,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -4195,10 +4202,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -4224,10 +4235,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -4257,7 +4269,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -4370,7 +4382,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -4501,16 +4513,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -4591,7 +4601,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -4715,7 +4725,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -4770,7 +4780,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -4778,7 +4788,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -4834,10 +4844,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -5024,23 +5037,51 @@ vec3 troncVar(float par){
 }
 const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, celui où la mousse monte
 vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
-float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
-  if(sol){ vec2 x=q.xz*s.xz+o; return fb?fbm(x):vnoise(x); }
-  vec3 x=q*s+o;
+float rN(vec3 q, vec3 s, vec3 o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol (o.xz) ou dans le volume
+  if(sol) return bruit2(q.xz*s.xz+o.xz,fb?5:1);
 #ifdef SOCLE                                                  // ombrage socle : deux octaves au lieu de quatre, même moyenne (les seuils des recettes restent justes)
-  return fb?.5*vnoise3(x)+.25*vnoise3(x*2.03+vec3(17.3,9.1,5.7))+.094:vnoise3(x);
+  return bruit3(q*s+o,fb?2:1)+(fb?.094:0.);
 #else
-  return fb?fbm3(x):vnoise3(x);
+  return bruit3(q*s+o,fb?4:1);
 #endif
+}
+/* Les bruits d'une recette sont tous tirés dans une boucle, par un seul appel à rN (FXC, sous Direct3D, recopie chaque appel :
+   seize sites d'appel faisaient seize copies du bruit). rSlot donne les réglages de l'emplacement j, ou faux s'il ne sert pas :
+   0 nuance ; 1 à 4 taches ; 5 à 7 motif (feuilles, rides, fissures, marquage) ; 8 variation ; 9 grain ; 10 mousse ;
+   11 limite de pente de la mousse ; 12 teinte de la mousse ; 13 à 15 grain du relief. Mêmes entrées qu'avant : même image. */
+#define NSLOT 16
+bool rSlot(int r, int j, vec3 q, bool sol, int ty, out vec3 s, out vec3 o, out bool fb, out bool sl){
+  s=vec3(1.); o=vec3(0.); fb=false; sl=sol;
+  if(j==0){ vec4 nc=rT(r,3), ns=rT(r,4); s=ns.xyz; o=vec3(rT(r,5).z); fb=ns.w>.5; return nc.w>0.; }
+  if(j<=4){ int k=j-1; vec4 b=rT(r,18+k*4); s=b.xyz; o=vec3(rT(r,20+k*4).z); fb=b.w>.5; return dot(b.xyz,b.xyz)>0.; }
+  if(j<=7){
+    vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
+    if(ty==1){ sl=true; s=vec3(j==7?.8:7.); o=vec3(j==5?0.:j==6?31.:3.); fb=j==7; return j<7 || p1.y>0.; }
+    if(ty==2){ sl=true; fb=true; if(j==5){ s=vec3(p0.y); o=vec3(uSeed.x,0.,uSeed.y); } else s=vec3(1.3); return j<7; }
+    if(ty==3){ vec4 e2=rT(r,11); s=j==5?e.xyz:e2.xyz; o=vec3(j==5?e.w:e2.w); return j==5 || (j==6 && p1.z>0.); }
+#ifndef SOCLE
+    if(ty==7){ sl=true; fb=true; s=vec3(1.2,1.,.5); o=vec3(7.); return j==5; }
+#endif
+    return false;
+  }
+  if(j<=9){ vec4 v=rT(r,j==8?1:2); s=v.xyz; fb=j==8; return v.w>0.; }
+  vec4 m0=rT(r,33);
+  if(j<=12){
+    vec4 m1=rT(r,34), m2=rT(r,35), m3=rT(r,36), m5=rT(r,38);
+    if(j==10){ s=m1.xyz; fb=m1.w>.5; o=sol?vec3(m2.z+uSeed.x,0.,m2.z+uSeed.y):vec3(m2.z); return m0.w>0.; }
+    if(j==11){ s=vec3(m5.z); o=vec3(m5.w); fb=true; return m0.w>0. && m5.z>0.; }
+    s=vec3(m3.w); return m0.w>0. && m2.w>0.;
+  }
+  vec4 rel=rT(r,39); s=vec3(rT(r,40).x); o=vec3(j==13?0.:j==14?9.:17.);
+  return rel.w>0. && (j<15 || !sol);
 }
 #ifdef SOCLE
 #define NTACHES 3            // ombrage socle : les trois premières taches d'une recette
 #else
 #define NTACHES 4
 #endif
-float tacheM(int r, int k, vec3 q, float hs, bool sol){     // masque de la tache k ; hs = hauteur au-dessus du sol
-  vec4 b=rT(r,18+k*4), c=rT(r,19+k*4), d=rT(r,20+k*4);
-  float N=dot(b.xyz,b.xyz)>0.?rN(q,b.xyz,d.z,b.w>.5,sol):0.;
+float tacheM(int r, int k, float N, float hs){               // masque de la tache k, son bruit déjà tiré (0 s'il n'y en a pas) ; hs = hauteur au-dessus du sol
+  vec4 c=rT(r,19+k*4), d=rT(r,20+k*4);
   if(d.x!=0.) N+=d.x*smoothstep(c.z,c.w,hs);
   return smoothstep(c.x,c.y,N);
 }
@@ -5081,7 +5122,7 @@ float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 su
    1 si une feuille couvre) ; tl : pente en travers de la feuille (bords relevés). */
 vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
   vec2 n=floor(x), f=fract(x); float best=-1., hc=0., ed=0.; tl=vec2(0.);
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){
     vec2 g=vec2(float(i),float(j)), c=n+g; float hid=h21(c+.5);
     if(fract(hid*5.31)>cov) continue;
     vec2 rr=f-g-h22(c); float a=hid*43.7; vec2 cs=vec2(cos(a),sin(a));
@@ -5094,39 +5135,51 @@ vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
   }
   return vec3(hc,ed,best>=0.?1.:0.);
 }
-float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
-  vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
-  float a=rN(q,e.xyz,e.w,false,sol);
+float fissH(int r, float a, float b){                        // 1 sur l'écorce, 0 au fond des fissures ; a, b : les deux bruits (emplacements 5 et 6)
+  vec4 p0=rT(r,9), p1=rT(r,10);
   float h=1.-smoothstep(p0.x,p0.y,1.-abs(a*2.-1.))*p0.z;
-  if(p1.z>0.){ float b=rN(q,e2.xyz,e2.w,false,sol); h-=p1.z*smoothstep(p1.x,p1.y,1.-abs(b*2.-1.)); }
+  if(p1.z>0.) h-=p1.z*smoothstep(p1.x,p1.y,1.-abs(b*2.-1.));
   return clamp(h,0.,1.);
 }
+#ifndef SOCLE
 float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relief : motif, creux des taches, bosses
-  vec4 mo=rT(r,6); float H=0.;
+  vec4 mo=rT(r,6); float H=0.; int ty=int(mo.x+.5);
+  // ses bruits aussi, par un seul appel : 0 et 1 fissures, 2 à 5 taches, 6 et 7 bosses
+  float N[8];
+  for(int j=0;j<8+uZ;j++){
+    vec3 s=vec3(1.), o=vec3(0.); bool fb=false, on=false;
+    if(j<2){ vec4 e=rT(r,j==0?7:11); s=e.xyz; o=vec3(e.w); on=mo.w!=0. && ty==3 && (j==0 || rT(r,10).z>0.); }
+    else if(j<6){ int k=j-2; vec4 b=rT(r,18+k*4); s=b.xyz; o=vec3(rT(r,20+k*4).z); fb=b.w>.5; on=mo.w!=0. && rT(r,20+k*4).y!=0. && dot(b.xyz,b.xyz)>0.; }
+    else { int k=j-6; vec4 a=rT(r,41+k*2), b=rT(r,42+k*2); s=a.xyz; o=vec3(b.y); fb=b.x>.5; on=a.w!=0.; }
+    N[j]=on?rN(q,s,o,fb,sol):0.;
+  }
   if(mo.w!=0.){
-    int ty=int(mo.x+.5); float mh=1.; vec2 id;
-    if(ty==3) mh=fissH(r,q,sol);
+    float mh=1.; vec2 id;
+    if(ty==3) mh=fissH(r,N[0],N[1]);
     else if(ty==4) mh=planches(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
     else if(ty==5) mh=paves(motifUV(q,n,sol),sol?rT(r,7).xz:rT(r,7).xy,rT(r,9),id);
     else if(ty==6) for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){ vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; float fr; mh=1.-fenetres(uv,rT(r,9),rT(r,10),id,fr); }
-    for(int k=0;k<4;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,q,hs,sol); }
+    for(int k=0;k<4+uZ;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,N[2+k],hs); }
     H+=mo.w*mh;
   }
-  for(int k=0;k<2;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.){ vec4 b=rT(r,42+k*2); H+=a.w*rN(q,a.xyz,b.y,b.x>.5,sol); } }
+  for(int k=0;k<2+uZ;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.) H+=a.w*N[6+k]; }
   return H;
 }
+#endif
 void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec, out float em){
   vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39);
   bool sol=mod(c0.w,2.)<.5;
   alb=c0.w>1.5?gFormCol:c0.rgb; tilt=vec3(0.); spec=nup.w; em=0.;
-  vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
-  if(nc.w>0.){ vec4 ns=rT(r,4); alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,rN(q,ns.xyz,nup.z,ns.w>.5,sol))); }
-  for(int k=0;k<NTACHES;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
   int ty=int(mo.x+.5); float cover=1., mm=1.;   // mm : où le motif est posé (pour les taches sur le motif)
+  float N[NSLOT];                                            // tous les bruits de la recette, un seul appel à rN
+  for(int j=0;j<NSLOT+uZ;j++){ vec3 s, o; bool fb, sl; N[j]=rSlot(r,j,q,sol,ty,s,o,fb,sl)?rN(q,s,o,fb,sl):0.; }
+  vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
+  if(nc.w>0.) alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,N[0]));
+  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)); }
   if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
-    vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
-    float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
+    vec2 wp=q.xz+p0.x*vec2(N[5]-.5,N[6]-.5);
+    float cov=p1.x; if(p1.y>0.) cov+=p1.y*N[7];
     float hc, on; vec3 lc;
 #ifndef SOCLE
     if(p1.w>0.){                                             // feuilles superposées : de vraies feuilles qui se recouvrent
@@ -5148,15 +5201,15 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     cover=1.-p0.w*step(.5,fract(hc*5.1));                    // une part des feuilles couvre la mousse
   } else if(ty==2){                                          // rides de vent
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
-    float w=fbm(q.xz*p0.y+uSeed.xy);
+    float w=N[5];
     vec2 dir=normalize(vec2(1.,.35+.5*(w-.5)));
     if(p1.x!=0.){ float c=cos(p1.x), s=sin(p1.x); dir=mat2(c,s,-s,c)*dir; }
-    float ph=dot(q.xz,dir)*e.x+p0.x*fbm(q.xz*1.3);
+    float ph=dot(q.xz,dir)*e.x+p0.x*N[6];
     float mk=smoothstep(p0.z,p0.w,w+.2*n.y);
     alb=mix(alb,rT(r,8).rgb,mo.y*smoothstep(.3,.8,sin(ph)*mk));
     tilt+=vec3(dir.x,0.,dir.y)*cos(ph)*mo.z*mk;
   } else if(ty==3){                                          // fissures
-    float h=fissH(r,q,sol); float as=rT(r,9).w;
+    float h=fissH(r,N[5],N[6]); float as=rT(r,9).w;
     alb=mix(alb,as>0.?alb*(1.-as):rT(r,8).rgb,(1.-h)*mo.y);
   } else if(ty==4 || ty==5){                                 // planches, pavés : éléments répétés et joints
     vec4 e=rT(r,7), P=rT(r,9); vec2 id;
@@ -5185,23 +5238,20 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     else if(Q.x>.5) m=smoothstep(lw+.01,lw-.01,abs(dx))*dash;
     if(P.w>0.) m=max(m,smoothstep(lw+.01,lw-.01,abs(abs(dx)-P.w)));
     if(Q.y>0.) m=max(m,step(fract(q.z/Q.y)*Q.y,3.)*step(.5,fract(dx*1.6))*step(abs(dx),P.w>0.?P.w-.3:3.5));
-    m*=1.-.7*smoothstep(.45,.75,fbm(q.xz*vec2(1.2,.5)+7.));   // usure
+    m*=1.-.7*smoothstep(.45,.75,N[5]);                       // usure
     alb=mix(alb,rT(r,8).rgb,m*mo.y); mm=m;
     }
   }
 #endif
-  vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*rN(q,va.xyz,0.,true,sol);
-  vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*rN(q,gr.xyz,0.,false,sol);
-  for(int k=0;k<NTACHES;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)*(pl>1.5?mm:1.)); }
-  if(rel.w>0.){                                              // grain du relief : petites facettes
-    float s=rT(r,40).x;
-    tilt+=sol?vec3(vnoise(q.xz*s)-.5,0.,vnoise(q.xz*s+9.)-.5)*rel.w
-             :(vec3(vnoise3(q*s),vnoise3(q*s+9.),vnoise3(q*s+17.))-.5)*rel.w;
-  }
+  vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*N[8];
+  vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*N[9];
+  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)*(pl>1.5?mm:1.)); }
+  if(rel.w>0.)                                               // grain du relief : petites facettes
+    tilt+=sol?vec3(N[13]-.5,0.,N[14]-.5)*rel.w:(vec3(N[13],N[14],N[15])-.5)*rel.w;
 #ifndef SOCLE                                                 // ombrage socle : sans relief de matière (le grain reste)
   if(mo.w!=0. || rT(r,41).w!=0. || rT(r,43).w!=0.){         // relief en hauteur : pente par différences finies
     const float e=.004; vec4 hv=vec4(0.);
-    for(int i=0;i<4;i++){                                    // un seul appel dans la boucle : le compilateur n'en déplie pas quatre copies
+    for(int i=0;i<4+uZ;i++){                                 // un seul appel, dans une boucle que le compilateur ne peut pas dérouler (uZ)
       vec3 o=i==1?vec3(e,0.,0.):i==2?vec3(0.,e,0.):i==3?vec3(0.,0.,e):vec3(0.);
       hv[i]=(sol && i==2)?hv.x:recetteH(r,q+o,n,hs,sol);
     }
@@ -5213,13 +5263,13 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   vec4 m0=rT(r,33);
   if(m0.w>0.){                                               // mousse ou lichen : par plaques, selon l'orientation et la hauteur
     vec4 m1=rT(r,34), m2=rT(r,35), m3=rT(r,36), m4=rT(r,37), m5=rT(r,38);
-    float N=sol?(m1.w>.5?fbm(q.xz*m1.xz+m2.z+uSeed.xy):vnoise(q.xz*m1.xz+m2.z+uSeed.xy)):rN(q,m1.xyz,m2.z,m1.w>.5,false);
-    float m=smoothstep(m2.x,m2.y,N);
+    float Nm=N[10];
+    float m=smoothstep(m2.x,m2.y,Nm);
     bool dOn=m3.x!=m3.y, cOn=m4.x!=m4.y;
-    float Np=m5.z>0.?rN(q,vec3(m5.z),m5.w,true,sol):N;      // bruit qui décale la limite de pente
+    float Np=m5.z>0.?N[11]:Nm;                               // bruit qui décale la limite de pente
     if(dOn || cOn) m*=max(dOn?smoothstep(m3.x,m3.y,n.y+m3.z*(Np-.5)):0.,cOn?m4.z*smoothstep(m4.x,m4.y,dot(n,HUMIDE)):0.);
     if(m5.x!=m5.y) m*=smoothstep(m5.x,m5.y,hs);
-    vec3 mc=m0.rgb; if(m2.w>0.) mc*=1.-.5*m2.w+m2.w*rN(q,vec3(m3.w),0.,false,sol);
+    vec3 mc=m0.rgb; if(m2.w>0.) mc*=1.-.5*m2.w+m2.w*N[12];
     alb=mix(alb,mc,m*cover*m0.w);                            // les feuilles posées dessus cachent la mousse...
     tilt*=1.-m4.w*m; spec*=1.-m;                             // ...mais le sol reste humide et plat dessous
   }
@@ -5234,7 +5284,7 @@ int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out 
   nl=n;                                                      // ombrage socle : la normale du monde oriente les motifs
 #else
   { vec4 hd=vec4(0.);                                        // normale dans le repère de la forme : c'est elle qui oriente les motifs
-    for(int i=0;i<4;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
+    for(int i=0;i<4+uZ;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
     nl=normalize(hd.yzw-hd.x+1e-6); }
 #endif
   float an=abs(nl.y)<.9&&abs(n.y)<.9?atan(n.z,n.x)-atan(nl.z,nl.x):0.;
@@ -5252,13 +5302,24 @@ int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out 
   if(m>15.5) return int(m-16.);                              // la forme nomme une recette de la fiche
   vec3 r=abs(q)/max(b.xyz,vec3(1e-3));
   float u=r.z>r.x?q.x:q.z;                                   // coordonnée le long de la face touchée
-  if(m<.5){ alb*=.9+.2*vnoise3(q*14.); }                                            // mat, peint, crépi
-  else if(m<1.5){ alb*=(.62+.7*h21(vec2(floor(u*7.),3.)))*(.8+.4*vnoise(vec2(u*40.,q.y*3.)))*mix(.3,1.,smoothstep(0.,.07,fract(u*7.))); }   // bois en planches
-  else if(m<2.5){ alb*=(.65+.7*fbm3(q*2.3))*(.85+.3*vnoise3(q*50.)); if(uKit==0) alb=mix(alb,vec3(.07,.12,.03),.6*smoothstep(.4,.9,n.y)*smoothstep(.45,.6,fbm3(q*1.1+3.))); }   // pierre
-  else if(m<3.5){ alb*=.85+.3*vnoise3(q*6.); spec=.5; }                              // métal
-  else if(m<4.5){ alb*=.12; spec=.8; }                                               // verre
-  else if(m<5.5){ alb*=.7+.6*vnoise3(q*110.); }                                      // pelage, tissu
-  else if(m<6.5){ alb*=(.7+.6*vnoise(vec2(q.x*3.,q.z*14.)))*mix(.55,1.,smoothstep(0.,.08,fract(abs(q.z)*4.))); spec=.08; }   // tuile, ardoise
+  // Les bruits de la matière, par un seul appel de chaque bruit (FXC recopie chaque appel) : mêmes entrées qu'avant.
+  int mi=m<.5?0:m<1.5?1:m<2.5?2:m<3.5?3:m<4.5?4:m<5.5?5:m<6.5?6:7;
+  float B[3];
+  for(int j=0;j<3+uZ;j++){
+    vec3 x=q; int no=1; bool d2=false, on=true;
+    if(j==0){ if(mi==0) x=q*14.; else if(mi==1){ d2=true; x=vec3(u*40.,q.y*3.,0.); } else if(mi==2){ x=q*2.3; no=4; } else if(mi==3) x=q*6.;
+      else if(mi==5) x=q*110.; else if(mi==6){ d2=true; x=vec3(q.x*3.,q.z*14.,0.); } else on=false; }
+    else if(j==1){ on=mi==2; x=q*50.; }
+    else { on=mi==2 && uKit==0; x=q*1.1+3.; no=4; }
+    B[j]=on?(d2?bruit2(x.xy,no):bruit3(x,no)):0.;
+  }
+  if(mi==0){ alb*=.9+.2*B[0]; }                                                      // mat, peint, crépi
+  else if(mi==1){ alb*=(.62+.7*h21(vec2(floor(u*7.),3.)))*(.8+.4*B[0])*mix(.3,1.,smoothstep(0.,.07,fract(u*7.))); }   // bois en planches
+  else if(mi==2){ alb*=(.65+.7*B[0])*(.85+.3*B[1]); if(uKit==0) alb=mix(alb,vec3(.07,.12,.03),.6*smoothstep(.4,.9,n.y)*smoothstep(.45,.6,B[2])); }   // pierre
+  else if(mi==3){ alb*=.85+.3*B[0]; spec=.5; }                                      // métal
+  else if(mi==4){ alb*=.12; spec=.8; }                                               // verre
+  else if(mi==5){ alb*=.7+.6*B[0]; }                                                 // pelage, tissu
+  else if(mi==6){ alb*=(.7+.6*B[0])*mix(.55,1.,smoothstep(0.,.08,fract(abs(q.z)*4.))); spec=.08; }   // tuile, ardoise
   else { emis=1.; }                                                                  // lumineux
   return -1;
 }
@@ -5708,6 +5769,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -5723,10 +5788,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -5752,10 +5821,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -5785,7 +5855,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -5898,7 +5968,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -6029,16 +6099,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -6119,7 +6187,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -6243,7 +6311,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -6298,7 +6366,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -6306,7 +6374,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -6362,10 +6430,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -6452,6 +6523,7 @@ uniform float uK;            // recouvrement visé (côté du grain = uK × l'é
 uniform float uMaxPt;
 uniform vec4  uAncre;        // feuilles en marche : ancre du tirage dans le monde (x, z), 1 = actif, cap du secteur
 uniform vec2  uFeuil;        // feuilles : profondeur de tranche au plus, pixels de l'écran
+uniform vec3  uFeuilG;       // feuilles des houppiers : part des grains gardés sur une feuille de plus de y pixels (0 : toutes celles qui en reçoivent plusieurs), longueur maximale à l'écran (pixels)
 uniform vec3  uSoleilC;      // carte d'ombres : centre, base (droite, haut, vers le soleil), demi-largeur et profondeur
 uniform mat3  uSoleilM;
 uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
@@ -6507,6 +6579,8 @@ vec2 aireHoup(Tige T){                                       // aires du bois et
   vec4 P0=uHp[T.e*4], P1=uHp[T.e*4+1], P2=uHp[T.e*4+2];
   return vec2(P1.x*3.1416*T.r0*.45*P0.z*.85*(1.+.16*P1.w), P1.x*(P1.w+1.)*8.9*P2.x*P2.x);
 }
+/* Houppier demandé par semeA ou semeB : main() fait l'unique appel à semeHoup (FXC recopie chaque appel). */
+bool hpDemande=false; Tige hpT; float hpU, hpS, hpCode; vec2 hpAH; mat2 hpRot;
 bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
   vec4 P1=uHp[T.e*4+1], P2=uHp[T.e*4+2], P3=uHp[T.e*4+3];
   int nb=int(P1.x), nr=int(P1.w);
@@ -6562,8 +6636,13 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
   if(hc.x>pres && hc.x>.03*min(tm*4.,1.)) return false;      // paquets denses, vides francs ; quelques feuilles isolées tiennent encore
   float Ls=L*(.6+.9*h2.x);                                   // tailles variées
   g.s=1.35*Ls;
-  if(uVue==0 && rnd()>s*s/(g.s*g.s)) return false;           // de près, plusieurs grains par feuille : six en moyenne suffisent
   float px=uVue==0?g.s/distance(Pf,uCamPos)*uRes.y/uFish:9.; // longueur de la feuille à l'écran (pixels)
+  /* De près, plusieurs grains par feuille : six en moyenne suffisent. Tous dessinent la même feuille au même endroit : au-delà
+     de quelques pixels, chaque grain de plus ne fait que repeindre (remplissage). Une grande feuille en garde une part
+     (uFeuilG.x, réglée par le régulateur du budget), et ne dépasse pas uFeuilG.z pixels : le nez dans un houppier, une feuille
+     plein écran coûtait des dizaines de milliers de pixels par grain. */
+  if(uVue==0 && rnd()>s*s/(g.s*g.s)*(px>uFeuilG.y?uFeuilG.x:1.)) return false;
+  if(uVue==0 && px>uFeuilG.z){ g.s*=uFeuilG.z/px; px=uFeuilG.z; }
   float gr=1.-smoothstep(2.5,9.,px);                         // au loin, la feuille ne se lit plus : on l'agrandit et l'arrondit, la masse reste pleine
   g.s*=1.+.7*gr;
   g.P=Pf;
@@ -6599,7 +6678,7 @@ bool semeA(out Grain g){
   vec2 vc=RA*vv.xz; vec3 vl=vec3(vc.x,vv.y,vc.y);            // direction du spectateur, repère de la cellule
   float aT=2.*A.r0*.85*(A.H+.3);
   vec4 aB=vec4(0.);
-  for(int k=0;k<3;k++){ vec3 a0,a1; float rb; brancheA(A,k,a0,a1,rb); aB[k]=2.*rb*.67*length(a1-a0); }
+  for(int k=0;k<3+uZ;k++){ vec3 a0,a1; float rb; brancheA(A,k,a0,a1,rb); aB[k]=2.*rb*.67*length(a1-a0); }
   float Rm=0., y0=uHoup.y, Hc=A.H+1.2-uHoup.y;               // cœur de feuillage (conifères) : rayon au pied, hauteur
   if(uHoup.x>.5){ Rm=min(uHoup.z*(.8+.4*A.h.w),3.3-max(abs(A.o.x),abs(A.o.y)))*.74; aB.w=2.*.36*Rm*Hc; }
   vec2 aH=vec2(0.);
@@ -6613,7 +6692,7 @@ bool semeA(out Grain g){
   bool pres=uVue==0 && procheA(id);                         // tronc et cœur dessinés en boîte (v3_proches) : seules les branches restent en grains
 #if HOUPPIER
   if(hp){ if(u<aT){ if(pres) return false; }
-    else { if(!semeHoup(T,u-aT,aH,s,g)) return false; g.code=1.+.5*(A.h.w*.999); g.rot=RA; return true; } }
+    else { hpDemande=true; hpT=T; hpU=u-aT; hpAH=aH; hpS=s; hpCode=1.+.5*(A.h.w*.999); hpRot=RA; return true; } }
   else
 #endif
   if(pres && (u<aT || u>=aT+aB.x+aB.y+aB.z)) return false;
@@ -6666,7 +6745,7 @@ bool semeB(out Grain g){
   if(uVue==1 && !hp) return false;
   if(hp){ T.th=terrainH(pied); vec2 aH=aireHoup(T); float aTv=uVue==1?0.:aT; aTot=aTv+aH.x+aH.y;
     float u=rnd()*aTot;
-    if(u>=aTv){ if(!semeHoup(T,u-aTv,aH,cote(aTot,parM2(pied,uNb.y)*CB*CB),g)) return false; g.code=2.+.5*B.h.w; g.rot=RB; return true; } }
+    if(u>=aTv){ hpDemande=true; hpT=T; hpU=u-aTv; hpAH=aH; hpS=cote(aTot,parM2(pied,uNb.y)*CB*CB); hpCode=2.+.5*B.h.w; hpRot=RB; return true; } }
 #endif
   if(pres) return false;
   vec3 vv=versVue(vec3(pied.x,terrainH(pied)+1.5,pied.y));
@@ -6703,10 +6782,6 @@ bool semeBTrait(int bout, out vec3 P){
 
 /* ---- blocs de grès (sdRock) : grain posé sur l'ellipsoïde, puis ramené sur la forme bosselée (deux pas de Newton) */
 float formeBloc(vec3 P, vec2 id, Bloc B){ return blocForme(blocLocal(P,terrainH(P.xz),id,B),B); }
-vec3 gradBloc(vec3 P, vec2 id, Bloc B){
-  const float e=.01; const vec2 k=vec2(1.,-1.);
-  return (k.xyy*formeBloc(P+k.xyy*e,id,B)+k.yyx*formeBloc(P+k.yyx*e,id,B)+k.yxy*formeBloc(P+k.yxy*e,id,B)+k.xxx*formeBloc(P+k.xxx*e,id,B))/(4.*e);
-}
 bool semeR(out Grain g){
   float dh; vec2 xz=tireSol(dh);
   vec2 id=floor(xz/CC);
@@ -6722,7 +6797,10 @@ bool semeR(out Grain g){
   vec2 w=cw+lp.xz*M;
   vec3 P=vec3(w.x,terrainH(w)+B.R*.22+lp.y,w.y);
   vec3 gr=vec3(0.,1.,0.);
-  for(int i=0;i<2;i++){ gr=gradBloc(P,id,B); P-=gr*formeBloc(P,id,B)/max(dot(gr,gr),1e-4); }
+  { const float e=.01; const vec2 k=vec2(1.,-1.); vec3 ga=vec3(0.);   // deux pas de Newton (gradBloc puis formeBloc), un seul appel de formeBloc déplié
+    for(int j=0;j<10+uZ;j++){ int m=j-5*(j/5); vec3 kk=m==0?k.xyy:m==1?k.yyx:m==2?k.yxy:m==3?k.xxx:vec3(0.);
+      float f=formeBloc(P+kk*e,id,B);
+      if(m<4) ga+=kk*f; else { gr=ga/(4.*e); ga=vec3(0.); P-=gr*f/max(dot(gr,gr),1e-4); } } }
   g.P=P; g.N=normalize(gr);
   g.q=blocLocal(P,terrainH(P.xz),id,B); g.code=3.; g.rot=M;
   g.s=cote(3.1416*max(B.rad.x,B.rad.z)*B.rad.y,parM2(cw,uNb.z)*CC*CC);
@@ -6803,7 +6881,7 @@ bool semeP(out Grain g){
   vec4 o1=texelFetch(uShapes,ivec2(1,oi),0);
   int st=int(o1.x), cn=int(o1.y), row=st; float v=rnd(), aire=1.;
   bool pris=false;
-  for(int j=0;j<24;j++){ if(j>=cn) break; vec4 s=texelFetch(uSemis,ivec2(0,st+j),0); if(!pris){ row=st+j; aire=s.y; pris=v<=s.x; } }
+  for(int j=0;j<min(cn,24);j++){ vec4 s=texelFetch(uSemis,ivec2(0,st+j),0); if(!pris){ row=st+j; aire=s.y; pris=v<=s.x; } }
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 V=uVue==0?primLocal(uCamPos,row):primLocal(a.xyz+uSd,row);
   vec3 lq, ln;
@@ -6871,7 +6949,7 @@ bool semeF(out vec4 pos, out float taille){
   if(t1<=t0) return false;
   float lr=log(t1/t0), t;                                    // distance en progression géométrique : les feuilles proches d'abord
   vec3 cell, hc; bool ok=false;
-  for(int k=0;k<3;k++){                                      // trois essais : la plupart des cellules sont vides
+  for(int k=0;k<3+uZ;k++){                                   // trois essais : la plupart des cellules sont vides
     t=t0*exp(rnd()*lr);
     cell=floor((O+rd*t)/CS);
     hc=h33(cell+uSeed);
@@ -6926,6 +7004,9 @@ void main(){
   if(i<uPart.x) ok=semeA(g);
   else if(i<uPart.y) ok=semeB(g);
   else ok=semeR(g);
+#if HOUPPIER
+  if(ok && hpDemande){ ok=semeHoup(hpT,hpU,hpAH,hpS,g); g.code=hpCode; g.rot=hpRot; }
+#endif
 #endif
   float s=g.s;
   bool forme=FORMES==1;
@@ -7025,6 +7106,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -7040,10 +7125,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -7069,10 +7158,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -7102,7 +7192,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -7215,7 +7305,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -7346,16 +7436,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -7436,7 +7524,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -7560,7 +7648,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -7615,7 +7703,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -7623,7 +7711,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -7679,10 +7767,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -7832,6 +7923,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -7847,10 +7942,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -7876,10 +7975,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -7909,7 +8009,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -8022,7 +8122,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -8153,16 +8253,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -8243,7 +8341,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -8367,7 +8465,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -8422,7 +8520,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -8430,7 +8528,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -8486,10 +8584,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -8510,9 +8611,12 @@ vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
 in vec3 vQ; in vec3 vN; flat in float vCode; in float vDist; in vec3 vDx; in vec3 vDy; in vec2 vDd; in float vSz;
 in vec3 vL; in vec3 vLx; in vec3 vLy; in vec4 vB; in vec2 vT; in float vOk;
 uniform int uPts;            // 1 = grains (points), 0 = maillage du sol
+uniform int uCompte;         // mesure du remplissage (src/main.js, v3Compter) : 1 compte chaque fragment tramé, 2 chaque fragment gardé
 layout(location=0) out vec4 g0;   // coordonnées de recette (ou couleur d'une feuille), élément
 layout(location=1) out vec4 g1;   // normale, distance
 void main(){
+  vec4 cpt=vec4(1.,vCode==5.?1.:0.,vCode>=1.&&vCode<3.?1.:0.,vCode==3.?1.:0.);   // comptage : tout, feuilles, bois, blocs
+  if(uCompte==1){ g0=cpt; g1=vec4(0.); return; }
   vec3 q=vQ; float d=vDist;
 #if FORMES
   vec2 o=(gl_PointCoord-.5)*vSz; o.y=-o.y; q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o);
@@ -8527,6 +8631,7 @@ void main(){
   else if(vOk<.9999) discard;                                // triangle du sol dont un sommet ne se projette pas (v3_sol.vert)
 #endif
   g0=vec4(q,vCode); g1=vec4(normalize(vN),d);
+  if(uCompte==2){ g0=cpt; g1=vec4(0.); }
 }`, FS_V3OMBRE = `#version 300 es
 // Moteur v3 : carte d'ombres. Les grains semés vus du soleil n'écrivent que leur profondeur. Variante FORMES : un grain
 // posé sur une forme (objet, élément de semis) est découpé comme dans le tampon G et suit le plan de sa face : un mur ne
@@ -8579,6 +8684,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -8594,10 +8703,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -8623,10 +8736,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -8656,7 +8770,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -8769,7 +8883,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -8900,16 +9014,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -8990,7 +9102,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -9114,7 +9226,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -9169,7 +9281,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -9177,7 +9289,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -9233,10 +9345,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -9312,6 +9427,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -9327,10 +9446,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -9356,10 +9479,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -9389,7 +9513,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -9502,7 +9626,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -9633,16 +9757,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -9723,7 +9845,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -9847,7 +9969,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -9902,7 +10024,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -9910,7 +10032,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -9966,10 +10088,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -10009,23 +10134,51 @@ vec3 troncVar(float par){
 }
 const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, celui où la mousse monte
 vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
-float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
-  if(sol){ vec2 x=q.xz*s.xz+o; return fb?fbm(x):vnoise(x); }
-  vec3 x=q*s+o;
+float rN(vec3 q, vec3 s, vec3 o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol (o.xz) ou dans le volume
+  if(sol) return bruit2(q.xz*s.xz+o.xz,fb?5:1);
 #ifdef SOCLE                                                  // ombrage socle : deux octaves au lieu de quatre, même moyenne (les seuils des recettes restent justes)
-  return fb?.5*vnoise3(x)+.25*vnoise3(x*2.03+vec3(17.3,9.1,5.7))+.094:vnoise3(x);
+  return bruit3(q*s+o,fb?2:1)+(fb?.094:0.);
 #else
-  return fb?fbm3(x):vnoise3(x);
+  return bruit3(q*s+o,fb?4:1);
 #endif
+}
+/* Les bruits d'une recette sont tous tirés dans une boucle, par un seul appel à rN (FXC, sous Direct3D, recopie chaque appel :
+   seize sites d'appel faisaient seize copies du bruit). rSlot donne les réglages de l'emplacement j, ou faux s'il ne sert pas :
+   0 nuance ; 1 à 4 taches ; 5 à 7 motif (feuilles, rides, fissures, marquage) ; 8 variation ; 9 grain ; 10 mousse ;
+   11 limite de pente de la mousse ; 12 teinte de la mousse ; 13 à 15 grain du relief. Mêmes entrées qu'avant : même image. */
+#define NSLOT 16
+bool rSlot(int r, int j, vec3 q, bool sol, int ty, out vec3 s, out vec3 o, out bool fb, out bool sl){
+  s=vec3(1.); o=vec3(0.); fb=false; sl=sol;
+  if(j==0){ vec4 nc=rT(r,3), ns=rT(r,4); s=ns.xyz; o=vec3(rT(r,5).z); fb=ns.w>.5; return nc.w>0.; }
+  if(j<=4){ int k=j-1; vec4 b=rT(r,18+k*4); s=b.xyz; o=vec3(rT(r,20+k*4).z); fb=b.w>.5; return dot(b.xyz,b.xyz)>0.; }
+  if(j<=7){
+    vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
+    if(ty==1){ sl=true; s=vec3(j==7?.8:7.); o=vec3(j==5?0.:j==6?31.:3.); fb=j==7; return j<7 || p1.y>0.; }
+    if(ty==2){ sl=true; fb=true; if(j==5){ s=vec3(p0.y); o=vec3(uSeed.x,0.,uSeed.y); } else s=vec3(1.3); return j<7; }
+    if(ty==3){ vec4 e2=rT(r,11); s=j==5?e.xyz:e2.xyz; o=vec3(j==5?e.w:e2.w); return j==5 || (j==6 && p1.z>0.); }
+#ifndef SOCLE
+    if(ty==7){ sl=true; fb=true; s=vec3(1.2,1.,.5); o=vec3(7.); return j==5; }
+#endif
+    return false;
+  }
+  if(j<=9){ vec4 v=rT(r,j==8?1:2); s=v.xyz; fb=j==8; return v.w>0.; }
+  vec4 m0=rT(r,33);
+  if(j<=12){
+    vec4 m1=rT(r,34), m2=rT(r,35), m3=rT(r,36), m5=rT(r,38);
+    if(j==10){ s=m1.xyz; fb=m1.w>.5; o=sol?vec3(m2.z+uSeed.x,0.,m2.z+uSeed.y):vec3(m2.z); return m0.w>0.; }
+    if(j==11){ s=vec3(m5.z); o=vec3(m5.w); fb=true; return m0.w>0. && m5.z>0.; }
+    s=vec3(m3.w); return m0.w>0. && m2.w>0.;
+  }
+  vec4 rel=rT(r,39); s=vec3(rT(r,40).x); o=vec3(j==13?0.:j==14?9.:17.);
+  return rel.w>0. && (j<15 || !sol);
 }
 #ifdef SOCLE
 #define NTACHES 3            // ombrage socle : les trois premières taches d'une recette
 #else
 #define NTACHES 4
 #endif
-float tacheM(int r, int k, vec3 q, float hs, bool sol){     // masque de la tache k ; hs = hauteur au-dessus du sol
-  vec4 b=rT(r,18+k*4), c=rT(r,19+k*4), d=rT(r,20+k*4);
-  float N=dot(b.xyz,b.xyz)>0.?rN(q,b.xyz,d.z,b.w>.5,sol):0.;
+float tacheM(int r, int k, float N, float hs){               // masque de la tache k, son bruit déjà tiré (0 s'il n'y en a pas) ; hs = hauteur au-dessus du sol
+  vec4 c=rT(r,19+k*4), d=rT(r,20+k*4);
   if(d.x!=0.) N+=d.x*smoothstep(c.z,c.w,hs);
   return smoothstep(c.x,c.y,N);
 }
@@ -10066,7 +10219,7 @@ float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 su
    1 si une feuille couvre) ; tl : pente en travers de la feuille (bords relevés). */
 vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
   vec2 n=floor(x), f=fract(x); float best=-1., hc=0., ed=0.; tl=vec2(0.);
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){
     vec2 g=vec2(float(i),float(j)), c=n+g; float hid=h21(c+.5);
     if(fract(hid*5.31)>cov) continue;
     vec2 rr=f-g-h22(c); float a=hid*43.7; vec2 cs=vec2(cos(a),sin(a));
@@ -10079,39 +10232,51 @@ vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
   }
   return vec3(hc,ed,best>=0.?1.:0.);
 }
-float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
-  vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
-  float a=rN(q,e.xyz,e.w,false,sol);
+float fissH(int r, float a, float b){                        // 1 sur l'écorce, 0 au fond des fissures ; a, b : les deux bruits (emplacements 5 et 6)
+  vec4 p0=rT(r,9), p1=rT(r,10);
   float h=1.-smoothstep(p0.x,p0.y,1.-abs(a*2.-1.))*p0.z;
-  if(p1.z>0.){ float b=rN(q,e2.xyz,e2.w,false,sol); h-=p1.z*smoothstep(p1.x,p1.y,1.-abs(b*2.-1.)); }
+  if(p1.z>0.) h-=p1.z*smoothstep(p1.x,p1.y,1.-abs(b*2.-1.));
   return clamp(h,0.,1.);
 }
+#ifndef SOCLE
 float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relief : motif, creux des taches, bosses
-  vec4 mo=rT(r,6); float H=0.;
+  vec4 mo=rT(r,6); float H=0.; int ty=int(mo.x+.5);
+  // ses bruits aussi, par un seul appel : 0 et 1 fissures, 2 à 5 taches, 6 et 7 bosses
+  float N[8];
+  for(int j=0;j<8+uZ;j++){
+    vec3 s=vec3(1.), o=vec3(0.); bool fb=false, on=false;
+    if(j<2){ vec4 e=rT(r,j==0?7:11); s=e.xyz; o=vec3(e.w); on=mo.w!=0. && ty==3 && (j==0 || rT(r,10).z>0.); }
+    else if(j<6){ int k=j-2; vec4 b=rT(r,18+k*4); s=b.xyz; o=vec3(rT(r,20+k*4).z); fb=b.w>.5; on=mo.w!=0. && rT(r,20+k*4).y!=0. && dot(b.xyz,b.xyz)>0.; }
+    else { int k=j-6; vec4 a=rT(r,41+k*2), b=rT(r,42+k*2); s=a.xyz; o=vec3(b.y); fb=b.x>.5; on=a.w!=0.; }
+    N[j]=on?rN(q,s,o,fb,sol):0.;
+  }
   if(mo.w!=0.){
-    int ty=int(mo.x+.5); float mh=1.; vec2 id;
-    if(ty==3) mh=fissH(r,q,sol);
+    float mh=1.; vec2 id;
+    if(ty==3) mh=fissH(r,N[0],N[1]);
     else if(ty==4) mh=planches(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
     else if(ty==5) mh=paves(motifUV(q,n,sol),sol?rT(r,7).xz:rT(r,7).xy,rT(r,9),id);
     else if(ty==6) for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){ vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; float fr; mh=1.-fenetres(uv,rT(r,9),rT(r,10),id,fr); }
-    for(int k=0;k<4;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,q,hs,sol); }
+    for(int k=0;k<4+uZ;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,N[2+k],hs); }
     H+=mo.w*mh;
   }
-  for(int k=0;k<2;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.){ vec4 b=rT(r,42+k*2); H+=a.w*rN(q,a.xyz,b.y,b.x>.5,sol); } }
+  for(int k=0;k<2+uZ;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.) H+=a.w*N[6+k]; }
   return H;
 }
+#endif
 void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec, out float em){
   vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39);
   bool sol=mod(c0.w,2.)<.5;
   alb=c0.w>1.5?gFormCol:c0.rgb; tilt=vec3(0.); spec=nup.w; em=0.;
-  vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
-  if(nc.w>0.){ vec4 ns=rT(r,4); alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,rN(q,ns.xyz,nup.z,ns.w>.5,sol))); }
-  for(int k=0;k<NTACHES;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
   int ty=int(mo.x+.5); float cover=1., mm=1.;   // mm : où le motif est posé (pour les taches sur le motif)
+  float N[NSLOT];                                            // tous les bruits de la recette, un seul appel à rN
+  for(int j=0;j<NSLOT+uZ;j++){ vec3 s, o; bool fb, sl; N[j]=rSlot(r,j,q,sol,ty,s,o,fb,sl)?rN(q,s,o,fb,sl):0.; }
+  vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
+  if(nc.w>0.) alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,N[0]));
+  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)); }
   if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
-    vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
-    float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
+    vec2 wp=q.xz+p0.x*vec2(N[5]-.5,N[6]-.5);
+    float cov=p1.x; if(p1.y>0.) cov+=p1.y*N[7];
     float hc, on; vec3 lc;
 #ifndef SOCLE
     if(p1.w>0.){                                             // feuilles superposées : de vraies feuilles qui se recouvrent
@@ -10133,15 +10298,15 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     cover=1.-p0.w*step(.5,fract(hc*5.1));                    // une part des feuilles couvre la mousse
   } else if(ty==2){                                          // rides de vent
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
-    float w=fbm(q.xz*p0.y+uSeed.xy);
+    float w=N[5];
     vec2 dir=normalize(vec2(1.,.35+.5*(w-.5)));
     if(p1.x!=0.){ float c=cos(p1.x), s=sin(p1.x); dir=mat2(c,s,-s,c)*dir; }
-    float ph=dot(q.xz,dir)*e.x+p0.x*fbm(q.xz*1.3);
+    float ph=dot(q.xz,dir)*e.x+p0.x*N[6];
     float mk=smoothstep(p0.z,p0.w,w+.2*n.y);
     alb=mix(alb,rT(r,8).rgb,mo.y*smoothstep(.3,.8,sin(ph)*mk));
     tilt+=vec3(dir.x,0.,dir.y)*cos(ph)*mo.z*mk;
   } else if(ty==3){                                          // fissures
-    float h=fissH(r,q,sol); float as=rT(r,9).w;
+    float h=fissH(r,N[5],N[6]); float as=rT(r,9).w;
     alb=mix(alb,as>0.?alb*(1.-as):rT(r,8).rgb,(1.-h)*mo.y);
   } else if(ty==4 || ty==5){                                 // planches, pavés : éléments répétés et joints
     vec4 e=rT(r,7), P=rT(r,9); vec2 id;
@@ -10170,23 +10335,20 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     else if(Q.x>.5) m=smoothstep(lw+.01,lw-.01,abs(dx))*dash;
     if(P.w>0.) m=max(m,smoothstep(lw+.01,lw-.01,abs(abs(dx)-P.w)));
     if(Q.y>0.) m=max(m,step(fract(q.z/Q.y)*Q.y,3.)*step(.5,fract(dx*1.6))*step(abs(dx),P.w>0.?P.w-.3:3.5));
-    m*=1.-.7*smoothstep(.45,.75,fbm(q.xz*vec2(1.2,.5)+7.));   // usure
+    m*=1.-.7*smoothstep(.45,.75,N[5]);                       // usure
     alb=mix(alb,rT(r,8).rgb,m*mo.y); mm=m;
     }
   }
 #endif
-  vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*rN(q,va.xyz,0.,true,sol);
-  vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*rN(q,gr.xyz,0.,false,sol);
-  for(int k=0;k<NTACHES;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)*(pl>1.5?mm:1.)); }
-  if(rel.w>0.){                                              // grain du relief : petites facettes
-    float s=rT(r,40).x;
-    tilt+=sol?vec3(vnoise(q.xz*s)-.5,0.,vnoise(q.xz*s+9.)-.5)*rel.w
-             :(vec3(vnoise3(q*s),vnoise3(q*s+9.),vnoise3(q*s+17.))-.5)*rel.w;
-  }
+  vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*N[8];
+  vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*N[9];
+  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)*(pl>1.5?mm:1.)); }
+  if(rel.w>0.)                                               // grain du relief : petites facettes
+    tilt+=sol?vec3(N[13]-.5,0.,N[14]-.5)*rel.w:(vec3(N[13],N[14],N[15])-.5)*rel.w;
 #ifndef SOCLE                                                 // ombrage socle : sans relief de matière (le grain reste)
   if(mo.w!=0. || rT(r,41).w!=0. || rT(r,43).w!=0.){         // relief en hauteur : pente par différences finies
     const float e=.004; vec4 hv=vec4(0.);
-    for(int i=0;i<4;i++){                                    // un seul appel dans la boucle : le compilateur n'en déplie pas quatre copies
+    for(int i=0;i<4+uZ;i++){                                 // un seul appel, dans une boucle que le compilateur ne peut pas dérouler (uZ)
       vec3 o=i==1?vec3(e,0.,0.):i==2?vec3(0.,e,0.):i==3?vec3(0.,0.,e):vec3(0.);
       hv[i]=(sol && i==2)?hv.x:recetteH(r,q+o,n,hs,sol);
     }
@@ -10198,13 +10360,13 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   vec4 m0=rT(r,33);
   if(m0.w>0.){                                               // mousse ou lichen : par plaques, selon l'orientation et la hauteur
     vec4 m1=rT(r,34), m2=rT(r,35), m3=rT(r,36), m4=rT(r,37), m5=rT(r,38);
-    float N=sol?(m1.w>.5?fbm(q.xz*m1.xz+m2.z+uSeed.xy):vnoise(q.xz*m1.xz+m2.z+uSeed.xy)):rN(q,m1.xyz,m2.z,m1.w>.5,false);
-    float m=smoothstep(m2.x,m2.y,N);
+    float Nm=N[10];
+    float m=smoothstep(m2.x,m2.y,Nm);
     bool dOn=m3.x!=m3.y, cOn=m4.x!=m4.y;
-    float Np=m5.z>0.?rN(q,vec3(m5.z),m5.w,true,sol):N;      // bruit qui décale la limite de pente
+    float Np=m5.z>0.?N[11]:Nm;                               // bruit qui décale la limite de pente
     if(dOn || cOn) m*=max(dOn?smoothstep(m3.x,m3.y,n.y+m3.z*(Np-.5)):0.,cOn?m4.z*smoothstep(m4.x,m4.y,dot(n,HUMIDE)):0.);
     if(m5.x!=m5.y) m*=smoothstep(m5.x,m5.y,hs);
-    vec3 mc=m0.rgb; if(m2.w>0.) mc*=1.-.5*m2.w+m2.w*rN(q,vec3(m3.w),0.,false,sol);
+    vec3 mc=m0.rgb; if(m2.w>0.) mc*=1.-.5*m2.w+m2.w*N[12];
     alb=mix(alb,mc,m*cover*m0.w);                            // les feuilles posées dessus cachent la mousse...
     tilt*=1.-m4.w*m; spec*=1.-m;                             // ...mais le sol reste humide et plat dessous
   }
@@ -10219,7 +10381,7 @@ int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out 
   nl=n;                                                      // ombrage socle : la normale du monde oriente les motifs
 #else
   { vec4 hd=vec4(0.);                                        // normale dans le repère de la forme : c'est elle qui oriente les motifs
-    for(int i=0;i<4;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
+    for(int i=0;i<4+uZ;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
     nl=normalize(hd.yzw-hd.x+1e-6); }
 #endif
   float an=abs(nl.y)<.9&&abs(n.y)<.9?atan(n.z,n.x)-atan(nl.z,nl.x):0.;
@@ -10237,13 +10399,24 @@ int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out 
   if(m>15.5) return int(m-16.);                              // la forme nomme une recette de la fiche
   vec3 r=abs(q)/max(b.xyz,vec3(1e-3));
   float u=r.z>r.x?q.x:q.z;                                   // coordonnée le long de la face touchée
-  if(m<.5){ alb*=.9+.2*vnoise3(q*14.); }                                            // mat, peint, crépi
-  else if(m<1.5){ alb*=(.62+.7*h21(vec2(floor(u*7.),3.)))*(.8+.4*vnoise(vec2(u*40.,q.y*3.)))*mix(.3,1.,smoothstep(0.,.07,fract(u*7.))); }   // bois en planches
-  else if(m<2.5){ alb*=(.65+.7*fbm3(q*2.3))*(.85+.3*vnoise3(q*50.)); if(uKit==0) alb=mix(alb,vec3(.07,.12,.03),.6*smoothstep(.4,.9,n.y)*smoothstep(.45,.6,fbm3(q*1.1+3.))); }   // pierre
-  else if(m<3.5){ alb*=.85+.3*vnoise3(q*6.); spec=.5; }                              // métal
-  else if(m<4.5){ alb*=.12; spec=.8; }                                               // verre
-  else if(m<5.5){ alb*=.7+.6*vnoise3(q*110.); }                                      // pelage, tissu
-  else if(m<6.5){ alb*=(.7+.6*vnoise(vec2(q.x*3.,q.z*14.)))*mix(.55,1.,smoothstep(0.,.08,fract(abs(q.z)*4.))); spec=.08; }   // tuile, ardoise
+  // Les bruits de la matière, par un seul appel de chaque bruit (FXC recopie chaque appel) : mêmes entrées qu'avant.
+  int mi=m<.5?0:m<1.5?1:m<2.5?2:m<3.5?3:m<4.5?4:m<5.5?5:m<6.5?6:7;
+  float B[3];
+  for(int j=0;j<3+uZ;j++){
+    vec3 x=q; int no=1; bool d2=false, on=true;
+    if(j==0){ if(mi==0) x=q*14.; else if(mi==1){ d2=true; x=vec3(u*40.,q.y*3.,0.); } else if(mi==2){ x=q*2.3; no=4; } else if(mi==3) x=q*6.;
+      else if(mi==5) x=q*110.; else if(mi==6){ d2=true; x=vec3(q.x*3.,q.z*14.,0.); } else on=false; }
+    else if(j==1){ on=mi==2; x=q*50.; }
+    else { on=mi==2 && uKit==0; x=q*1.1+3.; no=4; }
+    B[j]=on?(d2?bruit2(x.xy,no):bruit3(x,no)):0.;
+  }
+  if(mi==0){ alb*=.9+.2*B[0]; }                                                      // mat, peint, crépi
+  else if(mi==1){ alb*=(.62+.7*h21(vec2(floor(u*7.),3.)))*(.8+.4*B[0])*mix(.3,1.,smoothstep(0.,.07,fract(u*7.))); }   // bois en planches
+  else if(mi==2){ alb*=(.65+.7*B[0])*(.85+.3*B[1]); if(uKit==0) alb=mix(alb,vec3(.07,.12,.03),.6*smoothstep(.4,.9,n.y)*smoothstep(.45,.6,B[2])); }   // pierre
+  else if(mi==3){ alb*=.85+.3*B[0]; spec=.5; }                                      // métal
+  else if(mi==4){ alb*=.12; spec=.8; }                                               // verre
+  else if(mi==5){ alb*=.7+.6*B[0]; }                                                 // pelage, tissu
+  else if(mi==6){ alb*=(.7+.6*B[0])*mix(.55,1.,smoothstep(0.,.08,fract(abs(q.z)*4.))); spec=.08; }   // tuile, ardoise
   else { emis=1.; }                                                                  // lumineux
   return -1;
 }
@@ -10385,7 +10558,7 @@ float ombreSoleil(vec3 p, vec3 gn){                          // 1 = éclairé ; 
   if(bord>=1.) return stat;
   float z=(clamp(-l.z/uSoleilE.z,-1.,1.))*.5+.5-.075/uSoleilE.z;  // marge de 15 cm vers le soleil (un grain est plat)
   float v=0.; vec2 tx=uSoleilE.w/(2.*uSoleilE.xy);
-  for(int k=0;k<4;k++){
+  for(int k=0;k<4+uZ;k++){
     vec2 o=(vec2(rnd(),rnd())-.5)*tx*uPcf;
     v+=z<=textureLod(uOmbre,uv+o,0.).r?1.:0.;
   }
@@ -10416,8 +10589,10 @@ float raisVis(vec3 rd, float t){
 #if RAIS==0
   return st;
 #else
-  float tm=min(t,60.), ds=tm/float(RAIS), j=rnd(), S=0., W=0.;
-  for(int i=0;i<RAIS;i++){
+  int nr=min(RAIS,int(uAtmo2.z+.5));                         // pas voulus par la page (le régulateur du budget peut en ôter)
+  if(nr<1) return st;
+  float tm=min(t,60.), ds=tm/float(nr), j=rnd(), S=0., W=0.;
+  for(int i=0;i<nr;i++){
     float s=(float(i)+j)*ds; vec3 p=uCamPos+rd*s;
     float w=brumeDens(p)*exp(-brumeTau(uCamPos,rd,s));
     S+=w*ombreBrume(p); W+=w;
@@ -10446,12 +10621,11 @@ float pres(vec3 p){
    Un échantillon cosinus par pixel et par image : vers le haut, le ciel atténué par la canopée (canopyT, statistique)
    et par la futaie (troncs, statistique) ; vers le bas, le sol éclairé ; près du pied des objets, moins de ciel.
    C'est ici que se branchera la lumière d'ambiance rangée dans le monde (grille le long du trajet, calculée en fond). */
-vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts){
-  vec3 wi=cosDir(n); if(dot(wi,gn)<0.) wi=reflect(wi,gn);
+vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts, vec3 wi, float Tw){   // wi : direction tirée (cosDir) ; Tw : canopée dans cette direction
   vec3 L;
   vec3 solE=vec3(.24,.15,.07)*(vec3(.20,.21,.20)*uSky+SUN*max(uSunDir.y,0.)*Ts*.8);   // sol éclairé, vu d'en haut
   if(wi.y>.02){
-    float T=canopyT(po,wi);
+    float T=Tw;
     vec3 ciel=min(skyBase(wi),vec3(6.))*T+CANOPY_GLOW*(1.-T);
     float trajet=max(YC0-po.y,0.)/wi.y*length(wi.xz);       // distance horizontale parcourue sous la canopée
     float Tt=exp(-uOccT*trajet);
@@ -10477,7 +10651,7 @@ float lampeOmbre(vec3 p, vec3 Lp){
 #endif
   vec3 L=Lp-p; float dl=length(L); L/=dl;
   float v=1.;
-  for(int i=0;i<6;i++){
+  for(int i=0;i<6+uZ;i++){
     float s=min(.03*pow(2.2,float(i))*(.8+.4*rnd()),dl*.85);
     vec3 P=p+L*s, d=P-uCamPos; float dist=length(d);
     vec3 dlc=(d/dist)*uCam;
@@ -10498,10 +10672,9 @@ vec3 lampe(vec3 p, vec3 gn, vec3 n, vec3 alb){             // même cône et mê
   return alb*vec3(1.,.97,.90)*uTorch*cone*nl*lampeOmbre(p+gn*(.004+.0015*dl),Lp)/(d2+.3);
 }
 float gTs=1.;                                                // transmittance de la canopée vers le soleil au dernier point ombré (reprise par la brume)
-vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float TsCuit){   // TsCuit < 0 : à calculer
+vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float Ts, vec3 wi, float Tw){   // Ts, Tw : canopée vers le soleil et vers wi (main)
   vec3 sd=uSd;
   vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
-  float Ts=(uProf&4)!=0?1.:TsCuit>=0.?TsCuit:canopyT(po,uSunDir);                              // transmittance de la canopée vers le soleil (statistique)
   gTs=Ts;
   vec3 col=vec3(0.);
   float ndl=max(dot(n,sd),0.);
@@ -10516,7 +10689,7 @@ vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float TsCui
       col+=SUN*vis*uAtmo2.y*fr*smoothstep(-.1,.7,dot(rd,sd))*smoothstep(-.35,.25,dot(n,sd))*(alb*1.6+.025); }
 #endif
   }
-  col+=(uProf&2)!=0?alb*.3:alb*ambiance(po,gn,n,Ts);
+  col+=(uProf&2)!=0?alb*.3:alb*ambiance(po,gn,n,Ts,wi,Tw);
   if(uTorch>0.) col+=lampe(p,gn,n,alb);
   return col;
 }
@@ -10553,15 +10726,19 @@ void main(){
     vec3 p=uCamPos+rd*t;
     vec3 gn=normalize(g1.xyz);
     int id=int(floor(g0.w)); float par=(g0.w-float(id))*2.;
+    // Canopée (canopyT, lourd) : un seul appel, dans une boucle, pour la feuille (vers le soleil tiré) comme pour une surface
+    // (vers le soleil, et vers la direction tirée de l'ambiance) : FXC recopiait les trois appels.
+    vec3 sdL=vec3(0.,1.,0.), wi=vec3(0.,1.,0.), cn=gn; float Tc[2]; Tc[0]=1.; Tc[1]=1.;
+    vec3 alb=vec3(.3), n=gn; float spec=.05, emis=0., TsC=-1.;
     if(id==5){
-      col=shadeLeaf(p,gn,g0.xyz,rd);                         // feuille : couleur portée par le grain
+      sdL=sunSample();
     } else {
       // (le cœur de feuillage d'un conifère, id 1 et paramètre ≥ 1, et les éléments de semis, id 6, suivent render())
       if(dot(gn,rd)>0.) gn=-gn;
       // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
-      vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
+      n=gn;
       int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
-      vec4 ta, tb; float TsC=-1.; gTon=vec3(1.);
+      vec4 ta, tb; gTon=vec3(1.);
 #if TAPIS
       if(id==0 && uTapL>0 && (uProf&1)==0 && tapis(q.xz,log2(t*uFish/uRes.y/sqrt(max(abs(dot(rd,gn)),.05))/uTapS0)+uTapBias,ta,tb)){
         alb=ta.rgb*ta.rgb; spec=ta.w; emis=tb.z;             // sol cuit : deux lectures (quatre au fondu) au lieu de recette()
@@ -10592,15 +10769,26 @@ void main(){
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; q+=troncVar(par); rot=id==1?RA:RB; }
       if(r0>=0 && (uProf&1)==0 && !((uProf&64)!=0 && id==0) && !((uProf&128)!=0 && id!=0)){
         vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
-        for(int k=0;k<2;k++){
-          if(k>=nr) break;
+        for(int k=0;k<nr;k++){                               // borne inconnue du compilateur : un seul appel de recette() déplié
           vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,nr0,hs,rot,a,tt,sp,em);
           float wk=nr==1?1.:(k==0?1.-w:w);
           A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
         }
         alb=A*gTon; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
       }
-      col=lumiere(p,gn,n,alb,spec,rd,TsC)+alb*emis*8.;
+      cn=n;
+    }
+    vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
+    if(id!=5){ wi=cosDir(cn); if(dot(wi,gn)<0.) wi=reflect(wi,gn); }
+    for(int k=0;k<2+uZ;k++){
+      bool on=id==5?k==0:(k==0?(uProf&4)==0 && TsC<0.:(uProf&2)==0 && wi.y>.02);
+      vec3 o=id==5?p+sdL*.3:po, d=id==5?sdL:k==0?uSunDir:wi;
+      if(on) Tc[k]=canopyT(o,d);
+    }
+    if(id!=5 && TsC>=0. && (uProf&4)==0) Tc[0]=TsC;          // sol cuit (tapis) : sa transmittance
+    if(id==5) col=shadeLeafT(p,gn,g0.xyz,rd,sdL,Tc[0]);       // feuille : couleur portée par le grain
+    else {
+      col=lumiere(p,gn,cn,alb,spec,rd,Tc[0],wi,Tc[1])+alb*emis*8.;
       if(uVoir==1) col=vec3(ombreSoleil(p,gn));
       else if(uVoir==7) col=vec3(gTs);                        // transmittance de la canopée vers le soleil
       else if(uVoir==2) col=alb*3.;
@@ -10669,6 +10857,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -10684,10 +10876,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -10713,10 +10909,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -10746,7 +10943,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -10859,7 +11056,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -10990,16 +11187,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -11080,7 +11275,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -11204,7 +11399,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -11259,7 +11454,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -11267,7 +11462,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -11323,10 +11518,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -11366,23 +11564,51 @@ vec3 troncVar(float par){
 }
 const vec3 HUMIDE=vec3(.563,.102,-.819);                    // côté humide, celui où la mousse monte
 vec4 rT(int r, int i){ return texelFetch(uMats,ivec2(i,r),0); }
-float rN(vec3 q, vec3 s, float o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol ou dans le volume
-  if(sol){ vec2 x=q.xz*s.xz+o; return fb?fbm(x):vnoise(x); }
-  vec3 x=q*s+o;
+float rN(vec3 q, vec3 s, vec3 o, bool fb, bool sol){       // bruit d'une recette : sur le plan du sol (o.xz) ou dans le volume
+  if(sol) return bruit2(q.xz*s.xz+o.xz,fb?5:1);
 #ifdef SOCLE                                                  // ombrage socle : deux octaves au lieu de quatre, même moyenne (les seuils des recettes restent justes)
-  return fb?.5*vnoise3(x)+.25*vnoise3(x*2.03+vec3(17.3,9.1,5.7))+.094:vnoise3(x);
+  return bruit3(q*s+o,fb?2:1)+(fb?.094:0.);
 #else
-  return fb?fbm3(x):vnoise3(x);
+  return bruit3(q*s+o,fb?4:1);
 #endif
+}
+/* Les bruits d'une recette sont tous tirés dans une boucle, par un seul appel à rN (FXC, sous Direct3D, recopie chaque appel :
+   seize sites d'appel faisaient seize copies du bruit). rSlot donne les réglages de l'emplacement j, ou faux s'il ne sert pas :
+   0 nuance ; 1 à 4 taches ; 5 à 7 motif (feuilles, rides, fissures, marquage) ; 8 variation ; 9 grain ; 10 mousse ;
+   11 limite de pente de la mousse ; 12 teinte de la mousse ; 13 à 15 grain du relief. Mêmes entrées qu'avant : même image. */
+#define NSLOT 16
+bool rSlot(int r, int j, vec3 q, bool sol, int ty, out vec3 s, out vec3 o, out bool fb, out bool sl){
+  s=vec3(1.); o=vec3(0.); fb=false; sl=sol;
+  if(j==0){ vec4 nc=rT(r,3), ns=rT(r,4); s=ns.xyz; o=vec3(rT(r,5).z); fb=ns.w>.5; return nc.w>0.; }
+  if(j<=4){ int k=j-1; vec4 b=rT(r,18+k*4); s=b.xyz; o=vec3(rT(r,20+k*4).z); fb=b.w>.5; return dot(b.xyz,b.xyz)>0.; }
+  if(j<=7){
+    vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
+    if(ty==1){ sl=true; s=vec3(j==7?.8:7.); o=vec3(j==5?0.:j==6?31.:3.); fb=j==7; return j<7 || p1.y>0.; }
+    if(ty==2){ sl=true; fb=true; if(j==5){ s=vec3(p0.y); o=vec3(uSeed.x,0.,uSeed.y); } else s=vec3(1.3); return j<7; }
+    if(ty==3){ vec4 e2=rT(r,11); s=j==5?e.xyz:e2.xyz; o=vec3(j==5?e.w:e2.w); return j==5 || (j==6 && p1.z>0.); }
+#ifndef SOCLE
+    if(ty==7){ sl=true; fb=true; s=vec3(1.2,1.,.5); o=vec3(7.); return j==5; }
+#endif
+    return false;
+  }
+  if(j<=9){ vec4 v=rT(r,j==8?1:2); s=v.xyz; fb=j==8; return v.w>0.; }
+  vec4 m0=rT(r,33);
+  if(j<=12){
+    vec4 m1=rT(r,34), m2=rT(r,35), m3=rT(r,36), m5=rT(r,38);
+    if(j==10){ s=m1.xyz; fb=m1.w>.5; o=sol?vec3(m2.z+uSeed.x,0.,m2.z+uSeed.y):vec3(m2.z); return m0.w>0.; }
+    if(j==11){ s=vec3(m5.z); o=vec3(m5.w); fb=true; return m0.w>0. && m5.z>0.; }
+    s=vec3(m3.w); return m0.w>0. && m2.w>0.;
+  }
+  vec4 rel=rT(r,39); s=vec3(rT(r,40).x); o=vec3(j==13?0.:j==14?9.:17.);
+  return rel.w>0. && (j<15 || !sol);
 }
 #ifdef SOCLE
 #define NTACHES 3            // ombrage socle : les trois premières taches d'une recette
 #else
 #define NTACHES 4
 #endif
-float tacheM(int r, int k, vec3 q, float hs, bool sol){     // masque de la tache k ; hs = hauteur au-dessus du sol
-  vec4 b=rT(r,18+k*4), c=rT(r,19+k*4), d=rT(r,20+k*4);
-  float N=dot(b.xyz,b.xyz)>0.?rN(q,b.xyz,d.z,b.w>.5,sol):0.;
+float tacheM(int r, int k, float N, float hs){               // masque de la tache k, son bruit déjà tiré (0 s'il n'y en a pas) ; hs = hauteur au-dessus du sol
+  vec4 c=rT(r,19+k*4), d=rT(r,20+k*4);
   if(d.x!=0.) N+=d.x*smoothstep(c.z,c.w,hs);
   return smoothstep(c.x,c.y,N);
 }
@@ -11423,7 +11649,7 @@ float fenetres(vec2 uv, vec4 P, vec4 Q, out vec2 id, out float cadre){   // 1 su
    1 si une feuille couvre) ; tl : pente en travers de la feuille (bords relevés). */
 vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
   vec2 n=floor(x), f=fract(x); float best=-1., hc=0., ed=0.; tl=vec2(0.);
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){
     vec2 g=vec2(float(i),float(j)), c=n+g; float hid=h21(c+.5);
     if(fract(hid*5.31)>cov) continue;
     vec2 rr=f-g-h22(c); float a=hid*43.7; vec2 cs=vec2(cos(a),sin(a));
@@ -11436,39 +11662,51 @@ vec3 feuillesSup(vec2 x, float el, float lob, float L0, float cov, out vec2 tl){
   }
   return vec3(hc,ed,best>=0.?1.:0.);
 }
-float fissH(int r, vec3 q, bool sol){                        // 1 sur l'écorce, 0 au fond des fissures
-  vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10), e2=rT(r,11);
-  float a=rN(q,e.xyz,e.w,false,sol);
+float fissH(int r, float a, float b){                        // 1 sur l'écorce, 0 au fond des fissures ; a, b : les deux bruits (emplacements 5 et 6)
+  vec4 p0=rT(r,9), p1=rT(r,10);
   float h=1.-smoothstep(p0.x,p0.y,1.-abs(a*2.-1.))*p0.z;
-  if(p1.z>0.){ float b=rN(q,e2.xyz,e2.w,false,sol); h-=p1.z*smoothstep(p1.x,p1.y,1.-abs(b*2.-1.)); }
+  if(p1.z>0.) h-=p1.z*smoothstep(p1.x,p1.y,1.-abs(b*2.-1.));
   return clamp(h,0.,1.);
 }
+#ifndef SOCLE
 float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relief : motif, creux des taches, bosses
-  vec4 mo=rT(r,6); float H=0.;
+  vec4 mo=rT(r,6); float H=0.; int ty=int(mo.x+.5);
+  // ses bruits aussi, par un seul appel : 0 et 1 fissures, 2 à 5 taches, 6 et 7 bosses
+  float N[8];
+  for(int j=0;j<8+uZ;j++){
+    vec3 s=vec3(1.), o=vec3(0.); bool fb=false, on=false;
+    if(j<2){ vec4 e=rT(r,j==0?7:11); s=e.xyz; o=vec3(e.w); on=mo.w!=0. && ty==3 && (j==0 || rT(r,10).z>0.); }
+    else if(j<6){ int k=j-2; vec4 b=rT(r,18+k*4); s=b.xyz; o=vec3(rT(r,20+k*4).z); fb=b.w>.5; on=mo.w!=0. && rT(r,20+k*4).y!=0. && dot(b.xyz,b.xyz)>0.; }
+    else { int k=j-6; vec4 a=rT(r,41+k*2), b=rT(r,42+k*2); s=a.xyz; o=vec3(b.y); fb=b.x>.5; on=a.w!=0.; }
+    N[j]=on?rN(q,s,o,fb,sol):0.;
+  }
   if(mo.w!=0.){
-    int ty=int(mo.x+.5); float mh=1.; vec2 id;
-    if(ty==3) mh=fissH(r,q,sol);
+    float mh=1.; vec2 id;
+    if(ty==3) mh=fissH(r,N[0],N[1]);
     else if(ty==4) mh=planches(motifUV(q,n,sol),rT(r,7).x,rT(r,9),id);
     else if(ty==5) mh=paves(motifUV(q,n,sol),sol?rT(r,7).xz:rT(r,7).xy,rT(r,9),id);
     else if(ty==6) for(int i=0;i<(ty==6&&abs(n.y)<.5?1:0);i++){ vec2 uv=motifUV(q-gQo,n,false); uv.y=q.y+gYo; float fr; mh=1.-fenetres(uv,rT(r,9),rT(r,10),id,fr); }
-    for(int k=0;k<4;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,q,hs,sol); }
+    for(int k=0;k<4+uZ;k++){ float cr=rT(r,20+k*4).y; if(cr!=0.) mh-=cr*tacheM(r,k,N[2+k],hs); }
     H+=mo.w*mh;
   }
-  for(int k=0;k<2;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.){ vec4 b=rT(r,42+k*2); H+=a.w*rN(q,a.xyz,b.y,b.x>.5,sol); } }
+  for(int k=0;k<2+uZ;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.) H+=a.w*N[6+k]; }
   return H;
 }
+#endif
 void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec, out float em){
   vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39);
   bool sol=mod(c0.w,2.)<.5;
   alb=c0.w>1.5?gFormCol:c0.rgb; tilt=vec3(0.); spec=nup.w; em=0.;
-  vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
-  if(nc.w>0.){ vec4 ns=rT(r,4); alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,rN(q,ns.xyz,nup.z,ns.w>.5,sol))); }
-  for(int k=0;k<NTACHES;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)); }
   int ty=int(mo.x+.5); float cover=1., mm=1.;   // mm : où le motif est posé (pour les taches sur le motif)
+  float N[NSLOT];                                            // tous les bruits de la recette, un seul appel à rN
+  for(int j=0;j<NSLOT+uZ;j++){ vec3 s, o; bool fb, sl; N[j]=rSlot(r,j,q,sol,ty,s,o,fb,sl)?rN(q,s,o,fb,sl):0.; }
+  vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
+  if(nc.w>0.) alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,N[0]));
+  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)); }
   if(ty==1){                                                 // feuilles : cellules de Voronoï, une feuille par cellule
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
-    vec2 wp=q.xz+p0.x*vec2(vnoise(q.xz*7.)-.5,vnoise(q.xz*7.+31.)-.5);
-    float cov=p1.x; if(p1.y>0.) cov+=p1.y*fbm(q.xz*.8+3.);
+    vec2 wp=q.xz+p0.x*vec2(N[5]-.5,N[6]-.5);
+    float cov=p1.x; if(p1.y>0.) cov+=p1.y*N[7];
     float hc, on; vec3 lc;
 #ifndef SOCLE
     if(p1.w>0.){                                             // feuilles superposées : de vraies feuilles qui se recouvrent
@@ -11490,15 +11728,15 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     cover=1.-p0.w*step(.5,fract(hc*5.1));                    // une part des feuilles couvre la mousse
   } else if(ty==2){                                          // rides de vent
     vec4 e=rT(r,7), p0=rT(r,9), p1=rT(r,10);
-    float w=fbm(q.xz*p0.y+uSeed.xy);
+    float w=N[5];
     vec2 dir=normalize(vec2(1.,.35+.5*(w-.5)));
     if(p1.x!=0.){ float c=cos(p1.x), s=sin(p1.x); dir=mat2(c,s,-s,c)*dir; }
-    float ph=dot(q.xz,dir)*e.x+p0.x*fbm(q.xz*1.3);
+    float ph=dot(q.xz,dir)*e.x+p0.x*N[6];
     float mk=smoothstep(p0.z,p0.w,w+.2*n.y);
     alb=mix(alb,rT(r,8).rgb,mo.y*smoothstep(.3,.8,sin(ph)*mk));
     tilt+=vec3(dir.x,0.,dir.y)*cos(ph)*mo.z*mk;
   } else if(ty==3){                                          // fissures
-    float h=fissH(r,q,sol); float as=rT(r,9).w;
+    float h=fissH(r,N[5],N[6]); float as=rT(r,9).w;
     alb=mix(alb,as>0.?alb*(1.-as):rT(r,8).rgb,(1.-h)*mo.y);
   } else if(ty==4 || ty==5){                                 // planches, pavés : éléments répétés et joints
     vec4 e=rT(r,7), P=rT(r,9); vec2 id;
@@ -11527,23 +11765,20 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
     else if(Q.x>.5) m=smoothstep(lw+.01,lw-.01,abs(dx))*dash;
     if(P.w>0.) m=max(m,smoothstep(lw+.01,lw-.01,abs(abs(dx)-P.w)));
     if(Q.y>0.) m=max(m,step(fract(q.z/Q.y)*Q.y,3.)*step(.5,fract(dx*1.6))*step(abs(dx),P.w>0.?P.w-.3:3.5));
-    m*=1.-.7*smoothstep(.45,.75,fbm(q.xz*vec2(1.2,.5)+7.));   // usure
+    m*=1.-.7*smoothstep(.45,.75,N[5]);                       // usure
     alb=mix(alb,rT(r,8).rgb,m*mo.y); mm=m;
     }
   }
 #endif
-  vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*rN(q,va.xyz,0.,true,sol);
-  vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*rN(q,gr.xyz,0.,false,sol);
-  for(int k=0;k<NTACHES;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,q,hs,sol)*(pl>1.5?mm:1.)); }
-  if(rel.w>0.){                                              // grain du relief : petites facettes
-    float s=rT(r,40).x;
-    tilt+=sol?vec3(vnoise(q.xz*s)-.5,0.,vnoise(q.xz*s+9.)-.5)*rel.w
-             :(vec3(vnoise3(q*s),vnoise3(q*s+9.),vnoise3(q*s+17.))-.5)*rel.w;
-  }
+  vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*N[8];
+  vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*N[9];
+  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)*(pl>1.5?mm:1.)); }
+  if(rel.w>0.)                                               // grain du relief : petites facettes
+    tilt+=sol?vec3(N[13]-.5,0.,N[14]-.5)*rel.w:(vec3(N[13],N[14],N[15])-.5)*rel.w;
 #ifndef SOCLE                                                 // ombrage socle : sans relief de matière (le grain reste)
   if(mo.w!=0. || rT(r,41).w!=0. || rT(r,43).w!=0.){         // relief en hauteur : pente par différences finies
     const float e=.004; vec4 hv=vec4(0.);
-    for(int i=0;i<4;i++){                                    // un seul appel dans la boucle : le compilateur n'en déplie pas quatre copies
+    for(int i=0;i<4+uZ;i++){                                 // un seul appel, dans une boucle que le compilateur ne peut pas dérouler (uZ)
       vec3 o=i==1?vec3(e,0.,0.):i==2?vec3(0.,e,0.):i==3?vec3(0.,0.,e):vec3(0.);
       hv[i]=(sol && i==2)?hv.x:recetteH(r,q+o,n,hs,sol);
     }
@@ -11555,13 +11790,13 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
   vec4 m0=rT(r,33);
   if(m0.w>0.){                                               // mousse ou lichen : par plaques, selon l'orientation et la hauteur
     vec4 m1=rT(r,34), m2=rT(r,35), m3=rT(r,36), m4=rT(r,37), m5=rT(r,38);
-    float N=sol?(m1.w>.5?fbm(q.xz*m1.xz+m2.z+uSeed.xy):vnoise(q.xz*m1.xz+m2.z+uSeed.xy)):rN(q,m1.xyz,m2.z,m1.w>.5,false);
-    float m=smoothstep(m2.x,m2.y,N);
+    float Nm=N[10];
+    float m=smoothstep(m2.x,m2.y,Nm);
     bool dOn=m3.x!=m3.y, cOn=m4.x!=m4.y;
-    float Np=m5.z>0.?rN(q,vec3(m5.z),m5.w,true,sol):N;      // bruit qui décale la limite de pente
+    float Np=m5.z>0.?N[11]:Nm;                               // bruit qui décale la limite de pente
     if(dOn || cOn) m*=max(dOn?smoothstep(m3.x,m3.y,n.y+m3.z*(Np-.5)):0.,cOn?m4.z*smoothstep(m4.x,m4.y,dot(n,HUMIDE)):0.);
     if(m5.x!=m5.y) m*=smoothstep(m5.x,m5.y,hs);
-    vec3 mc=m0.rgb; if(m2.w>0.) mc*=1.-.5*m2.w+m2.w*rN(q,vec3(m3.w),0.,false,sol);
+    vec3 mc=m0.rgb; if(m2.w>0.) mc*=1.-.5*m2.w+m2.w*N[12];
     alb=mix(alb,mc,m*cover*m0.w);                            // les feuilles posées dessus cachent la mousse...
     tilt*=1.-m4.w*m; spec*=1.-m;                             // ...mais le sol reste humide et plat dessous
   }
@@ -11576,7 +11811,7 @@ int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out 
   nl=n;                                                      // ombrage socle : la normale du monde oriente les motifs
 #else
   { vec4 hd=vec4(0.);                                        // normale dans le repère de la forme : c'est elle qui oriente les motifs
-    for(int i=0;i<4;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
+    for(int i=0;i<4+uZ;i++){ vec3 o=i==1?vec3(.01,0.,0.):i==2?vec3(0.,.01,0.):i==3?vec3(0.,0.,.01):vec3(0.); hd[i]=sdPrim(q+o,a.w,b.xyz); }
     nl=normalize(hd.yzw-hd.x+1e-6); }
 #endif
   float an=abs(nl.y)<.9&&abs(n.y)<.9?atan(n.z,n.x)-atan(nl.z,nl.x):0.;
@@ -11594,13 +11829,24 @@ int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out 
   if(m>15.5) return int(m-16.);                              // la forme nomme une recette de la fiche
   vec3 r=abs(q)/max(b.xyz,vec3(1e-3));
   float u=r.z>r.x?q.x:q.z;                                   // coordonnée le long de la face touchée
-  if(m<.5){ alb*=.9+.2*vnoise3(q*14.); }                                            // mat, peint, crépi
-  else if(m<1.5){ alb*=(.62+.7*h21(vec2(floor(u*7.),3.)))*(.8+.4*vnoise(vec2(u*40.,q.y*3.)))*mix(.3,1.,smoothstep(0.,.07,fract(u*7.))); }   // bois en planches
-  else if(m<2.5){ alb*=(.65+.7*fbm3(q*2.3))*(.85+.3*vnoise3(q*50.)); if(uKit==0) alb=mix(alb,vec3(.07,.12,.03),.6*smoothstep(.4,.9,n.y)*smoothstep(.45,.6,fbm3(q*1.1+3.))); }   // pierre
-  else if(m<3.5){ alb*=.85+.3*vnoise3(q*6.); spec=.5; }                              // métal
-  else if(m<4.5){ alb*=.12; spec=.8; }                                               // verre
-  else if(m<5.5){ alb*=.7+.6*vnoise3(q*110.); }                                      // pelage, tissu
-  else if(m<6.5){ alb*=(.7+.6*vnoise(vec2(q.x*3.,q.z*14.)))*mix(.55,1.,smoothstep(0.,.08,fract(abs(q.z)*4.))); spec=.08; }   // tuile, ardoise
+  // Les bruits de la matière, par un seul appel de chaque bruit (FXC recopie chaque appel) : mêmes entrées qu'avant.
+  int mi=m<.5?0:m<1.5?1:m<2.5?2:m<3.5?3:m<4.5?4:m<5.5?5:m<6.5?6:7;
+  float B[3];
+  for(int j=0;j<3+uZ;j++){
+    vec3 x=q; int no=1; bool d2=false, on=true;
+    if(j==0){ if(mi==0) x=q*14.; else if(mi==1){ d2=true; x=vec3(u*40.,q.y*3.,0.); } else if(mi==2){ x=q*2.3; no=4; } else if(mi==3) x=q*6.;
+      else if(mi==5) x=q*110.; else if(mi==6){ d2=true; x=vec3(q.x*3.,q.z*14.,0.); } else on=false; }
+    else if(j==1){ on=mi==2; x=q*50.; }
+    else { on=mi==2 && uKit==0; x=q*1.1+3.; no=4; }
+    B[j]=on?(d2?bruit2(x.xy,no):bruit3(x,no)):0.;
+  }
+  if(mi==0){ alb*=.9+.2*B[0]; }                                                      // mat, peint, crépi
+  else if(mi==1){ alb*=(.62+.7*h21(vec2(floor(u*7.),3.)))*(.8+.4*B[0])*mix(.3,1.,smoothstep(0.,.07,fract(u*7.))); }   // bois en planches
+  else if(mi==2){ alb*=(.65+.7*B[0])*(.85+.3*B[1]); if(uKit==0) alb=mix(alb,vec3(.07,.12,.03),.6*smoothstep(.4,.9,n.y)*smoothstep(.45,.6,B[2])); }   // pierre
+  else if(mi==3){ alb*=.85+.3*B[0]; spec=.5; }                                      // métal
+  else if(mi==4){ alb*=.12; spec=.8; }                                               // verre
+  else if(mi==5){ alb*=.7+.6*B[0]; }                                                 // pelage, tissu
+  else if(mi==6){ alb*=(.7+.6*B[0])*mix(.55,1.,smoothstep(0.,.08,fract(abs(q.z)*4.))); spec=.08; }   // tuile, ardoise
   else { emis=1.; }                                                                  // lumineux
   return -1;
 }
@@ -11620,7 +11866,7 @@ void main(){
   if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(q.x-pathX(q.z))+(uTraj.w>0.?uTraj.w*(fbm(q.xz*.8+3.)-.5):0.)); r1=uSurf.y;
     if(w>=1.) r0=r1; else if(w>0.) nr=2; }
   vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
-  for(int k=0;k<2;k++){                                      // un seul appel à recette()
+  for(int k=0;k<2+uZ;k++){                                     // un seul appel à recette()
     if(k>=nr) break;
     vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,gn,0.,mat2(1.),a,tt,sp,em);
     float wk=nr==1?1.:(k==0?1.-w:w);
@@ -11629,7 +11875,7 @@ void main(){
   t0=vec4(sqrt(clamp(A,0.,1.)),clamp(SP,0.,1.));
   rs=uint(I.x*7919+I.y*104729)^0x9e3779b9u; rnd();
   vec3 po=q+gn*.01; float Ts=0.;
-  for(int i=0;i<4;i++) Ts+=canopyT(po,uSunDir);              // même transmittance que lumiere() (v3_ombrage.frag), sans son bruit
+  for(int i=0;i<4+uZ;i++) Ts+=canopyT(po,uSunDir);              // même transmittance que lumiere() (v3_ombrage.frag), sans son bruit
   t1=vec4(clamp(T.xz*.25+.5,0.,1.),clamp(EM,0.,1.),Ts*.25);
 }`, FS_V3SONDE = `#version 300 es
 // Sonde de collision du moteur v3 (option v3sonde, pas compilée par défaut) : la distance au décor (map(), la même que celle du lanceur de rayons, monde.glsl)
@@ -11681,6 +11927,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -11696,10 +11946,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -11725,10 +11979,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -11758,7 +12013,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -11871,7 +12126,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -12002,16 +12257,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -12092,7 +12345,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -12216,7 +12469,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -12271,7 +12524,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -12279,7 +12532,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -12335,10 +12588,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -12414,6 +12670,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -12429,10 +12689,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -12458,10 +12722,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -12491,7 +12756,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -12604,7 +12869,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -12735,16 +13000,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -12825,7 +13088,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -12949,7 +13212,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -13004,7 +13267,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -13012,7 +13275,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -13068,10 +13331,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -13289,6 +13555,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -13304,10 +13574,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -13333,10 +13607,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -13366,7 +13641,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -13479,7 +13754,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -13610,16 +13885,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -13700,7 +13973,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -13824,7 +14097,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -13879,7 +14152,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -13887,7 +14160,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -13943,10 +14216,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);
@@ -13979,7 +14255,7 @@ void main(){
   float t0=length(vW-uCamPos), t=vPrx.x>.5?.02:max(.02,t0-.05), tmax=t0+vPrx.y, d=1.;
   bool touche=false; vec4 gv=vec4(0.); const vec2 k=vec2(1.,-1.);
   int nn=0;
-  for(int i=0;i<24;i++){                                     // jusqu'à 20 pas de marche, puis 4 évaluations pour la normale
+  for(int i=0;i<24+uZ;i++){                                    // jusqu'à 20 pas de marche, puis 4 évaluations pour la normale
     if(nn>=4) break;
     vec3 o=touche?(nn==0?k.xyy:nn==1?k.yyx:nn==2?k.yxy:k.xxx)*(.0005*t+.0005):vec3(0.);
     vec3 p=uCamPos+rd*t+o;
@@ -14021,7 +14297,7 @@ function fail(msg){ const e=$("err"); e.style.display="flex"; e.style.userSelect
 const gl = canvas.getContext("webgl2",{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:"high-performance"});
 /* Diagnostic : les dernières étapes graphiques (compilations, premières passes), affichées si le contexte tombe ou si un
    programme ne se lie pas. Sans cela, impossible de savoir d'ici ce qui casse sur une machine qu'on n'a pas sous la main. */
-const ETAPES=[]; const t00=performance.now();
+const ETAPES=[]; const t00=performance.now(); var REG_RES=1;
 function etapeGL(nom){ ETAPES.push(((performance.now()-t00)/1000).toFixed(1)+" s  "+nom); if(ETAPES.length>14) ETAPES.shift(); }
 let CARTE="?";
 function diag(){ const m=CARTE;
@@ -14037,16 +14313,17 @@ if(!gl.getExtension("EXT_color_buffer_float") && !gl.getExtension("EXT_color_buf
 
 function sh(type,src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) fail("Erreur de compilation du shader :\n"+gl.getShaderInfoLog(s)); return s; }
-function lancer(fs,vs=VS){ const p=gl.createProgram(), v=gl.createShader(gl.VERTEX_SHADER), f=gl.createShader(gl.FRAGMENT_SHADER);   // compile sans attendre le résultat
+function lancer(fs,vs=VS,nom){ const p=gl.createProgram(), v=gl.createShader(gl.VERTEX_SHADER), f=gl.createShader(gl.FRAGMENT_SHADER);   // compile sans attendre le résultat
   gl.shaderSource(v,vs); gl.compileShader(v); gl.shaderSource(f,fs); gl.compileShader(f);
-  gl.attachShader(p,v); gl.attachShader(p,f); gl.linkProgram(p); return {p,v,f}; }
+  gl.attachShader(p,v); gl.attachShader(p,f); gl.linkProgram(p);
+  const x={p,v,f,nom:nom||"programme",t0:performance.now()}; COMP.envol.push(x); COMP.dernier=COMP.img; COMP.lances++; etapeGL("lancé : "+x.nom); return x; }
 function finir(x){
   if(!gl.getProgramParameter(x.p,gl.LINK_STATUS)){
     for(const s of [x.v,x.f]) if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) fail("Erreur de compilation du shader :\n"+gl.getShaderInfoLog(s));
     fail("Erreur de liaison du shader :\n"+gl.getProgramInfoLog(x.p)); }
   const p=x.p, u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
   for(let i=0;i<n;i++){ const a=gl.getActiveUniform(p,i); u[a.name.replace("[0]","")]=gl.getUniformLocation(p,a.name); }
-  return {p,u}; }
+  compNote(x); return {p,u}; }
 const prog=(fs,vs=VS,nom)=>{ etapeGL("compilation : "+(nom||"programme")); const r=finir(lancer(fs,vs)); etapeGL("  compilé : "+(nom||"programme")); return r; };
 /* Variantes fixes du même shader, choisies par #define. En rendu logiciel, le code présent coûte à chaque pas de rayon même
    quand il ne s'exécute pas : la forêt garde un programme sans semis, un monde nu un programme sans arbres. Chaque variante se
@@ -14054,8 +14331,37 @@ const prog=(fs,vs=VS,nom)=>{ etapeGL("compilation : "+(nom||"programme")); const
    Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis.
    + 4 : bosses et buttes du relief (RELIEF, monde.glsl). */
 const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+((v>>1)&1)+"\n#define RELIEF "+((v>>2)&1)+"\n"):FS_PT;
-const P_DOWN=prog(FS_DOWN,VS,"halo (réduction)"), P_BLUR=prog(FS_BLUR,VS,"halo (flou)"), P_CAM=prog(FS_CAM,VS,"capteur"), P_EXPO=prog(FS_EXPO,VS,"exposition");
 const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
+const EXTP=gl.getExtension("KHR_parallel_shader_compile");
+const fini=x=>!EXTP||gl.getProgramParameter(x.p,EXTP.COMPLETION_STATUS_KHR);
+/* Lancement sans gel (docs/moteur-v3.md, « Lancement sans gel »). Le processus graphique de Chrome est partagé par toute
+   l'application qui contient la page (vue web embarquée) : une compilation longue, ou plusieurs à la fois, la figent tout
+   entière. Donc une seule compilation en vol, au moins une image entre deux lancements, jamais d'interrogation d'un
+   programme (LINK_STATUS, uniformes) avant COMPLETION_STATUS_KHR, et les gros programmes (ombrage, tapis, lanceur de rayons)
+   attendent une pause dans la frappe. Ordre : capteur et halo, semeur, socle, formes, variante complète. COMP.journal garde
+   la durée de chaque compilation (diagnostic). Option compTout : tout lancer d'un coup, comme avant. */
+const COMP={ envol:[], img:0, dernier:-1, frappe:-1e9, journal:[], lances:0 };
+addEventListener("keydown",()=>{ COMP.frappe=performance.now(); },true);
+function compNote(x){ if(x.note) return; x.note=true; const ms=performance.now()-x.t0; COMP.journal.push({nom:x.nom,ms,t:(x.t0-t00)/1000}); if(COMP.journal.length>24) COMP.journal.shift(); }
+function compVol(){ COMP.envol=COMP.envol.filter(x=>{ if(x.note) return false; if(!fini(x)) return true; compNote(x); return false; }); return COMP.envol.length>0; }
+function compLibre(gros){                                       // peut-on lancer une compilation maintenant ?
+  if(CFG.compTout) return true;
+  if(compVol()||COMP.img<=COMP.dernier) return false;
+  return !(gros&&(performance.now()-COMP.frappe<900||(typeof frozen!=="undefined"&&frozen)||(!window.__CFG&&!ouvRepos&&!document.hasFocus())));   // le joueur tape, ou parle au porteur : pas de gros programme
+}
+/* Capteur, halo et exposition : petits, mais compilés eux aussi un à un, sans attendre (postPret, appelé à chaque image). */
+let P_DOWN=null, P_BLUR=null, P_CAM=null, P_EXPO=null; const POST={};
+function postPret(){
+  if(P_CAM) return true;
+  for(const [k,fs,nom] of [["cam",FS_CAM,"capteur"],["down",FS_DOWN,"halo (réduction)"],["blur",FS_BLUR,"halo (flou)"],["expo",FS_EXPO,"exposition"]]){
+    const e=POST[k]||(POST[k]={});
+    if(e.p) continue;
+    if(!e.l){ if(compLibre(false)) e.l=lancer(fs,VS,nom); return false; }
+    if(!fini(e.l)) return false;
+    e.p=finir(e.l);
+  }
+  P_DOWN=POST.down.p; P_BLUR=POST.blur.p; P_EXPO=POST.expo.p; P_CAM=POST.cam.p; return true;
+}
 /* Le shader du lanceur de rayons est très gros. Sur certains ordinateurs (Chrome sous Windows) sa compilation échoue et emporte
    tout le contexte WebGL. On le compile donc sous surveillance : une marque est posée avant, retirée après. Si la page meurt
    entre les deux, le chargement suivant le sait (PT_KO) et ne réessaie pas : il démarre sur le moteur v3, qui n'en a pas besoin.
@@ -14068,14 +14374,13 @@ const ptDispo=()=>compilerPT(varCourante());                    // le lanceur de
 /* Compilation sans bloquer : quand le navigateur le permet, le programme se compile sur un fil à part et on revient voir
    à chaque image s'il est prêt. Attendre le résultat d'un coup fige le processus graphique ; sur un gros shader, Chrome
    sous Windows le croit planté et le tue (constaté : trois chutes, puis tout l'affichage 3D désactivé). */
-const EXTP=gl.getExtension("KHR_parallel_shader_compile");
-const fini=x=>!EXTP||gl.getProgramParameter(x.p,EXTP.COMPLETION_STATUS_KHR);
 function compilerPT(v,attendre){
   if(progs[v]) return true; if(PT_KO) return false;
   if(!lances[v]||!lances[v].marque){
     try{ localStorage.setItem("bodycam-rayons-2","essai"); }catch(_){}
+    if(!lances[v]&&!attendre&&!compLibre(true)) return false;   // une compilation à la fois
     etapeGL("compilation : moteur à rayons, variante "+v);
-    lances[v]=lances[v]||lancer(variante(v)); lances[v].marque=true;
+    lances[v]=lances[v]||lancer(variante(v),VS,"lanceur de rayons "+v); lances[v].marque=true;
   }
   if(!attendre&&!fini(lances[v])) return false;                 // pas encore prêt : on repassera
   try{ progs[v]=finir(lances[v]); lances[v]=null; etapeGL("  compilé : moteur à rayons"); }
@@ -14085,8 +14390,8 @@ function compilerPT(v,attendre){
 }
 const ptEnCours=()=>{ const l=lances[varCourante()]; return !!(l&&l.marque&&!progs[varCourante()]&&!PT_KO); };
 function progMonde(){ if(!compilerPT(varCourante(),true)) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
-if(!bureau && !PT_KO) compilerPT(0);                            // téléphone : compilé d'emblée, comme avant
-if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
+if(!bureau && !PT_KO && !CFG.v3) compilerPT(0);                 // téléphone : compilé d'emblée, comme avant (pas en v3 : il n'y sert pas)
+if(parallele && !bureau) setTimeout(function essai3(){ if(V3.on||PT_KO||progs[3]||lances[3]) return; if(!compLibre(true)) return setTimeout(essai3,1000); lances[3]=lancer(variante(3),VS,"lanceur de rayons 3"); },4000);   // la plus probable pour un monde décrit
 /* La sonde de collision peut avoir son propre petit programme (v3_sonde.frag : la distance au décor, map(), rien d'autre),
    qui se compile là où le lanceur de rayons ne se compile pas. Il n'est compilé qu'avec l'option v3sonde : le porteur ne
    bouge que sur ordre du récit. Sans lui ni lanceur de rayons, la sonde rend « rien » (aucun obstacle). */
@@ -14094,7 +14399,7 @@ const SONDE={lance:null,p:null};
 function sondeProg(){                                           // moteur v3 (ou option v3sonde) : compilée au départ, sans bloquer
   if(SONDE.p&&SONDE.rel!==!!S.relOn){ SONDE.p=null; SONDE.lance=null; }   // bosses et buttes : une autre variante (RELIEF)
   if(SONDE.p) return SONDE.p; if(!CFG.v3sonde&&!(V3.on&&S.semN>0&&S.kit===2)) return null;   // forêt : troncs et blocs sont connus en JS (obstaclesConnus), on épargne ce gros programme à Direct3D ;   // en v3, le lanceur de rayons n'est pas compilé : la sonde garde le porteur hors des surfaces (§16)
-  if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.rel=!!S.relOn; SONDE.lance=lancer(FS_V3SONDE.replace("\n","\n#define RELIEF "+(S.relOn?1:0)+"\n")); }
+  if(!SONDE.lance){ if(!compLibre(false)) return null; SONDE.rel=!!S.relOn; SONDE.lance=lancer(FS_V3SONDE.replace("\n","\n#define RELIEF "+(S.relOn?1:0)+"\n"),VS,"sonde de collision"); }
   if(!fini(SONDE.lance)) return null;
   SONDE.p=finir(SONDE.lance); SONDE.lance=null; etapeGL("  compilé : sonde de collision"); return SONDE.p;
 }
@@ -14694,7 +14999,7 @@ function resize(){
   const cw=Math.max(2,Math.round(canvas.clientWidth*dpr)), ch=Math.max(2,Math.round(canvas.clientHeight*dpr));
   canvas.width=cw; canvas.height=ch;
   const maxPx=CFG.maxPx||(QUAL.full?2000000:V3.on?115000:coarse?250000:440000);   // v3 en mobile : la résolution que le moteur à rayons tenait en marche   // mode complet : jusqu'à la pleine résolution de l'écran
-  const s=Math.min(1,Math.sqrt(maxPx/(cw*ch)));
+  const s=Math.min(1,Math.sqrt(maxPx/(cw*ch)))*REG_RES;           // REG_RES : résolution réduite par le régulateur du budget
   W=CFG.w||Math.max(2,Math.round(cw*s)); H=CFG.h||Math.max(2,Math.round(ch*s));
   // Mobile en v3 : le capteur simulé coûte par pixel d'écran (17 ms mesurés à 432 × 781 sur Mali-G77). On le calcule à peine
   // plus fin que l'image interne et le navigateur agrandit : c'est aussi ce que fait un téléphone qui filme en basse définition.
@@ -14740,7 +15045,8 @@ function staticRows(p){
 }
 let blBuf=null; const expoL=lectureDiff();
 function postFX(src){
-  gl.useProgram(P_DOWN.p); bindTex(0,src.t,P_DOWN.u.uTex); gl.uniform2f(P_DOWN.u.uDstRes,bl1.w,bl1.h);
+  if(!P_CAM) return;                                           // capteur et halo pas encore compilés (postPret)
+  gpuDebut("halo"); gl.useProgram(P_DOWN.p); bindTex(0,src.t,P_DOWN.u.uTex); gl.uniform2f(P_DOWN.u.uDstRes,bl1.w,bl1.h);
   gl.bindFramebuffer(gl.FRAMEBUFFER,bl1.f); gl.viewport(0,0,bl1.w,bl1.h); draw();
   const now=performance.now();
   // Exposition auto : moyenne logarithmique, pondérée au centre, toutes les 180 ms. La lecture est différée (option expoSync :
@@ -14787,6 +15093,8 @@ function flouCapteur(u,t){
 }
 let src0=null;
 function display(src,t,cible){
+  if(!P_CAM) return;
+  if(!cible) gpuDebut("capteur");
   const u=P_CAM.u; gl.useProgram(P_CAM.p); src0=src;
   if(!cible) flouCapteur(u,t);
   else gl.uniform1f(u.uFlou||null,0);
@@ -14958,12 +15266,14 @@ function ombVoulue(){                                          // la variante co
   v.sig=ECHELLE.signature(v,OMB.empr); return v; }
 function ombLancer(sig,defs,tapis,rais){                            // une variante, compilée sans attendre
   etapeGL("compilation : ombrage "+sig);
-  const e={ sig, l:lancer(FS_V3OMBRAGE.replace("\n","\n"+defs+"\n")), t0:performance.now(), tapis, rais:rais||0, p:null, echec:"", ms:0 };
-  if(tapis&&!V3.tapP&&!V3.tapL){ V3.tapL=lancer(v3Rel(FS_V3TAPIS)); V3.tapRel=!!S.relOn; }    // le tapis du sol (qualité mobile) va avec la variante qui le lit
-  return OMB.e[sig]=e; }
+  const e={ sig, l:lancer(FS_V3OMBRAGE.replace("\n","\n"+defs+"\n"),VS,"ombrage "+(sig==="socle"?"socle":"complet")), t0:performance.now(), tapis, rais:rais||0, p:null, echec:"", ms:0 };
+  return OMB.e[sig]=e; }                                       // le tapis du sol (qualité mobile) se compile après elle (ombAvancer)
 function ombAvancer(e,socle){                                  // rend vrai quand la variante est prête ; abandonne une complète trop lente
   if(e.p) return true; if(e.echec) return false;
-  const pret=(socle||!CFG.ombrageJamais)&&fini(e.l)&&(!e.tapis||V3.tapP||!V3.tapL||fini(V3.tapL));
+  let pret=(socle||!CFG.ombrageJamais)&&fini(e.l);
+  if(pret&&e.tapis&&!V3.tapP){                                 // le tapis du sol va avec la variante qui le lit : lancé après elle, une compilation à la fois
+    if(!V3.tapL){ if(compLibre(true)){ V3.tapL=lancer(v3Rel(FS_V3TAPIS),VS,"tapis du sol"); V3.tapRel=!!S.relOn; } pret=false; }
+    else if(!fini(V3.tapL)) pret=false; }
   if(!pret){
     if(!socle&&OMB.mode==="echelle"&&performance.now()-e.t0>OMB.delai){
       e.echec="délai"; ombMemoire(e.sig,"delai",performance.now()-e.t0); etapeGL("  ombrage "+e.sig+" : pas prêt en "+(OMB.delai/1000)+" s, on reste au socle");
@@ -14981,10 +15291,11 @@ function v3Ombrage(){                                          // choisit le pro
   for(const k in OMB.e){ const e=OMB.e[k]; if(!e.p&&!e.echec&&k!=="socle") ombAvancer(e,false); }   // celles qui compilent encore (fiche quittée comprise)
   let P=OMB.e[v.sig]; const pleinePrete=!!(P&&P.p);
   let So=OMB.e.socle; const soclePret=!!(So&&So.p);
-  const c=ECHELLE.choisir({ mode:OMB.mode, pleinePrete, soclePret, mem:OMB.mem, sig:v.sig, imageFaite:V3.nImg>0 });
-  if(c.socle&&!So) So=ombLancer("socle","#define SOCLE 1\n#define TAPIS 0\n#define SEMO 0\n#define ATMO 0\n#define RAIS 0",false);
-  if(c.socle&&!soclePret&&ombAvancer(So,true)){ OMB.tSocle=So.ms; return v3Ombrage(); }
-  if(c.tenter&&!P){ P=ombLancer(v.sig,"#define TAPIS "+(v.tapis?1:0)+"\n#define SEMO "+(v.semis?1:0)+"\n#define ATMO "+v.atmo+"\n#define RAIS "+v.rais,v.tapis,v.rais); if(OMB.mode==="echelle") ombMemoire(v.sig,"debut"); }
+  // La variante complète se lance après la première image, ou pendant l'ouverture (le moteur s'y repose), une fois les formes compilées.
+  const c=ECHELLE.choisir({ mode:OMB.mode, pleinePrete, soclePret, mem:OMB.mem, sig:v.sig, imageFaite:V3.nImg>0||ouvRepos });
+  if(c.socle&&!So&&compLibre(true)) So=ombLancer("socle","#define SOCLE 1\n#define TAPIS 0\n#define SEMO 0\n#define ATMO 0\n#define RAIS 0",false);
+  if(c.socle&&So&&!soclePret&&ombAvancer(So,true)){ OMB.tSocle=So.ms; return v3Ombrage(); }
+  if(c.tenter&&!P&&(OMB.mode==="plein"||v3Formes())&&compLibre(true)){ P=ombLancer(v.sig,"#define TAPIS "+(v.tapis?1:0)+"\n#define SEMO "+(v.semis?1:0)+"\n#define ATMO "+v.atmo+"\n#define RAIS "+v.rais,v.tapis,v.rais); if(OMB.mode==="echelle") ombMemoire(v.sig,"debut"); }
   if(OMB.mode==="plein"&&P&&!P.p&&ombAvancer(P,true)) return v3Ombrage();   // mode plein : comme avant, une erreur s'affiche
   V3.attendSocle=c.utiliser===null&&c.socle;
   const e=c.utiliser==="plein"?P:c.utiliser==="socle"?So:null; if(!e) return false;
@@ -14998,6 +15309,13 @@ function ombDiag(){                                           // pour le diagnos
   if(So) L.push("  socle : "+(So.p?"compilé en "+f(So.ms):"compilation depuis "+f(performance.now()-So.t0)));
   if(OMB.sig&&OMB.mode!=="socle") L.push("  voulu "+OMB.sig+" : "+(P?P.p?"compilé en "+f(P.ms):P.echec?"échec ("+P.echec+")":"compilation depuis "+f(performance.now()-P.t0):!ECHELLE.peutTenter(OMB.mem,OMB.sig)?"échec mémorisé, pas retenté":"pas encore lancé"));
   const m=ECHELLE.resumer(OMB.mem); if(m.length) L.push("  mémoire : "+m.join(" ; "));
+  // Lancement (docs/moteur-v3.md, « Lancement sans gel ») : durée de chaque compilation, plus longue image des 10 premières secondes
+  L.push("Compilations ("+COMP.lances+") : "+COMP.journal.map(j=>j.nom+" "+(j.ms/1000).toFixed(1)+" s").join(" · ")+(COMP.envol.some(x=>!x.note)?" · en cours : "+COMP.envol.filter(x=>!x.note).map(x=>x.nom).join(", "):""));
+  L.push("Plus longue image des 10 premières s : "+Math.round(LONGUE.max)+" ms");
+  const gk=Object.keys(GT.ms);
+  L.push(GT.ext?"Puce (ms) : "+gk.map(k=>k+" "+GT.ms[k].toFixed(1)).join(" · ")+" · image "+(GT.total||0).toFixed(1):"Puce : pas de chronomètre (EXT_disjoint_timer_query_webgl2 absente), image "+Math.round(V3.msMoy)+" ms");
+  const deux=Object.keys(GT.nImg).filter(k=>GT.nImg[k]>1); if(deux.length) L.push("  passes doublées : "+deux.map(k=>k+" ×"+GT.nImg[k]).join(", "));
+  const r=regEtat(); L.push("Régulateur "+(REG.on?"":"(coupé) ")+": niveau "+REG.niveau+"/"+(REG_N.length-1)+", "+Math.round(REG.ms)+" ms pour "+regCible()+" · grains ×"+r.g+", feuilles ×"+r.fG+" ≤ "+r.fMax+" px, rais ×"+r.rais+", résolution ×"+r.res);
   return L.join("\n"); }
 function ombBouton(){ const b=$("ombrage-raz"); if(b) b.hidden=!ECHELLE.echecs(OMB.mem).length; }
 function ombRaz(){ try{ localStorage.removeItem(ECHELLE.CLE_OMBRAGE); }catch(_){} location.reload(); }   // remise à zéro de la mémoire : tout se retente
@@ -15007,18 +15325,20 @@ function ombRaz(){ try{ localStorage.removeItem(ECHELLE.CLE_OMBRAGE); }catch(_){
 const v3Rel=src=>S.relOn?src.replace("\n","\n#define RELIEF 1\n"):src;
 function v3Init(){                                             // rend vrai quand les programmes du semeur et un ombrage sont prêts (compilation sans bloquer)
   if((V3.gp||V3.lance) && (V3.avecRel!==!!S.relOn||V3.avecHp!==!!S.hpOn)){ V3.gp=null; V3.lance=null; }
-  if(V3.tapRel!==!!S.relOn && (V3.tapP||V3.tapL)){ V3.tapP=null; V3.tapL=null;   // le tapis cuit le sol (terrainH) : il suit la variante RELIEF
-    for(const k in OMB.e) if(OMB.e[k].tapis){ V3.tapL=lancer(v3Rel(FS_V3TAPIS)); break; } }
-  V3.tapRel=!!S.relOn;
+  if(V3.tapRel!==!!S.relOn && (V3.tapP||V3.tapL)){ V3.tapP=null; V3.tapL=null; }   // le tapis cuit le sol (terrainH) : il suit la variante RELIEF
   if(V3.tapL&&!V3.tapP&&V3.omb&&V3.omb.p&&V3.omb.tapis&&fini(V3.tapL)){ V3.tapP=finir(V3.tapL); V3.tapL=null; }
+  if(!V3.tapL&&!V3.tapP&&V3.omb&&V3.omb.p&&V3.omb.tapis&&compLibre(true)){ V3.tapL=lancer(v3Rel(FS_V3TAPIS),VS,"tapis du sol"); V3.tapRel=!!S.relOn; }
   if(!V3.gp){
-  if(!V3.lance){ V3.avecRel=!!S.relOn; V3.avecHp=!!S.hpOn; etapeGL("compilation : moteur v3 (6 programmes, puis l'ombrage)");
-    const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
-    const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
-    V3.lance={ grains:lancer(FS_V3GBUF,Hp(VS_V3GRAINS)), grainsF:lancer(F(FS_V3GBUF),F(R(VS_V3GRAINS))), sol:lancer(FS_V3GBUF,R(VS_V3SOL)),
-      ombre:lancer(FS_V3OMBRE,Hp(VS_V3GRAINS)), ombreF:lancer(F(FS_V3OMBRE),F(R(VS_V3GRAINS))), proches:lancer(Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)) }; }
-  for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } V3.attendSocle=true; return false; }
-  const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
+  if(!V3.lance){ V3.avecRel=!!S.relOn; V3.avecHp=!!S.hpOn; V3.lance={}; etapeGL("compilation : moteur v3, un programme à la fois"); }
+  // Les quatre programmes de la première image, un à un ; les deux variantes FORMES (objets, semis) viennent après le socle
+  // (v3Formes), sauf en mode plein (captures de référence : tout avant la première image).
+  const base=OMB.mode==="plein"?V3_PROGS:V3_PROGS.slice(0,4);
+  for(const k of base){
+    const x=V3.lance[k];
+    if(!x){ if(compLibre(false)) V3.lance[k]=v3Lancer(k); V3.attendSocle=true; return false; }
+    if(!fini(x)){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } V3.attendSocle=true; return false; }
+  }
+  const gp={}; for(const k of base){ gp[k]=finir(V3.lance[k]); delete V3.lance[k]; } V3.gp=gp; V3.nImg0=V3.nImg;   // montée progressive des grains (v3Budget)
   // Taille maximale d'un grain : plafonnée à 64 pixels, une surface vue de très près (tronc, bloc, mur) ne pouvait plus être couverte
   // et laissait voir à travers. Le plafond suit maintenant ce que la puce accepte, jusqu'à 320 pixels.
   V3.maxPt=Math.min(CFG.v3maxPt||320,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
@@ -15026,7 +15346,28 @@ function v3Init(){                                             // rend vrai quan
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   }
-  return v3Ombrage();
+  const r=v3Ombrage();
+  if(OMB.e.socle&&OMB.e.socle.p) v3Formes();                   // après le socle : les variantes FORMES, puis (v3Ombrage) la complète
+  return r;
+}
+const V3_PROGS=["sol","grains","ombre","proches","grainsF","ombreF"];
+function v3Lancer(k){                                          // un programme du semeur, dans la variante voulue par la fiche
+  const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
+  const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
+  const SP={ sol:[FS_V3GBUF,R(VS_V3SOL)], grains:[FS_V3GBUF,Hp(VS_V3GRAINS)], ombre:[FS_V3OMBRE,Hp(VS_V3GRAINS)], proches:[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)],
+    grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))], ombreF:[F(FS_V3OMBRE),F(R(VS_V3GRAINS))] }[k];
+  return lancer(SP[0],SP[1],"v3 "+k);
+}
+function v3Formes(){                                           // rend vrai quand les deux variantes FORMES sont en service
+  if(!V3.gp) return false; if(V3.gp.grainsF&&V3.gp.ombreF) return true;
+  for(const k of ["grainsF","ombreF"]){
+    if(V3.gp[k]) continue;
+    const x=V3.lance[k];
+    if(!x){ if(compLibre(false)) V3.lance[k]=v3Lancer(k); return false; }
+    if(!fini(x)) return false;
+    V3.gp[k]=finir(x); delete V3.lance[k];
+  }
+  return true;
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
@@ -15250,7 +15591,7 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   if(u.uHp) gl.uniform4fv(u.uHp,S.hp); if(u.uHpC) gl.uniform3fv(u.uHpC,S.hpC);   // houppiers (variante HOUPPIER)
   gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
   gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);
-  atmoUniformes(u,p,V3.omb&&V3.omb.rais||0);
+  atmoUniformes(u,p,Math.round((V3.omb&&V3.omb.rais||0)*regEtat().rais));   // le régulateur peut réduire les pas des rais (borne : RAIS)
 }
 /* Atmosphère : uAtmo (modèle, trouble, brume basse au sol, hauteur d'échelle) et uAtmo2 (sol de référence de la brume basse :
    celui de la caméra ; force du rebord ; pas des rais dans la carte d'ombres, v3 en qualité complète seulement ; troncs par
@@ -15270,6 +15611,81 @@ function v3Sync(t){
   if(t===null){ gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,u8s); return; }
   gl.bindFramebuffer(gl.FRAMEBUFFER,(t||dummy).f);
   if(t&&t.u8) gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,u8s); else gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,px3);   // une cible RGBA8 ne se lit qu'en octets
+}
+/* Temps de la puce par passe (EXT_disjoint_timer_query_webgl2, quand la carte le propose) : une requête par passe, lue
+   quelques images plus tard sans attendre. Sans l'extension, seul l'intervalle entre deux images est connu. GT.n compte les
+   passes d'une image : aucune ne doit tourner deux fois (diagnostic). Option chronoGpu:false pour couper. */
+const GT={ ext:CFG.chronoGpu===false?null:gl.getExtension("EXT_disjoint_timer_query_webgl2"), libres:[], attente:[], cur:null, ms:{}, n:{}, nImg:{}, img:0 };
+function gpuDebut(nom){
+  if(!GT.ext) return; gpuFin();
+  const q=GT.libres.pop()||gl.createQuery(); gl.beginQuery(GT.ext.TIME_ELAPSED_EXT,q); GT.cur={q,nom,img:GT.img};
+  GT.n[nom]=(GT.n[nom]||0)+1; }
+function gpuFin(){ if(!GT.cur) return; gl.endQuery(GT.ext.TIME_ELAPSED_EXT); GT.attente.push(GT.cur); GT.cur=null; }
+function gpuImage(){                                           // fin d'une image : passes comptées, résultats arrivés
+  for(const k in GT.n){ GT.nImg[k]=GT.n[k]; } GT.n={}; GT.img++;
+  if(!GT.ext) return;
+  const dj=gl.getParameter(GT.ext.GPU_DISJOINT_EXT);
+  while(GT.attente.length){ const a=GT.attente[0];
+    if(!gl.getQueryParameter(a.q,gl.QUERY_RESULT_AVAILABLE)) break;
+    GT.attente.shift(); const ms=gl.getQueryParameter(a.q,gl.QUERY_RESULT)/1e6; GT.libres.push(a.q);
+    if(dj) continue;
+    GT.ms[a.nom]=GT.ms[a.nom]===undefined?ms:GT.ms[a.nom]*.8+ms*.2;
+    if(a.img!==GT.dernImg){ if(GT.dernImg!==undefined) GT.total=GT.somme; GT.somme=0; GT.dernImg=a.img; } GT.somme+=ms; }
+  if(GT.attente.length>48) GT.attente.splice(0,GT.attente.length-48).forEach(a=>GT.libres.push(a.q));
+}
+/* Régulateur du budget (triptyque : le coût par image est fixe, c'est la finesse qui s'adapte). Si l'image dépasse sa cible
+   (18 ms en qualité complète, 33 ms en mobile) pendant une seconde, on descend d'un niveau ; avec de la marge (moins de 65 %
+   de la cible) pendant trois secondes, on remonte. Mesure : temps de la puce quand il est connu, sinon intervalle entre images.
+   Niveaux, dans l'ordre : feuilles proches moins recouvertes et plus petites, moins de grains, moins de pas de rais,
+   résolution interne plus basse. Option regulateur:false (défaut des captures d'essai, window.__CFG) pour le couper. */
+const REG_N=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:1, fG:.6, fMax:64, rais:1, res:1}, {g:.75, fG:.5, fMax:48, rais:1, res:1},
+  {g:.55, fG:.5, fMax:40, rais:.5, res:1}, {g:.4, fG:.4, fMax:32, rais:.3, res:.85}, {g:.32, fG:.4, fMax:28, rais:0, res:.7} ];
+const REG={ on:CFG.regulateur!==undefined?!!CFG.regulateur:!window.__CFG, niveau:0, ms:0, haut:0, bas:0, t:0, change:0 };
+function regCible(){ return CFG.cibleMs||(QUAL.full?18:33); }
+function regMesure(dt,dtBrut){                                 // après chaque image v3 en marche ou accumulée
+  if(!REG.on) return;
+  // Sans chronomètre de la puce : l'intervalle entre deux images (il ne descend pas sous celui de l'écran, 16,7 ms à 60 Hz :
+  // on remonte alors dès qu'on tient la cible, au lieu d'attendre une marge qu'on ne peut pas voir).
+  const puce=GT.ext&&GT.total>0, m=puce?GT.total:dtBrut; if(!(m>0)||m>2000) return;
+  REG.ms=REG.ms?REG.ms*.85+m*.15:m;
+  const c=regCible(), now=performance.now();
+  if(REG.ms>c*1.1) { REG.haut+=dt; REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
+  if(now-REG.change<1500) return;                              // le temps que le niveau précédent se mesure
+  let k=REG.niveau;
+  if(REG.haut>1&&k<REG_N.length-1) k++; else if(REG.bas>3&&k>0) k--;
+  if(k!==REG.niveau) regNiveau(k);
+}
+function regNiveau(k){
+  const avant=REG_N[REG.niveau]; REG.niveau=k; REG.haut=REG.bas=0; REG.change=performance.now(); REG.ms=0;
+  etapeGL("régulateur : niveau "+k);
+  if(avant.res!==REG_N[k].res){ REG_RES=REG_N[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
+}
+const regEtat=()=>REG_N[REG.on?REG.niveau:0];
+/* Montée progressive au démarrage : les premières images ne sèment qu'une part du budget (la puce compile peut-être encore,
+   et la première seconde ne doit pas cumuler compilation et rendu plein pot). Pas dans les captures d'essai (window.__CFG). */
+function v3Budget(){
+  const k=regEtat().g, r=CFG.rampe!==undefined?!!CFG.rampe:!window.__CFG, m=r?Math.min(1,.2+.08*(V3.nImg-(V3.nImg0||0))):1;
+  return Math.max(20000,Math.round(V3.grains*k*m));
+}
+/* Remplissage des grains de la caméra (balade.remplissage(), mise au point) : chaque fragment ajoute 1 dans une cible RGBA16F,
+   sans test de profondeur ; 1 : fragments tramés (ce que paie la puce), 2 : fragments gardés (après la découpe des feuilles et
+   des grains ronds). Lecture bloquante : jamais dans la boucle normale. */
+function v3Compter(semer){
+  const c=V3.compte; V3.compte=null;
+  const t=[0,1].map(()=>{ const x=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,x); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA16F,W,H); return x; });
+  const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb);
+  t.forEach((x,i)=>gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0+i,gl.TEXTURE_2D,x,0)); gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
+  const r={ pixels:W*H };
+  for(const k of [1,2]){
+    gl.clearBufferfv(gl.COLOR,0,[0,0,0,0]); gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
+    semer(k); gl.disable(gl.BLEND);
+    const b=new Float32Array(W*H*4); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,W,H,gl.RGBA,gl.FLOAT,b);
+    let n=0, mx=0; const parts=[0,0,0]; for(let i=0;i<b.length;i+=4){ n+=b[i]; if(b[i]>mx) mx=b[i]; parts[0]+=b[i+1]; parts[1]+=b[i+2]; parts[2]+=b[i+3]; }
+    r[k===1?"trames":"gardes"]=Math.round(n); r[k===1?"tramesFeuillesBoisBlocs":"gardesFeuillesBoisBlocs"]=parts.map(Math.round); if(k===1) r.maxParPixel=mx;
+  }
+  gl.deleteFramebuffer(fb); t.forEach(x=>gl.deleteTexture(x));
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.enable(gl.DEPTH_TEST);
+  c(r);
 }
 function v3Image(p){
   v3Cibles();
@@ -15292,17 +15708,18 @@ function v3Image(p){
   // En marche, la carte n'est refaite qu'une image sur trois : le soleil ne bouge pas, et c'était une grosse part du coût mesuré sur téléphone.
   const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%3===0));
   let u;
-  if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w};
-  const Ns=V3.ombre||Math.round(V3.grains*.6);
+  if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w}; gpuDebut("ombre");
+  const Ns=V3.ombre||Math.round(v3Budget()*.6);
   const ps=v3Partage(Ns,1,p);
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.sm.f); gl.viewport(0,0,V3.sm.w,V3.sm.h);
   gl.clearBufferfv(gl.DEPTH,0,[1]); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   for(const P of [G.ombre,G.ombreF]){                          // deux variantes du semeur : arbres, perches, blocs ; puis formes (objets, semis)
+    if(!P) continue;                                           // variante FORMES pas encore compilée (v3Formes) : les formes viendront
     const de=P===G.ombre?0:ps.part[3], a=P===G.ombre?ps.part[3]:ps.total; if(a<=de&&!(P===G.ombre&&ps.traits>0)) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
     gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); v3Grains(u,ps); gl.uniform1i(u.uPrx,0);
     gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
-    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
+    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H); { const r=regEtat(), fg=CFG.feuilG||[r.fG,0,r.fMax*Math.max(1,H/480)]; gl.uniform3f(u.uFeuilG||null,fg[0],fg[1],fg[2]); }   // feuilG : [part, seuil px, max px] imposés (essais)
     gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
     gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
     gl.uniform1i(u.uTrait,0);
@@ -15318,7 +15735,7 @@ function v3Image(p){
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
   const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol; so.dmax=S.eau&&S.eau[3]>0?150:420;
-  u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
+  gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
   if(CFG.v3solPlein){                                         // l'ancien maillage : six sommets par quadrilatère, tout le tour
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,Math.PI,so.secteurs); gl.uniform1i(u.uSolIdx,0);
     so.tri=so.anneaux*so.secteurs*2; gl.drawArrays(gl.TRIANGLES,0,so.anneaux*so.secteurs*6);
@@ -15332,32 +15749,37 @@ function v3Image(p){
   }
   // les éléments proches, en boîtes (v3_proches) : avant les grains, ils couvrent les grandes surfaces proches sans trou
   const px=v3Proches();
-  if(px.total>0){ u=G.proches.u; gl.useProgram(G.proches.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
+  if(px.total>0){ gpuDebut("proches"); u=G.proches.u; gl.useProgram(G.proches.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
     gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
     gl.drawArrays(gl.TRIANGLES,0,px.total*PRX_VPS); }
-  const pc=v3Partage(V3.grains,0,p); V3.parts=pc;
+  const pc=v3Partage(v3Budget(),0,p); V3.parts=pc; gpuDebut("grains");
+  const semer=compte=>{
   for(const P of [G.grains,G.grainsF]){
+    if(!P) continue;
     const de=P===G.grains?0:pc.part[3], a=P===G.grains?pc.part[3]:pc.total; if(a<=de) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
     gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); v3Grains(u,pc);
     gl.uniform1i(u.uPrx,px.on?1:0); gl.uniform4iv(u.uPrxN,px.n);
     gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
-    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H);
+    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H); { const r=regEtat(), fg=CFG.feuilG||[r.fG,0,r.fMax*Math.max(1,H/480)]; gl.uniform3f(u.uFeuilG||null,fg[0],fg[1],fg[2]); }   // feuilG : [part, seuil px, max px] imposés (essais)
     gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
     gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
     if(u.uOmbreG){ bindTex(9,V3.sm.t,u.uOmbreG); gl.uniform1i(u.uOmbreOk,1); }   // houppiers : chaque feuille lit son ombre dans la carte de cette image
     { const cap=Math.atan2(fwd[0],fwd[1]), q=Math.PI/4;       // ancre des feuilles : la position arrondie à 4 m, le cap arrondi à 45°
       gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
+    gl.uniform1i(u.uCompte||null,compte|0);
     gl.drawArrays(gl.POINTS,de,a-de);
-  }
+  } };
+  if(V3.compte) v3Compter(semer);                              // mesure du remplissage (balade.remplissage) : avant le vrai semis, même tirage
+  semer(0);
   gl.disable(gl.DEPTH_TEST);
-  if(V3.nImg<3){ v3Sync(g); note("  semis fait"); }
+  if(V3.nImg<3&&CFG.v3premieres){ v3Sync(g); note("  semis fait"); }   // lecture bloquante : seulement sur demande (elle fige le processus graphique)
   chrono("tamponG",g);
   // (3) tapis du sol : les bandes qui entrent dans les fenêtres, par tranches
-  v3Tapis(p); if(V3.tap.cuits) chrono("tapis",{f:V3.tap.f[V3.tap.dernier],u8:true}); else chrono("tapis");
+  gpuDebut("tapis"); v3Tapis(p); if(V3.tap.cuits) chrono("tapis",{f:V3.tap.f[V3.tap.dernier],u8:true}); else chrono("tapis");
   // (4) matière, lumière, ciel, accumulation
   const dst=V3.hist===V3.A?V3.B:V3.A;
-  const GO=V3.omb.p; u=GO.u; gl.useProgram(GO.p); v3Monde(u,W,H,p);
+  gpuDebut("ombrage"); const GO=V3.omb.p; u=GO.u; gl.useProgram(GO.p); v3Monde(u,W,H,p);
   bindTex(0,g.t0,u.uG0); bindTex(1,g.t1,u.uG1); bindTex(2,V3.sm.t,u.uOmbre); bindTex(6,(V3.hist||dummy).t,u.uPrev);
   gl.uniform1ui(u.uFrame,f); gl.uniform2fv(u.uJitPx,jit);
   gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
@@ -15369,7 +15791,8 @@ function v3Image(p){
   gl.uniform1i(u.uDamier,damier?1:0); gl.uniform1f(u.uAlphaD,1-(1-alpha)*(1-alpha));
   if(V3.hist){ gl.uniform3fv(u.uPrevPos,V3.histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,V3.histPose.mat); }
   gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,W,H); draw();
-  if(V3.nImg<3){ v3Sync(dst); note("  matière et lumière faites"); }
+  gpuFin();
+  if(V3.nImg<3&&CFG.v3premieres){ v3Sync(dst); note("  matière et lumière faites"); }
   chrono("ombrage",dst);
   // Plus d'attente de la puce à chaque image (option v3sync pour la remettre) : elle empêchait le processeur de préparer
   // l'image suivante pendant que la puce finit celle-ci. Sans elle, V3.ms est l'intervalle entre deux images v3.
@@ -15384,7 +15807,7 @@ function v3Frame(p,dt){
     return; }                                        // programmes encore en compilation
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
-  v3Image(p); frames++;
+  v3Image(p); frames++; regMesure(dt,V3.dtBrut||0);
   if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,cuits:V3.tap.cuits,t:performance.now()});
   // Halo et exposition : 28 ms mesurés sur Mali-G77 pour trois petites passes. En mobile, une image sur quatre suffit (ils varient lentement).
   if(QUAL.full||CFG.haloToujours||V3.nImg%4===0||!bl1.fait){ postFX(V3.hist); bl1.fait=true; }
@@ -15402,7 +15825,7 @@ function v3Basculer(on){
   if(on&&v3Refus()) on=false;                                  // fiche que le semeur ne sait pas rendre : on reste sur le lanceur de rayons
   if(on&&V2.on) v2Basculer(false);
   V3.on=on; V3.repli=false; v3Bouton();
-  if(on){ v3Init(); V3.hist=null; V3.n=0; } else { hist=null; v3Libere(false); }
+  if(on){ V3.hist=null; V3.n=0; }                              // les programmes se compilent depuis frame(), un à un (v3Init) else { hist=null; v3Libere(false); }
   if(typeof W==="number"&&W>0&&!CFG.w) resize();                    // la résolution interne dépend du moteur
 }
 /* Ce que le semeur ne sait pas encore rendre (docs/moteur-v3.md, « Le v3 rend tous les mondes »). Rend la raison, ou "" si la
@@ -15427,12 +15850,19 @@ const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]
 const normz=a=>{ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; };
 
 /* ------------------------------------------------------------------ boucle */
+const LONGUE={max:0}, REPOS={t:0}; let lastT0=0;
 let ptDit=false, lastT=0, vide=null, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
-  const dt=Math.min(CFG.dtMax||.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;   // dtMax : essais en rendu logiciel, le récit avance malgré des images lentes
+  const dt=Math.min(CFG.dtMax||.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now; V3.dtBrut=dtBrut;   // dtMax : essais en rendu logiciel, le récit avance malgré des images lentes
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
-  if(ouvRepos) return;                                            // l'ouverture pose sa question : rien n'est visible derrière, le moteur se repose (docs/ouverture.md)
+  COMP.img++;
+  if(REG.redim){ REG.redim=false; resize(); }
+  if(ouvRepos){ prechauffer(); return; } 
+  // Page cachée ou sans le focus (vue embarquée dans une application, l'utilisateur est ailleurs) : au repos, dix images par
+  // seconde au plus et pas de gros programme lancé (compLibre) ; le processus graphique est partagé avec l'application hôte.
+  if(!window.__CFG||CFG.repos){ if(document.hidden) return; if(!document.hasFocus()&&now-REPOS.t<100) return; REPOS.t=now; }                         // l'ouverture pose sa question : rien n'est rendu derrière, mais tout se compile, un programme à la fois (docs/ouverture.md)
+  if(!postPret()&&!V3.on){ return; }                              // capteur et halo d'abord (le v3 compile les siens à la suite, dans v3Init)
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
   const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=(k,cible)=>{ if(!pf) return; if(cible!==undefined) v3Sync(cible); const t=performance.now(); pf[k]=t-pt; pt=t; };
   simulate(dt); etape("sim");
@@ -15453,6 +15883,9 @@ function frame(now){
   exposure+=(expTarget-exposure)*(1-Math.exp(-dt/.45));
   if(!(exposure>0)||!Number.isFinite(exposure)){ exposure=1.2; if(!(expTarget>0)) expTarget=1.2; }
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
+  gpuFin(); gpuImage();
+  if(now-t00<10000&&lastT0>0) LONGUE.max=Math.max(LONGUE.max,dtBrut);   // plus longue image des dix premières secondes (diagnostic)
+  lastT0=1;
   etape("aff",null); hud(now);
   if(pf&&walking) prof.push(pf);
 }
@@ -15749,7 +16182,7 @@ function mondeBati(texte,t){                                  // ville, rue, vil
 function attendreImage(passes,delai,signal){                  // attend que l'image soit posée (accumulation à l'arrêt), ou le délai
   return new Promise((ok,ko)=>{ const t0=performance.now(); let n0=-1;
     const tic=()=>{ if(signal&&signal.aborted) return ko({code:"cancelled",message:"arrêté"});
-      const k=V3.on?V3.n:n, prete=!sceneDirty&&!ptEnCours()&&(V3.on?!!V3.hist:!!hist);
+      const k=V3.on?V3.n:n, prete=!sceneDirty&&(V3.on||!ptEnCours())&&(V3.on?!!V3.hist:!!hist);   // en v3, le lanceur de rayons ne sert pas
       if(prete&&n0<0) n0=k;                                     // première image après le déplacement (une image en mouvement compte pour plusieurs passes)
       const voulu=V3.on?Math.min(passes,V3.max):passes;
       if((prete&&k>=Math.min(n0+voulu,V3.on?V3.max:MAXS))||performance.now()-t0>delai) return ok(k);
@@ -16743,7 +17176,9 @@ window.balade={
   pause(v){ pauseTest=!!v; },
   pauseQuand(type,t){ pauseQuand={type,t:+t}; },                 // figer quand le geste en tête de file (ramasser : part 0..1 ; faconner : secondes) atteint t
   enPause:()=>pauseTest,
-  grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
+  grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },
+  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },   // fragments des grains de la caméra sur la prochaine image (v3Compter)
+  regulateur(){ return { niveau:REG.niveau, ms:REG.ms, cible:regCible(), etat:regEtat(), puce:GT.ms, total:GT.total||0 }; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?mainsObj.formes.length:0,
     file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4).toFixed(2):-1,
       total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0}))}),
@@ -16821,6 +17256,26 @@ function tourHorizon(k){
   setTimeout(()=>{ if(k===arriveeJeton&&!(meneur&&!meneurLibre)) pensee(ARRIVEE[(seedN>>>0)%ARRIVEE.length]); },2200);   // même fiche, même phrase
 }
 
+/* Pendant l'ouverture, aucune image du monde n'est rendue, mais tout ce qu'il faut pour la première se compile, un programme
+   à la fois (compLibre) : capteur et halo, semeur, socle, formes, puis la variante complète. La fiche de la suggestion est
+   appliquée en coulisse dès l'ouverture : c'est la plus probable, et la question laisse le temps de compiler. */
+function prechauffer(){ if(!postPret()) return; if(V3.on) v3Init(); else if(!PT_KO) compilerPT(varCourante()); }
+const OUV_ATTENTE=CFG.ouvAttente||5000;                          // ms : au-delà, le fondu part sur ce qui est prêt (socle), même sans image
+let ouvCoulisse=null, ouvMesure=null;
+function etatPrep(){                                             // l'étape en cours, pour la ligne « Le monde se construit »
+  const x=COMP.envol.find(e=>!e.note);
+  if(x) return "compilation : "+x.nom;
+  if(V3.on&&!(V3.gp&&V3.omb)) return "programmes du moteur";
+  return "première image";
+}
+function pretOuverture(){                                        // fin du rejeu : le moteur se réveille ; rend la main dès la première image, ou au délai
+  ouvRepos=false; const t0=performance.now(), n0=V3.nImg; V3.nImg0=V3.nImg;
+  return new Promise(ok=>{ const tic=()=>{
+    const prete=V3.on?V3.nImg>n0&&!!V3.hist:!!hist&&!sceneDirty&&!ptEnCours(), d=performance.now()-t0;
+    if(prete||d>OUV_ATTENTE){ ouvMesure={ms:Math.round(d),image:prete,ombrage:V3.on?(V3.omb?(V3.omb===OMB.e.socle?"socle":"complet"):"aucun"):"rayons"};
+      etapeGL("ouverture : fondu après "+(d/1000).toFixed(1)+" s"+(prete?"":" (délai, sans image)")); return ok(ouvMesure); }
+    setTimeout(tic,40); }; tic(); });
+}
 /* L'ouverture : « Quel monde veux-tu filmer ? » ; rejeu d'une préparation enregistrée, ou vraie chaîne du constructeur. */
 function lancerOuverture(){
   if(ouverture&&ouverture.ouvert()) return;
@@ -16829,16 +17284,19 @@ function lancerOuverture(){
   const voulue=id=>FICHES.find(f=>f.id===id);
   ouverture=OUVERTURE.creerOuverture({ rejeux:OUVERTURES, fiches:FICHES, C:CONSTRUCTEUR, recettes:Object.keys(MAT_LIB.recettes), mention:mentionRejeu,
     ficheDe:r=>voulue(r.fiche)||voulue(r.ficheSecours)||null,
-    appliquer:f=>{ const i=FICHES.indexOf(f); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); arriveeJeton++; },   // l'arrivée attend la fin du fondu
-    pret:ms=>attendreImage(V3.on?6:4,ms),
+    appliquer:f=>{ if(f!==ouvCoulisse){ const i=FICHES.indexOf(f); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); } ouvCoulisse=null; arriveeJeton++; },   // l'arrivée attend la fin du fondu
+    pret:()=>pretOuverture(), etat:etatPrep,
     dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
-    surDebut:()=>{ ouvRepos=false; },
+    surDebut:(t,rejeu)=>{ if(!rejeu) ouvRepos=false; },          // rejeu : le moteur reste au repos (il compile) jusqu'au fondu
     surFin:o=>{ ouvRepos=false; if(o.constructeur){ creerMonde(o.texte); return; } const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1200); } });
   ouverture.ouvrir(); ouvRepos=true;
+  const r0=OUVERTURES.find(r=>r.suggestion), f0=r0&&(voulue(r0.fiche)||voulue(r0.ficheSecours));   // en coulisse : la fiche de la suggestion
+  if(f0){ const i=FICHES.indexOf(f0); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f0)); arriveeJeton++; ouvCoulisse=f0; }
 }
 setInterval(()=>{ if(ouverture&&ouverture.ouvert()) ouverture.dictee(listening); },300);
 if(DEMO&&!CFG.histoire) lancerOuverture();
 window.balade.ouverture=()=>{ lancerOuverture(); return ouverture; };
+window.balade.ouvertureMesure=()=>ouvMesure;                    // tools/ouverture.mjs : attente entre la fin du rejeu et le fondu
 window.balade.arrivee=()=>({ errance, file:queue.map(a=>a.type), pensee:$("pensee").textContent });
 
 </script>
