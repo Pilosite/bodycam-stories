@@ -6,6 +6,8 @@ This is the shared contract for the real proof of concept. It follows `docs/poc-
 
 **Rule of the POC: simple, but every pillar is shown once, for real.** One place, one playable character, ten minutes. No pillar is faked; where something is out of scope it is absent, not staged.
 
+**Scope and process.** What is in v1, v2 and target is in `docs/scope.md`; how we build is in `docs/sdlc.md`. v1 is **station-based**: a few viewpoints along one path, free look and in-place action at each, transitions between them; no free roaming.
+
 ## The nine pillars
 
 | # | Pillar | What it is | What the POC shows |
@@ -83,7 +85,7 @@ Rules are data. They are written by creators, by story packs, or by a model duri
 
 ### Vocabulary (closed, typed)
 
-`place` (terrain, light, weather), `thing` (shapes, materials, mass), `body` (move, look, posture, hands, effort), `sound` (recipes, cues), `speech` (line, language, tone), `fact` (subject, predicate, value, certainty), `clock`, `camera`. The existing engine vocabulary (fiche de lieu, formes, matières, bruitages, actions du porteur) is the starting set.
+`place` (terrain, light, weather), `station` (a named viewpoint: position, heading, what is within reach; `go` moves between adjacent stations as a transition), `thing` (shapes, materials, mass), `body` (move, look, posture, hands, effort), `sound` (recipes, cues), `speech` (line, language, tone), `fact` (subject, predicate, value, certainty), `clock`, `camera`. The existing engine vocabulary (fiche de lieu, formes, matières, bruitages, actions du porteur) is the starting set.
 
 ### Story pack
 
