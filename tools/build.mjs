@@ -88,8 +88,19 @@ function storyPack(id) {
 }
 const storyIds = readdirSync(join(root, 'stories')).filter(d => !d.startsWith('_') && !d.startsWith('.') && existsSync(join(root, 'stories', d, 'pack.json'))).sort();
 const STORY_PACKS = Object.fromEntries(storyIds.map(id => [id, storyPack(id)]));
+// The trailer mode (src/trailer.js, briefs/trailer.md): the player (TRAILER) and the scripts of the packs that have one
+// (stories/<id>/trailer.json, TRAILER_SCRIPTS), checked here: a script with an error stops the build.
+const { loadTrailer } = await import('../src/trailer.js');
+const TRAILER_SCRIPTS = {};
+for (const id of storyIds) {
+  const f = join(root, 'stories', id, 'trailer.json'); if (!existsSync(f)) continue;
+  const { script, errors } = loadTrailer(JSON.parse(readFileSync(f, 'utf8')));
+  if (errors.length) throw new Error('stories/' + id + '/trailer.json: ' + JSON.stringify(errors.slice(0, 3)));
+  TRAILER_SCRIPTS[id] = script;
+}
 const storyJs = bundleCore(root) + '\n' + embarquer('ADAPTER', 'src/adaptateur-core.js') + '\n' + embarquer('REFLEX', 'src/reflex-model.js') + '\n' + embarquer('STORY', 'src/story.js')
-  + `\nconst REFLEXES=${esc(JSON.parse(read('src/reflexes.json')))};\nconst STORY_PACKS=${esc(STORY_PACKS)};`;
+  + '\n' + embarquer('TRAILER', 'src/trailer.js')
+  + `\nconst REFLEXES=${esc(JSON.parse(read('src/reflexes.json')))};\nconst STORY_PACKS=${esc(STORY_PACKS)};\nconst TRAILER_SCRIPTS=${esc(TRAILER_SCRIPTS)};`;
 if (/<\/script/i.test(storyJs.replace(/<\\\//g, ''))) throw new Error('story mode: </script> in the embedded code');
 const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n' + constructeurJs + '\n' + ouvertureJs + '\n' + storyJs + '\n</script>\n<script>\n' + js);
 mkdirSync(join(root, 'dist'), { recursive: true });
@@ -98,4 +109,4 @@ writeFileSync(join(root, 'dist/index.html'), html);
 const body = html.replace(/<!DOCTYPE html>\s*<html[^>]*>\s*<head>\s*/i, '').replace(/<meta charset[^>]*>\s*/i, '').replace(/<meta name="viewport"[^>]*>\s*/i, '<meta name="claude:viewport-fit-sides" content="cover">\n')
   .replace(/<\/head>\s*<body>\s*/i, '').replace(/<\/body>\s*<\/html>\s*$/i, '');
 writeFileSync(join(root, 'dist/artefact.html'), body);
-console.log(`dist/index.html : ${(html.length / 1024).toFixed(1)} Ko, ${scenes.length} fiches (${sceneFiles.join(', ')}), ${histoires.length} histoires, ${storyIds.length} story packs (${storyIds.join(', ')})`);
+console.log(`dist/index.html : ${(html.length / 1024).toFixed(1)} Ko, ${scenes.length} fiches (${sceneFiles.join(', ')}), ${histoires.length} histoires, ${storyIds.length} story packs (${storyIds.join(', ')}), ${Object.keys(TRAILER_SCRIPTS).length} trailer(s)`);

@@ -240,5 +240,31 @@ export function createStoryMode(P) {
     },
     session: () => st.session,
   };
+
+  /* ---- journal subscription (trailer lot): keep this block last ----------------------------------------------------
+     api.on(event, handler) → unsubscribe. `handler(entry)` is called for every journal entry appended after the call
+     (event 'entry'), or only for entries of one type (event 'tx', 'rule', 'model_call', 'event'…), including the entries
+     of sessions started later (a new session begins with its 'session' header). The journal is read every 100 ms, and
+     only while someone listens: nothing runs otherwise. Read-only: a handler cannot change the session.
+     api.on() with no argument keeps its old meaning: whether the story mode is on. */
+  const subs = { list: [], timer: 0, session: null, seen: 0 }, isOn = api.on;
+  function flushSubs() {
+    const s = st.session; if (!s) return;
+    if (s !== subs.session) { subs.session = s; subs.seen = 0; }
+    const E = s.journal.entries;
+    while (subs.seen < E.length) {
+      const e = E[subs.seen++];
+      for (const x of subs.list.slice()) if (x.event === 'entry' || x.event === e.type) try { x.handler(e); } catch (err) { console.warn('story.on:', err && err.message); }
+    }
+  }
+  api.on = (event, handler) => {
+    if (event === undefined) return isOn();
+    flushSubs();
+    if (!subs.list.length && st.session) { subs.session = st.session; subs.seen = st.session.journal.entries.length; }
+    const x = { event, handler }; subs.list.push(x);
+    if (!subs.timer) subs.timer = setInterval(flushSubs, 100);
+    return () => { subs.list = subs.list.filter(y => y !== x); if (!subs.list.length) { clearInterval(subs.timer); subs.timer = 0; } };
+  };
+  /* ---- end of the journal subscription block ---- */
   return api;
 }

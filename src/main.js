@@ -3665,10 +3665,35 @@ function storyChoice(){                                           // the launch 
   const l=$("ouv-launch"); if(!l||$("ouv-story")) return;
   for(const id of Object.keys(STORY_PACKS)){ const b=document.createElement("button"); b.type="button"; b.id="ouv-story"; b.className="ouv-launch"; b.style.marginTop="12px";
     b.textContent=STORY_PACKS[id].title.en||id; b.onclick=()=>{ voixP.geste&&voixP.geste(); lancerStory(id); }; l.after(b); }
+  if(trailerScript()&&!$("ouv-trailer")){ const b=document.createElement("button"); b.type="button"; b.id="ouv-trailer"; b.className="ouv-launch"; b.style.marginTop="12px";   // the trailer mode
+    b.textContent="Trailer"; b.onclick=()=>{ voixP.geste&&voixP.geste(); lancerTrailer(true); }; ($("ouv-story")||l).after(b); }
 }
 { const o=$("outils"); for(const id of Object.keys(STORY_PACKS)){ const b=document.createElement("button"); b.type="button"; b.className="ghost"; b.textContent="Story: "+(STORY_PACKS[id].title.en||id); b.onclick=()=>lancerStory(id); o.prepend(b); } }
 window.story={ start:(id,o)=>lancerStory(id,o), hear:t=>storyMode.hear(t), advance:n=>storyMode.advance(n), look:(t,s)=>storyMode.look(t,s), state:()=>storyMode.state(), journal:()=>storyMode.journal(),
-  gaps:()=>storyMode.gaps(), commands:()=>storyMode.commands(), stop:()=>storyMode.stop(), checkpoint:()=>storyMode.checkpoint() };
+  gaps:()=>storyMode.gaps(), commands:()=>storyMode.commands(), stop:()=>storyMode.stop(), checkpoint:()=>storyMode.checkpoint(), on:(e,h)=>storyMode.on(e,h) };
+
+/* ------------------------------------------------------------------ trailer mode (src/trailer.js, briefs/trailer.md)
+   A real session of a story played by its script (stories/<id>/trailer.json), captions and live read-outs on top. From the
+   launch screen (« Trailer »), or ?trailer=1 (&lang=fr, &loop=1, &clean=1 for a screen recording, &pace=1.3). New code, English. */
+const qp=k=>(location.search.match(new RegExp("[?&]"+k+"=([\\w.-]+)"))||[])[1];
+const TRAILER_ON=!!(CFG.trailer||qp("trailer")==="1");
+var trailer=null;
+function trailerScript(){ return typeof TRAILER_SCRIPTS!=="undefined"?(TRAILER_SCRIPTS[CFG.trailerStory||"louis-round"]||Object.values(TRAILER_SCRIPTS)[0]||null):null; }
+function lancerTrailer(direct){
+  const script=trailerScript(); if(!script) return null;
+  fermerOutils(); const r=$("ouverture"); if(r){ r.hidden=true; r.remove(); document.body.classList.remove("ouverture-on"); } ouvRepos=false;
+  if(!trailer){ const lang=CFG.lang||qp("lang")||STORY_PAGE.storedLang()||"en";
+    trailer=TRAILER.createTrailer({ doc:document, win:window, script, lang:lang==="fr"?"fr":"en", clean:!!(CFG.clean||qp("clean")==="1"), loop:!!(CFG.loop||qp("loop")==="1"), pace:+(CFG.pace||qp("pace"))||0,
+      story:{ start:(id,o)=>storyMode.start(id,o), hear:t=>storyMode.hear(t), advance:n=>storyMode.advance(n), on:(e,h)=>storyMode.on(e,h) },
+      look, cam, showSaid:t=>montrerDit(t),
+      thingPos:id=>{ const pk=STORY_PACKS[script.story], o=pk&&(pk.place.objets||[]).find(x=>x&&x.id===id); return o?posObjet(o):null; },
+      gameUi:on=>document.body.classList.toggle("trailer-on",!on),
+      playStory:l=>{ trailer=null; lancerStory(script.story,{lang:l}); },
+      exit:()=>{ trailer=null; storyMode.stop(); } }); }
+  if(direct) trailer.start(); else trailer.ready();
+  return trailer;
+}
+window.trailer={ open:d=>lancerTrailer(d), get:()=>trailer };
 
 /* ------------------------------------------------------------------ ouverture de démo et arrivée dans un lieu
    Le code est dans src/ouverture.js (OUVERTURE) et ouvertures/*.json (OUVERTURES, journaux de préparation réels) ; ici, les
@@ -3763,8 +3788,9 @@ function lancerOuverture(){
   if(f0){ const i=FICHES.indexOf(f0); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f0)); arriveeJeton++; ouvCoulisse=f0; }
 }
 setInterval(()=>{ if(ouverture&&ouverture.ouvert()) ouverture.dictee(listening); },300);
-if(DEMO&&!CFG.histoire&&!STORY_ID) lancerOuverture();
-if(STORY_ID) setTimeout(()=>lancerStory(STORY_ID,CFG.storyOpts),0);   // ?story=<id> or CFG.story: straight into the story
+if(DEMO&&!CFG.histoire&&!STORY_ID&&!TRAILER_ON) lancerOuverture();
+if(STORY_ID&&!TRAILER_ON) setTimeout(()=>lancerStory(STORY_ID,CFG.storyOpts),0);   // ?story=<id> or CFG.story: straight into the story
+if(TRAILER_ON) setTimeout(()=>lancerTrailer(!!CFG.trailerDirect),0);   // ?trailer=1: the trailer's start card (one press)
 window.balade.ouverture=()=>{ lancerOuverture(); return ouverture; };
 window.balade.ouvertureMesure=()=>ouvMesure;                    // tools/ouverture.mjs : attente entre la fin du rejeu et le fondu
 window.balade.arrivee=()=>({ errance, file:queue.map(a=>a.type), pensee:$("pensee").textContent });

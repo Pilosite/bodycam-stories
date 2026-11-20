@@ -1,0 +1,76 @@
+{
+  "version": 0,
+  "note": "The trailer of « Louis's Round » (src/trailer.js, briefs/trailer.md): a real session, nothing staged. Each step starts, then `hold` seconds pass (times the pace: ?pace=1.3 or `pace` here) before the next. `say` is sent through the story's input port as if typed; `time` lets world time pass, `speed` times faster (a ×N mark shows it); `camera` is where the player looks (the gaze is the real input: looking at a thing long enough is an observation); `caption` is one idea at a time (`*x*` is highlighted; `text_reflex` is shown instead while no model has decided anything); `show` reveals the live read-outs. Tune the holds on a real GPU: voices and transitions take longer there than lines on paper.",
+  "story": "louis-round",
+  "seed": 11,
+  "transitions": "cut",
+  "pace": 1,
+  "patterns": {
+    "absent-one": { "en": "the absent one", "fr": "l'absent" },
+    "trail-of-signs": { "en": "a trail of signs", "fr": "une piste de signes" },
+    "ticking-clock": { "en": "a ticking clock", "fr": "un compte à rebours" }
+  },
+  "labels": {
+    "en": {
+      "title_1": "Bodycam", "title_2": "Stories", "preview": "Private preview", "exit": "Exit trailer",
+      "clock_now": "Now", "clock_scene": "The scene", "clock_story": "The story",
+      "decisions": "live decisions", "by_reflex": "reflex (code)", "by_model": "model", "rules": "written rules fired",
+      "rule": "rule", "absolute": "absolute held", "your_promise": "your promise, run as a rule", "pattern": "pattern",
+      "promise": "promise", "status": { "accepted": "made", "amended": "amended", "refused": "refused", "due": "due", "kept": "kept", "broken": "broken" },
+      "start_kicker": "Trailer · about 90 s", "start_text": "A real session of « Louis's Round », played by the engine. Captions on top.", "start_clean": "Click anywhere to start", "play": "Play",
+      "end_kicker": "An AI-driven procedural experience",
+      "end_reflex": "In this run no model was connected: every live decision was taken by reflex code, and Sam's lines came from the author's bank.",
+      "end_model": "In this run the live decisions were taken by models, behind the same port.",
+      "play_story": "Play the story", "again": "Watch again"
+    },
+    "fr": {
+      "title_1": "Bodycam", "title_2": "Stories", "preview": "Avant-première privée", "exit": "Quitter",
+      "clock_now": "Maintenant", "clock_scene": "La scène", "clock_story": "L'histoire",
+      "decisions": "décisions en direct", "by_reflex": "réflexe (code)", "by_model": "modèle", "rules": "règles écrites déclenchées",
+      "rule": "règle", "absolute": "absolu tenu", "your_promise": "ta promesse, exécutée comme une règle", "pattern": "motif",
+      "promise": "promesse", "status": { "accepted": "faite", "amended": "amendée", "refused": "refusée", "due": "due", "kept": "tenue", "broken": "rompue" },
+      "start_kicker": "Bande-annonce · environ 90 s", "start_text": "Une vraie partie de « La tournée de Louis », jouée par le moteur. Les légendes par-dessus.", "start_clean": "Clique n'importe où pour commencer", "play": "Lancer",
+      "end_kicker": "Une expérience procédurale pilotée par l'IA",
+      "end_reflex": "Dans cette partie, aucun modèle n'était branché : chaque décision en direct a été prise par du code réflexe, et les répliques de Sam viennent de la banque de l'auteur.",
+      "end_model": "Dans cette partie, les décisions en direct ont été prises par des modèles, derrière le même port.",
+      "play_story": "Jouer l'histoire", "again": "Revoir"
+    }
+  },
+  "steps": [
+    { "caption": { "style": "title", "kicker": { "en": "An AI-driven procedural experience", "fr": "Une expérience procédurale pilotée par l'IA" }, "text": { "en": "This is the engine running, not a video.", "fr": "C'est le moteur qui tourne, pas une vidéo." } }, "hold": 5 },
+    { "say": { "en": "Hello? Can you hear me?", "fr": "Allô ? Tu m'entends ?" }, "hold": 4 },
+
+    { "caption": { "kicker": { "en": "You never act", "fr": "Tu n'agis jamais" }, "text": { "en": "You talk. *She decides.*", "fr": "Tu parles. *Elle décide.*" } } },
+    { "show": ["tally"] },
+    { "say": { "en": "Leave the trail. Cut through the trees.", "fr": "Quitte le sentier, coupe à travers les arbres." }, "hold": 5 },
+    { "say": { "en": "Then follow the orange marks, please.", "fr": "Alors suis les marques orange, s'il te plaît." }, "hold": 4.5 },
+
+    { "caption": { "kicker": { "en": "Anything that can be said", "fr": "Tout ce qui se dit" }, "text": { "en": "If you can say it, *it can happen.*", "fr": "Si tu peux le dire, *ça peut arriver.*" } } },
+    { "say": { "en": "Look at the orange mark.", "fr": "Regarde la marque orange." }, "hold": 6 },
+    { "say": { "en": "Crouch down.", "fr": "Accroupis-toi." }, "hold": 3 },
+    { "say": { "en": "Turn around.", "fr": "Retourne-toi." }, "hold": 3.5 },
+    { "caption": { "kicker": { "en": "Image · sound · story", "fr": "Image · son · histoire" }, "text": { "en": "All generated: *image, sound, story.*", "fr": "Tout est généré : *image, son, histoire.*" },
+      "text_reflex": { "en": "Image and sound: *generated by code,* live.", "fr": "Image et son : *générés par le code,* en direct." } }, "hold": 3 },
+
+    { "caption": { "kicker": { "en": "Three clocks", "fr": "Trois horloges" }, "text": { "en": "The present answers at once. *The scene and the story take their time.*", "fr": "Le présent répond tout de suite. *La scène et l'histoire prennent leur temps.*" } } },
+    { "show": ["strip"] },
+    { "say": { "en": "Keep going, please.", "fr": "Continue, s'il te plaît." }, "hold": 3 },
+    { "camera": "look", "at": "chablis", "hold": 5 },
+
+    { "caption": { "kicker": { "en": "Plan ahead", "fr": "Prévoir" }, "text": { "en": "You can't act. *You can prepare.*", "fr": "Tu ne peux pas agir. *Tu peux prévoir.*" } } },
+    { "show": ["promises"] },
+    { "say": { "en": "If the jay calls, stop and lie down.", "fr": "Si le geai crie, arrête-toi et couche-toi." }, "hold": 5 },
+    { "say": { "en": "Keep going, please.", "fr": "Continue, s'il te plaît." }, "hold": 3.5 },
+    { "say": { "en": "Whatever you hear down there, don't move and don't speak.", "fr": "Quoi que tu entendes en bas, ne bouge pas et ne parle pas." }, "hold": 4 },
+    { "say": { "en": "Take the tape.", "fr": "Prends le ruban." }, "hold": 7 },
+
+    { "caption": { "kicker": { "en": "The inversion", "fr": "L'inversion" }, "text": { "en": "Agentic by default. *Deterministic by exception.*", "fr": "Agentique par défaut. *Déterministe par exception.*" } } },
+    { "say": { "en": "Go on, please.", "fr": "Vas-y, s'il te plaît." }, "hold": 3.5 },
+    { "time": 40, "speed": 4 },
+
+    { "caption": { "kicker": { "en": "Written like a book", "fr": "Écrit comme un livre" }, "text": { "en": "Authors write *patterns and rules,* in words.", "fr": "Les auteurs écrivent *des motifs et des règles,* avec des mots." } } },
+    { "camera": "look", "at": "terrier", "hold": 4.5 },
+    { "camera": "look", "at": "affut", "hold": 9 },
+    { "end": true }
+  ]
+}
