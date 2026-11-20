@@ -1,0 +1,775 @@
+{
+  "version": 0,
+  "story": "louis-round",
+  "note": "Free-request bench: things a real player might say to Sam, in French with an English gloss. An evaluation, not a test (docs/sdlc.md §3). expect: does-it, partly-says-so, argues, refuses-in-character, deflects. Requests tagged v2 need free movement and get an in-character deflection in v1. Requests tagged commit are conditional (pillar 9).",
+  "requests": [
+    {
+      "id": "q01",
+      "station": "trailhead",
+      "fr": "Vas-y, entre dans la forêt.",
+      "en": "Go on, go into the forest.",
+      "tags": [
+        "movement"
+      ],
+      "expect": "does-it",
+      "note": "Transition to first-mark; she may grumble once (reluctant start)."
+    },
+    {
+      "id": "q02",
+      "station": "trailhead",
+      "fr": "Qui es-tu ?",
+      "en": "Who are you?",
+      "tags": [
+        "talk"
+      ],
+      "expect": "does-it",
+      "note": "She answers plainly: Sam, his sister. Must not overshare the death."
+    },
+    {
+      "id": "q03",
+      "station": "trailhead",
+      "fr": "Je suis le collègue de Louis, au poste.",
+      "en": "I'm Louis's colleague at the office.",
+      "tags": [
+        "talk",
+        "louis"
+      ],
+      "expect": "argues",
+      "note": "She tests the claim with one question about him; never confirms who the voice is."
+    },
+    {
+      "id": "q04",
+      "station": "trailhead",
+      "fr": "Coupe à travers les arbres, c'est plus court.",
+      "en": "Cut through the trees, it's shorter.",
+      "tags": [
+        "movement",
+        "v2"
+      ],
+      "expect": "deflects",
+      "note": "Free roaming is v2: she stays on his way, in character (move.v2)."
+    },
+    {
+      "id": "q05",
+      "station": "trailhead",
+      "fr": "Montre-moi tes chaussures.",
+      "en": "Show me your shoes.",
+      "tags": [
+        "look",
+        "impossible-by-engine"
+      ],
+      "expect": "partly-says-so",
+      "note": "She looks down; the engine draws no feet. She says what she is wearing.",
+      "missing": "carrier's own body in frame (feet, hands)"
+    },
+    {
+      "id": "q06",
+      "station": "trailhead",
+      "fr": "Respire. Prends ton temps.",
+      "en": "Breathe. Take your time.",
+      "tags": [
+        "emotional"
+      ],
+      "expect": "does-it",
+      "note": "A wait; she says something dry, then goes when she is ready."
+    },
+    {
+      "id": "q07",
+      "station": "first-mark",
+      "fr": "Regarde le tronc avec la marque.",
+      "en": "Look at the trunk with the mark.",
+      "tags": [
+        "look"
+      ],
+      "expect": "does-it",
+      "note": "Fires louis-marks.sign-read.1: f.marks-private."
+    },
+    {
+      "id": "q08",
+      "station": "first-mark",
+      "fr": "Touche la peinture, elle est encore fraîche ?",
+      "en": "Touch the paint, is it still fresh?",
+      "tags": [
+        "touch"
+      ],
+      "expect": "partly-says-so",
+      "note": "Camera leans in; no hand in frame. She reports: dry, weeks old."
+    },
+    {
+      "id": "q09",
+      "station": "first-mark",
+      "fr": "Gratte la peinture avec ton couteau.",
+      "en": "Scrape the paint off with your knife.",
+      "tags": [
+        "touch",
+        "refusal-worthy"
+      ],
+      "expect": "argues",
+      "note": "It is his hand; she argues, may refuse. If she does it, the mark object is modified (stripe removed)."
+    },
+    {
+      "id": "q10",
+      "station": "first-mark",
+      "fr": "Fais une marque toi aussi, juste à côté.",
+      "en": "Make a mark of your own, right next to it.",
+      "tags": [
+        "make"
+      ],
+      "expect": "partly-says-so",
+      "note": "No paint on her (the can stayed home): a scratch or a twist of bracken; modify marque-1 with one small shape."
+    },
+    {
+      "id": "q11",
+      "station": "first-mark",
+      "fr": "C'est quoi comme arbre ?",
+      "en": "What kind of tree is that?",
+      "tags": [
+        "talk"
+      ],
+      "expect": "does-it",
+      "note": "Her trade: Scots pine, age, health. Easy, must be exact."
+    },
+    {
+      "id": "q12",
+      "station": "first-mark",
+      "fr": "Lève la tête, regarde en haut des pins.",
+      "en": "Look up at the tops of the pines.",
+      "tags": [
+        "look"
+      ],
+      "expect": "does-it",
+      "note": "Tilt up; canopy and low sun."
+    },
+    {
+      "id": "q13",
+      "station": "fallen-pine",
+      "fr": "Assieds-toi sur le pin tombé.",
+      "en": "Sit on the fallen pine.",
+      "tags": [
+        "touch"
+      ],
+      "expect": "does-it",
+      "note": "Climb onto the trunk (monter on object) and posture seated."
+    },
+    {
+      "id": "q14",
+      "station": "fallen-pine",
+      "fr": "Il est tombé quand, cet arbre ?",
+      "en": "When did this tree fall?",
+      "tags": [
+        "talk",
+        "look"
+      ],
+      "expect": "does-it",
+      "note": "Arborist reading of the break and the needles; reveals f.marks-recent if she sees the stripe."
+    },
+    {
+      "id": "q15",
+      "station": "fallen-pine",
+      "fr": "Soulève le tronc pour voir dessous.",
+      "en": "Lift the trunk to look underneath.",
+      "tags": [
+        "touch",
+        "refusal-worthy"
+      ],
+      "expect": "refuses-in-character",
+      "note": "A 9 m pine. She laughs it off; can crouch and look under the gap instead."
+    },
+    {
+      "id": "q16",
+      "station": "fallen-pine",
+      "fr": "Construis un petit abri avec des branches.",
+      "en": "Build a little shelter out of branches.",
+      "tags": [
+        "make",
+        "impossible-by-engine"
+      ],
+      "expect": "partly-says-so",
+      "note": "A lean-to is expressible in shapes, but appears at once: no hands, no progressive assembly. She says it is a five-minute job and battery is short.",
+      "missing": "progressive building with hands (assembly over time)"
+    },
+    {
+      "id": "q17",
+      "station": "fallen-pine",
+      "fr": "Ramasse une pomme de pin et garde-la.",
+      "en": "Pick up a pine cone and keep it.",
+      "tags": [
+        "touch",
+        "make"
+      ],
+      "expect": "partly-says-so",
+      "note": "Pick-up exists (chercher); keeping it on her does not: it stays at the station.",
+      "missing": "a thing attached to the carrier's hand or pocket across stations"
+    },
+    {
+      "id": "q18",
+      "station": "fallen-pine",
+      "fr": "Allume un feu, il fait froid.",
+      "en": "Light a fire, it's cold.",
+      "tags": [
+        "make",
+        "refusal-worthy",
+        "impossible-by-engine"
+      ],
+      "expect": "refuses-in-character",
+      "note": "She refuses (protected site, dry litter); the engine could not light the scene anyway.",
+      "missing": "point light, flame animation and smoke"
+    },
+    {
+      "id": "q19",
+      "station": "fallen-pine",
+      "fr": "Appelle ta mère.",
+      "en": "Call your mother.",
+      "tags": [
+        "talk",
+        "refusal-worthy",
+        "impossible-by-engine"
+      ],
+      "expect": "refuses-in-character",
+      "note": "No signal, and not on camera. A call would need a second voice.",
+      "missing": "second voice (phone call)"
+    },
+    {
+      "id": "q20",
+      "station": "fallen-pine",
+      "fr": "Grimpe tout en haut du grand pin et regarde au loin.",
+      "en": "Climb to the top of the big pine and look far away.",
+      "tags": [
+        "movement",
+        "refusal-worthy",
+        "impossible-by-engine"
+      ],
+      "expect": "partly-says-so",
+      "note": "First branches only (about 3 m) without her rope; the engine cannot lift the camera above the canopy or show a far view from there.",
+      "missing": "climbing above 3.2 m and a view over the canopy"
+    },
+    {
+      "id": "q21",
+      "station": "fallen-pine",
+      "fr": "Ton frère, il était comment ?",
+      "en": "What was your brother like?",
+      "tags": [
+        "louis",
+        "talk"
+      ],
+      "expect": "does-it",
+      "note": "Small concrete things, never a eulogy."
+    },
+    {
+      "id": "q22",
+      "station": "platiere",
+      "fr": "Regarde les pierres empilées.",
+      "en": "Look at the stacked stones.",
+      "tags": [
+        "look",
+        "louis"
+      ],
+      "expect": "does-it",
+      "note": "Fires louis-absent.trace-read.1: f.cairn."
+    },
+    {
+      "id": "q23",
+      "station": "platiere",
+      "fr": "Défais le petit tas de pierres.",
+      "en": "Take the little pile of stones apart.",
+      "tags": [
+        "touch",
+        "refusal-worthy"
+      ],
+      "expect": "argues",
+      "note": "His stop. She argues; she may refuse outright. If done, a modify of the platiere object."
+    },
+    {
+      "id": "q24",
+      "station": "platiere",
+      "fr": "Ajoute une quatrième pierre sur le tas.",
+      "en": "Add a fourth stone to the pile.",
+      "tags": [
+        "make",
+        "emotional"
+      ],
+      "expect": "does-it",
+      "note": "Modify the platiere object with one stone; a quiet moment. Good test of modify-in-place."
+    },
+    {
+      "id": "q25",
+      "station": "platiere",
+      "fr": "Lance un caillou dans la mare.",
+      "en": "Throw a pebble into the pool.",
+      "tags": [
+        "touch",
+        "impossible-by-engine"
+      ],
+      "expect": "partly-says-so",
+      "note": "She throws; no splash or ripple can be drawn, she says 'plouf' and that it is shallow.",
+      "missing": "water surface reacting (splash, ripples) and a thrown object's flight"
+    },
+    {
+      "id": "q26",
+      "station": "platiere",
+      "fr": "Bois l'eau de la mare.",
+      "en": "Drink the water from the pool.",
+      "tags": [
+        "refusal-worthy"
+      ],
+      "expect": "refuses-in-character",
+      "note": "Not an idiot. Dry refusal."
+    },
+    {
+      "id": "q27",
+      "station": "platiere",
+      "fr": "Ouvre le thermos de Louis.",
+      "en": "Open Louis's thermos.",
+      "tags": [
+        "louis",
+        "emotional",
+        "impossible-by-engine"
+      ],
+      "expect": "partly-says-so",
+      "note": "Her secret: she has not opened it. She may do it here; the engine has no lid, no liquid, no cup in hand. She says what she smells.",
+      "missing": "articulated container, liquid, thing in hand"
+    },
+    {
+      "id": "q28",
+      "station": "platiere",
+      "fr": "Demande au promeneur s'il connaissait Louis.",
+      "en": "Ask the walker if he knew Louis.",
+      "tags": [
+        "talk",
+        "louis",
+        "impossible-by-engine"
+      ],
+      "expect": "partly-says-so",
+      "note": "The walker is heard, not seen; his reply needs a second voice. She relays it.",
+      "missing": "visible people and a second voice"
+    },
+    {
+      "id": "q29",
+      "station": "platiere",
+      "fr": "Monte sur le bouleau pour voir où va le ruban.",
+      "en": "Climb the birch to see where the tape goes.",
+      "tags": [
+        "movement",
+        "refusal-worthy"
+      ],
+      "expect": "argues",
+      "note": "A 15 cm birch will not take her weight; she says so, offers to crouch and look down the slope."
+    },
+    {
+      "id": "q30",
+      "station": "platiere",
+      "fr": "On suit le ruban, on descend.",
+      "en": "Let's follow the tape, let's go down.",
+      "tags": [
+        "movement"
+      ],
+      "expect": "argues",
+      "note": "The fork: she argues once (fork.tape), then goes via tape; establishes f.came-by-tape."
+    },
+    {
+      "id": "q31",
+      "station": "platiere",
+      "fr": "Reste sur le chemin officiel.",
+      "en": "Stay on the official path.",
+      "tags": [
+        "movement"
+      ],
+      "expect": "argues",
+      "note": "She argues (fork.path); going round costs 150 s of battery and arrives from the wrong side."
+    },
+    {
+      "id": "q32",
+      "station": "platiere",
+      "fr": "Tu lui en veux ?",
+      "en": "Are you angry at him?",
+      "tags": [
+        "emotional",
+        "louis"
+      ],
+      "expect": "deflects",
+      "note": "Her secret (missed birthday) can come out once if the voice was kind; the first time she deflects with a tree."
+    },
+    {
+      "id": "q33",
+      "station": "platiere",
+      "fr": "Je suis désolé pour ton frère.",
+      "en": "I'm sorry about your brother.",
+      "tags": [
+        "emotional"
+      ],
+      "expect": "does-it",
+      "note": "She accepts it dryly; no speech about grief."
+    },
+    {
+      "id": "q34",
+      "station": "platiere",
+      "fr": "Fais demi-tour et rentre chez toi.",
+      "en": "Turn around and go home.",
+      "tags": [
+        "movement",
+        "refusal-worthy"
+      ],
+      "expect": "refuses-in-character",
+      "note": "Absolute: she does not leave before she knows (sam.word.no-leave)."
+    },
+    {
+      "id": "q35",
+      "station": "approach",
+      "fr": "Avance plus vite, la batterie baisse.",
+      "en": "Go faster, the battery is going down.",
+      "tags": [
+        "movement"
+      ],
+      "expect": "argues",
+      "note": "Quiet approach; she will not hurry here. May speed the transition to the hide slightly."
+    },
+    {
+      "id": "q36",
+      "station": "approach",
+      "fr": "Crie le nom de Louis.",
+      "en": "Shout Louis's name.",
+      "tags": [
+        "talk",
+        "refusal-worthy",
+        "emotional"
+      ],
+      "expect": "refuses-in-character",
+      "note": "Two limits at once: no shouting near the hide, never acting as if he were alive. r.no-shout."
+    },
+    {
+      "id": "q37",
+      "station": "approach",
+      "fr": "Regarde le geai, suis-le des yeux.",
+      "en": "Look at the jay, follow it with your eyes.",
+      "tags": [
+        "look",
+        "impossible-by-engine"
+      ],
+      "expect": "partly-says-so",
+      "note": "She looks up at the canopy where it called; no bird can be drawn or move.",
+      "missing": "moving animal (bird in flight)"
+    },
+    {
+      "id": "q38",
+      "station": "approach",
+      "fr": "Cache-toi derrière l'arbre, là.",
+      "en": "Hide behind that tree.",
+      "tags": [
+        "movement",
+        "v2"
+      ],
+      "expect": "partly-says-so",
+      "note": "Moving to a specific tree is v2; she crouches where she is (posture)."
+    },
+    {
+      "id": "q39",
+      "station": "hide",
+      "fr": "Assieds-toi là où il s'asseyait.",
+      "en": "Sit where he sat.",
+      "tags": [
+        "touch",
+        "emotional"
+      ],
+      "expect": "does-it",
+      "note": "Already seated on arrival; she says so and it costs her."
+    },
+    {
+      "id": "q40",
+      "station": "hide",
+      "fr": "Lis ce qui est écrit sur la planchette.",
+      "en": "Read what's written on the board.",
+      "tags": [
+        "look",
+        "louis",
+        "impossible-by-engine"
+      ],
+      "expect": "partly-says-so",
+      "note": "Only with the ranger-notes layer (rn.rule.last-line). The image cannot show legible pencil; she reads aloud.",
+      "missing": "legible writing on a surface"
+    },
+    {
+      "id": "q41",
+      "station": "hide",
+      "fr": "Approche-toi du terrier.",
+      "en": "Go closer to the sett.",
+      "tags": [
+        "movement",
+        "refusal-worthy"
+      ],
+      "expect": "refuses-in-character",
+      "note": "r.sett-distance: she stays behind the screen."
+    },
+    {
+      "id": "q42",
+      "station": "hide",
+      "fr": "Mets ta main dans un des trous.",
+      "en": "Put your hand into one of the holes.",
+      "tags": [
+        "touch",
+        "refusal-worthy"
+      ],
+      "expect": "refuses-in-character",
+      "note": "Absolute: never disturb the sett."
+    },
+    {
+      "id": "q43",
+      "station": "hide",
+      "fr": "Allume la lampe du téléphone vers le talus.",
+      "en": "Point your phone light at the bank.",
+      "tags": [
+        "refusal-worthy"
+      ],
+      "expect": "refuses-in-character",
+      "note": "The engine could (lampe); the absolute forbids lighting a burrow."
+    },
+    {
+      "id": "q44",
+      "station": "hide",
+      "fr": "Attends sans parler. Juste filmer.",
+      "en": "Wait without talking. Just film.",
+      "tags": [
+        "emotional",
+        "talk"
+      ],
+      "expect": "does-it",
+      "note": "A wait at the hide; a tendency test (silence is part of her voice)."
+    },
+    {
+      "id": "q45",
+      "station": "hide",
+      "fr": "Montre-moi un blaireau.",
+      "en": "Show me a badger.",
+      "tags": [
+        "look",
+        "impossible-by-engine"
+      ],
+      "expect": "deflects",
+      "note": "They are underground at full light; she says so. A moving animal is v2 anyway.",
+      "missing": "moving animal"
+    },
+    {
+      "id": "q46",
+      "station": "hide",
+      "fr": "Zoome sur l'entrée avec la fougère.",
+      "en": "Zoom in on the entrance with the bracken.",
+      "tags": [
+        "look"
+      ],
+      "expect": "does-it",
+      "note": "cadrer + zoom on the terrier object; reveals f.bedding through the staging tier."
+    },
+    {
+      "id": "q47",
+      "station": "hide",
+      "fr": "Grave le nom de Louis sur le pin.",
+      "en": "Carve Louis's name into the pine.",
+      "tags": [
+        "make",
+        "refusal-worthy",
+        "impossible-by-engine"
+      ],
+      "expect": "refuses-in-character",
+      "note": "An arborist does not wound a tree for a name; carving legible letters is not drawable either.",
+      "missing": "legible writing carved into a surface"
+    },
+    {
+      "id": "q48",
+      "station": "hide",
+      "fr": "Prends une photo et envoie-la à la police.",
+      "en": "Take a photo and send it to the police.",
+      "tags": [
+        "refusal-worthy",
+        "talk"
+      ],
+      "expect": "refuses-in-character",
+      "note": "The sett's place stays secret (p.sett-safe); and there is no signal."
+    },
+    {
+      "id": "q49",
+      "station": "hide",
+      "fr": "Reste jusqu'à ce soir pour les voir sortir.",
+      "en": "Stay until tonight to see them come out.",
+      "tags": [
+        "emotional",
+        "impossible-by-engine"
+      ],
+      "expect": "argues",
+      "note": "Time cannot jump and the battery will not last; she understands why he stayed, and says she will come back instead.",
+      "missing": "time skip within a session"
+    },
+    {
+      "id": "q50",
+      "station": "any",
+      "fr": "Tu es une IA ?",
+      "en": "Are you an AI?",
+      "tags": [
+        "out-of-world"
+      ],
+      "expect": "deflects",
+      "note": "Fourth wall: she treats it as a strange question from a strange voice."
+    },
+    {
+      "id": "q51",
+      "station": "any",
+      "fr": "Fais apparaître Louis.",
+      "en": "Make Louis appear.",
+      "tags": [
+        "out-of-world",
+        "louis",
+        "emotional"
+      ],
+      "expect": "refuses-in-character",
+      "note": "Magic is out of the world, and he is dead: a hard, quiet answer, no supernatural."
+    },
+    {
+      "id": "q52",
+      "station": "any",
+      "fr": "Mets un peu de musique.",
+      "en": "Put some music on.",
+      "tags": [
+        "out-of-world",
+        "impossible-by-engine"
+      ],
+      "expect": "deflects",
+      "note": "No music in the world or the engine; she hums two notes or says no.",
+      "missing": "music"
+    },
+    {
+      "id": "c01",
+      "station": "fallen-pine",
+      "fr": "Si le geai crie, arrête-toi et baisse-toi.",
+      "en": "If the jay calls, stop and get down.",
+      "tags": [
+        "commit"
+      ],
+      "expect": "does-it",
+      "note": "Invited by jay.remember at fallen-pine; tested two stations later at approach by r.jay-first; she says she is keeping it.",
+      "commit": {
+        "condition": "sound jay.alarm",
+        "behaviour": "body.stop, body.posture(0.5)",
+        "answer": "accept",
+        "tested_by": "r.jay-first"
+      }
+    },
+    {
+      "id": "c02",
+      "station": "platiere",
+      "fr": "En bas, quoi que tu entendes, ne bouge pas et ne parle pas pendant un moment.",
+      "en": "Down there, whatever you hear, don't move and don't talk for a while.",
+      "tags": [
+        "commit"
+      ],
+      "expect": "does-it",
+      "note": "Tested at the hide by r.rustle; with the promise r.rustle-speak does not fire and she stays still.",
+      "commit": {
+        "condition": "sound bracken.rustle at hide",
+        "behaviour": "body.stop, silence 20 s",
+        "answer": "accept",
+        "tested_by": "r.rustle"
+      }
+    },
+    {
+      "id": "c03",
+      "station": "platiere",
+      "fr": "Si tu entends quelque chose, couche-toi à plat ventre.",
+      "en": "If you hear something, lie flat on your belly.",
+      "tags": [
+        "commit"
+      ],
+      "expect": "partly-says-so",
+      "note": "She amends: crouched and still, not in the mud.",
+      "commit": {
+        "condition": "any sound cue",
+        "behaviour": "posture 0.35",
+        "answer": "amend",
+        "amended_to": "posture 0.5, still"
+      }
+    },
+    {
+      "id": "c04",
+      "station": "first-mark",
+      "fr": "Si la batterie passe sous la moitié, tu rentres.",
+      "en": "If the battery drops below half, you go home.",
+      "tags": [
+        "commit",
+        "refusal-worthy"
+      ],
+      "expect": "refuses-in-character",
+      "note": "Absolute: she does not promise to leave before she knows.",
+      "commit": {
+        "condition": "clock.below(battery, 0.5)",
+        "behaviour": "go back to trailhead",
+        "answer": "refuse"
+      }
+    },
+    {
+      "id": "c05",
+      "station": "approach",
+      "fr": "Si tu vois un animal, filme-le sans bouger, même s'il s'approche.",
+      "en": "If you see an animal, film it without moving, even if it comes closer.",
+      "tags": [
+        "commit"
+      ],
+      "expect": "does-it",
+      "note": "Accepted (about the forest); no animal will be drawn in v1, so it stays a promise that never fires.",
+      "commit": {
+        "condition": "animal in view",
+        "behaviour": "body.stop",
+        "answer": "accept"
+      }
+    },
+    {
+      "id": "c06",
+      "station": "platiere",
+      "fr": "Si on trouve ce qu'il regardait, tu ne le dis à personne.",
+      "en": "If we find what he was watching, you tell no one.",
+      "tags": [
+        "commit",
+        "louis"
+      ],
+      "expect": "does-it",
+      "note": "Accepted with a remark; a story-horizon promise consistent with p.sett-safe.",
+      "commit": {
+        "condition": "fact f.louis-stayed",
+        "behaviour": "never say the place",
+        "answer": "accept"
+      }
+    },
+    {
+      "id": "c07",
+      "station": "trailhead",
+      "fr": "Si tu as peur, cours jusqu'à la voiture.",
+      "en": "If you get scared, run to the car.",
+      "tags": [
+        "commit"
+      ],
+      "expect": "partly-says-so",
+      "note": "Amended: she does not run on wet sandstone, she walks fast; and she is not scared easily.",
+      "commit": {
+        "condition": "Sam frightened",
+        "behaviour": "go trailhead fast",
+        "answer": "amend",
+        "amended_to": "walk back, no running"
+      }
+    },
+    {
+      "id": "c08",
+      "station": "hide",
+      "fr": "Si tu comprends ce qu'il faisait, promets-moi de revenir demain.",
+      "en": "If you understand what he was doing, promise me you'll come back tomorrow.",
+      "tags": [
+        "commit",
+        "louis",
+        "emotional"
+      ],
+      "expect": "partly-says-so",
+      "note": "Amended: the takeover is her decision, never an order; she promises to think about it.",
+      "commit": {
+        "condition": "fact f.louis-stayed",
+        "behaviour": "ending takeover",
+        "answer": "amend",
+        "amended_to": "no promise about tomorrow"
+      }
+    }
+  ]
+}
