@@ -16603,12 +16603,8 @@ function simulate(dt){
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*(a.libre?1:gesteK())*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
-<<<<<<< HEAD
-    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK(),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
-    else if(a.type==="soleil") soleilPas(a,dt);
-=======
     else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK()*(vitK()>1?1.5:1),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
->>>>>>> 044db2eff428e6f72f3aba25ab91946e19aab011
+    else if(a.type==="soleil") soleilPas(a,dt);
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*gesteK()*dt); if(Math.abs(d)<.012) queue.shift(); }
     else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*gesteK()*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
     else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet,a.cadre);   // vers un objet : la page calcule cap et inclinaison
