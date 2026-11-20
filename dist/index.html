@@ -16054,7 +16054,8 @@ const clampN=(v,a,b,d)=>{ v=Number(v); return Number.isFinite(v)?Math.min(b,Math
 function enqueue(actions){
   if(Array.isArray(actions)&&actions.some(a=>a&&a.type==="effort"&&a.exploit)&&MODELES.exploit&&MODELES.exploit.bruit){   // les bruits de l'effort, calés entre les souffles (docs/bruitages.md)
     try{ const r=SON.caler(actions,MODELES.exploit.bruit,{graine:seedN,compteur:++compteurSons}); actions=r.actions;
-      const fe=actions.filter(a=>a&&a.type==="effort"&&a.exploit).pop(); if(fe&&fe.exploit.masse) fe.chute={masse:clampN(fe.exploit.masse,.01,500,1)};   // elle tombe à la fin de l'effort : on l'entend à ce moment, arrivée ou pas if(sons) sons.preparer(r.plan.bruits); journalSons.push({t:+(performance.now()/1000).toFixed(2),plan:r.plan.bruits.map(b=>({t:b.t_abs,duree:b.duree,f0:b.f0,force:b.force,principal:b.principal})),souffles:r.plan.souffles,pose_t:r.plan.pose_t}); }
+      const fe=actions.filter(a=>a&&a.type==="effort"&&a.exploit).pop(); if(fe&&fe.exploit.masse) fe.chute={masse:clampN(fe.exploit.masse,.01,500,1)};   // elle tombe à la fin de l'effort : on l'entend à ce moment, arrivée ou pas
+      if(sons) sons.preparer(r.plan.bruits); journalSons.push({t:+(performance.now()/1000).toFixed(2),plan:r.plan.bruits.map(b=>({t:b.t_abs,duree:b.duree,f0:b.f0,force:b.force,principal:b.principal})),souffles:r.plan.souffles,pose_t:r.plan.pose_t}); }
     catch(e){ console.warn("sons :",e&&e.message); } }
   for(const a of (Array.isArray(actions)?actions:[]).slice(0,12)){   // 8 gestes au plus, plus les marqueurs de la page (poser, attendreObjet, §19)
     if(!a||typeof a!=="object") continue;
