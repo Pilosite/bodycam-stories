@@ -14,6 +14,7 @@ export const REGLAGES_VOIX = {
   langue: 'fr',
   max: 2000,         // limite de speak()
   doublon_s: 30,     // même texte relu dans ce délai : ignoré
+  file: false,       // true : une phrase en cours n'est pas coupée, la suivante attend (la page) ; false : la nouvelle remplace
   geste_s: 20,       // une pensée refusée faute de geste se rejoue au geste suivant, si elle a moins de cet âge
 };
 export const VOIX_TTS = ['buttery', 'airy', 'glassy', 'rounded'];
@@ -45,7 +46,10 @@ export function creerVoix({ tts = null, locale = null, reglages = {}, maintenant
   const sec = () => maintenant() / 1000;
   let T = null, ttsAttendu = !!(tts && typeof tts.then === 'function'), refus = false, sansTts = false;
   let on = false, n = 0, courant = null, attente = null, dernier = null, parle = false;
-  const signaler = p => { if (p !== parle) { parle = p; try { onParle(p); } catch (_) {} } };
+  const file = [];                                                // pensées en attente : une phrase en cours n'est plus coupée par la suivante
+  let tFile = 0;
+  const signaler = p => { if (p !== parle) { parle = p; try { onParle(p); } catch (_) {} }
+    if (!p && file.length) { clearTimeout(tFile); tFile = setTimeout(() => { if (!parle && file.length && on && !refus) lancer(file.shift()); }, 120); } };
 
   function brancher(t) {
     T = t && typeof t.speak === 'function' ? t : null;
@@ -111,7 +115,7 @@ export function creerVoix({ tts = null, locale = null, reglages = {}, maintenant
   }
 
   function taire() {
-    attente = null;
+    attente = null; file.length = 0; clearTimeout(tFile);
     const c = courant; courant = null;
     if (c && c.moteur === 'tts' && T) { try { T.stop().catch(() => {}); } catch (_) {} }
     if (locale) try { locale.cancel(); } catch (_) {}
@@ -126,6 +130,8 @@ export function creerVoix({ tts = null, locale = null, reglages = {}, maintenant
     dernier = { texte: t, t: sec() };
     attente = null;
     if (ttsAttendu) { taire(); attente = { texte: t, t: sec() }; return true; }   // la capacité répond encore : on lira à sa réponse
+    if (R.file && /^[\shmnrgaeo….!'’-]+$/i.test(t) && t.length < 28) return false;      // un souffle d'effort (« Hhhnn… ») : les bruitages s'en chargent
+    if (R.file && (parle || courant)) { if (file.length >= 2) file.shift(); file.push(t); return true; }   // elle finit sa phrase d'abord
     if (!ttsUtilisable() && !locale) return false;
     lancer(t);
     return true;
