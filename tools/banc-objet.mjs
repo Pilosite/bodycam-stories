@@ -75,7 +75,7 @@ for (const fi of FICHES) for (const q of QUAL) {
         cam.x = q.x - Math.sin(az) * d; cam.z = q.z - Math.cos(az) * d; cam.yaw = az; cam.haut = haut; cam.elev = 0;
         const v = viserObjet('banc', true); cam.yaw += v.yaw; cam.pitch = v.pitch;
         const eye = S.eye * haut, dist = Math.hypot(d, eye - T * .3);
-        const frac = cadre === 'pres' ? .9 : .45;                   // part de la hauteur d'image (portrait) que prend l'envergure
+        const frac = cadre === 'pres' ? .5 : .28;                   // part de la hauteur d'image (portrait) que prend l'envergure
         const demi = 1.09 * (ratio > 1 ? 1 / ratio : 1);             // demi-angle vertical sans zoom (rad)
         const z = Math.max(1, Math.min(8, frac * 2 * demi * dist / T));
         cam.zoom = cam.zoomCible = z; look.yaw = 0; look.pitch = 0; sceneDirty = true;
