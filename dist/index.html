@@ -17444,7 +17444,7 @@ function mainsVers(H,dt,quelles=[0,1]){                          // quelles : le
   if(!MAINS) return;
   if(!mainsEtat.H) mainsEtat.H=mainsRepos();
   const k=Math.min(1,dt*12);
-  mainsEtat.H=mainsEtat.H.map((h,i)=>{ const c=H[i]; if(!c) return h;
+  mainsEtat.H=mainsEtat.H.map((h,i)=>{ let c=H[i]; if(!c) return h; if(Array.isArray(c)) c=main(c,[0,-1,0],"ouverte");   // une simple position : main ouverte, paume en bas
     return {p:h.p.map((x,j)=>x+(c.p[j]-x)*k),n:v3n(h.n.map((x,j)=>x+(c.n[j]-x)*k)),d:c.d?v3n((h.d||c.d).map((x,j)=>x+(c.d[j]-x)*k)):null,v:h.v.map((x,j)=>x+(c.v[j]-x)*k)}; });
   mainsObj=objetMains(mainsEtat.H,quelles);
 }
@@ -17534,7 +17534,7 @@ function nauseePas(n,N,dt,idOuvrage,dg){
   else if(e.quoi==="vomir"){ cam.yaw=B.yaw+A+j(.03,7); cam.pitch=pv+.09*Math.abs(Math.sin(n.t*5.5))-.04*Math.sin(n.t*13); cam.haut=B.haut-.06-.02*Math.abs(Math.sin(n.t*5.5)); }
   else if(e.quoi==="souffler"){ cam.yaw=B.yaw+A; cam.pitch=pv+.25*sm+j(.02,2.6); cam.haut=B.haut-.06+.03*sm; }
   else if(e.quoi==="essuyer"){ cam.yaw=B.yaw+A; cam.pitch=pv+.25+j(.015,3);               // le revers de la manche passe devant la caméra
-    const {e:o,f,r}=corpsAxes(), rep=mainsRepos(), x=.18-.36*sm, H=[rep[0],[o[0]+f[0]*.13+r[0]*x,o[1]-.05,o[2]+f[2]*.13+r[2]*x]];
+    const {e:o,f,r}=corpsAxes(), rep=mainsRepos(), x=.18-.36*sm, H=[rep[0],main([o[0]+f[0]*.13+r[0]*x,o[1]-.05,o[2]+f[2]*.13+r[2]*x],f,"poing",[-r[0],.3,-r[2]])];
     mainsVers(H,dt,[1]); buildShapes(fiche,true); }
   else if(e.quoi==="revenir"){ if(mainsObj){ mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); } if(!n.retour){ n.retour=true; if(n.pas) moveBy(-.15); }
     cam.yaw=B.yaw+A*(1-sm); cam.pitch=(pv+.25)+(B.pitch-(pv+.25))*sm; cam.haut=B.haut-.03*(1-sm); }
