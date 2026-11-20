@@ -4,7 +4,7 @@ Strong on architecture, light on ceremony. This page is binding for everyone wor
 
 ## 0. The constitution
 
-`docs/principles.md` holds the founding principles (P1 to P21). It ranks above this page, the architecture and the plan. Consequences:
+`docs/principles.md` holds the founding principles (P1 to P22). It ranks above this page, the architecture and the plan. Consequences:
 
 - Every brief names the principles its lot serves or risks. Every review checks the change against them; a change that breaks one is not merged, however good the code.
 - A principle changes only through an ADR and Toine's explicit agreement.
@@ -24,7 +24,9 @@ Strong on architecture, light on ceremony. This page is binding for everyone wor
 
 Architecture decisions live in `docs/adr/NNNN-title.md`, one page each: context, decision, consequences, status (`proposed`, `accepted`, `superseded`). An ADR is required when a contract changes, when a row of the scope ledger moves, or when we pick a technology. Not for anything else.
 
-Initial set: 0001 PDL is the only channel · 0002 PDL source and the strength spectrum · 0003 v1 is station-based · 0004 model tiers and how they are reached · 0005 language policy · 0006 collaboration is layered packs in Git · 0007 test strategy.
+Initial set: 0001 PDL is the only channel · 0002 PDL source and the strength spectrum · 0003 v1 is station-based · 0004 model tiers and how they are reached · 0005 language policy · 0006 collaboration is layered packs in Git · 0007 test strategy · 0008 the home node.
+
+Priorities, open questions and the assumptions work proceeds on are kept in `docs/board.md`.
 
 ## 3. Tests: enough, at the right level
 

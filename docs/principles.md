@@ -2,11 +2,17 @@
 
 This is the constitution of the project. It comes before the architecture, the plan and the code, and it outlives any conversation. A change here needs an ADR and Toine's explicit agreement. Every brief, every review and every milestone is checked against it.
 
-Source: Toine's statements of 19 and 20 November 2026, restated. Where a principle is my reading rather than his words, it is marked *(reading)*.
+Source: Toine's statements of 19 and 20 November 2026, restated (last additions on the evening of the 20th: the game table, "the player is not the player", creating as a game, P22). Where a principle is my reading rather than his words, it is marked *(reading)*.
 
 ## What Bodycam Stories is
 
 A place where people come to **tell themselves stories**: to enter an atmosphere, a universe, a situation, and see what happens. Its value is the richness of what can be imagined and lived, not reaction speed. The agents, the language and the engine exist to serve that, and are replaceable; the experience below is not.
+
+The model is the **game table**, not the rule book. Around a table, a player says what they want and a game master rules on it, whatever it is; the dice and the stat sheet are a detail. That freedom, with the dynamism of real time, is what we are after.
+
+And every Bodycam Stories game is a game where **the player is not the player**: you are never the one who acts, you are the one who talks *with* the person who acts. This is true of every story on the platform, by construction.
+
+There are two ways to play: **living a story** and **writing one**. Both are games (P11).
 
 Under it lies one bet: **semantic engineering**. We are building a system that translates what a story is, and what a game is, into something a machine can run, starting from words.
 
@@ -43,7 +49,7 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 
 **P10. The whole spectrum, from hard to fuzzy.** Players and creators can both state things that must hold (deterministic, run by code), things that tend to hold (fuzzy, weighed by a model in context) and things left open (decided in the moment). Fuzzy notions such as "too often", "close", "late", "angry" are first-class: they are named quantities that rise and fade, and principles refer to them in words. No one should have to write a complicated rule to get a simple effect.
 
-**P11. Creators are the point.** The project lives if people come and write stories in it. Every mechanism must be something a creator can state in words, see at work, and adjust. Most creators talk to an assistant; a few open the backend. A player who makes commitments is already writing rules: the path from player to creator is continuous.
+**P11. Creators are the point, and creating is a game.** The project lives if people come and write stories in it. Writing a world, watching players meet it and adjusting it must be as playable as living a story: quick to try, visible at once, never a chore of configuration. Every mechanism must be something a creator can state in words, see at work, and adjust. Most creators talk to an assistant; a few open the backend. A player who makes commitments is already writing rules: the path from player to creator is continuous.
 
 **P12. The narrative space is shared.** Stories are made by several hands. Everything in a story keeps its author, so that contributions can be layered, merged, credited and revised.
 
@@ -60,6 +66,8 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 **P20. Three clocks, decoupled.** The present (what is happening), the scene (what is brewing here) and the story (what is being prepared far ahead) are separate layers. Each has its own latency budget and its own kind of intelligence: reflexes and the leanest models for the present, fuller models for the scene, the largest for the story. They talk only through the intermediate language, asynchronously. A slow layer can enrich or correct what a fast one did; it can never make it wait. Not knowing what the player will do next (go back to the car, or stay) is the business of the slow layers; answering what he just said is the business of the fast one.
 
 **P21. Hexagonal.** The narrative core (story state, principles, horizons, commitments) knows nothing of the engine, the models, the input device or storage. Each is reached through a port and can be replaced without touching the core. This is what lets the rendering, the models and the tools evolve while the gameplay stays.
+
+**P22. A semantic engine on several levels: invention and judgement are different instruments.** AI serves the story in two distinct ways, never confused. *Invention* is the creative edge: generative models write what nobody wrote, in three sizes matched to the three clocks (fast, mid, large). *Judgement* is synthesis: decision models turn something open (a sentence, a situation, a fuzzy notion) into a typed answer the code can act on (yes or no, one of these, how much), with a confidence. A generative model is never asked to judge when a judgement will do, and a judgement never writes. Which instrument reads which thing is an explicit choice, recorded in `docs/architecture.md`. *Check: every model call in the journal is either an invention or a judgement, and says which.*
 
 **P17. What happened can be read.** Those who keep a story alive must be able to see what players did, how the world and its principles reacted, and why, in order to refine them.
 
@@ -78,3 +86,5 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 - Refusing a request because nobody planned for it.
 - An answer in the present that waits for a slow layer.
 - A slow model on the path between the player's words and the character's first reaction.
+- A stat sheet that decides in place of the table: numbers may inform a ruling, they never replace it.
+- A story in which the player is the one who acts.

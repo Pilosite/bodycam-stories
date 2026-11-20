@@ -28,10 +28,10 @@ Why: it is the bodycam constraint taken seriously (we never drive her), it lets 
 | Sound | synthesized cues and voice, driven by PDL | ambience beds, spatial sound | — |
 | PDL | transactions, three horizons, rules, source format with strengths | richer events, time-based rules | a public, versioned standard |
 | Commitments (planning ahead through the character) | conditional requests become promises and rules within a session, kept or broken in character | commitments that persist across sessions; creators define moments that invite them | players' commitments shared and reused as story material |
-| Model tiers | reflex (code), translation, staging, background, behind one adapter | on-device small model for translation | specialised non-generative models per modality |
+| Model tiers | reflex (code), translation, staging, background, behind one adapter; judgement (`decide`) separate from invention (P22); a home node on Toine's desktop for real tiers (ADR 0008) | on-device small model for translation; hosted decision models | specialised non-generative models per modality |
 | Anticipation | frontier of likely intents per station, measured | speculative pre-rendering of next views | continuous background world growth |
 | Creator tools | session viewer, rule what-if, principle audit, pack checker | assistant-driven authoring commands | hosted creator workspace |
 | Collaboration | layered packs in Git with provenance | shared packs, forks and merges with tooling | live shared narrative spaces |
-| Languages | backend English; French and English speech with subtitles; one override setting | more languages | — |
+| Languages | backend English; English is the primary play language, French fully available, speech with subtitles; one override setting | more languages | — |
 | Platform | desktop browser | phone | — |
 | The satire demo | kept apart as a sandbox, off the main path | — | — |

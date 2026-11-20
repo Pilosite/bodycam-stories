@@ -4,14 +4,16 @@ POC documents first (English, binding), then the legacy French docs of the engin
 
 ## POC (English)
 
-- `principles.md` — the founding principles (P1 to P21), the constitution; read first
+- `principles.md` — the founding principles (P1 to P22), the constitution; read first
 - `architecture.md`: the contract. Nine pillars, transactions, rules, vocabulary, story pack, journal, repo layout.
 - `scope.md`: the scope ledger. What is v1, v2 and target; the station-based frame.
 - `sdlc.md`: how we build. Principles, ADRs, test levels, flow, working with agents, milestones.
 - `milestones.md`: the M0 to M6 table with how to check each and a "Measured" column to fill.
 - `adr/`: architecture decision records (`0000-template.md`, then 0001 to 0007).
 - `sandbox.md`: what belongs to the satire demo versus the generic mechanisms that stay, and how to separate them.
-- `pdl-spec.md`: the PDL specification (being written; contract first).
+- `pdl-spec.md`: the PDL specification (source grammar, transactions, rules, validation, ports, clocks, journal).
+- `board.md`: priorities, open questions, working assumptions, and how Toine and the coordinator work together.
+- `adr/0008-home-node.md`: models reached through Toine's desktop, and how the page detects it.
 - `research/models.md`: research behind ADR 0004 (which models for which tier; Jev and decision models, JEPA, embeddings, constrained decoding, the artifact and proxy modes).
 - `story-louis-round.md`: the bible of the POC story (premise, people, stations, beats, endings, tone, what must never happen).
 - `patterns.md`: the narrative pattern library, how a story binds patterns, and what swapping one changes.

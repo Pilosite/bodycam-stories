@@ -48,6 +48,31 @@ This is the shared contract for the real proof of concept. It follows `docs/poc-
 - **Loops communicate only by PDL transactions and events, asynchronously.** A slower loop may add to, amend or cancel what a faster one did, through transactions tagged with `cause`; it cannot block it. Every transaction records the loop and the latency against its budget, so a blocked present shows up in the journal as a defect.
 - **Uncertainty is routed by horizon.** What the player just said goes to `now`. What he might do next goes to `story`, which prepares for it.
 
+## Where judgement happens: the decision points (P22, ADR 0004)
+
+Judgement is the second instrument of the engine: a **decision model** (the class opened by Jev: Clef, the Decisions API, open-source equivalents) reads a state and a typed question and returns a typed answer with a probability. It never writes. In the core it is one port method, `decide({ tier, question, options?, state }) → { answer, p, uncertain }`, with three answer types: `bool`, `choice` (one of a closed list) and `score` (a level on a short scale).
+
+| # | Clock | Question | Type | What the code does with it |
+|---|---|---|---|---|
+| D1 | now | What is the player asking? (intent class and target, among the closed vocabulary) | choice | builds the `intent` transaction; asked only when the nearest-match on embeddings is below its threshold |
+| D2 | now | Is it for now, or for later under a condition? | bool | routes to a commitment instead of an act |
+| D3 | now | Does she go along? (accept, amend, refuse, argue), given her tendencies in scope | choice | picks the reaction family; the line itself is a bank line or an invention |
+| D4 | scene | Does this proposed transaction break a principle in scope that code cannot check (`!` not yet compiled, strong `~`)? | bool | accept, or repair toward the intent; on `!!` the question is asked in both orders |
+| D5 | scene | Is this fuzzy condition true now? ("too often", "close", "she has had enough") when no gauge answers it | bool or score | fires or holds a rule's `if`; a gauge, when one exists, answers in code instead |
+| D6 | scene | Has what the player planned for just happened? (a commitment's condition, stated in words) | bool | marks the commitment `due` |
+| D7 | scene | Did she keep her word? | choice | `kept` or `broken`, with the reason journaled |
+| D8 | story | Has this beat reached its goal? | bool | lets the story move on |
+| D9 | story | Which requests are likely at the next stations? | score | orders the frontier the large model prepares |
+| D10 | story | Was each principle in scope respected in this window? | score | the principle audit of the creator view |
+
+Rules of use:
+
+- **A judgement has a confidence, and the confidence is played.** High: act. Middle: act in character with the doubt showing (she hesitates, she checks). Low: she asks back. The thresholds are configuration per question; the default is 0.8 and 0.5. Uncertainty is given to the character, never to the player as an error (P5, P7).
+- **Stakes decide the care.** On an absolute (`!!`) a binary question is asked twice, in both orders, and a disagreement counts as "uncertain". Elsewhere once is enough.
+- **One fallback chain, the same everywhere:** a decision model when one is reachable, else the fast generative model with a flat structured output, else the code heuristic (lexicon, nearest match). The journal records which one answered, its probability and its latency, so a creator can see where the engine guessed.
+- **Never on the reflex path.** What code can answer (a gauge, a compiled rule, a closed match) is not asked to a model.
+- D1 to D3 are the only judgements between the player's words and the character's first reaction; they share one call when the model allows several questions per call.
+
 ## The authoring format: one text, a spectrum from soft to hard
 
 JSON describes values; it cannot say "she tends to…". Story assets are therefore written as **PDL source**: plain text files, readable by a person and by a model, diffable in Git. JSON remains only as the compiled, machine form.
