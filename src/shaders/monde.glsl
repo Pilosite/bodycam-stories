@@ -196,7 +196,7 @@ void masse(Tige T, int k, int m, out vec3 c, out vec3 rad){
   else c=a1+d2*P2.x*.25;
   float M=P2.x*(.7+.6*h42(T.h.wz*21.3+vec2(float(k)*2.7,float(m)*4.1)).x);
   c.y-=P1.z*.35*M;                                           // retombée : la masse pend
-  rad=vec3(M,M*(1.-.62*P0.w)*(1.+.7*P1.z),M);
+  rad=vec3(M,M*(1.-.4*P0.w)*(1.+.7*P1.z),M);
 }
 #endif
 void brancheA(ArbreA A, int k, out vec3 a0, out vec3 a1, out float rb){   // branche k (0 à 2), dans le repère de la cellule

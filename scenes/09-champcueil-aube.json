@@ -24,13 +24,13 @@
           "montee": 0.3,
           "retombe": 0.15,
           "rameaux": 3,
-          "masse": 0.6,
-          "feuilles": 0.75,
-          "taille": 0.12,
+          "masse": 0.75,
+          "feuilles": 0.8,
+          "taille": 0.1,
           "couleurs": [
-            "#2b3a23",
-            "#35472a",
-            "#1f2b1a"
+            "#34482a",
+            "#40552f",
+            "#26351f"
           ]
         },
         "b": {
@@ -41,17 +41,17 @@
           ],
           "largeur": 3.4,
           "aplati": 0.25,
-          "branches": 7,
+          "branches": 8,
           "montee": 0.55,
           "retombe": 0.1,
           "rameaux": 3,
-          "masse": 0.8,
-          "feuilles": 0.42,
-          "taille": 0.08,
+          "masse": 0.6,
+          "feuilles": 0.5,
+          "taille": 0.06,
           "couleurs": [
-            "#9a6a2a",
-            "#b4893a",
-            "#6e5a2c"
+            "#a8692a",
+            "#c08a3c",
+            "#7a5528"
           ]
         }
       },
