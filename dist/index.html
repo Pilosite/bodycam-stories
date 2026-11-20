@@ -16131,7 +16131,7 @@ function objetMeneur(o){
   if(o.op==="faconner"){ faconnages.set(id,o); if(!queue.some(a=>a.type==="faconner"&&a.objet===id)) faconnerTout(id); return; }
   if(o.op==="creer"){
     const visibles=L.filter(x=>x&&!(x.visible===false||cacheObj.has(x.id))).length;
-    if(i>=0||visibles>=8||!o.objet) return;
+    if(i>=0||visibles>=8||!o.objet){ if(o.reserve) reserves.delete(o.reserve); return; }
     const rs=o.reserve&&reserves.get(o.reserve);
     if(rs&&!rs.pos&&!o.pres_de&&marquePose(o.reserve)){ rs.attente=o; return; }   // il n'y est pas encore : posée quand la file atteindra le geste
     if(rs) reserves.delete(o.reserve);
