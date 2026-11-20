@@ -125,7 +125,8 @@ verifier(entiere2 && Math.abs(o2.angle) < 10, `retourné, elle est entière à l
 await vueLibre('fab-2', '5 kg');
 await capture('2b-5kg', 'la crotte de 5 kg, il s\'est retourné, entière');
 
-// 3. une énorme crotte (Claude : texte seul, « avec de la terre ») : la page la fait, énorme
+// 3. une énorme crotte (Claude : texte seul, « avec de la terre ») : la page la fait, énorme ; il pousse accroupi, puis s'étonne (§20)
+const tVoix3 = await page.evaluate(() => performance.now() / 1000);
 await dire(PH[2]);
 await quand(() => balade.objets().some(o => /^fab-/.test(o.id) && o.id !== 'fab-1' && o.id !== 'fab-2'));
 const idE = await page.evaluate(() => balade.objets().map(o => o.id).filter(i => /^fab-/.test(i)).sort((a, b) => +b.slice(4) - +a.slice(4))[0]);
@@ -137,6 +138,15 @@ verifier(o3 && o3.taille >= 0.72 && o3.taille <= 0.9, `énorme : ${o3 && o3.tail
 const entiere3 = await page.evaluate(([t, h, m, y, z]) => MENEUR.tientDansImage(t, h, m, y, z, innerWidth / innerHeight), [o3.taille, o3.haut, o3.m, 1.36 * c3.haut, c3.zoom]);
 verifier(entiere3, `entière à l'image : ${o3.m} m, accroupi ${c3.haut}, zoom ${c3.zoom.toFixed(1)}`);
 verifier(!/terre/.test(await page.textContent('#pensee')), 'sa pensée ne parle plus de terre : « ' + (await page.textContent('#pensee')) + ' »');
+{ // le journal des pensées et leurs instants (balPensees) : avant, souffles pendant l'effort, réaction après le cadrage, jamais la terre
+  const P = (await page.evaluate(() => window.balPensees)).filter(p => p.t >= tVoix3).map(p => Object.assign(p, { t: +(p.t - tVoix3).toFixed(1) }));
+  writeFileSync(join(out, 'pensees.json'), JSON.stringify(P, null, 1));
+  for (const p of P) console.log(sec(), `  pensée +${p.t} s [${p.source}] « ${p.texte} » (file : ${p.file.join(', ')})`);
+  verifier(P.length && !P.some(p => /terre|boue|mod[eè]l/i.test(p.texte)), 'aucune pensée ne parle d\'une autre matière');
+  const souffles = P.filter(p => p.source === 'file' && p.file[0] === 'effort'), reac = P.filter(p => p.source === 'file' && p.file[0] !== 'effort');
+  verifier(souffles.length >= 1, `souffles pendant l'effort : ${souffles.map(p => '+' + p.t + ' s').join(', ')}`);
+  verifier(reac.length === 1 && reac[0].t > Math.max(0, ...souffles.map(p => p.t)), `une réaction, après l'effort et le cadrage : ${reac.map(p => '+' + p.t + ' s « ' + p.texte + ' »').join(' ; ')}`);
+}
 await vueLibre(idE, 'énorme');
 await capture('3-enorme', 'l\'énorme crotte, entière');
 
