@@ -320,3 +320,18 @@ Variante compilée seulement si la fiche en demande (`RELIEF`) : semeur, sol, pr
 ### Taille de l'ombrage
 
 `node tools/ombrage-taille.mjs`, avant (main 564cab0) et après : actif, déplié et SPIR-V identiques pour les quatre variantes (socle 35 740 / 315 290 / 318 707 ; fiche 09 PC 38 708 / 1 007 645 / 534 957 ; fiche 09 mobile 39 483 / 996 737 / 541 749). Seul le source envoyé grossit (+6,3 k caractères : les sections `#if HOUPPIER` et `#if RELIEF` de `monde.glsl`, retirées par le préprocesseur).
+
+### Feuilles lisibles de près (20 novembre 2026, suite)
+
+De près (moins de 10 m), les bouquets se lisaient comme des boules de pop-corn brun tachées de noir : chaque grain tombait n'importe où sur la coque du bouquet, à la taille du grain, et la coque se remplissait ; à l'ombre (le devant d'un bouquet en contre-jour est à l'ombre de son propre arrière), la normale couchée éteignait toute lumière.
+
+- **Une feuille par cellule du monde, dessinée entière** (`semeHoup`, `v3_grains.vert`). Le grain prend la cellule (côté `taille`) où il tombe ; la place de la feuille dans la cellule, sa longueur (0,6 à 1,5 fois `taille`), son orientation, sa couleur et sa présence (trouées, jours, bord) ne dépendent que de la cellule : tous les grains qui y tombent dessinent la même feuille, au même endroit, d'une image à l'autre. De près, plusieurs grains par feuille sont inutiles : on en garde six en moyenne (`s²/taille²`).
+- **Limbe en fuseau** (`v3_gbuf.frag`) : pointu aux deux bouts, plus large vers la base, tourné, et aminci quand on le voit de biais (`|n·v|`, porté par `vDy.z`).
+- **Au loin**, une feuille de moins de 3 à 9 pixels est agrandie (jusqu'à 1,7 fois) et arrondie : la masse reste pleine, comme avant.
+- **Translucidité en contre-jour** : une feuille à l'ombre dans la carte d'ombres, vue du côté opposé au soleil, garde une part de lumière transmise qui décroît avec l'épaisseur de feuillage traversée (lue dans la carte, `exp(-e/0,9 m)`). Rien n'est ajouté à `v3_ombrage.frag` : la normale de la feuille est inclinée pour que `shadeLeaf` (terme de transmission chaud existant) donne cette part.
+- **Contour déchiqueté** (bruit à deux échelles), plus de feuilles dans l'épaisseur du bouquet.
+- **`inegal`** (nouveau champ d'un port, 0 par défaut : rien ne change) : un arbre sur quatre presque nu, les autres plus ou moins garnis, bouquets de tailles et de remplissages inégaux, petits jours dans chaque bouquet ; quelques feuilles isolées tiennent toujours (3 % des cellules). Fiche 09 : pin 0,2, chêne 0,85 (feuilles 0,68), bouleau 0,9, hêtre 0,5.
+
+Images (`node tools/arbres.mjs`, `MARCHE=7` pour sept images de marche) : avant `out/apres5/`, après `out/apres7/` (face, dos, haut, pieds, tel-face, tel-haut, marche-pc-1 à 7, marche-tel-1 à 7). De près, on lit des feuilles rousses orientées, translucides en contre-jour, le ciel et les rameaux entre elles ; à mi-distance, des arbres inégaux, certains presque nus ; les pins gardent leurs masses.
+
+Vérifications (rendu logiciel) : marche de 3 m en PC et téléphone, sept images de suite : sol suivi (caméra = `terrainH` JS + hauteur d'œil ; vue des pieds à l'échelle de la litière), feuilles fixes dans le monde, pas de scintillement des houppiers, mais en marche les feuilles lointaines sont des carrés de 1 à 2 pixels (pointillé visible au téléphone). Fiches 01, 04, 06 contre 564cab0, mêmes poses, même machine : écarts après flou 1,46 à 2,15 sur la 01, pour un plancher de bruit (même code rendu deux fois) de 1,69 à 2,11 ; 0,37 à 0,73 sur les 04 et 06. Lanceur de rayons sur la fiche 09 : rend (trois branches, relief, sans houppiers). Taille de l'ombrage : actif, déplié et SPIR-V inchangés pour les quatre variantes (source +11 caractères de commentaire).
