@@ -207,8 +207,8 @@
     {"f": "boule", "p": [0, 1.58, 0.02], "taille": [0.54, 0.5, 0.54], "couleur": "@", "matiere": "@", "lisse": 0.1, "bosse": 0.07, "part": "masse"},
     {"f": "cylindre", "p": [-0.56, 1.24, 0], "taille": [0.07, 0.85, 0.07], "penche": [0, 58], "couleur": "#4e3a27", "matiere": "bois", "part": "bras"},
     {"f": "cylindre", "p": [0.56, 1.27, 0], "taille": [0.07, 0.85, 0.07], "penche": [0, -52], "couleur": "#4e3a27", "matiere": "bois", "part": "bras"},
-    {"f": "boule", "p": [-0.105, 1.65, 0.235], "taille": [0.13, 0.13, 0.09], "couleur": "#e4e0d6", "matiere": "gres", "part": "yeux"},
-    {"f": "boule", "p": [0.105, 1.65, 0.235], "taille": [0.13, 0.13, 0.09], "couleur": "#e4e0d6", "matiere": "gres", "part": "yeux"}
+    {"f": "boule", "p": [-0.095, 1.65, 0.245], "taille": [0.08, 0.08, 0.06], "couleur": "#e4e0d6", "matiere": "gres", "part": "yeux"},
+    {"f": "boule", "p": [0.095, 1.65, 0.245], "taille": [0.08, 0.08, 0.06], "couleur": "#e4e0d6", "matiere": "gres", "part": "yeux"}
    ]
   }
  }

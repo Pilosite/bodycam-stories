@@ -111,18 +111,30 @@ export function creerOuverture(deps) {
   racine.id = 'ouverture'; racine.className = 'ouv'; racine.setAttribute('aria-labelledby', 'ouv-q'); racine.hidden = true;
   racine.innerHTML = `<div class="ouv-cadre">
   <header class="ouv-marque">
-    <p class="ouv-nom">Bodycam Stories</p>
-    <p class="ouv-concept">Génération procédurale complète par intelligence artificielle</p>
-    <p class="ouv-expl">Tu décris un monde. Une IA l'écrit, le moteur le fabrique entièrement par code, sans image ni modèle 3D, et le filme comme une caméra-piéton. Puis tu parles à celui qui la porte.</p>
+    <p class="ouv-surtitre"><span class="ouv-pt"></span>REC · prototype</p>
+    <p class="ouv-nom">BODYCAM<br><span>STORIES</span></p>
+    <p class="ouv-concept">From prompt to multimodal procedural generation</p>
+    <p class="ouv-expl">Un <b>moteur de jeu génératif</b>. Rien n'est programmé d'avance&nbsp;: tu demandes n'importe quoi, l'IA l'improvise et le moteur le rend, à l'image, au son et dans l'histoire.</p>
+    <ol class="ouv-chaine" aria-label="Du texte au jeu">
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H10l-4 4v-4H4z"/><path d="M8 9h5"/><path d="M8 12.5h8"/></svg><b>Prompt</b><i>tu dis ce que tu veux</i></li>
+      <li class="ouv-fl" aria-hidden="true">→</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><b>IA</b><i>elle improvise, sans script</i></li>
+      <li class="ouv-fl" aria-hidden="true">→</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V5h3M21 8V5h-3M3 16v3h3M21 16v3h-3"/><path d="M6 16l4-6 3 4 2-2.5 3 4.5"/><circle cx="16.5" cy="8.5" r="1.3"/></svg><b>Image</b><i>générée par code, en direct</i></li>
+      <li class="ouv-fl ouv-plus" aria-hidden="true">+</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v0M7.5 9v6M11 6v12M14.5 9.5v5M18 7.5v9M21 11v2"/></svg><b>Son</b><i>voix et bruitages</i></li>
+      <li class="ouv-fl ouv-plus" aria-hidden="true">+</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h10l4 4v12H5z"/><path d="M15 4v4h4"/><path d="M8.5 12h7M8.5 15.5h5"/></svg><b>Histoire</b><i>elle s'écrit pendant que tu joues</i></li>
+    </ol>
   </header>
   <p class="ouv-sur"><span class="ouv-pt"></span>CAM 07 · nouveau tournage</p>
   <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>
   <form id="ouv-form" class="ouv-form" autocomplete="off">
     <label class="ouv-vh" for="ouv-txt">Décris le monde</label>
-    <textarea id="ouv-txt" rows="2" maxlength="600" enterkeyhint="send" placeholder="Un lieu, une saison, une heure…"></textarea>
+    <textarea id="ouv-txt" rows="2" maxlength="900" enterkeyhint="send" placeholder="Un lieu, une saison, une heure…"></textarea>
     <div class="ouv-actions"><button type="button" id="ouv-dicter" class="ghost" hidden aria-pressed="false">Micro</button><button type="submit" id="ouv-go">Filmer</button></div>
   </form>
-  <div class="ouv-sugg"><span>Essaie :</span> <button type="button" id="ouv-sugg" class="ouv-chip"></button></div>
+  <div class="ouv-sugg"><button type="button" id="ouv-sugg" class="ouv-chip">Prompt démo</button></div>
   <div id="ouv-demande" class="ouv-demande" hidden></div>
   <div id="ouv-pense" class="ouv-pense" hidden></div>
   <ol id="ouv-log" class="ouv-log" aria-live="polite"></ol>
@@ -130,9 +142,34 @@ export function creerOuverture(deps) {
 </div>
 <button type="button" id="ouv-passer" class="ghost ouv-passer">Passer</button>`;
   d.body.appendChild(racine);
+  // L'intro : un faux cadre vidéo (REC, minutage, viseur, neige) et un bouton « Launch » ; noir, blanc, rouge. Le clic sert aussi
+  // de premier geste (son), puis une coupure de signal amène l'accueil.
+  const intro = d.createElement('div'); intro.className = 'ouv-intro'; intro.id = 'ouv-intro';
+  intro.innerHTML = `<div class="ouv-ecran">
+    <div class="ouv-neige" aria-hidden="true"></div><div class="ouv-lignes" aria-hidden="true"></div>
+    <div class="ouv-hud ouv-hg"><span class="ouv-pt"></span>REC <span id="ouv-tc">00:00:00:00</span></div>
+    <div class="ouv-hud ouv-hd">CAM 07 · 1080p · 30 i/s</div>
+    <div class="ouv-hud ouv-bg">SIGNAL · EN ATTENTE</div>
+    <div class="ouv-hud ouv-bd"><span class="ouv-bat"><i></i></span> 82 %</div>
+    <div class="ouv-mire" aria-hidden="true"></div>
+    <div class="ouv-centre">
+      <p class="ouv-i-nom">BODYCAM<br><span>STORIES</span></p>
+      <p class="ouv-i-sous">From prompt to multimodal procedural generation</p>
+      <button type="button" id="ouv-launch" class="ouv-launch"><span class="ouv-pt"></span>Launch</button>
+    </div>
+  </div><div class="ouv-coupe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>`;
+  racine.appendChild(intro);
+  { const t0 = Date.now(), tc = $('ouv-tc'), z = n => String(n).padStart(2, '0');
+    const iv = setInterval(() => { if (!intro.isConnected) { clearInterval(iv); return; } const ms = Date.now() - t0, s = Math.floor(ms / 1000);
+      tc.textContent = z(Math.floor(s / 3600)) + ':' + z(Math.floor(s / 60) % 60) + ':' + z(s % 60) + ':' + z(Math.floor(ms % 1000 / 33.4)); }, 67);
+    const lancer = () => { if (intro.classList.contains('ouv-part')) return; intro.classList.add('ouv-part'); racine.classList.add('ouv-arrive');
+      try { deps.surLancement && deps.surLancement(); } catch (_) {}
+      setTimeout(() => { intro.remove(); racine.classList.remove('ouv-arrive'); try { $('ouv-txt').focus({ preventScroll: true }); } catch (_) {} }, 1150); };
+    $('ouv-launch').onclick = lancer;
+    intro.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); lancer(); } }); }
   const txt = $('ouv-txt'), log = $('ouv-log'), rejeux = deps.rejeux || [];
   const sugg = (rejeux.find(r => r.suggestion) || {}).suggestion || '';
-  $('ouv-sugg').textContent = sugg; $('ouv-sugg').parentNode.hidden = !sugg;
+  $('ouv-sugg').parentNode.hidden = !sugg;                 // le bouton « Prompt démo » écrit la demande dans le champ ; elle n'est pas affichée d'avance
   let mention = !!deps.mention, timers = [], enCours = false, fini = false;
 
   function afficherMention(r) {
@@ -143,7 +180,8 @@ export function creerOuverture(deps) {
   $('ouv-sugg').onclick = () => {                       // la suggestion s'écrit dans le champ, comme tapée ; on garde la main pour envoyer
     if (enCours) return;
     txt.value = ''; let i = 0; const s = sugg;
-    const tape = () => { txt.value = s.slice(0, ++i); if (i < s.length) timers.push(setTimeout(tape, 14 + 30 * Math.random())); else txt.focus(); };
+    const grandir = () => { txt.style.height = 'auto'; txt.style.height = Math.min(txt.scrollHeight + 2, 260) + 'px'; };
+    const tape = () => { i = Math.min(s.length, i + 1 + (Math.random() < 0.35 ? 1 : 0)); txt.value = s.slice(0, i); grandir(); if (i < s.length) timers.push(setTimeout(tape, 6 + 16 * Math.random())); else txt.focus(); };
     tape();
   };
   txt.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ouv-form').requestSubmit(); } });
@@ -294,7 +332,7 @@ export function creerOuverture(deps) {
   }
 
   return {
-    ouvrir() { racine.hidden = false; d.body.classList.add('ouverture-on'); setTimeout(() => { try { txt.focus({ preventScroll: true }); } catch (_) {} }, 60); },
+    ouvrir() { racine.hidden = false; d.body.classList.add('ouverture-on'); setTimeout(() => { try { ($('ouv-launch') || txt).focus({ preventScroll: true }); } catch (_) {} }, 60); },
     mention(on) { mention = !!on; const m = $('ouv-mention'); if (m && m.textContent) m.hidden = !mention; return mention; },
     dictee(on) { const b = $('ouv-dicter'); if (b) { b.setAttribute('aria-pressed', String(!!on)); b.textContent = on ? 'J\'écoute' : 'Micro'; } },
     envoyer: t => { txt.value = t; envoyer(t); },

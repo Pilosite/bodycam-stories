@@ -459,3 +459,16 @@ Une pâte, de la boue, de la neige, des mains : des formes qui se fondent (`liss
 - **Compilation** : à la demande, quand un objet mou est visible, au calme (comme un gros programme, `v3Mou`) ; tant qu'elle n'est pas prête, `prochesO` dessine les formes une à une, sans fondu (les creux ne sont pas dessinés). Déplié (`node tools/proches-taille.mjs`) : PATE 6 940 (sommets 3 723, pixels 3 217 : sans les semis) ; `prochesO` 19 811 → 19 834 (le creux sauté) ; ombrage complet PC 67 098 → 67 115 (brillance par tache). Rien d'autre ne grossit dans les programmes de la première image.
 - **Pourquoi une boîte par forme** : un essai avec une boîte par objet coupait les bras (la boîte d'un bras passe derrière la caméra et se projette mal en fisheye) ; une boîte par forme coûte des recouvrements (un pixel couvert par k boîtes évalue k fois l'objet), pas de trou.
 - **Ombres** : la carte d'ombres reste semée en grains sur les formes non fondues (les creux ne sont pas semés) ; l'ombre de contact est une forme plate du modèle. Le lanceur de rayons fond `lisse` et creuse `creux` (rangés en dernier), sans bourrelet ni bosses.
+
+## Fluidité des gestes (branche `fluide`, 20 novembre 2026)
+
+Retour du PC de Toine : « ça rame quand ça ramasse les cailloux et que ça fait la crotte ». Gains appliqués par construction, sans mesure sur un vrai GPU :
+
+- **Faces arrière rejetées** dans `v3_proches.vert` (toutes familles) : la caméra du côté intérieur du plan d'une face, hors de la boîte : rien. Chaque boîte dessinait ses deux côtés, et chaque fragment marchait son rayon (la profondeur écrite empêche le rejet précoce) : moitié moins de fragments. Un seul `coin` pour toutes les familles (sommets PF 1 : 10 437 → 9 770 dépliés ; PF 2 +56, PF 3 +121).
+- **Objet mou, une marche par pixel** (`PATE`) : la boîte « propriétaire » (la première que croise le rayon, test rayon-boîte analytique dans le repère de chaque forme) marche seule ; les autres jettent leur fragment dès qu'une boîte d'avant croise le rayon. `sdMou` n'évalue que les formes dont la boîte croise le rayon (masque), et la marche est bornée à [entrée, sortie] de leur réunion. Déplié PATE (pixels) 3 263 → 4 766.
+- **Mains simplifiées** loin de la caméra (> 0,55 m, main au sol) : 5 formes au lieu de 9.
+- **Pâte compilée d'office** après les variantes FORMES, avant la variante complète ; premier dessin derrière l'ouverture, ou dès qu'elle est prête, au calme.
+- **Régulateur pendant un geste** (`enGeste` : mains à l'écran, zoom, effort, ramassage, façonnage) : descend quatre fois plus vite, attend 0,4 s entre deux niveaux, suit une échelle qui coupe grains, feuilles et rais en gardant la résolution (`REG_G`) ; à la fin du geste, les niveaux quittés se retentent. Carte d'ombres une image sur six.
+- **Mesure** : `balade.prochesCompte()` (variante `PRXCOMPTE`), `node tools/geste-cout.mjs`.
+
+Pas fait : proches à demi-résolution, variante « geste » du banc d'essai, tableau avant/après mesuré.

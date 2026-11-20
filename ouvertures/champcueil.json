@@ -5,7 +5,7 @@
   "note": "Journal réel d'une préparation faite le 19 novembre 2026 (recherche web par Claude, puis écriture de scenes/09-champcueil-aube.json ; à défaut de cette fiche dans la page, le rejeu débouche sur scenes/01-grands-avaux.json). Rien n'est ajouté : requêtes, pages lues, pages illisibles et constats sont ceux de cette séance. Les durées sont celles du rejeu, pas celles de la séance (environ une demi-heure de recherche et d'essais de rendu). Aucun texte de source n'est recopié. Le lendemain (20 novembre 2026), une recherche de photos sous licence libre sur Wikimedia Commons a complété la séance : ses vignettes et crédits sont dans ouvertures/photos/champcueil.json, ses observations parmi les constats (source « commons.wikimedia.org (photo) »). Elles n'illustrent que l'écran d'ouverture.",
   "fiche": "champcueil-aube",
   "ficheSecours": "grands-avaux-sentier",
-  "suggestion": "fais-moi une forêt en automne au lever du soleil, genre Champcueil",
+  "suggestion": "Sam, 24 ans, vit seule depuis trois ans au fond de la forêt de Champcueil, dans l'Essonne. Ce matin de novembre, elle a retrouvé la caméra-piéton de son frère, garde forestier, et l'a accrochée à sa veste. Le soleil se lève à peine entre les pins, la brume traîne sur le sentier de sable, entre les gros rochers de grès. Elle ne sait pas encore ce qu'elle cherche. Filme ce qu'elle voit, et laisse-moi lui parler.",
   "mots": [
     "champcueil",
     "grands avaux",
@@ -45,9 +45,9 @@
   "enregistre": "2026-11-19",
   "comprendre": {
     "duree": 1.3,
-    "texte": "Une forêt d'automne au lever du soleil, sur le modèle de Champcueil (Essonne) : je cherche à quoi ressemble ce lieu avant de le construire.",
+    "texte": "Sam, une jeune femme qui vit seule dans les bois de Champcueil (Essonne), un matin de novembre au lever du soleil, la caméra de son frère sur la veste : je cherche à quoi ressemble ce lieu avant de le construire, puis je lui donne une voix.",
     "reperes": [
-      "lieu réel : Champcueil, Essonne",
+      "personnage : Sam, 24 ans, seule ; on voit par sa caméra-piéton", "lieu réel : Champcueil, Essonne",
       "saison : automne",
       "heure : lever du soleil"
     ]

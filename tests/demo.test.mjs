@@ -64,7 +64,7 @@ test('bonhomme : la matière de la chose, à volume égal, trois boules, deux br
   const V0 = volumeFormes(g), V1 = volumeFormes(boules);
   assert.ok(Math.abs(V1 / V0 - 1) < 0.08, `volume gardé : ${(V0 * 1000).toFixed(2)} L → ${(V1 * 1000).toFixed(2)} L`);
   const tete = boules.reduce((a, b) => b.p[1] > a.p[1] ? b : a);
-  assert.ok(yeux.every(y => y.taille[0] >= 0.2 * tete.taille[0]), 'un œil fait au moins le cinquième de la tête');
+  assert.ok(yeux.every(y => y.taille[0] >= 0.12 * tete.taille[0] && y.taille[0] <= 0.16 * tete.taille[0]), 'un œil fait 12 à 15 % du diamètre de la tête : ' + (yeux[0].taille[0] / tete.taille[0]).toFixed(3));
   assert.ok(yeux.every(y => y.p[2] > tete.p[2] + tete.taille[2] * 0.35), 'les yeux sont sur le devant de la tête (+z)');
   const lum = c => parseInt(c.slice(1, 3), 16) + parseInt(c.slice(3, 5), 16) + parseInt(c.slice(5, 7), 16);
   assert.ok(lum(yeux[0].couleur) > 2.5 * lum(tete.couleur), 'contraste des yeux sur la tête');
@@ -247,7 +247,36 @@ test('monde de papier : rejoindre une chose derrière un rocher, droit dessus �
 /* ------------------------------------------------------------------ le parcours de la démo, tel qu'il sera joué (§15.6)
    1. une petite crotte ; 2. une énorme bouse ; 3. « fais comme un bonhomme de neige avec » (la géante), sans dire d'aller
    chercher quoi que ce soit. Plusieurs formulations du joueur, plusieurs façons dont Claude nomme les choses ou se trompe. */
-import { tientDansImage } from '../src/meneur.js';
+import { tientDansImage, saillants, ajoutsVus, CHAMP_RAD } from '../src/meneur.js';
+
+/* Les yeux du bonhomme (retour réel, PC de Toine : « on voit pas les cailloux à la fin sur la tête ») : un ajout dur planté
+   dans la pâte reste saillant (enfoncé d'un tiers au plus), du côté du visage, et se voit depuis la caméra du cadrage final :
+   rien ne le cache, au moins 8 pixels sur l'écran du PC (960 × 600, 16/10). */
+test('yeux : saillants (enfoncés d\'un tiers au plus), du côté de la caméra finale, non cachés, au moins 8 px sur le PC', async () => {
+  for (const chose of ['une énorme crotte', 'une crotte de 5 kg', 'une petite crotte']) {
+    const g = formesModele(MODELE('crotte'), chose).formes, brut = formesTransformees(MODELE('bonhomme'), g).formes, F = saillants(brut);
+    const H = haut(F), t = envergure(F), pl = planCadrage(t, 1.36, H), oeil = [0, 1.36 * pl.hauteur, pl.m];   // face (+z) tournée vers lui
+    const V = ajoutsVus(F, oeil).filter(v => F[v.i].matiere === 'gres');
+    assert.equal(V.length, 2, chose + ' : deux yeux vus');
+    const pxRad = 600 * pl.zoom * (960 / 600) / CHAMP_RAD;
+    for (const v of V) {
+      assert.ok(v.saillie >= 2 / 3 - 0.05, `${chose} : œil saillant aux deux tiers : ${v.saillie.toFixed(2)}`);
+      assert.ok(v.face && !v.occulte, `${chose} : du côté de la caméra, rien devant : ${JSON.stringify(v)}`);
+      assert.ok(v.angle * pxRad >= 8, `${chose} : ${(v.angle * pxRad).toFixed(1)} px à ${v.distance.toFixed(2)} m`);
+    }
+    // sans la règle, les cailloux du modèle étaient noyés (plus de la moitié dans la pâte)
+    if (chose === 'une énorme crotte') assert.ok(ajoutsVus(brut, oeil).filter(v => brut[v.i].matiere === 'gres').every(v => v.saillie < 0.5));
+  }
+  // vu de dos, ils ne sont pas « face »
+  const F = saillants(formesTransformees(MODELE('bonhomme'), formesModele(MODELE('crotte'), 'une énorme crotte').formes).formes);
+  assert.ok(ajoutsVus(F, [0, 1, -1.4]).filter(v => F[v.i].matiere === 'gres').every(v => !v.face || v.occulte));
+});
+test('yeux : dans la démo, le bonhomme final porte ses yeux saillants', async () => {
+  const P = await demo({});
+  const b = P.monde.objets.find(o => o.id === 'fab-2'), F = b.formesL, H = haut(F), pl = planCadrage(envergure(F), 1.36, H);
+  const V = ajoutsVus(F, [0, 1.36 * pl.hauteur, pl.m]).filter(v => F[v.i].matiere === 'gres');
+  assert.equal(V.length, 2); assert.ok(V.every(v => v.saillie >= 0.6 && v.face && !v.occulte), JSON.stringify(V));
+});
 const PHRASES = [
   ['fais une petite crotte', 'maintenant fais une énorme bouse', 'fais comme un bonhomme de neige avec'],
   ['fais une petite crotte', 'fais une crotte géante', 'fais-en un bonhomme de neige'],

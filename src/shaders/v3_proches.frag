@@ -13,8 +13,20 @@ precision highp float; precision highp int; precision highp sampler2D;
 #ifndef PATE
 #define PATE 0
 #endif
+/* PRXCOMPTE (essais seulement, balade.prochesCompte) : chaque fragment écrit, au lieu du tampon G, 1, le nombre de formes
+   évaluées (sdPrim, ou un pas de bloc ou de tronc), 1 s'il touche, et le nombre de tests de boîte ; la page les additionne
+   sur l'écran (mélange additif, sans profondeur). */
+#ifndef PRXCOMPTE
+#define PRXCOMPTE 0
+#endif
 #include "monde.glsl"
 uniform vec2 uJitPx;
+#if PRXCOMPTE
+int NEV=0, NFR=0;
+#define JETER { g0=vec4(1.,float(NEV),0.,float(NFR)); g1=vec4(0.); return; }
+#else
+#define JETER discard;
+#endif
 #if PATE
 /* Objets mous (variante PATE, voir v3_proches.vert). Vocabulaire des formes, des données (docs/fiche-de-lieu.md) :
    - lisse > 0 : la forme est MOLLE et se fond dans les formes molles de l'objet (union adoucie de ce rayon, m) : deux boules
@@ -25,24 +37,34 @@ uniform vec2 uJitPx;
    - bosse (partie fractionnaire de la matière, 0 à 0,4) : bosses molles à l'échelle de la forme, dans son repère (elles
      tournent avec elle quand on la roule).
    Une seule boucle sur les formes de l'objet, un seul appel de sdPrim : borné par le nombre de formes de l'objet (24 au plus),
-   évalué seulement dans les boîtes des formes de l'objet. */
+   évalué seulement dans les boîtes des formes de l'objet, et seulement pour les formes dont la boîte croise le rayon (msk).
+   Un pixel couvert par plusieurs boîtes d'un même objet ne marche l'objet qu'une fois : la boîte « propriétaire » (la première
+   que croise le rayon, test analytique rayon-boîte dans le repère de chaque forme : sans projection, donc sans souci de boîte
+   derrière la caméra) ; les autres jettent leur fragment dès qu'une boîte d'avant croise le rayon. La marche est bornée à
+   [entrée, sortie] de la réunion des boîtes croisées. */
 float smaxP(float a, float b, float k){ return -smin(-a,-b,k); }
 float bosseP(vec3 q){ return sin(q.x*1.9+1.3*sin(q.z*1.6))*sin(q.y*2.2+1.1+.8*sin(q.x*1.2))*sin(q.z*2.0+.7*sin(q.y*1.7)); }
-float sdMou(vec3 p, int st, int cn, bool mou, out float brow){
-  float so=1e5, ha=1e5, cr=1e5, kS=0., kC=0., bs=1e5, bh=1e5, rs=float(st), rh=float(st);
+float sdMou(vec3 p, int st, int cn, bool mou, int msk, out float brow){
+  float so=1e5, ha=1e5, cr=1e5, kS=0., kC=0., bs=1e5, bh=1e5, rs=float(st), rh=float(st), wb=1e5;
   for(int j=0;j<24+uZ;j++){
     if(j>=cn) break;
+    if(((msk>>j)&1)==0) continue;                                    // sa boîte ne croise pas le rayon : elle ne compte pas
     int row=st+j;
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
     vec3 q=primLocal(p,row);
+#if PRXCOMPTE
+    NEV++;
+#endif
     float dd=sdPrim(q,a.w,b.xyz)-max(e.y,0.);
     float bo=mou?fract(texelFetch(uShapes,ivec2(2,row),0).w):0.;
     if(bo>.001){ float sz=max(min(b.x,min(b.y,b.z)),.004); dd+=bo*sz*bosseP(q*(2.2/sz)+float(row)*1.7); }
     if(e.x>0.){ so=smin(so,dd,e.x); kS=max(kS,e.x); if(dd<bs){ bs=dd; rs=float(row); } }
     else if(e.x<0.){ cr=min(cr,dd); kC=max(kC,-e.x); }
-    else { ha=min(ha,dd); if(dd<bh){ bh=dd; rh=float(row); } }
+    else { ha=min(ha,dd); if(dd<bh){ bh=dd; rh=float(row); wb=.6*min(b.x,min(b.y,b.z)); } }
   }
-  if(ha<1e4 && so<1e4) so=smin(so,max(ha-.8*kS,so-.4*kS),.5*kS);   // bourrelet de matière autour de ce qui y est planté
+  // bourrelet de matière autour de ce qui y est planté, à l'échelle de la forme dure la plus proche (sinon un petit caillou
+  // pressé dans la pâte disparaît sous son propre bourrelet)
+  if(ha<1e4 && so<1e4){ float w=min(.8*kS,wb); so=smin(so,max(ha-w,so-.5*w),.6*w); }
   if(cr<1e4) so=smaxP(so,-cr,kC);                                    // empreintes
   brow=ha<so?rh:rs;
   return min(so,ha);
@@ -52,19 +74,44 @@ flat in ivec4 vK; flat in vec2 vId; flat in vec2 vPrx; in vec3 vW;
 layout(location=0) out vec4 g0;
 layout(location=1) out vec4 g1;
 void main(){
-  if(vK.x<0) discard;
+  if(vK.x<0) JETER
   vec2 uv=(gl_FragCoord.xy+uJitPx-.5*uRes)/uRes.y;
   float rr=length(uv), ang=rr*uFish;
   vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
   int row=vK.y; ElemS e; Bloc B; float sc=1.;
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), ee=texelFetch(uShapes,ivec2(3,row),0);
 #if (PF==0 || PF==1) && !PATE
-  if(vK.x==1){ semisTete(vK.z,float(vK.w),e); if(!semisElem(vK.z,vId,e)) discard; sc=.85*e.s*min(1.,e.sy)*e.sh; }
+  if(vK.x==1){ semisTete(vK.z,float(vK.w),e); if(!semisElem(vK.z,vId,e)) JETER sc=.85*e.s*min(1.,e.sy)*e.sh; }
 #endif
 #if PF==0 || PF==2
-  if(vK.x==2){ if(!blocGres(vId,B)) discard; }
+  if(vK.x==2){ if(!blocGres(vId,B)) JETER }
 #endif
   float t0=length(vW-uCamPos), t=vPrx.x>.5?.02:max(.02,t0-.05), tmax=t0+vPrx.y, d=1.;
+#if PATE
+  int msk=1;
+  if(vK.x==5){                                                // objet mou : propriétaire, formes croisées, intervalle
+    float T0=1e5, T1=-1e5; int own=-1; msk=0;
+    for(int j=0;j<24+uZ;j++){
+      if(j>=vK.z) break;
+      int r=vK.y+j;
+      vec4 ja=texelFetch(uShapes,ivec2(0,r),0), jb=texelFetch(uShapes,ivec2(1,r),0), je=texelFetch(uShapes,ivec2(3,r),0);
+      vec3 hb=boiteP(ja.w,jb.xyz,je.y)+vId.x+fract(texelFetch(uShapes,ivec2(2,r),0).w)*min(jb.x,min(jb.y,jb.z));
+      vec3 ro=primLocal(uCamPos,r), rl=primLocal(uCamPos+rd,r)-ro;
+#if PRXCOMPTE
+      NFR++;
+#endif
+      rl=mix(rl,vec3(1e-6),lessThan(abs(rl),vec3(1e-6)));
+      vec3 t1=(-hb-ro)/rl, t2=(hb-ro)/rl, tn=min(t1,t2), tf=max(t1,t2);
+      float a0=max(tn.x,max(tn.y,tn.z)), a1=min(tf.x,min(tf.y,tf.z));
+      if(a1>max(a0,0.)){
+        if(own<0 && je.x>=0.){ own=r; if(r!=vK.w) break; }   // une boîte d'avant tient ce pixel : rien à faire ici
+        msk|=1<<j; T0=min(T0,a0); T1=max(T1,a1);
+      }
+    }
+    if(own!=vK.w) JETER
+    t=max(.02,T0); tmax=T1;
+  }
+#endif
   bool touche=false; vec4 gv=vec4(0.); const vec2 k=vec2(1.,-1.);
   int nn=0; float brow=float(row);
   for(int i=0;i<24+uZ;i++){                                    // jusqu'à 20 pas de marche, puis 4 évaluations pour la normale
@@ -72,8 +119,11 @@ void main(){
     vec3 o=touche?(nn==0?k.xyy:nn==1?k.yyx:nn==2?k.yxy:k.xxx)*(.0005*t+.0005):vec3(0.);
     vec3 p=uCamPos+rd*t+o;
     float dd=1.;
+#if PRXCOMPTE && !PATE
+    NEV++;
+#endif
 #if PATE
-    if(vK.x==0 || vK.x==5){ float br; dd=sdMou(p,row,vK.x==5?vK.z:1,vK.x==5,br)*(vK.x==5?.7:.8); if(!touche) brow=br; }   // un seul appel de sdMou
+    if(vK.x==0 || vK.x==5){ float br; dd=sdMou(p,row,vK.x==5?vK.z:1,vK.x==5,msk,br)*(vK.x==5?.7:.8); if(!touche) brow=br; }   // un seul appel de sdMou
 #elif PF==0 || PF==1
     if(vK.x<=1) dd=(sdPrim(primLocal(vK.x==0?p:semisLocal(p,e),row),a.w,b.xyz)-ee.y)*(vK.x==0?.8:sc);   // un seul appel de sdPrim
 #endif
@@ -87,7 +137,7 @@ void main(){
     else if(dd<.0006*t+.0004 || (i>=19 && dd<.01*t+.004)) touche=true;   // au dernier pas, tout près de la surface (rayon rasant) : touché, pas de trou
     else { t+=dd; if(t>tmax || i>=19) break; }
   }
-  if(!touche || nn<4) discard;
+  if(!touche || nn<4) JETER
   vec3 p=uCamPos+rd*t;
   vec3 n=normalize(k.xyy*gv.x+k.yyx*gv.y+k.yxy*gv.z+k.xxx*gv.w);
   vec3 q=p; float code=0.;
@@ -106,4 +156,7 @@ void main(){
 #endif
   gl_FragDepth=clamp(t/400.,0.,1.);
   g0=vec4(q,code); g1=vec4(n,t);
+#if PRXCOMPTE
+  g0=vec4(1.,float(NEV),1.,float(NFR));
+#endif
 }

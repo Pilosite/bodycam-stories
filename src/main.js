@@ -184,9 +184,9 @@ function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture
 
 /* ------------------------------------------------------------------ scène : ce que la fiche de lieu pilote */
 const S={ can:[7,19], houp:[0,1.5,2.6,1], loin:[0,3,2,0], loinCol:[.2,.2,.21], loinBas:[.05,.07,.05], surf:[0,1,2,0], surfT:[3,4,5,6], surfP:[.45,.5], objN:0, kit:0,
-  rel:[1,1,0,0], relB:[0,0,0,0], relC:[0,0,1,1], relS:[0,0], relOn:false, hp:new Float32Array(64), hpC:new Float32Array(36), hpOn:false, traj:[1,.85,.3,.5], creux:[.10,1.8,.4,0], terK:[.88,0], yTop:23, pente:.22, semN:0, semTop:[0,0,0,0], objTop:0, solAlb:[.24,.15,.07], lum:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
+  rel:[1,1,0,0], relB:[0,0,0,0], relC:[0,0,1,1], relS:[0,0], relOn:false, hp:new Float32Array(64), hpC:new Float32Array(36), hpOn:false, traj:[1,.85,.3,.5], creux:[.10,1.8,.4,0], terK:[.88,0], yTop:23, pente:.22, semN:0, semTop:[0,0,0,0], objTop:0, solAlb:[.24,.15,.07], lum:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false, seed:[0,0,0], trou:[0,0,0,0], trou2:[0,0,0,0], depart:null };
 let fiche=null, ficheIdx=0, seedN=4821, seed=[0,0,0], sceneDirty=true;
-function setSeed(n){ seedN=n; seed=[(n*12.9898)%89,(n*78.233)%83,(n*.618034)%6.2832]; }
+function setSeed(n){ seedN=n; seed=LUMIERE.graineVec(n); S.seed=seed; }
 function applyAmbiance(a){
   const so=a.soleil||{azimut:-33,hauteur:21};
   S.nuit=so.hauteur<-1;
@@ -228,43 +228,16 @@ function soleilAtmo(h,trouble){
 }
 /* Kit : "foret" et "dunes" ont encore leurs arbres, rochers et canopée en dur ; "nu" n'a rien de prédéfini.
    Une fiche sans kit qui fournit ses semis est un monde nu. */
-const kitDe=f=>f.kit==="dunes"?1:f.kit==="nu"||(f.kit===undefined&&Array.isArray(f.semis)&&f.semis.length)?2:0;
-/* Relief et trajet : la fiche règle les formules de terrainH et pathX. Sans réglage, la forêt d'origine à l'identique. */
-function reglerRelief(f){
-  S.rel=[1,1,0,0]; S.traj=[1,.85,.3,.5]; S.creux=[.10,1.8,.4,0]; S.terK=[.88,0]; S.pente=.22;
-  S.relB=[0,0,0,0]; S.relC=[0,0,1,1]; S.relS=[0,0]; S.relOn=false;
-  if(S.kit===1) return;                                          // dunes : relief encore en dur
-  const re=isObj(f.relief)?f.relief:null, tr=isObj(f.trajet)?f.trajet:null;
-  if(!re&&!tr&&S.kit===0) return;
-  /* Bosses (creux et bosses de 5 à 30 m) et buttes (flanc puis plateau, au second plan) : reliefDetail dans monde.glsl, variante
-     RELIEF compilée seulement si la fiche en demande. hauteur en m, echelle en m (longueur d'onde), trajet : part gardée sur le trajet. */
-  const bo=re&&isObj(re.bosses)?re.bosses:null, bu=re&&isObj(re.buttes)?re.buttes:null;
-  const hB=bo?clampN(bo.hauteur,0,4,0):0, hT=bu?clampN(bu.hauteur,0,25,0):0;
-  if(hB>0||hT>0){
-    const part=bu?clampN(bu.part,0,1,.3):.3, plat=bu?clampN(bu.plat,0,1,.5):.5, s1=.78-.4*part, s0=s1-(.06+.22*(1-plat));
-    S.relB=[hB,1/(bo?clampN(bo.echelle,3,80,12):12),hT,1/(bu?clampN(bu.echelle,15,400,60):60)];
-    S.relC=[s0,s1,bo?clampN(bo.trajet,0,1,.35):.35,bu?clampN(bu.trajet,0,1,.5):.5];
-    S.relS=[seedN%997,(seedN*7)%991]; S.relOn=true;
-  }
-  const amp=clampN(re&&re.amplitude,0,12,S.kit===2?.8:1.5), ech=clampN(re&&re.echelle,20,600,150), pente=clampN(re&&re.pente,-.35,.35,0);
-  const larg=clampN(tr&&tr.largeur,.6,30,1.7), hw=larg/2, net=!!(tr&&tr.bord==="net"), creux=clampN(tr&&tr.creux,0,1.2,.10);   // jusqu'à 1,2 m : un sentier encaissé entre deux talus
-  const niv=re&&re.niveler!==undefined?!!re.niveler:S.kit===2&&larg>=3;
-  S.rel=[amp/1.5,150/ech,pente,niv?hw+2:0];
-  S.traj=[clampN(tr&&tr.sinuosite,0,2,1),hw,net?.03:.3,net?0:.5];
-  S.creux=[creux,hw+(net?.18:.95),net?hw:Math.max(0,hw-.45),0];
-  const g=S.rel[0]*S.rel[1]*.22+Math.abs(pente)+(S.relOn?3*S.relB[0]*S.relB[1]+.6*S.relB[2]*S.relB[3]/Math.max(.05,S.relC[1]-S.relC[0]):0); S.pente=g;     // pente la plus forte du relief, en gros
-  S.terK=[.88/Math.sqrt(1+g*g),0];
-  const cg=1.5*creux/Math.max(.05,S.creux[1]-S.creux[2]);       // bord de trottoir : pas réduit seulement là
-  if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
-}
+const kitDe=LUMIERE.kitDe;
+/* Relief et trajet : la fiche règle les formules de terrainH et pathX (src/lumiere.js, reglerRelief). Sans réglage, la forêt d'origine à l'identique. */
+function reglerRelief(f){ LUMIERE.reglerRelief(S,f,seedN); }
 function applyFiche(f){
   if(f!==fiche){ montrerDit(""); errance=arrivee(); immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
   const fo=f.foret||{};
-  S.kitP=S.kit===1 ? [-1,(f.dunes&&f.dunes.rochers)||0,0,1] : S.kit===2 ? [-1,0,0,1]
-                   : [fo.densite!==undefined?(.2+.6*fo.densite)*Math.min(1,fo.densite*5):.62, fo.rochers!==undefined?fo.rochers:1, fo.feuillage!==undefined?fo.feuillage:1, 1];
+  S.kitP=LUMIERE.kitParams(f,S.kit);
   reglerRelief(f);
   const cone=fo.houppier==="cone";                               // conifères : un cône de feuillage par arbre au lieu de la voûte commune
   S.can=cone?[clampN(fo.houppier_bas,.3,8,1.6),19]:[7,19];
@@ -277,11 +250,28 @@ function applyFiche(f){
   buildMats(f); reglerHouppiers(f); buildShapes(f);
   applyAmbiance(f.ambiance||{});
   if(f.ambiance&&f.ambiance.saison==="hiver") S.kitP[2]*=.15;
-  cam.z=0; cam.x=S.kit!==1?pathX(0):0; cam.yaw=S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; queue.length=0; tempsFaits.length=0;
+  LUMIERE.reglerTrouee(S,f,pathX);                               // foret.trouee : une bande sans arbres vers le soleil (troue, monde.glsl)
+  cacheObj.clear(); (f.objets||[]).forEach(o=>{ if(o&&o.visible===false) cacheObj.add(o.id); });
+  S.depart=departDe(f);                                          // parcours.depart : où il démarre (au soleil, à l'ombre)
+  auDepart(); queue.length=0; tempsFaits.length=0;
   cacheObj.clear(); (f.objets||[]).forEach(o=>{ if(o&&o.visible===false) cacheObj.add(o.id); }); buildShapes(f);
   v3Fiche();
 }
 
+/* Le départ (fiche : parcours.depart) : { lumiere: "soleil" | "ombre" } cherche le long du trajet le point et le cap où le sol
+   autour du porteur (2,5 m, devant et derrière) est au soleil (ou à l'ombre), libre d'obstacle, le soleil de trois quarts
+   (LUMIERE.chercherDepart : relief, troncs, perches, blocs, houppiers, trouée). Calculé une fois par fiche. Sans ce champ (ou
+   sans soleil) : le début du trajet, dans son axe, comme avant. */
+function departDe(f){
+  const d=isObj(f.parcours)&&isObj(f.parcours.depart)?f.parcours.depart:null, lu=d&&(d.lumiere==="soleil"||d.lumiere==="ombre")?d.lumiere:null;
+  if(!lu||S.kit===1||S.nuit) return null;
+  const t=performance.now(), r=LUMIERE.chercherDepart(MJ,{lumiere:lu});
+  if(r) console.log("départ "+lu+" : z "+r.z.toFixed(1)+", écart "+(r.x-pathX(r.z)).toFixed(2)+" m, disque au soleil "+Math.round(r.part*100)+" % (min "+Math.round(r.min*100)+" %), soleil à "+r.soleil_deg+"° du regard, "+Math.round(performance.now()-t)+" ms");
+  return r?{x:r.x,z:r.z,yaw:r.yaw,part:r.part,min:r.min,lumiere:lu}:null;
+}
+function auDepart(){
+  const d=S.depart; cam.z=d?d.z:0; cam.x=d?d.x:S.kit!==1?pathX(0):0; cam.yaw=d?d.yaw:S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0;
+}
 /* Houppiers (foret.houppiers) : un port par écorce (arbres a et b, perches a et b, même partage). Rien n'est une essence :
    la fiche dit où commence le houppier sur la hauteur du tronc, sa largeur, son profil, ses charpentières (nombre, montée,
    retombée), leurs rameaux, et les masses de feuillage au bout (taille, remplissage, taille des feuilles, couleurs). Rangé dans
@@ -291,10 +281,7 @@ function applyFiche(f){
 function portHoup(o,i,part){
   const r=i*16, c=i*9;
   if(!isObj(o)) return false;
-  const hb=Array.isArray(o.hauteur)?o.hauteur:[.45,1], bas=clampN(hb[0],0,.95,.45), haut=clampN(hb[1],bas+.03,1,1);
-  S.hp.set([bas,haut,clampN(o.largeur,.2,8,2.5),clampN(o.aplati,0,1,.3),
-    Math.round(clampN(o.branches,1,8,5)),clampN(o.montee,0,1,.5),clampN(o.retombe,0,1,.1),Math.round(clampN(o.rameaux,0,3,2)),
-    clampN(o.masse,.15,2.5,.8),clampN(o.feuilles,0,1,.5),clampN(o.taille,.02,.4,.08),1, part,clampN(o.inegal,0,1,0),0,0],r);
+  LUMIERE.portHoupNum(S.hp,o,i,part);                           // les nombres du port (src/lumiere.js : la lumière les lit aussi)
   const cs=(Array.isArray(o.couleurs)?o.couleurs:[]).filter(x=>typeof x==="string").slice(0,3);
   if(!cs.length) cs.push("#6b5a2a");
   for(let k=0;k<3;k++) S.hpC.set(couleur(cs[k%cs.length]),c+3*k);
@@ -562,33 +549,11 @@ function validerRecettes(m){                                    // la fiche ne g
   return Object.keys(out).length?out:undefined;
 }
 
-/* Mêmes formules que dans pathtrace.frag : à modifier des deux côtés. */
-const sstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
-const pathX=z=>S.traj[0]*(3.2*Math.sin(z*.047+seed[2])+1.6*Math.sin(z*.113+1.7+seed[2]*2));
-const pathYaw=z=>Math.atan2(pathX(z+3)-pathX(z-3),6);
-function ondul(x,z){ const qx=x*S.rel[1], qz=z*S.rel[1];
-  return S.rel[0]*(1.5*Math.sin(qx*.041+.6+seed[2])*Math.cos(qz*.035+1.1)+.65*Math.sin(qx*.097+qz*.071+2)+.22*Math.sin(qx*.29-qz*.21+seed[2]*3)); }
-function terrainH(x,z){
-  if(S.kit===1){ const a=x*.045+.9*Math.sin(z*.021+seed[2])+.5*Math.sin(z*.05+1.3);
-    return 3.2*(1-Math.abs(Math.sin(a)))*(.62+.38*Math.sin(z*.03+2+seed[2]))+.5*Math.sin(x*.11+z*.08); }
-  const px=pathX(z), ax=Math.abs(x-px);
-  let h=ondul(S.rel[3]>0?x+(px-x)*sstep(S.rel[3]+5,S.rel[3],ax):x,z);   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe
-  h+=S.rel[2]*z;
-  h-=S.creux[0]*sstep(S.creux[1],S.creux[2],ax);
-  return S.relOn?h+reliefDetail(x,z,ax):h;
-}
-/* Bosses et buttes : la même formule que reliefDetail (monde.glsl), au bit près pour le hachage (entiers non signés, Math.imul). */
-function hR(cx,cz){ let x=(Math.imul((cx+S.relS[0]+46000)>>>0,1597334677)^Math.imul((cz+S.relS[1]+46000)>>>0,3812015801))>>>0;
-  x=(Math.imul(x,747796405)+2891336453)>>>0; x=Math.imul(((x>>>((x>>>28)+4))^x)>>>0,277803737)>>>0; x=((x>>>22)^x)>>>0; return (x>>>8)/16777216; }
-function bruitR(px,pz){ const ix=Math.floor(px), iz=Math.floor(pz); let fx=px-ix, fz=pz-iz; fx=fx*fx*(3-2*fx); fz=fz*fz*(3-2*fz);
-  const a=hR(ix,iz), b=hR(ix+1,iz), c=hR(ix,iz+1), d=hR(ix+1,iz+1); return (a+(b-a)*fx)+((c+(d-c)*fx)-(a+(b-a)*fx))*fz; }
-function reliefDetail(x,z,ax){
-  const B=S.relB, C=S.relC, qx=x*B[1], qz=z*B[1], rx=x*B[3], rz=z*B[3], hw=S.traj[1];
-  if(B[0]===0&&B[2]===0) return 0;                              // ni bosses ni buttes (comme monde.glsl)
-  const b=(bruitR(qx,qz)-.5)*1.4+(bruitR((.8*qx-.6*qz)*2.13+31,(.6*qx+.8*qz)*2.13+17)-.5)*.6;
-  const t=sstep(C[0],C[1],bruitR(.6*rx+.8*rz-57,-.8*rx+.6*rz+83));
-  return B[0]*b*(C[2]+(1-C[2])*sstep(hw,hw+2.5,ax))+B[2]*t*(C[3]+(1-C[3])*sstep(hw+1,hw+14,ax));
-}
+/* Le monde en JS (trajet, relief, objets de cellule, trouée) : src/lumiere.js (LUMIERE.mondeJS), MÊMES FORMULES que monde.glsl,
+   à modifier des deux côtés. L'état est S (seed, relief, trajet, kit, houppiers, trouée, degage). */
+S.degage=(x,z)=>degage(x,z);
+const MJ=LUMIERE.mondeJS(S), sstep=LUMIERE.sstep, pathX=MJ.pathX, pathYaw=MJ.pathYaw, terrainH=MJ.terrainH, reliefDetail=MJ.reliefDetail;
+const libreJS=(x,z)=>degage(x,z)||MJ.troue(x,z);                // cleared() de monde.glsl : objet qui dégage, ou trouée
 
 /* ------------------------------------------------------------------ porteur de la caméra */
 // le corps du porteur : seul le récit le déplace (haut : posture, part de la hauteur debout ; elev : perché au-dessus du sol,
@@ -624,7 +589,7 @@ function common(w,h,p){
   gl.uniform1f(u.uFish,1.09/(.5*Math.max(1,w/h))/cam.zoom);   // 125° sur le grand côté, divisé par le zoom
   gl.uniform1f(u.uFog,S.fog); gl.uniform3fv(u.uSeed,seed); gl.uniform3fv(u.uSunDir,S.sunDir);
   gl.uniform3fv(u.uSun,S.sun); gl.uniform3fv(u.uSky,S.sky); gl.uniform1f(u.uTorch,S.torch);
-  bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
+  bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN); gl.uniform4fv(u.uTrou||null,S.trou); gl.uniform4fv(u.uTrou2||null,S.trou2);
   gl.uniform2fv(u.uCan,S.can); gl.uniform4fv(u.uHoup,S.houp);
   gl.uniform4fv(u.uLoin,S.loin); gl.uniform4fv(u.uEau,S.eau||[0,0,0,0]); gl.uniform3fv(u.uLoinCol,S.loinCol); gl.uniform3fv(u.uLoinBas,S.loinBas);
   bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP);
@@ -1144,6 +1109,7 @@ function v3Init(){                                             // rend vrai quan
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   }
+  if(OMB.e.socle&&OMB.e.socle.p&&V3.gp.grainsF) v3Mou();        // après les formes : la pâte (petite, celle des gestes), compilée d'office avant la variante complète
   const r=v3Ombrage();
   if(OMB.e.socle&&OMB.e.socle.p) v3Formes();                   // après le socle : les variantes FORMES, puis (v3Ombrage) la complète
   return r;
@@ -1159,13 +1125,13 @@ function v3Tranches(G,ps,vue){                                 // [programme, pr
   const t=[[G.grainsA,0,ps.part[0]],[G.grainsB,ps.part[0],ps.part[1]],[G.grainsR,ps.part[1],ps.part[2]]];
   if(!vue) t.push([G.grainsL,ps.part[2],ps.part[3]]);
   t.push([BANC.v&&BANC.v.sansF?null:G.grainsF,ps.part[3],ps.total]); return t; }
-function v3Lancer(k){                                          // un programme du semeur, dans la variante voulue par la fiche
+function v3Lancer(k,compte){                                   // un programme du semeur, dans la variante voulue par la fiche (compte : PRXCOMPTE, essais)
   const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
   const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
   const SP=V3_FAM[k]?[FS_V3GBUF,Hp(VS_V3GRAINS).replace("\n","\n#define FAM "+V3_FAM[k]+"\n")]:
-    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+"\n")):
+    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+(compte?"\n#define PRXCOMPTE 1":"")+"\n")):
     { sol:[FS_V3GBUF,R(VS_V3SOL)], grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))] }[k];
-  return lancer(SP[0],SP[1],"v3 "+k);
+  return lancer(SP[0],SP[1],"v3 "+k+(compte?" (compte)":""));
 }
 function v3Formes(){                                           // rend vrai quand les deux variantes FORMES sont en service
   if(!V3.gp) return false; if(V3.gp.grainsF) return true;
@@ -1186,7 +1152,7 @@ function v3Mou(){
   const x=V3.lance.prochesM;
   if(!x){ if(compLibre(true)) V3.lance.prochesM=v3Lancer("prochesM"); return false; }
   if(!fini(x)) return false;
-  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; return true;
+  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; if(!ouvRepos) V3.chaufferMou=true; return true;   // premier dessin (vide) au calme, pas au premier geste
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
@@ -1253,7 +1219,7 @@ function v3Tapis(p){
       T.f.push(f); T.lv.push({O:[0,0],pret:false,fill:-1}); }
   }
   if(T.panne) return false;
-  const cle=JSON.stringify([seed,S.surf,S.traj,S.rel,S.relB,S.relC,S.creux,S.kit,matVersion,S.sunDir,S.kitP,S.can,S.houp]);   // tout ce dont dépend la cuisson
+  const cle=JSON.stringify([seed,S.surf,S.traj,S.rel,S.relB,S.relC,S.creux,S.kit,matVersion,S.sunDir,S.kitP,S.can,S.houp,S.trou,S.trou2]);   // tout ce dont dépend la cuisson
   if(cle!==T.cle){ T.cle=cle; T.lv.forEach(l=>{ l.pret=false; l.fill=-1; }); }
   const G=V3.tapP, u=G.u; gl.useProgram(G.p); v3Monde(u,N,N,p); gl.uniform1i(u.uTapN,N);
   gl.viewport(0,0,N,N); gl.enable(gl.SCISSOR_TEST);
@@ -1403,7 +1369,7 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   gl.uniform1i(u.uKit||null,S.kit); gl.uniform4fv(u.uKitP||null,S.kitP); gl.uniform1i(u.uMode||null,0);
   gl.uniform2fv(u.uCan||null,S.can); gl.uniform4fv(u.uHoup||null,S.houp);
   gl.uniform4fv(u.uLoin||null,S.loin); gl.uniform3fv(u.uLoinCol||null,S.loinCol); gl.uniform3fv(u.uLoinBas||null,S.loinBas);
-  if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
+  if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN); gl.uniform4fv(u.uTrou||null,S.trou); gl.uniform4fv(u.uTrou2||null,S.trou2);
   if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP); }
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
   if(u.uRelB){ gl.uniform4fv(u.uRelB,BANC.v&&BANC.v.sansRel?[0,S.relB[1],0,S.relB[3]]:S.relB); gl.uniform4fv(u.uRelC,S.relC); gl.uniform2fv(u.uRelS,S.relS); }   // bosses et buttes (variante RELIEF ; banc : sans)
@@ -1458,6 +1424,12 @@ function gpuImage(){                                           // fin d'une imag
    de la cible) pendant trois secondes, on remonte. Mesure : temps de la puce quand il est connu, sinon intervalle entre images.
    Niveaux, dans l'ordre : feuilles proches moins recouvertes et plus petites, moins de grains, moins de pas de rais,
    résolution interne plus basse. Option regulateur:false (défaut des captures d'essai, window.__CFG) pour le couper. */
+/* Un geste lourd à l'écran (effort accroupi, ramassage, façonnage : mains et pâte de près, cadrage zoomé) : le régulateur
+   réagit plus vite, réduit d'abord grains, feuilles et rais (ce qui ne se voit pas alors) et garde la résolution ; la carte
+   d'ombres n'est refaite qu'une image sur six. */
+const enGeste=()=>!!mainsObj||cam.zoom>1.05||!!(queue[0]&&/^(effort|ramasser|faconner)$/.test(queue[0].type));
+const REG_G=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:.7, fG:.5, fMax:48, rais:.5, res:1}, {g:.5, fG:.4, fMax:32, rais:0, res:1},
+  {g:.35, fG:.4, fMax:28, rais:0, res:1}, {g:.28, fG:.4, fMax:28, rais:0, res:.85}, {g:.22, fG:.4, fMax:24, rais:0, res:.7} ];
 const REG_N=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:1, fG:.6, fMax:64, rais:1, res:1}, {g:.75, fG:.5, fMax:48, rais:1, res:1},
   {g:.55, fG:.5, fMax:40, rais:.5, res:1}, {g:.4, fG:.4, fMax:32, rais:.3, res:.85}, {g:.32, fG:.4, fMax:28, rais:0, res:.7} ];
 const REG={ on:CFG.regulateur!==undefined?!!CFG.regulateur:!window.__CFG, niveau:0, ms:0, haut:0, bas:0, t:0, change:0, vu:{}, quand:{} };
@@ -1468,9 +1440,11 @@ function regMesure(dt,dtBrut){                                 // après chaque 
   // on remonte alors dès qu'on tient la cible, au lieu d'attendre une marge qu'on ne peut pas voir).
   const puce=GT.ext&&GT.total>0, m=puce?GT.total:dtBrut; if(!(m>0)||m>2000) return;
   REG.ms=REG.ms?REG.ms*.85+m*.15:m;
-  const c=regCible(), now=performance.now();
-  if(REG.ms>c*1.1) { REG.haut+=dt; REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
-  if(now-REG.change<1500) return;                              // le temps que le niveau précédent se mesure
+  const c=regCible(), now=performance.now(), g=enGeste();
+  if(REG.geste&&!g){ REG.vu={}; }                              // fin du geste : la scène a changé, les niveaux quittés pendant le geste se retentent
+  if(g!==REG.geste){ REG.geste=g; regNiveau(REG.niveau); }      // l'échelle change (REG_G / REG_N) au même niveau
+  if(REG.ms>c*1.1) { REG.haut+=dt*(g?4:1); REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
+  if(now-REG.change<(g?400:1500)) return;                      // le temps que le niveau précédent se mesure (geste : vite)
   let k=REG.niveau;
   /* Pas de pompage : on ne remonte pas vers un niveau qu'on vient de quitter parce qu'il dépassait la cible (mesuré au-dessus
      de 100 % il y a moins de 20 s). Passé ce temps (la scène a pu changer), on réessaie. */
@@ -1482,9 +1456,9 @@ function regNiveau(k){
   const avant=REG_N[REG.niveau]; REG.vu[REG.niveau]=REG.ms; REG.quand[REG.niveau]=performance.now();   // ce que coûtait le niveau quitté
   REG.niveau=k; REG.haut=REG.bas=0; REG.change=performance.now(); REG.ms=0;
   etapeGL("régulateur : niveau "+k);
-  if(avant.res!==REG_N[k].res){ REG_RES=REG_N[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
+  const L=REG.geste?REG_G:REG_N; if(REG_RES!==L[k].res){ REG_RES=L[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
 }
-const regEtat=()=>REG_N[REG.on?REG.niveau:0];
+const regEtat=()=>(REG.on&&REG.geste?REG_G:REG_N)[REG.on?REG.niveau:0];
 /* Montée progressive au démarrage : les premières images ne sèment qu'une part du budget (la puce compile peut-être encore,
    et la première seconde ne doit pas cumuler compilation et rendu plein pot). Pas dans les captures d'essai (window.__CFG). */
 function v3Budget(){
@@ -1511,10 +1485,37 @@ function v3Compter(semer){
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.enable(gl.DEPTH_TEST);
   c(r);
 }
+/* Coût des éléments proches (essais : balade.prochesCompte) : la même passe, avec les variantes PRXCOMPTE (compilées à la
+   demande, de façon bloquante : jamais dans la boucle normale), dans une cible flottante additive, sans profondeur. Rend les
+   pixels couverts (au moins un fragment), les fragments (chacun marche son rayon), les formes évaluées, par pixel couvert. */
+function v3PrxCompte(p,px,jc,jit,e1,e2,e3){
+  const ok=V3.prxCompte; V3.prxCompte=null; const C=V3.prxC||(V3.prxC={});
+  const G=V3.gp, PM=S.mou&&G.prochesM?"prochesM":"prochesO";
+  for(const k of new Set([PM,"prochesO","prochesB","prochesT"])) if(!C[k]) C[k]=finir(v3Lancer(k,true));
+  const f32=!!gl.getExtension("EXT_float_blend"), t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,f32?gl.RGBA32F:gl.RGBA16F,W,H);
+  const t2=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t2); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA16F,W,H);
+  const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,t2,0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]); gl.clearBufferfv(gl.COLOR,0,[0,0,0,0]); gl.clearBufferfv(gl.COLOR,1,[0,0,0,0]);
+  gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
+  for(const [k,de,a] of [[PM,0,e1],["prochesB",e1,e2],["prochesT",e2,e3],["prochesO",e3,px.total]]){ if(a<=de) continue;
+    const P=C[k], u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
+    gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); }
+  gl.disable(gl.BLEND);
+  const b=new Float32Array(W*H*4); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,W,H,gl.RGBA,gl.FLOAT,b);
+  let couverts=0, frag=0, ev=0, touches=0, mx=0, mxe=0, boites=0;
+  for(let i=0;i<b.length;i+=4){ if(b[i]>0){ couverts++; frag+=b[i]; ev+=b[i+1]; touches+=b[i+2]; boites+=b[i+3]; if(b[i]>mx) mx=b[i]; if(b[i+1]>mxe) mxe=b[i+1]; } }
+  gl.deleteFramebuffer(fb); gl.deleteTexture(t); gl.deleteTexture(t2);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]); gl.enable(gl.DEPTH_TEST);
+  const r=x=>Math.round(x*100)/100;
+  ok({pixels:W*H,couverts,partCouverte:r(couverts/(W*H)),fragments:Math.round(frag),fragParPixel:r(frag/Math.max(1,couverts)),evaluations:Math.round(ev),evalParPixel:r(ev/Math.max(1,couverts)),
+    evalParFragment:r(ev/Math.max(1,frag)),testsBoiteParPixel:r(boites/Math.max(1,couverts)),touches:Math.round(touches),maxFragPixel:mx,maxEvalPixel:mxe,mou:PM==="prochesM",zoom:cam.zoom});
+}
 function v3Image(p){
   v3Cibles();
   const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
-  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
+  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; (V3.passesD||(V3.passesD={}))[nom]=t-tp; tp=t; };
   const rnd=Math.random;
   const jit=bouge?[0,0]:[rnd()-.5,rnd()-.5];                   // décalage sous-pixel, seulement à l'arrêt
   // soleil de cette image : tiré dans le disque solaire (pénombre par accumulation)
@@ -1531,7 +1532,7 @@ function v3Image(p){
   // (1) carte d'ombres
   // En marche, la carte n'est refaite qu'une image sur trois : le soleil ne bouge pas, et c'était une grosse part du coût mesuré sur téléphone.
   if(BANC.on) V3.smP=null;                                    // banc d'essai : la carte d'ombres à chaque image (mesurée)
-  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%3===0));
+  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%(enGeste()&&!BANC.on?6:3)===0));   // geste : une image sur six
   let u;
   if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w}; gpuDebut("ombre");
   const Ns=V3.ombre||Math.round(v3Budget()*.6);
@@ -1561,7 +1562,7 @@ function v3Image(p){
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
   const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol; so.dmax=S.eau&&S.eau[3]>0?150:420;
-  gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
+  chrono("avant"); gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
   if(CFG.v3solPlein){                                         // l'ancien maillage : six sommets par quadrilatère, tout le tour
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,Math.PI,so.secteurs); gl.uniform1i(u.uSolIdx,0);
     so.tri=so.anneaux*so.secteurs*2; gl.drawArrays(gl.TRIANGLES,0,so.anneaux*so.secteurs*6);
@@ -1581,7 +1582,9 @@ function v3Image(p){
     for(const [P,de,a] of [[PM,0,e1],[G.prochesB,e1,e2],[G.prochesT,e2,e3],[G.prochesO,e3,px.total]]){ if(a<=de) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
     gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
-    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); } }
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); }
+    chrono("proches",g);
+    if(V3.prxCompte) v3PrxCompte(p,px,jc,jit,e1,e2,e3); }
   const pc=v3Partage(v3Budget(),0,p); V3.parts=pc; gpuDebut("grains");
   const semer=compte=>{
   for(const [P,de,a] of v3Tranches(G,pc,0)){
@@ -1716,7 +1719,7 @@ function frame(now){
   if(!(exposure>0)||!Number.isFinite(exposure)){ exposure=1.2; if(!(expTarget>0)) expTarget=1.2; }
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
   gpuFin(); gpuImage();
-  if(chauffe) v3ChaufferFroids();
+  if(chauffe||V3.chaufferMou){ V3.chaufferMou=false; v3ChaufferFroids(); }   // ouverture, ou la pâte vient d'être prête : premier dessin au calme
   premiersDessins();
   if(BANC.on&&BANC.vi>=0&&!GT.ext){ syncPuce(); const t=performance.now(); if(BANC.tFin) BANC.rec.push({v:BANC.vi,nom:"image",ms:t-BANC.tFin,img:V3.nImg}); BANC.tFin=t; }   // sans chronomètre de la puce : intervalle entre deux fins d'image (syncPuce, ici seulement)
   if(now-t00<10000&&lastT0>0) LONGUE.max=Math.max(LONGUE.max,dtBrut);   // plus longue image des dix premières secondes (diagnostic)
@@ -2056,7 +2059,7 @@ async function capturerVues(vues,o={}){                         // repérage : l
       out.push(Object.assign(im,{legende:v.legende}));
     }
   } finally {
-    hold=avant; cam.z=0; cam.x=S.kit!==1?pathX(0):0; cam.yaw=S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; sceneDirty=true;
+    hold=avant; auDepart(); sceneDirty=true;
   }
   return out;
 }
@@ -2487,8 +2490,8 @@ function objetsPercus(){                                      // distance, direc
   return out;
 }
 const PATIENCE_APRES_TEMPS=45;                                 // secondes d'attente après un temps de la trame, si le joueur ne dit rien
-function percevoirMeneur(){ const p=perception(), x0=S.kit!==1?pathX(0):0;
-  p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z).toFixed(1); p.objets=objetsPercus();
+function percevoirMeneur(){ const p=perception(), x0=S.depart?S.depart.x:S.kit!==1?pathX(0):0, z0=S.depart?S.depart.z:0;
+  p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z-z0).toFixed(1); p.objets=objetsPercus();
   p.supports=supportsProches().map(({id,nom,m,angle,haut})=>({id,nom,m,angle,haut})); p.hauteur_m=+cam.elev.toFixed(1); return p; }
 function executer(o){                                         // les ordres du meneur, traduits pour le moteur
   if(o.type==="pensee") penser(o.texte);
@@ -2630,7 +2633,9 @@ function faconnerPas(a,dt){
     while(G.dites<G.D.pensees.length&&tg>=G.D.pensees[G.dites].t&&pensePeut(3,G)){ const q=G.D.pensees[G.dites++]; say(q.texte); direVoix(q.texte); notePensee(q.texte,"degout",q.phase); } }
   if(k!==a.k){ a.k=k; a.i=k; if(tr.pile!==null&&tr.pile!==undefined&&G.tas) G.pris.add(tr.pile); }   // la main prend dans le tas : il quitte le tas
   let F=MENEUR.etatGeste(tr,ue);
-  if(F.length>G.place) F=F.slice().sort((p,q)=>Math.max(...q.taille)-Math.max(...p.taille)).slice(0,G.place);   // le budget fixe (64 formes) : les miettes d'abord
+  // le budget fixe (64 formes) : les miettes de pâte d'abord ; les ajouts (_k « j » : ce qu'on plante ou presse, petits mais
+  // lisibles, les yeux) jamais avant elles, ce sont les derniers à recycler
+  if(F.length>G.place){ const aj=f=>/^j/.test(f._k||"")?1:0; F=F.slice().sort((p,q)=>aj(q)-aj(p)||Math.max(...q.taille)-Math.max(...p.taille)).slice(0,G.place); }
   const L=fiche.objets.slice(), i=L.findIndex(x=>x&&x.id===a.objet); if(i<0){ fin(); return; }
   if(G.tas){ const j=L.findIndex(x=>x&&x.id===G.tas); if(j>=0){ const reste=G.tasF.filter((f,n)=>!G.pris.has(n)); L[j]=Object.assign({},L[j],{formes:reste.length?reste:[Object.assign({},G.tasF[0],{taille:[.01,.01,.01]})]}); } }
   // les mains : où elles vont pour cette opération, et ce qu'elles tiennent (la matière suit la main qui la porte)
@@ -2790,6 +2795,13 @@ function objetMains(Hs,quelles=[0,1]){
     peau("boule",P,n,[pt[0],pt[1],pt[2]]);
     // quatre doigts : de l'index (côté pouce) à l'auriculaire, fléchis à la jointure vers la paume
     const V=H.v;
+    // loin de la caméra (main au sol, hors gros plan) : les quatre doigts en une seule forme et le pouce d'une pièce (5 formes
+    // au lieu de 9 : moins de formes évaluées à chaque pas, aucune différence à cette taille une fois l'image salie)
+    if(Math.hypot(...v3s(P,e))>.55){ const fl=(V[0]+V[1]+V[2]+V[3])/4*rad, dir=v3n(v3a(v3a([0,0,0],d,Math.cos(fl)),n,Math.sin(fl))), Lm=(DL[1]||.08);
+      peau("capsule",v3a(v3a(P,d,pt[2]/2-.008),dir,Lm/2),dir,[pas*3.4,Math.max(.006,Lm-pas*1.7),2*dr],dg.couleur,dg.matiere);
+      const Bp=v3a(v3a(Wr,d,.03),uT,pt[0]*.36), d1=v3n(v3a(v3a([0,0,0],d,Math.cos(V[5]*rad+.35)),uT,Math.sin(V[5]*rad+.35))), Lp=PL[0]+PL[1]*.8;
+      peau("capsule",v3a(Bp,d1,Lp/2),d1,[2*pr,Math.max(.006,Lp-2*pr),2*pr],po.couleur,po.matiere);
+      objs.push(o); return; }
     for(let j=0;j<4;j++){ const K=v3a(v3a(v3a(P,d,pt[2]/2-.008),uT,pas*(1.5-j)),n,.002), ea=V[4]*(1.5-j)*rad, c=V[j]*rad;
       const dj=v3n(v3a(v3a([0,0,0],d,Math.cos(ea)),uT,Math.sin(ea))), dir=v3n(v3a(v3a([0,0,0],dj,Math.cos(c)),n,Math.sin(c))), Lj=DL[j]||.07;
       peau("capsule",v3a(K,dir,Lj/2),dir,[2*dr*(j===3?.88:1),Math.max(.006,Lj-2*dr),2*dr*(j===3?.88:1)],dg.couleur,dg.matiere); }
@@ -2900,17 +2912,7 @@ function cibleMonde(id){
 /* Les éléments du monde où l'on peut monter, les plus proches : un arbre (tronc), un rocher. Les paramètres viennent des
    fonctions de cellule de monde.glsl (arbreA, blocGres), recopiées ici en flottants 32 bits : MÊMES FORMULES, à modifier
    des deux côtés (comme terrainH et pathX). La sonde (balade.sonde) sert à vérifier qu'il y a bien un tronc à l'endroit dit. */
-const F32=Math.fround, fr32=x=>F32(x-Math.floor(x));
-function h42(px,py){ px=F32(px); py=F32(py);
-  let a=fr32(F32(px*F32(.1031))), b=fr32(F32(py*F32(.1030))), c=fr32(F32(px*F32(.0973))), d=fr32(F32(py*F32(.1099)));
-  const k=F32(33.33), t=F32(F32(F32(F32(a*F32(d+k))+F32(b*F32(c+k)))+F32(c*F32(a+k)))+F32(d*F32(b+k)));
-  a=F32(a+t); b=F32(b+t); c=F32(c+t); d=F32(d+t);
-  return [fr32(F32(F32(a+b)*c)),fr32(F32(F32(a+c)*b)),fr32(F32(F32(b+c)*d)),fr32(F32(F32(c+d)*a))]; }
-function h21(px,py){ px=F32(px); py=F32(py); let a=fr32(F32(px*F32(.1031))), b=fr32(F32(py*F32(.1031))), c=fr32(F32(px*F32(.1031)));
-  const k=F32(33.33), t=F32(F32(F32(a*F32(b+k))+F32(b*F32(c+k)))+F32(c*F32(a+k))); a=F32(a+t); b=F32(b+t); c=F32(c+t);
-  return fr32(F32(F32(a+b)*c)); }
-function vnoise2(x,y){ const ix=Math.floor(x), iy=Math.floor(y); let fx=x-ix, fy=y-iy; fx=fx*fx*(3-2*fx); fy=fy*fy*(3-2*fy);
-  const m=(a,b,t)=>a+(b-a)*t; return m(m(h21(ix,iy),h21(ix+1,iy),fx),m(h21(ix,iy+1),h21(ix+1,iy+1),fx),fy); }
+const F32=LUMIERE.F32, fr32=LUMIERE.fr32, h42=LUMIERE.h42, h21=LUMIERE.h21, vnoise2=LUMIERE.vnoise2;   // src/lumiere.js : au bit près comme le shader
 function degage(wx,wz){ for(const o of (Array.isArray(fiche.objets)?fiche.objets:[])){ if(!o||o.visible===false||cacheObj.has(o.id)||!(o.degage>0)) continue;
   const q=posObjet(o); if(Math.hypot(wx-q.x,wz-q.z)<clampN(o.degage,0,12,0)) return true; } return false; }
 let supportsCache={t:-1,x:0,z:0,L:[]};
@@ -2925,7 +2927,7 @@ function supportsProches(){
       const h=h42(i+sx,j+sy); if(h[0]>S.kitP[0]) continue;
       const ox=(h[1]-.5)*3.8, oz=(h[2]-.5)*3.8, vx=(i+.5)*CA+ox, vz=(j+.5)*CA+oz;
       const wx=.8776*vx+.4794*vz, wz=-.4794*vx+.8776*vz;           // v*RA
-      if(Math.abs(wx-pathX(wz))<1.5||degage(wx,wz)) continue;
+      if(Math.abs(wx-pathX(wz))<1.5||libreJS(wx,wz)) continue;
       const m=Math.hypot(wx-cam.x,wz-cam.z); if(!best||m<best.m) best={m,x:wx,z:wz,H:11+6*h[3],r0:.16+.17*fr32(h[3]*7.31)};
     }
     if(best) ajoute("arbre",best.x,best.z,best.H,best.r0);
@@ -2936,7 +2938,7 @@ function supportsProches(){
       const h=h42(i+sx+13,j+sy+13), mask=vnoise2(i*.37+sx,j*.37+sy);
       if(h[0]>(sstep(.32,.68,mask)*.9+.08)*S.kitP[1]) continue;
       const R=.7+1.6*h[3]*h[3], ox=(h[1]-.5)*2*(.5*CC-.3-1.25*R), oz=(h[2]-.5)*2*(.5*CC-.3-1.25*R), wx=(i+.5)*CC+ox, wz=(j+.5)*CC+oz;
-      if(Math.abs(wx-pathX(wz))<R*1.1+.5||degage(wx,wz)) continue;
+      if(Math.abs(wx-pathX(wz))<R*1.1+.5||libreJS(wx,wz)) continue;
       const m=Math.hypot(wx-cam.x,wz-cam.z); if(!best||m<best.m) best={m,x:wx,z:wz,top:R*.22+R*(.62+.3*fr32(h[2]*7)),r:R*Math.max(1+.25*fr32(h[1]*9),.8+.3*fr32(h[3]*11))};
     }
     if(best) ajoute("rocher",best.x,best.z,best.top,best.r);
@@ -3010,14 +3012,14 @@ function obstaclesConnus(){
     for(let i=i0-6;i<=i0+6;i++) for(let j=j0-6;j<=j0+6;j++){
       const h=h42(i+sx,j+sy); if(h[0]>S.kitP[0]) continue;
       const vx=(i+.5)*CA+(h[1]-.5)*3.8, vz=(j+.5)*CA+(h[2]-.5)*3.8, wx=.8776*vx+.4794*vz, wz=-.4794*vx+.8776*vz;
-      if(Math.abs(wx-pathX(wz))<1.5||degage(wx,wz)||loin(wx,wz)) continue;
+      if(Math.abs(wx-pathX(wz))<1.5||libreJS(wx,wz)||loin(wx,wz)) continue;
       L.push({id:"arbre:"+i+","+j,nom:"un tronc",x:wx,z:wz,r:(.16+.17*fr32(h[3]*7.31))*1.3}); }
     if(S.houp[3]>0){                                              // percheB : grille tournée de 3,3 m
       const CB=3.3, qx=.6216*cam.x+.7833*cam.z+17.3, qz=-.7833*cam.x+.6216*cam.z+17.3, i0=Math.floor(qx/CB), j0=Math.floor(qz/CB);
       for(let i=i0-10;i<=i0+10;i++) for(let j=j0-10;j<=j0+10;j++){
         const h=h42(i+sx+71,j+sy+71); if(h[0]>S.kitP[0]*.8*S.houp[3]) continue;
         const vx=(i+.5)*CB+(h[1]-.5)*1.9-17.3, vz=(j+.5)*CB+(h[2]-.5)*1.9-17.3, wx=.6216*vx-.7833*vz, wz=.7833*vx+.6216*vz;
-        if(Math.abs(wx-pathX(wz))<1.15||degage(wx,wz)||loin(wx,wz)) continue;
+        if(Math.abs(wx-pathX(wz))<1.15||libreJS(wx,wz)||loin(wx,wz)) continue;
         L.push({id:"perche:"+i+","+j,nom:"un tronc",x:wx,z:wz,r:(.035+.07*fr32(h[3]*5.3))*1.3+.06}); } }
   }
   if(S.kit!==2&&S.kitP[1]>0){                                     // blocGres : grille de 8,5 m
@@ -3026,7 +3028,7 @@ function obstaclesConnus(){
       const h=h42(i+sx+13,j+sy+13), mask=vnoise2(i*.37+sx,j*.37+sy);
       if(h[0]>(sstep(.32,.68,mask)*.9+.08)*S.kitP[1]) continue;
       const R=.7+1.6*h[3]*h[3], ox=(h[1]-.5)*2*(.5*CC-.3-1.25*R), oz=(h[2]-.5)*2*(.5*CC-.3-1.25*R), wx=(i+.5)*CC+ox, wz=(j+.5)*CC+oz;
-      if(Math.abs(wx-pathX(wz))<R*1.1+.5||degage(wx,wz)||loin(wx,wz)) continue;
+      if(Math.abs(wx-pathX(wz))<R*1.1+.5||libreJS(wx,wz)||loin(wx,wz)) continue;
       L.push({id:"rocher:"+i+","+j,nom:"un rocher",x:wx,z:wz,r:R*Math.max(1+.25*fr32(h[1]*9),.8+.3*fr32(h[3]*11))+.1*R,haut:R*.22+R*(.62+.3*fr32(h[2]*7))}); }
   }
   for(const o of (Array.isArray(fiche.objets)?fiche.objets:[])){ if(!o||o.visible===false||cacheObj.has(o.id)) continue;
@@ -3067,7 +3069,7 @@ function semisDist(x,y,z){
     const gc=[(id[0]+.5)*A[0]+(h[1]-.5)*2*J[0],(id[1]+.5)*A[1]+(h[2]-.5)*2*J[1]], w=W(gc);
     let dx=0;
     if(!rg){ dx=w[0]-pathX(w[1]); if(Math.abs(dx)<T[0]||Math.abs(dx)>T[1]||dx*T[2]<0) continue; }
-    if(degage(w[0],w[1])) continue;
+    if(libreJS(w[0],w[1])) continue;
     const h2=h42(F32(id[0]*1.37+h[1]*91+k*3.1+side),F32(id[1]*1.37+h[2]*91+k*3.1+side));
     let yaw=D[0];
     if(T[3]<.5) yaw=h2[2]*6.2832;
@@ -3396,12 +3398,16 @@ window.balade={
   pauseQuand(type,t){ pauseQuand={type,t:+t}; },                 // figer quand le geste en tête de file (ramasser : part 0..1 ; faconner : secondes) atteint t
   enPause:()=>pauseTest,
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },
-  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },   // fragments des grains de la caméra sur la prochaine image (v3Compter)
+  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },
+  prochesCompte(){ return new Promise(ok=>{ V3.prxCompte=ok; V3.n=0; sceneDirty=true; }); },   // essais : coût des éléments proches sur la prochaine image (v3PrxCompte)
+  passes(){ return Object.assign({},V3.passesD||{}); },                                        // essais (option v3detail) : durée de la dernière de chaque passe, attente de la puce comprise   // fragments des grains de la caméra sur la prochaine image (v3Compter)
   regulateur(){ return { niveau:REG.niveau, ms:REG.ms, cible:regCible(), etat:regEtat(), puce:GT.ms, total:GT.total||0 }; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
   mainsP:()=>mainsEtat.H?mainsEtat.H.map(h=>h.p.map(v=>+v.toFixed(3))):null,   // essais : centres des paumes
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,
     file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4-(a.pause||0)).toFixed(2):-1,nausee:!!a.nau,pause:+(a.pause||0).toFixed(2),
       total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0,dbg:a.dbg}))}),
+  vueLocale(id){ const o=(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===id); if(!o) return null;   // essais : les formes de la chose et la caméra dans son repère (MENEUR.ajoutsVus)
+    return {formes:o.formes||[],oeil:versLocal(repereObjet(o),corpsAxes().e),echelle:repereObjet(o).ech,zoom:cam.zoom}; },
   vue(id){ const q=cibleMonde(id); if(!q) return null; const c=corpsAxes().e; return vueDegagee(c[0],c[1],c[2],q.x,q.z,q.taille/2,q.haut,id); },   // rien entre la caméra et la chose ?
   resolution(px){ CFG.maxPx=+px||undefined; resize(); },        // pixels internes (essais : finesse d'une capture)
   sonde:(x,y,z)=>probe(x,y,z)[0],
