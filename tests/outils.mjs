@@ -32,7 +32,8 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     lumineux: (o.formes || []).some(f => f.matiere === 'lumineux') }));
   const caches = new Set((fiche.objets || []).filter(o => o.visible === false).map(o => o.id));
   const w = { x: 0, z: 0, yaw: 0, haut: 1, elev: 0, zoom: 1, objets, file: [], idle: 0, nuit: false, lampe: false, brume: 0.009, fin: null, ordres: [], pensees: [], flaner,
-    reserves: {}, immobile: false, arbres, rochers, semis, marches: [], differes: {}, faconnages: {}, faconnes: [], bloques: [], marge: 9, cherche: null };
+    reserves: {}, immobile: false, arbres, rochers, semis, marches: [], differes: {}, faconnages: {}, faconnes: [], bloques: [], marge: 9, cherche: null, t: 0, journal: [] };
+  const noter = (quoi, x) => w.journal.push(Object.assign({ quoi, t: Math.round(w.t * 100) / 100, corps: { x: w.x, z: w.z } }, x || {}));
   const taille = o => envergure(o.formesL || []) * (o.echelle || 1);
   // supports : l'arbre et le rocher les plus proches (comme supportsProches dans main.js)
   const supports = () => [['arbre', arbres], ['rocher', rochers]].map(([id, L]) => {
@@ -98,7 +99,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
         if (base) { x = base.x + (o.decale ? o.decale[0] : 0); z = base.z + (o.decale ? o.decale[1] : 0); }
         else ({ x, z } = placeLibre(horsDuCorps((o.reserve && w.reserves[o.reserve]) || place(), w, envergure(o.objet.formes) / 2, undefined, o.ou), envergure(o.objet.formes) / 2, obstacles(), w));   // ni dans le corps du porteur, ni sur une autre chose
         const ob = { id: o.objet.id, nom: o.objet.nom, x, z, formes: o.objet.formes.length, formesL: o.objet.formes, echelle: 1, lumineux: o.objet.formes.some(f => f.matiere === 'lumineux') };
-        if (o.differe) (w.differes[o.differe] = w.differes[o.differe] || []).push(ob); else objets.push(ob);
+        if (o.differe) (w.differes[o.differe] = w.differes[o.differe] || []).push(ob); else { objets.push(ob); noter('creer', { id: ob.id, x, z }); }
       } else if (o.op === 'faconner') { w.faconnages[o.id] = o; if (!w.file.some(a => a.type === 'faconner' && a.objet === o.id)) faconner(o);
       } else if (i < 0) return;
       else if (o.op === 'retirer') objets.splice(i, 1);
@@ -122,6 +123,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     }
   };
   w.step = dt => {
+    w.t += dt;
     if (!w.file.length) { w.idle += dt; if (w.flaner && !w.immobile && w.idle > 2.5) { w.idle = 0;          // il se promène le long du sentier
       const avant = Math.cos(w.yaw) >= 0, cible = avant ? Math.atan2(-w.x * 0.3, 1) : Math.PI + Math.atan2(w.x * 0.3, 1);
       let d = cible - w.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -147,7 +149,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     }
     if (a.type === 'bloque') { w.bloques.push(a.devant); w.file.shift(); return; }
     if (a.type === 'marche') {                                   // comme planMarchePage dans main.js : se relever, dézoomer, marcher en contournant
-      w.file.shift();
+      w.file.shift(); noter('marche', { metres: a.metres });
       const obs = obstacles(), p = planMarche({ x: w.x, z: w.z, yaw: w.yaw }, a.metres, obs), recul = a.metres < 0, cap0 = w.yaw;
       const ordre = { x: w.x, z: w.z, haut0: w.haut, zoom0: w.zoom, plan: p, nom: p.bloque ? (obs.find(o => o.id === p.bloque) || {}).nom || null : null }, out = [];
       if (w.haut < 0.95) out.push({ type: 'posture', rest: 1 }); out.push({ type: 'zoom', rest: 1 });
@@ -161,6 +163,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     }
     if (a.type === 'finMarche') { w.file.shift(); const o = a.ordre, fait = Math.hypot(w.x - o.x, w.z - o.z);
       const t = texteMarche({ demande: o.plan.demande, fait, bouche: fait < 1 && o.plan.bouche }, o.nom);
+      noter('finMarche', { fait });
       w.marches.push({ de: { x: o.x, z: o.z }, a: { x: w.x, z: w.z }, demande: o.plan.demande, fait, texte: t, haut0: o.haut0, zoom0: o.zoom0, plan: o.plan }); return; }
     if (a.type === 'rejoindre' || a.type === 'cadrer') {           // comme main.js : la page calcule le trajet, l'arrêt et le cadrage
       w.file.shift();
@@ -214,6 +217,30 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
   });
   w.caches = caches;
   return w;
+}
+
+/* La forêt de la fiche 09 en papier, tirée de sa graine : le sentier est droit (x = 0), troncs sur une grille de 6 m, blocs
+   sur 8,5 m (hors du sentier, comme arbreA et blocGres), branches mortes de 2,2 m (des cercles bas en chapelet) et éclats de
+   grès sur leurs cellules, jusque sur le sentier pour les éclats. */
+export function foret09(FICHE, graine = FICHE.graine) {
+  const r = rng(graine), arbres = [], rochers = [], semis = [];
+  for (let i = -6; i <= 6; i++) for (let j = -4; j <= 14; j++) {
+    if (r() > FICHE.foret.densite) continue;
+    const x = (i + 0.5) * 6 + (r() - 0.5) * 3.8, z = (j + 0.5) * 6 + (r() - 0.5) * 3.8;
+    if (Math.abs(x) < 1.5) continue; arbres.push({ x, z, haut: 14, rayon: (0.16 + 0.17 * r()) * 1.3 }); }
+  for (let i = -4; i <= 4; i++) for (let j = -3; j <= 10; j++) {
+    if (r() > 0.45) continue;
+    const R = 0.7 + 1.6 * r() * r(), x = (i + 0.5) * 8.5 + (r() - 0.5) * 2 * (4.25 - 0.3 - 1.25 * R), z = (j + 0.5) * 8.5 + (r() - 0.5) * 2 * (4.25 - 0.3 - 1.25 * R);
+    if (Math.abs(x) < R * 1.1 + 0.5) continue; rochers.push({ x, z, haut: R * 0.9, rayon: R * 1.1 }); }
+  for (let i = -8; i <= 8; i++) for (let j = -4; j <= 22; j++) {                // branches mortes : cellules de 4,5 m, hors du sentier (1,2 m)
+    if (r() > 0.45) continue;
+    const k = 0.6 + 0.7 * r(), L = 2.2 * k, a = r() * Math.PI, x = (i + 0.5) * 4.5 + (r() - 0.5) * 2, z = (j + 0.5) * 4.5 + (r() - 0.5) * 2;
+    if (Math.abs(x) < 1.2 + L / 2) continue;
+    for (let s = -2; s <= 2; s++) semis.push({ x: x + Math.cos(a) * s * L / 4, z: z + Math.sin(a) * s * L / 4, r: 0.07 * k, haut: 0.1 * k }); }
+  for (let i = -20; i <= 20; i++) for (let j = -10; j <= 50; j++) {             // éclats de grès : cellules de 2 m, partout
+    if (r() > 0.32) continue;
+    const k = 0.6 + 0.8 * r(); semis.push({ x: (i + 0.5) * 2 + (r() - 0.5) * 1.2, z: (j + 0.5) * 2 + (r() - 0.5) * 1.2, r: 0.15 * k, haut: 0.1 * k }); }
+  return { arbres, rochers, semis };
 }
 
 /* ------------------------------------------------------------------ faux Claude
