@@ -8,7 +8,7 @@
 // la capture d'écran de Playwright faisait tomber le navigateur à 1280 × 800 en rendu logiciel.
 // Variables : PASSES (images accumulées, 8 par défaut), W et H (résolution interne en plein format, 1280 × 800 par défaut ;
 // SwiftShader ne tient parfois pas plus), GRAINS (budget de grains, celui de la qualité complète par défaut), EXPO (exposition
-// du capteur imposée, option expoFixe), SZ et SDX (position de la pose « soleil en face », vue plein-soleil).
+// du capteur imposée, option expoFixe), ACC16 (accumulation RGBA16F, option v3acc16), SZ et SDX (position de la pose « soleil en face », vue plein-soleil).
 import { chromium } from 'playwright';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -42,6 +42,7 @@ const REGLAGES = [
 const base = { still: true, nohud: true, nowalk: true, v3: true, full: true, bureau: false };
 if (process.env.GRAINS) base.grains = +process.env.GRAINS;
 if (process.env.EXPO) base.expoFixe = +process.env.EXPO;                // exposition du capteur imposée (mise au point du disque solaire)
+if (process.env.ACC16) base.v3acc16 = true;                             // accumulation en RGBA16F réel, même en qualité complète
 
 async function rendre(nom, cfg, vw, vh) {
   const out = join(root, dir, nom + '.png');
