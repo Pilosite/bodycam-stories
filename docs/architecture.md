@@ -8,7 +8,7 @@ This is the shared contract for the real proof of concept. It follows `docs/poc-
 
 **Scope and process.** What is in v1, v2 and target is in `docs/scope.md`; how we build is in `docs/sdlc.md`. v1 is **station-based**: a few viewpoints along one path, free look and in-place action at each, transitions between them; no free roaming.
 
-## The nine pillars
+## The ten pillars
 
 | # | Pillar | What it is | What the POC shows |
 |---|---|---|---|
@@ -20,7 +20,8 @@ This is the shared contract for the real proof of concept. It follows `docs/poc-
 | 6 | **Narrative patterns** | Reusable story shapes creators pick from (`absent-one`, `ticking-clock`, `reluctant-guide`…), as data. | The story is assembled from 3 named patterns; swapping one changes the session. |
 | 7 | **Characters, light or strong** | A creator gives either a few directions (traits) or a full sheet (voice, limits, secrets, arc). | Sam as a strong character; one light character defined in three lines. |
 | 8 | **Soft-to-hard principles** | Assets are written as PDL source with strengths from tendency to absolute; hard ones compile to code, soft ones are evaluated by models and audited. | One tendency, one open question, one hard rule and one absolute on Sam, each visibly at work, and an audit score after the session. |
-| 9 | **Collaboration and creator view** | The narrative space is layered and every transaction carries its author. Creators see what players did and how the world reacted, and refine rules. | Two creator layers merged with provenance; a session viewer; one rule edited and the session replayed against it. |
+| 9 | **Commitments** | The player plans ahead through the character: a conditional request becomes a promise and a rule, with a strength, that she keeps (or breaks) later. | One commitment made at an early station and honoured two stations later, linked in the journal. |
+| 10 | **Collaboration and creator view** | The narrative space is layered and every transaction carries its author. Creators see what players did and how the world reacted, and refine rules. | Two creator layers merged with provenance; a session viewer; one rule edited and the session replayed against it. |
 
 ## The authoring format: one text, a spectrum from soft to hard
 
@@ -82,6 +83,18 @@ rule {
 ```
 
 Rules are data. They are written by creators, by story packs, or by a model during play, and they run in code.
+
+### Commitments: the player plans ahead through the character
+
+The player never acts on the world, but can ask the character to **prepare**: "if you hear the jay, stop and get down", "tomorrow, if someone is at the hide, do not show yourself". This is the same rule mechanism, opened to the player and mediated by the character:
+
+1. The translation tier recognises a conditional request and emits an `intent` of sub-kind `commit` (a condition and a wanted behaviour, in the player's words).
+2. The character answers in character: she accepts, amends ("I will stop, I will not lie down in that mud") or refuses. Her principles decide (`? does she take orders about Louis?`).
+3. If accepted, two transactions are recorded with the player as author and the character as party: a `fact` (the promise, with its wording and certainty) and a `rule` (`when / if / then`, horizon `scene` or `story`).
+4. The commitment carries a **strength**, like any statement: a promise she will keep in code (`!`), or one she will try to keep and that the model weighs against the moment (`~`). A strong character may break her word, and the journal shows that she did and why.
+5. When it fires, the journal links the act back to the commitment, and she can say so ("You told me to stop if the jay called.").
+
+Commitments are what makes the indirect control a game: the player's lever is foresight, not steering. They are also the first authoring tool: a player who writes commitments is already writing rules, which is the path from player to creator.
 
 ### Vocabulary (closed, typed)
 
