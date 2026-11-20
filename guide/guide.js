@@ -1,4 +1,4 @@
-/* The interactive guide (briefs/guide.md). Every live panel calls the real core/ (inlined above as CORE) on the real pack
+/* The interactive guide (briefs/guide.md, second pass briefs/guide-v2.md: Part I "See it", Part II "Open the hood"). Every live panel calls the real core/ (inlined above as CORE) on the real pack
    stories/louis-round (inlined as data, with the golden journal p8). No network, no model: where a model would answer, a
    fixed answer written in advance is used and marked "canned answer". Copy: guide/copy.js. */
 (function () {
@@ -90,60 +90,348 @@ function renderCheck() {
   clear($('replay-check')).append(h('span', { class: ok ? 'ok' : 'bad' }, ok ? '✓ ' : '✗ '), t('hero.replay'), ': ', h('code', {}, String(P8R.hash)), ok ? ' = ' : ' ≠ ', h('code', {}, String(P8HASH)), '.');
 }
 
-/* ---------------------------------------------------------------- 1. what it is */
+/* ================================================================ PART I · SEE IT */
+var MEDIA = JSON.parse(document.getElementById('guide-media').textContent);
+var CUES = D.pack.manifest.cues || {};
 var BENCH = D.pack.bench.requests;
-function s1Stations() {
-  var sel = clear($('s1-station')), cur = sel.dataset.v || 'approach';
-  PATH.concat(['any']).forEach(function (id) { opt(sel, id, id === 'any' ? 'any' : stName(id), id === cur); });
-}
-function s1Requests() {
-  var st = $('s1-station').value, sel = clear($('s1-request')), cur = sel.dataset.v;
-  var list = BENCH.filter(function (r) { return r.station === st; });
-  list.forEach(function (r, i) { opt(sel, r.id, r.id + ' · ' + (r[lang] || r.en), cur ? r.id === cur : i === (st === 'approach' ? 1 : 0)); });
-}
-function s1() {
-  var r = BENCH.find(function (x) { return x.id === $('s1-request').value; }), out = clear($('s1-out'));
-  if (!r) return;
-  var write = $('s1-side-write').checked;
-  out.append(h('blockquote', { class: 'say' }, h('span', { class: 'voice' }, '« ' + (r[lang] || r.en) + ' »'), h('small', { class: 'dim' }, lang === 'en' ? r.fr : r.en)));
-  if (!write) {
-    out.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s1.expect')), chip(t('expect.' + r.expect), 'strong')),
-      h('p', { class: 'note-data' }, r.note), r.tags ? h('p', { class: 'tags' }, r.tags.map(function (x) { return chip(x, 'tag'); })) : null);
-    if (r.commit) out.append(pre(json(r.commit)));
-    return;
+var STN = {}; STATIONS.forEach(function (s) { STN[s.id] = s; });
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function L(o) { return o ? (o[lang] || o.en) : ''; }
+function pct(x) { return Math.round(x * 100) + '%'; }
+function put(el) { for (var i = 1; i < arguments.length; i++) [].concat(arguments[i]).forEach(function (c) { if (c !== null && c !== undefined && c !== false) el.append(c); }); return el; }
+
+/* ---------------------------------------------------------------- sound: the project's synthesizer (src/son.js) */
+// Created on the first gesture (a click on a chip or a button), never before. A cue without a recipe plays nothing.
+var SOUND = { player: null };
+function soundPlayer() {
+  if (!SOUND.player && typeof SON !== 'undefined') {
+    SOUND.player = SON.creerSons({ bruitages: MEDIA.sound, fabriquer: function () { var A = window.AudioContext || window.webkitAudioContext; return A ? new A() : null; } });
   }
-  var ids = (r.note.match(/[a-z][\w-]*(?:\.[\w-]+)+/g) || []).concat(r.commit && r.commit.tested_by ? [r.commit.tested_by] : []);
-  var seen = {}, cards = [];
-  ids.forEach(function (id) {
-    if (seen[id]) return; seen[id] = 1;
-    var c = statementCard(id);
-    if (c) cards.push(c);
-    else if (LINES[id]) cards.push(h('div', { class: 'stmt' }, h('div', { class: 'stmt-h' }, chip('line', 'k-line'), h('code', {}, id), h('span', { class: 'dim' }, 'lines/' + lang + '.json')), pre(lineText(id), 'wrap')));
-  });
-  out.append(h('h3', { class: 'sub' }, t('s1.governs')));
-  out.append(cards.length ? cards : h('p', { class: 'dim' }, t('s1.none')));
+  if (SOUND.player) SOUND.player.geste();
+  return SOUND.player;
+}
+function recipeFor(cue) { var I = MEDIA.sound.indices || {}; return Array.isArray(I[cue]) && I[cue].length ? I[cue] : null; }
+// A pack cue through the synthesizer: its plans (src/bruitages.json "indices"), each at its start time.
+function playCue(cue, key) {
+  var plans = recipeFor(cue), p = SOUND.player; if (!plans || !p) return false;
+  plans.forEach(function (pl, i) { var ev = Object.assign({ graine: 7, cle: cue + ':' + key + ':' + i }, pl); setTimeout(function () { p.jouer(ev); }, Math.round((pl.t || 0) * 1000)); });
+  return true;
+}
+var synthN = 0;
+function synthFall(mass) {
+  var p = soundPlayer(), rec = MEDIA.sound.recettes.chute;
+  if (!p || !rec) { $('synth-note').textContent = t('synth.none'); return; }
+  var ev = SON.planChute(rec, { masse: mass, distance: 1.5, graine: 7, cle: ++synthN });
+  ev.recette = 'chute';
+  p.jouer(ev);
+  clear($('synth-note')).append(h('code', {}, 'chute · ' + mass + ' kg · f0 ' + ev.f0 + ' Hz · ' + ev.duree + ' s · force ' + ev.force + (ev.rebonds ? ' · ' + ev.rebonds + ' rebond' + (ev.rebonds > 1 ? 's' : '') : '')));
 }
 
-/* ---------------------------------------------------------------- 2. from soft to hard */
-var S2_PRESETS = ['sam.never.harm', 'sam.no-shout', 'r.jay-first', 'r.no-shout', 'p.one-sound', 'p.walker-when'];
-(function () {
-  var ex = Object.keys(SRC).find(function (id) { return SRC[id].mark === '>' && SRC[id].file === 'characters/sam.pdl'; });
-  var cx = Object.keys(SRC).find(function (id) { return SRC[id].mark === 'x' && SRC[id].file === 'characters/sam.pdl'; });
-  if (ex) S2_PRESETS.push(ex); if (cx) S2_PRESETS.push(cx);
-})();
-var S2_EXTRA = [
-  { id: 'try.never', raw: '!! never go(hide) if not beat(hide) {try.hide-early}', header: '# guide — written here, not in the pack\n@kind rules  @layer base  @author you  @lang en  @scope story  @horizon story' },
-  { id: 'try.gauge', raw: 'gauge unease "how uneasy Sam is": rises sound(bracken.rustle) by 0.4; fades 0.1/min {unease}', header: '# guide — written here, not in the pack\n@kind rules  @layer base  @author you  @lang en  @scope story  @horizon story' },
-];
-var s2Header = '';
-function s2Presets() {
-  var sel = clear($('s2-preset')), cur = sel.value || S2_PRESETS[0];
-  S2_PRESETS.forEach(function (id) { if (SRC[id]) opt(sel, id, SRC[id].raw.slice(0, 2).trim() + '  ' + id + '  (' + SRC[id].file + ':' + SRC[id].line + ')', id === cur); });
-  S2_EXTRA.forEach(function (x) { opt(sel, x.id, x.raw.slice(0, 2).trim() + '  ' + x.id + '  (' + (lang === 'fr' ? 'pas dans l’histoire : à essayer' : 'not in the pack: try it') + ')', x.id === cur); });
+/* ---------------------------------------------------------------- I.1 the scene you can play */
+// Sentences from the pack's bench (tests/requests.json), each with the canned answers of the two model tiers: the
+// translator's intent and first reaction (now), and the stager's reaction (scene, may be empty). Written for this guide; no
+// model produced them. What happens next is the core's: the validator, the pack's rules, the commitments, the line bank.
+var WALK = { id: 'walk', en: 'Go on.', fr: 'Continue.' };
+var HERO = {
+  trailhead: [
+    { id: 'q01', intent: { verb: 'go', target: 'station:first-mark' }, now: 'now act.say ref=move.ok\nnow act.go to=station:first-mark' },
+    { id: 'q04', intent: { verb: 'go', class: 'move_free' }, now: 'now act.stop' },
+    { id: 'q06', intent: { verb: 'wait', params: { seconds: 4 } }, now: 'now act.wait seconds=4', scene: 'scene fact subj=sam pred=steadier val=true cert=0.6' },
+    { id: 'q50', intent: { verb: 'ask' }, now: 'now act.say ref=out_of_world', scene: 'story fact subj=voice pred=seems_strange val=true cert=0.7' },
+  ],
+  'first-mark': [
+    { id: 'q07', intent: { verb: 'look', target: 'thing:marque-1' }, now: 'now act.look tg=thing:marque-1' },
+    { id: 'q08', intent: { verb: 'touch', target: 'thing:marque-1' }, now: 'now act.touch tg=thing:marque-1\nnow act.say ref=touch.ok', scene: 'story fact subj=louis pred=painted_weeks_ago val=true cert=0.6' },
+    { id: 'q12', intent: { verb: 'look', target: 'dir:up' }, now: 'now act.look pitch=60\nnow act.say ref=look.ok' },
+    { walk: 'fallen-pine' },
+  ],
+  'fallen-pine': [
+    { id: 'c01', intent: { verb: 'commit', class: 'jay', condition: 'the jay calls', behaviour: 'stop and get down', commit: 'c.jay' }, now: 'now act.say ref=commit.accept',
+      commit: { id: 'c.jay', value: 'stop and get down if the jay calls', when: { event: 'sound.played', match: { cue: 'jay.alarm' } },
+        then: [{ horizon: 'now', kind: 'act', body: { op: 'stop' } }, { horizon: 'now', kind: 'act', body: { op: 'posture', height: 0.5 } }, { horizon: 'now', kind: 'act', body: { op: 'say', ref: 'commit.keeping' } }] } },
+    { id: 'q14', intent: { verb: 'look', target: 'thing:chablis' }, now: 'now act.look tg=thing:chablis' },
+    { id: 'q18', intent: { verb: 'make', params: { what: 'fire' } }, now: 'now act.say ref=fire.refuse' },
+    { id: 'q21', intent: { verb: 'ask' }, now: 'now act.say ref=louis.question', scene: 'scene act.posture height=0.6' },
+    { walk: 'platiere' },
+  ],
+  platiere: [
+    { id: 'q22', intent: { verb: 'look', target: 'thing:platiere' }, now: 'now act.look tg=thing:platiere' },
+    { id: 'c02', intent: { verb: 'commit', class: 'silence', condition: 'a sound at the hide', behaviour: 'do not move, do not talk', commit: 'c.silence' }, now: 'now act.say ref=commit.accept',
+      commit: { id: 'c.silence', value: 'at the hide, whatever she hears, she does not move or talk', when: { event: 'sound.played', match: { cue: 'bracken.rustle' } },
+        then: [{ horizon: 'now', kind: 'act', body: { op: 'stop' } }, { horizon: 'now', kind: 'act', body: { op: 'posture', height: 0.5 } }] } },
+    { id: 'q30', intent: { verb: 'go', target: 'station:approach' }, now: 'now act.say ref=fork.tape\nnow act.go to=station:approach via=tape' },
+    { id: 'q31', intent: { verb: 'go', target: 'station:approach' }, now: 'now act.say ref=fork.path\nnow act.go to=station:approach via=path' },
+  ],
+  approach: [
+    { id: 'q36', intent: { verb: 'say', class: 'shout', loud: true }, now: 'now act.stop' },
+    { id: 'q37', intent: { verb: 'look', target: 'dir:up' }, now: 'now act.look pitch=50\nnow act.say ref=look.ok' },
+    { id: 'q35', intent: { verb: 'go', target: 'station:hide' }, now: 'now act.say ref=move.ok\nnow act.go to=station:hide' },
+  ],
+  hide: [
+    { id: 'q46', intent: { verb: 'look', target: 'thing:terrier' }, now: 'now act.look tg=thing:terrier' },
+    { id: 'q39', intent: { verb: 'look', target: 'thing:affut' }, now: 'now act.posture height=0.5\nnow act.look tg=thing:affut' },
+    { id: 'q44', intent: { verb: 'wait' }, now: 'now act.wait seconds=5', wait: 45 },
+    { id: 'q41', intent: { verb: 'go', class: 'approach_sett' }, now: 'now act.stop' },
+    { id: 'q42', intent: { verb: 'touch', target: 'thing:terrier' }, now: 'now act.say ref=dig.refuse' },
+  ],
+};
+var NEXT = {}; PATH.forEach(function (id, i) { NEXT[id] = PATH[i + 1]; });
+function benchText(id) { var r = BENCH.find(function (x) { return x.id === id; }); return r ? (r[lang] || r.en) : ''; }
+function chipText(c) { return c.walk ? L(WALK) : benchText(c.id); }
+var H = null;
+function heroNew() {
+  var s = newSession(); s.loadPrinciples(PACK.principles); s.start();
+  H = { s: s, gen: 0, busy: false, arrived: {}, walked: 0, lastStation: null, turn: null, subs: [] };
+  var first = s.journal.entries.findIndex(function (e) { return e.type === 'start'; });
+  heroArrive();
+  H.turn = { first: first, said: 0, scene: 'none', sceneMs: null, start: true };
+  heroDraw();
 }
-function s2Load() {
-  var id = $('s2-preset').value, x = SRC[id] || S2_EXTRA.find(function (e) { return e.id === id; });
-  s2Header = x.header; $('s2-header').textContent = x.header; $('s2-line').value = x.raw; s2();
+// What the engine does on a first arrival (stations.json arrive_line: the staging tier may replace it; here it does not).
+function heroArrive(from) {
+  var s = H.s, st = s.world.body.station;
+  if (H.arrived[st]) return; H.arrived[st] = true;
+  var line = STN[st] && STN[st].arrive_line;
+  if (line) s.submit({ author: ENGINE, horizon: 'now', kind: 'act', body: { op: 'say', ref: line } });
+}
+function heroModel(chip) {
+  var base = C.cannedModel.createCannedModel({
+    intent: { answer: chip.intent },
+    reaction: { answer: chip.now.split('\n').map(function (l) { return 'm:translator/translate ' + l; }).join('\n') },
+    react: function () { return { tokens: chip.scene ? 'm:stager/stage ' + chip.scene : '' }; },
+  });
+  return { decide: function (q) { return wait(REDUCED ? 0 : 120).then(function () { return base.decide(q); }); },
+    generate: function (q) { return wait(REDUCED ? 300 : 1700).then(function () { return base.generate(q); }); } };
+}
+function heroSay(chip, text) {
+  if (!H || H.busy) return;
+  soundPlayer();
+  if (chip.walk) chip = { id: 'walk', intent: { verb: 'go', target: 'station:' + chip.walk }, now: 'now act.go to=station:' + chip.walk };
+  var s = H.s, E = s.journal.entries, gen = ++H.gen, t0 = performance.now();
+  var clock = function () { return Math.round(performance.now() - t0); };
+  H.busy = true;
+  H.turn = { first: E.length, said: s.world.said.length, text: text, scene: 'pending', sceneMs: null };
+  heroDraw();
+  var clocks = C.clocks.createClocks({ session: s, model: heroModel(chip), character: 'sam', clock: clock });
+  clocks.hear({ text: text, lang: lang, loud: !!chip.intent.loud }).then(function (res) {
+    if (gen !== H.gen) return;
+    H.turn.nowMs = clock();
+    if (chip.commit) {        // the commitment: a promise (fact) and the rule it becomes, the player as author (§8.6)
+      var k = res.intent.seq, cm = chip.commit, P = { kind: 'player', id: 'player' };
+      s.submit({ author: P, horizon: 'story', kind: 'fact', cause: { tx: k, commit: cm.id }, body: { subject: 'sam', predicate: 'promised', value: cm.value, commit: { id: cm.id, party: 'sam', status: 'accepted', strength: 'hard' } } });
+      s.submit({ author: P, horizon: 'story', kind: 'rule', cause: { tx: k, commit: cm.id }, body: { id: cm.id, commit: cm.id, when: cm.when, then: cm.then } });
+    }
+    heroArrive();
+    if (chip.wait) { H.turn.waited = chip.wait; s.advance(chip.wait); }
+    H.busy = false; heroDraw();
+    res.scene.then(function () { if (gen !== H.gen) return; H.turn.scene = 'landed'; H.turn.sceneMs = clock(); heroDraw(); });
+  });
+}
+/* Free text: no model in this page, so the words are matched to the nearest sentence the scene knows (bag of words). */
+var STOP = /^(the|a|an|to|of|and|it|is|at|in|on|your|you|me|i|le|la|les|un|une|de|du|des|et|à|a|au|en|ton|ta|tes|tu|te|je|moi|ce|ça|est)$/;
+function words(x) { return String(x).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(function (w) { return w.length > 1 && !STOP.test(w); }); }
+function heroMatch(text) {
+  var ws = words(text), best = null, bs = 0;
+  (HERO[H.s.world.body.station] || []).forEach(function (c) {
+    var cand = c.walk ? [WALK.en, WALK.fr, 'walk on go next continue avance marche suite'] : (function () { var r = BENCH.find(function (x) { return x.id === c.id; }); return [r.en, r.fr]; })();
+    var score = 0; cand.forEach(function (x) { var cw = words(x); var n = ws.filter(function (w) { return cw.some(function (v) { return v === w || (w.length > 3 && v.indexOf(w.slice(0, 4)) === 0); }); }).length; score = Math.max(score, n / Math.max(2, Math.sqrt(cw.length))); });
+    if (score > bs) { bs = score; best = c; }
+  });
+  return bs >= 0.34 ? best : null;
+}
+/* ---- drawing */
+function stillOf(st) { return MEDIA.stills[st] || MEDIA.stills.trailhead || ''; }
+function heroStill(st) {
+  var a = $('still-a'), b = $('still-b'), on = a.classList.contains('off') ? b : a, off = on === a ? b : a, src = stillOf(st);
+  if (on.getAttribute('src') === src) return;
+  if (!on.getAttribute('src') || REDUCED) { on.setAttribute('src', src); on.alt = t('hero.alt', stName(st)); return; }
+  off.setAttribute('src', src); off.alt = t('hero.alt', stName(st)); off.classList.remove('off'); on.classList.add('off');
+}
+function hhmmss(sec) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; sec = Math.floor(sec); return p(Math.floor(sec / 3600) % 24) + ':' + p(Math.floor(sec / 60) % 60) + ':' + p(sec % 60); }
+function walkedSeconds() {
+  var E = H.s.journal.entries, sec = 0, prev = 'trailhead';
+  E.forEach(function (e) {
+    if (e.type === 'tx' && e.status !== 'rejected' && e.kind === 'act' && e.body.op === 'go') {
+      var to = String(e.body.to).replace('station:', ''), c = (STN[prev].connects || []).find(function (x) { return x.to === to && (!e.body.via || !x.via || x.via === e.body.via); });
+      sec += c ? c.cost_s : 0; prev = to;
+    }
+  });
+  return sec;
+}
+function lineOf(x) { var l = x.line || {}; return { text: l[lang] || l.en || l.fr || '', speaker: l.speaker }; }
+var subTimer = null;
+function heroSubs(lines) {
+  clearTimeout(subTimer);
+  var el = $('ov-sub');
+  if (!lines.length) { el.textContent = ''; el.classList.add('quiet'); return; }
+  el.classList.remove('quiet');
+  var k = 0, show = function () {
+    var x = lines[k]; clear(el);
+    if (x.speaker && x.speaker !== 'sam') el.append(h('b', {}, x.speaker.toUpperCase() + ' '));
+    el.append(x.text);
+    if (++k < lines.length) subTimer = setTimeout(show, REDUCED ? 2600 : 2400);
+  };
+  show();
+}
+function describe(e) {
+  var b = e.body || {};
+  if (e.type === 'rule') return { k: 'rule', text: t('tr.rule', '<code>' + esc(e.rule) + '</code>', e.author && e.author.kind === 'player' ? t('tr.byplayer') : '') };
+  if (e.type === 'event' && e.event === 'beat.entered') { var bt = (D.pack.beats.beats || []).find(function (x) { return x.id === e.data.id; }); return { k: 'beat', text: t('tr.beat', esc(bt ? L(bt.name) : e.data.id)) }; }
+  if (e.type !== 'tx') return null;
+  var st = e.status === 'rejected' ? ' <span class="bad">' + t('tr.rejected') + (e.reasons ? ' (' + esc(e.reasons.map(function (r) { return r.why + (r.value ? ' ' + r.value : ''); }).join(', ')) + ')' : '') + '</span>' : e.status === 'repaired' ? ' <span class="dim">' + t('tr.repaired') + '</span>' : '';
+  if (e.kind === 'intent') return { k: 'intent', text: t('tr.intent', '<code>' + esc(b.verb + (b.target ? ' ' + b.target : '') + (b.class ? ' · ' + b.class : '')) + '</code>') + st };
+  if (e.kind === 'act') {
+    var o = b.op;
+    if (o === 'say') return { k: 'say', text: t('tr.say', '<code>' + esc(b.ref || 'line') + '</code>') + st };
+    if (o === 'go') return { k: 'go', text: t('tr.go', esc(stName(String(b.to).replace('station:', '')))) + st };
+    if (o === 'look') return { k: 'act', text: t('tr.look', '<code>' + esc(b.target || ('pitch ' + b.pitch)) + '</code>') + st };
+    return { k: 'act', text: t('tr.act', '<code>' + esc(o + (b.target ? ' ' + b.target : b.height ? ' ' + b.height : b.seconds ? ' ' + b.seconds + ' s' : '')) + '</code>') + st };
+  }
+  if (e.kind === 'effect' && b.op === 'sound.play') return { k: 'sound', text: t('tr.sound', '<code>' + esc(b.cue) + '</code>') + ' ' + (recipeFor(b.cue) ? '<span class="dim">' + t('tr.synth') + '</span>' : '<span class="norec">' + t('tr.norec') + '</span>') + st };
+  if (e.kind === 'effect') return { k: 'act', text: t('tr.effect', '<code>' + esc(b.op) + '</code>') + st };
+  if (e.kind === 'fact') {
+    if (b.commit) return { k: 'promise', text: t('tr.promise', '<code>' + esc(b.commit.id) + '</code>', '<b>' + esc(t('cm.' + b.commit.status)) + '</b>') + st };
+    if (b.predicate === 'established') { var p = PRINC[b.subject]; return { k: 'fact', text: t('tr.fact', p ? '“' + esc(p.text) + '”' : '<code>' + esc(b.subject) + '</code>') + st }; }
+    return { k: 'fact', text: t('tr.fact', '<code>' + esc(b.subject + ' ' + b.predicate + ' ' + b.value) + '</code>') + (b.certainty !== undefined && b.certainty < 1 ? ' <span class="dim">' + b.certainty + '</span>' : '') + st };
+  }
+  if (e.kind === 'rule') return { k: 'promise', text: t('tr.newrule', '<code>' + esc(b.id) + '</code>') + st };
+  return null;
+}
+function laneOf(e) {
+  if (e.type === 'tx' && (e.kind === 'fact' || e.kind === 'rule')) return 'story';
+  if (e.type === 'event' && e.event === 'beat.entered') return 'story';
+  if (e.type === 'tx' && e.loop === 'scene') return 'scene';
+  if (e.type === 'tx' || e.type === 'rule') return 'now';
+  return null;
+}
+function heroDraw() {
+  if (!H) return;
+  var s = H.s, w = s.world, E = s.journal.entries, T = H.turn, st = w.body.station;
+  heroStill(st);
+  $('ov-st').textContent = stName(st);
+  clear($('talk-where')).append('· ' + stName(st));
+  $('ov-tc').textContent = hhmmss(7 * 3600 + 52 * 60 + 10 + w.clock.t + walkedSeconds());
+  $('ov-bat').firstChild.style.width = pct(w.camera.battery);
+  $('ov-bat').classList.toggle('low', w.camera.battery < 0.25);
+  // chips: the sentences this station knows
+  var box = clear($('chips'));
+  (HERO[st] || []).forEach(function (c) {
+    box.append(h('button', { type: 'button', class: 'chip-say' + (c.walk ? ' walk' : '') + (c.commit ? ' commit' : ''), disabled: H.busy, onclick: function () { heroHeard(null); heroSay(c, chipText(c)); } },
+      c.walk ? h('span', { class: 'arrow', 'aria-hidden': 'true' }, '→ ') : null, '« ' + chipText(c) + ' »'));
+  });
+  if (!(HERO[st] || []).length) box.append(h('p', { class: 'dim' }, t('hero.end')));
+  $('free-go').disabled = H.busy;
+  // subtitles: what was said this turn (Sam's lines from the line bank; another speaker is named)
+  var lines = w.said.slice(T.said).map(lineOf).filter(function (x) { return x.text; });
+  if (T.subsN !== lines.length) { T.subsN = lines.length; heroSubs(lines); }
+  // sound: the cues played this turn
+  var cues = E.slice(T.first).filter(function (e) { return e.type === 'event' && e.event === 'sound.played'; }).map(function (e) { return e.data.cue; });
+  var snd = clear($('ov-sound'));
+  cues.forEach(function (cue) {
+    if (!T.played) T.played = {};
+    var rec = recipeFor(cue);
+    snd.append(h('span', { class: 'snd' + (rec ? '' : ' none'), title: CUES[cue] ? CUES[cue].en : '' }, '♪ ' + cue, h('small', {}, rec ? rec.map(function (x) { return x.recette; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(' + ') : t('tr.norec'))));
+    if (rec && !T.played[cue]) { T.played[cue] = 1; playCue(cue, T.first); }
+  });
+  // the trace on three clocks
+  var lanes = { now: [], scene: [], story: [] };
+  E.slice(T.first).forEach(function (e) { var k = laneOf(e); if (!k) return; var d = describe(e); if (d) lanes[k].push(d); });
+  var item = function (d) { return h('li', { class: 'tr-' + d.k, html: d.text }); };
+  var cut = function (a, n) { return a.length > n ? a.slice(0, n).map(item).concat([h('li', { class: 'dim' }, t('tr.more', a.length - n))]) : a.map(item); };
+  put(clear($('tl-now')), T.start ? h('p', { class: 'dim', html: t('tr.startnow', esc(stName(st))) }) : null,
+    T.nowMs !== undefined ? h('p', { class: 'ms' }, t('tr.nowms', T.nowMs)) : T.start ? null : h('p', { class: 'ms pending' }, t('tr.listening')),
+    h('ul', {}, cut(lanes.now, 5)));
+  put(clear($('tl-scene')), 
+    T.scene === 'pending' ? h('p', { class: 'ms pending' }, t('tr.scenewait')) : T.scene === 'landed' ? h('p', { class: 'ms' }, t('tr.scenems', (T.sceneMs / 1000).toFixed(1)), ' ', canned()) : h('p', { class: 'dim' }, t('tr.scenenone')),
+    T.scene === 'landed' ? (lanes.scene.length ? h('ul', {}, cut(lanes.scene, 4)) : h('p', { class: 'dim' }, t('tr.scenenothing'))) : null);
+  var facts = w.facts.filter(function (f) { return f.predicate === 'established'; }).length, cms = Object.values(w.commitments || {});
+  var beat = (D.pack.beats.beats || []).find(function (x) { return x.id === w.story.beat; });
+  put(clear($('tl-story')), lanes.story.length ? h('ul', {}, cut(lanes.story, 4)) : null,
+    T.waited ? h('p', { class: 'dim' }, t('tr.waited', T.waited)) : null,
+    h('p', { class: 'thread' }, t('tr.thread'), ' ', chip(t('tr.beatnow', beat ? L(beat.name) : '—')), ' ', chip(t('tr.facts', facts)), ' ',
+      cms.map(function (c) { return chip(c.id + ' · ' + t('cm.' + c.status), c.status === 'kept' ? 'strong' : c.status === 'broken' ? 'bad' : ''); }), ' ', chip(t('tr.battery', pct(w.camera.battery)), w.camera.battery < 0.5 ? 'bad' : '')));
+  var jl = E.slice(T.first).filter(function (e) { return e.type !== 'principles'; });
+  put(clear($('tl-jbox')), jl.map(function (e) { return h('div', { class: 'jl' }, h('span', { class: 'seq' }, '#' + e.seq), h('code', {}, (e.loop ? '[' + e.loop + '] ' : '') + summary(e)), e.author && e.author.kind === 'model' ? canned() : null); }));
+  $('tl-j').querySelector('summary').textContent = t('hero.journal') + ' · ' + jl.length;
+}
+function heroHeard(c, text) {
+  var el = clear($('heard'));
+  if (text === undefined) return;
+  if (!c) { el.append(h('span', { html: t('hero.nomatch') })); return; }
+  el.append(h('span', { html: t('hero.matched', esc(chipText(c))) }));
+}
+
+/* ---------------------------------------------------------------- I.2 the inversion: every statement as one mark */
+var ORDER_FILES = ['characters/sam.pdl', 'characters/louis.pdl', 'characters/voice.pdl', 'characters/walker.pdl', 'facts/base.pdl', 'facts/ranger-notes.pdl', 'rules/place.pdl', 'rules/hide.pdl', 'rules/voice.pdl'];
+function kindOf(p) {
+  if (p.strength === 'absolute') return 'absolute';
+  if (p.strength === 'hard') return p.compiled && (p.compiled.status === 'compiled' || p.compiled.status === 'approved') ? 'code' : 'hard';
+  if (p.strength === 'example' || p.strength === 'counter') return 'calib';
+  return p.strength;                        // tendency, open
+}
+var FIELD = PACK.principles.slice().sort(function (a, b) {
+  var fa = ORDER_FILES.indexOf(a.source.file), fb = ORDER_FILES.indexOf(b.source.file);
+  fa = fa < 0 ? 99 : fa; fb = fb < 0 ? 99 : fb;
+  return fa - fb || (a.source.file < b.source.file ? -1 : a.source.file > b.source.file ? 1 : 0) || a.source.line - b.source.line;
+});
+var fieldSel = 'louis-marks.sign-read.1', fieldOnly = null;
+function field() {
+  var box = clear($('field')), cnt = {};
+  FIELD.forEach(function (p) {
+    var k = kindOf(p); cnt[k] = (cnt[k] || 0) + 1;
+    var op = p.strength === 'tendency' && p.weight !== undefined ? Math.max(0.35, p.weight) : 1;
+    box.append(h('button', { type: 'button', role: 'listitem', class: 'mk mk-' + k + (p.id === fieldSel ? ' on' : '') + (fieldOnly && fieldOnly !== k ? ' fade' : ''), style: '--o:' + op, title: p.id,
+      'aria-label': t('kind.' + k) + ': ' + p.text, 'aria-pressed': p.id === fieldSel ? 'true' : 'false', onclick: function () { fieldSel = p.id; field(); } }));
+  });
+  var total = FIELD.length, code = (cnt.code || 0) + PACK.principles.filter(function (p) { return p.strength === 'absolute' && p.compiled && p.compiled.status === 'approved'; }).length;
+  var leg = clear($('field-legend'));
+  ['open', 'tendency', 'calib', 'hard', 'code', 'absolute'].forEach(function (k) {
+    leg.append(h('li', {}, h('button', { type: 'button', class: 'lg' + (fieldOnly === k ? ' on' : ''), 'aria-pressed': fieldOnly === k ? 'true' : 'false', onclick: function () { fieldOnly = fieldOnly === k ? null : k; field(); } },
+      h('span', { class: 'mk mk-' + k, 'aria-hidden': 'true' }), h('b', {}, String(cnt[k] || 0)), h('span', {}, t('kind.' + k)))));
+  });
+  leg.append(h('li', { class: 'tot', html: t('inv.total', total, code) }));
+  var p = PRINC[fieldSel] || FIELD[0], s = SRC[p.id], k = kindOf(p), card = clear($('mark-card'));
+  card.append(h('div', { class: 'stmt-h' }, chip(t('kind.' + k), 'k-' + p.strength), h('code', {}, p.id), h('span', { class: 'dim' }, p.source.file + ':' + p.source.line + ' · ' + p.layer + ' · ' + p.author.id)),
+    h('p', { class: 'mk-text' }, p.text), h('p', { class: 'mk-who', html: '<span class="k">' + t('s2.who') + '</span> ' + t(k === 'code' ? 'who.code' : k === 'hard' ? 'who.hardprose' : 'who.' + p.strength) }));
+}
+
+/* ---------------------------------------------------------------- I.3 a story is a book */
+var CAST = ['characters/sam.pdl', 'characters/louis.pdl', 'characters/voice.pdl', 'characters/walker.pdl'], castSel = CAST[0];
+function book() {
+  var M = D.pack.manifest, B = D.pack.beats;
+  clear($('cover')).append(h('p', { class: 'cv-k' }, t('book.cover')), h('h3', { class: 'cv-t' }, L(M.title)), h('p', { class: 'cv-s' }, L(M.summary)),
+    h('p', { class: 'cv-q' }, h('span', { class: 'k' }, t('book.question')), ' ', L(B.question)),
+    h('ul', { class: 'cv-l' }, M.layers.map(function (l) { return h('li', {}, chip(l.id, l.id === 'base' ? '' : 'strong'), ' ', h('span', {}, t('book.by', l.author)), ' ', h('span', { class: 'dim' }, t('book.files', l.files.length))); })));
+  var ch = clear($('chapters'));
+  B.beats.forEach(function (b, i) {
+    ch.append(h('li', {}, h('span', { class: 'ch-n' }, t('book.chapter', i + 1)), h('b', {}, L(b.name)),
+      h('span', { class: 'ch-st' }, b.stations.map(stName).join(' · ')),
+      h('span', { class: 'ch-t', 'aria-label': 'tension ' + b.tension }, new Array((b.tension || 0) + 1).join('●'))));
+  });
+  var cast = clear($('cast'));
+  CAST.forEach(function (f) {
+    var head = /@id\s+(\S+)[\s\S]*?(?:@strength\s+(\S+))?/.exec(D.pack.texts[f] || ''), name = f.replace(/^characters\/|\.pdl$/g, '');
+    var n = PACK.principles.filter(function (p) { return p.source.file === f; }).length;
+    cast.append(h('button', { type: 'button', role: 'tab', id: 'cast-' + name, 'aria-selected': f === castSel ? 'true' : 'false', class: 'cast-t' + (f === castSel ? ' on' : ''), onclick: function () { castSel = f; book(); } },
+      h('b', {}, t('who.name.' + name)), h('span', { class: 'dim' }, t('book.lines', n))));
+  });
+  var page = clear($('page')), ps = PACK.principles.filter(function (p) { return p.source.file === castSel; }), sec = null;
+  ps.forEach(function (p) {
+    if (p.section !== sec) { sec = p.section; page.append(h('p', { class: 'pg-sec' }, sec)); }
+    page.append(h('div', { class: 'pg-l' + (p.id === s2Id ? ' on' : '') }, h('span', { class: 'mk mk-' + kindOf(p), 'aria-hidden': 'true' }),
+      h('span', { class: 'pg-x' }, p.text, p.weight !== undefined && p.strength === 'tendency' ? h('small', { class: 'dim' }, ' ~' + p.weight) : null),
+      h('button', { type: 'button', class: 'linkish', 'aria-label': t('book.editthis') + ' ' + p.id, onclick: function () { s2Load(p.id); book(); $('s2-line').focus(); } }, t('book.editthis'))));
+  });
+}
+
+/* ---------------------------------------------------------------- I.3 the editor of the book: one line, in place */
+// The header in force is the file's own (its @kind, @layer, @scope...): a line is compiled as if it stood in that file.
+var s2Header = '', s2Id = null;
+function s2Load(id) {
+  var x = SRC[id]; if (!x) return;
+  s2Id = id; s2Header = x.header; $('s2-line').value = x.raw;
+  clear($('ed-where')).append(x.file + ':' + x.line);
+  s2();
 }
 var WORLD0 = null;
 function s2() {
@@ -566,31 +854,96 @@ function s11Col() {
   Array.prototype.forEach.call($('s11-ledger').querySelectorAll('tr'), function (tr) { Array.prototype.forEach.call(tr.children, function (c, i) { c.hidden = v !== 'all' && i !== 0 && i !== +v; }); });
 }
 
+
+
+/* ---------------------------------------------------------------- I.0 other worlds, and the game page */
+function worlds() {
+  var box = clear($('worlds-strip'));
+  (MEDIA.worlds || []).forEach(function (w) {
+    box.append(h('figure', { class: 'world' }, h('img', { src: w.src, alt: t('world.' + w.id), loading: 'lazy', width: 270, height: 480 }), h('figcaption', {}, t('world.' + w.id))));
+  });
+  if (MEDIA.game) $('play-img').setAttribute('src', MEDIA.game); else $('play-img').hidden = true;
+}
+
+/* ================================================================ PART II · the map of the semantic framework */
+// Statuses from docs/milestones.md (M1, M2 measured), ADR 0004, 0008, 0009 (proposed): tested = built and tested;
+// built = built, not measured; designed = written down, not built.
+var MAP = [
+  { id: 'words', go: '#play', st: [['tested', 'map.s.words']] },
+  { id: 'decide', go: '#s5', st: [['tested', 'map.s.reflex'], ['designed', 'map.s.dm']] },
+  { id: 'pdl', go: '#s3', st: [['tested', 'map.s.core']] },
+  { id: 'validate', go: '#invert', st: [['tested', 'map.s.core'], ['designed', 'map.s.compile']] },
+  { id: 'executor', go: '#play', st: [['tested', 'map.s.m2']] },
+  { id: 'events', go: '#promise', st: [['tested', 'map.s.core']] },
+  { id: 'rules', go: '#promise', st: [['tested', 'map.s.m2c']] },
+  { id: 'journal', go: '#rewind', st: [['tested', 'map.s.golden']] },
+];
+var MAP_SIDE = [
+  { id: 'clocks', go: '#clocks', st: [['built', 'map.s.clocks'], ['designed', 'map.s.story']] },
+  { id: 'generate', go: '#s10', st: [['designed', 'map.s.m3']] },
+  { id: 'gauges', go: '#s7', st: [['tested', 'map.s.core']] },
+];
+function badge(x) { return h('span', { class: 'badge b-' + x[0], title: t(x[1]) }, t('st.' + x[0]), h('small', {}, ' · ' + t(x[1]))); }
+function mapBox(b, i) {
+  return h('a', { class: 'mb mb-' + b.id, href: b.go, role: 'listitem' }, i !== undefined ? h('span', { class: 'mb-n' }, String(i + 1)) : null,
+    h('b', { html: t('map.' + b.id) }), h('span', { class: 'mb-p', html: t('map.' + b.id + '.p') }), h('span', { class: 'mb-st' }, b.st.map(badge)));
+}
+function map() {
+  var m = clear($('map'));
+  m.append(h('div', { class: 'map-clk' }, mapBox(MAP_SIDE[0])),
+    h('div', { class: 'map-flow' }, MAP.reduce(function (a, b, i) { return a.concat([mapBox(b, i), i < MAP.length - 1 ? h('span', { class: 'arr', 'aria-hidden': 'true' }, '→') : null]); }, [])),
+    h('div', { class: 'map-side' }, mapBox(MAP_SIDE[1]), mapBox(MAP_SIDE[2])));
+  put(clear($('map-leg')), ['tested', 'built', 'designed'].map(function (k) { return h('li', {}, h('span', { class: 'badge b-' + k }, t('st.' + k)), ' ', t('st.' + k + '.p')); }));
+}
+/* ADR 0009, output economy: real examples from this pack, their real sizes in characters (tokens are not measured here). */
+function eco() {
+  var tok = 'm:stager/stage now act.look tg=thing:marque-1', tx = C.tokens.parseTokens(tok)[0];
+  var canon = JSON.stringify({ author: tx.author, horizon: tx.horizon, kind: tx.kind, body: tx.body });
+  var src = SRC['r.jay-first'] ? SRC['r.jay-first'].raw : '';
+  var rows = [
+    { k: 'now', ex: 'mark.read.1', vs: lineText('mark.read.1') },
+    { k: 'scene', ex: tok.replace(/^m:stager\/stage /, ''), vs: canon },
+    { k: 'story', ex: src, vs: null },
+  ];
+  put(clear($('eco')), rows.map(function (r) {
+    return h('div', { class: 'eco-r' }, h('span', { class: 'eco-k' }, r.k), h('div', { class: 'eco-v' }, h('b', {}, t('eco.' + r.k)), h('span', { class: 'dim' }, t('eco.' + r.k + '.p')),
+      h('code', { class: 'eco-ex' }, r.ex), h('span', { class: 'eco-n' }, t('eco.chars', r.ex.length) + (r.vs ? ' · ' + t('eco.vs.' + r.k, r.vs.length) : ''))));
+  }));
+}
+
 /* ---------------------------------------------------------------- language, theme, wiring */
+var HOOD = ['s3', 's5', 's7', 's9', 's10', 's11'];
 function applyCopy() {
   document.documentElement.lang = lang;
   Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (e) { e.innerHTML = t(e.getAttribute('data-t')); });
+  $('story-title').textContent = L(D.pack.manifest.title);
+  ['synth-0', 'synth-1', 'synth-2'].forEach(function (id, i) { $(id).textContent = t('synth.b' + i); });
   var toc = clear($('toc'));
-  for (var i = 1; i <= 11; i++) toc.append(h('li', {}, h('a', { href: '#s' + i }, h('span', { class: 'n' }, (i < 10 ? '0' : '') + i), t('s' + i + '.title'))));
+  HOOD.forEach(function (id, i) { toc.append(h('li', {}, h('a', { href: '#' + id }, h('span', { class: 'n' }, '0' + (i + 1)), t(id + '.title')))); });
 }
 function renderAll() {
   applyCopy(); renderCheck();
-  $('s1-station').dataset.v = $('s1-station').value || 'approach'; $('s1-request').dataset.v = $('s1-request').value || ''; s1Stations(); s1Requests(); s1();
-  var keep = $('s2-line').value, keepH = s2Header; s2Presets(); if (keep) { s2Header = keepH; s2(); } else s2Load();
+  heroDraw();
+  worlds(); field(); book(); map(); eco(); if (s2Id) s2Load(s2Id); else s2Load('sam.voice.dry');
   var k3 = $('s3-tokens').value; s3Presets(); if (k3) s3(); else s3Load();
   s4Sentences(); s4Out();
   s5Questions(); s5(); s6(); if (!$('s7-src').value) $('s7-src').value = S7_DEFAULT; s7();
-  s8List(); s8Show(true); s8Rules(); s9(); s10(); s11();
+  s8List(); s8Show(false); s8Rules(); s9(); s10(); s11();
 }
 function setTheme(v) { if (v === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', v); }
 function wire() {
   var on = function (id, ev, f) { $(id).addEventListener(ev, f); };
   on('lang', 'change', function () { lang = $('lang').value; store('bcs-guide-lang', lang); renderAll(); s4Say(); });
   on('theme', 'change', function () { setTheme($('theme').value); store('bcs-guide-theme', $('theme').value); });
-  on('s1-station', 'change', function () { $('s1-request').dataset.v = ''; s1Requests(); s1(); });
-  on('s1-request', 'change', function () { $('s1-request').dataset.v = $('s1-request').value; s1(); });
-  on('s1-side-live', 'change', s1); on('s1-side-write', 'change', s1);
-  on('s2-preset', 'change', s2Load); on('s2-line', 'input', debounce(s2, 120));
+  on('free', 'submit', function (ev) {
+    ev.preventDefault();
+    var text = $('free-text').value.trim(); if (!text || !H || H.busy) return;
+    var c = heroMatch(text); heroHeard(c, text);
+    if (c) { heroSay(c, text); $('free-text').value = ''; }
+  });
+  on('hero-reset', 'click', function () { heroHeard(null); heroNew(); });
+  ['synth-0', 'synth-1', 'synth-2'].forEach(function (id) { on(id, 'click', function () { synthFall(+$(id).dataset.mass); }); });
+  on('s2-line', 'input', debounce(s2, 120));
   on('s3-preset', 'change', s3Load); on('s3-station', 'change', function () { $('s3-station').dataset.v = $('s3-station').value; s3(); }); on('s3-tokens', 'input', debounce(s3, 200));
   on('s4-say', 'click', s4Say); on('s4-sentence', 'change', s4Say);
   ['now', 'scene', 'story'].forEach(function (k) { on('s4-' + k, 'input', s4Out); on('s4-' + k, 'change', s4Say); });
@@ -606,6 +959,7 @@ function wire() {
   on('s10-node', 'change', s10); on('s10-host', 'change', s10);
   Array.prototype.forEach.call(document.querySelectorAll('input[name="s11-col"]'), function (e) { e.addEventListener('change', s11Col); });
 }
+
 function timecode() {
   var el = $('timecode'), t0 = Date.now(), still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var f = function () { var ms = Date.now() - t0, s = Math.floor(ms / 1000), p = function (n) { return (n < 10 ? '0' : '') + n; }; el.textContent = p(Math.floor(s / 3600)) + ':' + p(Math.floor(s / 60) % 60) + ':' + p(s % 60) + ':' + p(Math.floor(ms / 40) % 25); };
@@ -616,5 +970,5 @@ var l0 = store('bcs-guide-lang'), th0 = store('bcs-guide-theme');
 if (l0 === 'fr' || l0 === 'en') lang = l0;   // English first; French only by choice
 $('lang').value = lang;
 if (th0 === 'dark' || th0 === 'light') { $('theme').value = th0; setTheme(th0); }
-wire(); renderAll(); s8Load(true); s4Say(); timecode();
+wire(); heroNew(); renderAll(); s8Load(true); s4Say(); timecode();
 })();
