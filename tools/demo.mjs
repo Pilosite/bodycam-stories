@@ -18,6 +18,7 @@ import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as MENEUR from '../src/meneur.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const [,, px = '9000', pxCapture = '120000', mode = ''] = process.argv;
@@ -223,6 +224,13 @@ verifier((await page.evaluate(() => balade.faconnage().mains)) === 0, 'les mains
 const enPied = await page.evaluate(([t, h, m, y, z]) => MENEUR.tientDansImage(t, h, m, y, z, innerWidth / innerHeight), [ob.taille, ob.haut, ob.m, 1.36 * cb.haut, cb.zoom]);
 verifier(ob && Math.abs(ob.angle) < 10 && enPied, `bonhomme cadré en pied, entier : ${ob && ob.m} m, ${ob && ob.angle}°`);
 await vueLibre(idE, 'bonhomme');
+{ // les yeux (cailloux pressés dans la pâte) : saillants, tournés vers la caméra finale, rien devant, assez gros à l'écran
+  const vl = await page.evaluate(i => balade.vueLocale(i), idE);
+  const V = MENEUR.ajoutsVus(vl.formes, vl.oeil).filter(v => vl.formes[v.i].matiere === 'gres');
+  const pxRad = VH * Math.max(1, vl.zoom) * Math.max(1, VW / VH) / MENEUR.CHAMP_RAD;
+  verifier(V.length === 2 && V.every(v => v.saillie >= 0.6 && v.face && !v.occulte && v.angle * pxRad >= 8),
+    'les yeux se voient depuis la caméra finale : ' + V.map(v => `saillie ${v.saillie.toFixed(2)}, ${v.face ? 'face' : 'DE DOS'}, ${v.occulte ? 'CACHÉ' : 'dégagé'}, ${(v.angle * pxRad).toFixed(1)} px`).join(' ; '));
+}
 await capture('8-bonhomme', 'le bonhomme fini, cadré en pied');
 
 { // §22 : le dégoût (et la nausée) du bonhomme fait avec l'énorme : le journal des pensées et leurs instants, depuis la phrase
