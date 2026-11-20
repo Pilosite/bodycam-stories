@@ -13,6 +13,7 @@ POC documents first (English, binding), then the legacy French docs of the engin
 - `sandbox.md`: what belongs to the satire demo versus the generic mechanisms that stay, and how to separate them.
 - `pdl-spec.md`: the PDL specification (source grammar, transactions, rules, validation, ports, clocks, journal).
 - `board.md`: priorities, open questions, working assumptions, and how Toine and the coordinator work together.
+- `creation-pipeline.md`: the opening sequence of the demo read as the specification of the real creation pipeline; what is real, partly real, staged, and the work items to make it true.
 - `adr/0008-home-node.md`: models reached through Toine's desktop, and how the page detects it.
 - `adr/0009-model-output-economy.md`: what each tier is asked to produce (choose, write compact, write long), and how it will be measured.
 - `research/models.md`: research behind ADR 0004 (which models for which tier; Jev and decision models, JEPA, embeddings, constrained decoding, the artifact and proxy modes).

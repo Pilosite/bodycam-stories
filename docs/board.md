@@ -20,6 +20,8 @@ Kept by the coordinator, read by Toine. One page. It is how we talk without redo
 
 Next: home node and model port in the page (ADR 0008, after Toine's answers) · model tiers live and measured (M3) · background, frontier, a rule written by a model (M4) · creator view (M5).
 
+Creation pipeline (`docs/creation-pipeline.md`): the demo's opening is now the specification of the real path from a prompt to a playable story. Of 17 steps it shows, 3 are real, 7 partly, 4 staged, 3 not designed. Proposed order: W1 to W6 with v1 (one creation-event schema, the agent network drawn only from real model calls, the opening labelled as a replay when it is one, real PDL in the overlays), research and character-from-findings in v2, a full story from a prompt as target.
+
 Later: the satire moved behind `SATIRE=1` · phone · autonomous movement (v2).
 
 ## Open questions
@@ -30,6 +32,7 @@ Later: the satire moved behind `SATIRE=1` · phone · autonomous movement (v2).
 | Q2 | Outside the artifact, which generative models can we call (API key Anthropic or Google, or none)? | none; mid and large tiers run only inside the artifact for now | medium: decides whether M3 measures real tiers |
 | Q3 | "Real-time dynamism" in v1: the world's clock runs on its own (light rises, the walker comes, the battery drains) whether or not the player speaks, even though she moves station to station? | yes | high: it shapes the session loop and the engine adapter |
 | Q4 | Is the prepared future ("the possible", "the worlds that follow") ever shown to the player, or only felt as speed and coherence? | never shown in play; visible in the creator view | medium |
+| Q6 | The opening as specification: does the real pipeline have to do web research on the place and the person (queries, sources, photos), as the opening shows? | yes as v2, served by the home node since an artifact has no web access; photos are read for research only, never shown or used as assets | medium |
 | Q5 | The story of « Louis's Round »: Louis watched a badger sett and died there of his heart; discreet, nothing supernatural. Keep it? | kept | medium: the pack is written around it |
 
 ## Assumptions adopted without an answer
