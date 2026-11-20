@@ -31,9 +31,9 @@ background:rgba(10,12,9,.9);border-top:1px solid var(--line,rgba(243,240,232,.24
 #conception .cc-chips button{padding:8px 12px;min-height:36px;font-size:13px;border-radius:999px}
 #conception .cc-chips button[aria-pressed=true]{background:var(--ink,#f3f0e8);color:#000}
 #conception .cc-chips input{flex:1 1 140px;min-width:0;padding:8px 10px;border-radius:999px;border:1px solid var(--line,rgba(243,240,232,.24));background:transparent;color:inherit;font:inherit;font-size:13px}
-#conception dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+#conception dl{margin:0;display:grid;grid-template-columns:1fr;gap:2px}
 #conception dt{font:500 11px/1.6 var(--f-mono,ui-monospace,monospace);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-dim,rgba(243,240,232,.72))}
-#conception dd{margin:0}
+#conception dd{margin:0 0 6px}
 #conception .cc-src{font:400 11px/1.4 var(--f-mono,ui-monospace,monospace);color:var(--ink-dim,rgba(243,240,232,.72))}
 #conception .cc-row{display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:-14px;margin:0 -16px -14px;padding:10px 16px 14px;background:rgba(10,12,9,.96)}
 #conception .cc-play{background:var(--ink,#f3f0e8);color:#000;padding:12px 26px;min-height:46px}`;
