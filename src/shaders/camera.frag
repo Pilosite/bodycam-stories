@@ -94,8 +94,8 @@ void main(){
   float v=r2/(.25*(asp*asp+1.));
   if(uEbl.x>0.||uEbl.y>0.){
     float e=uEbl.x;
-    c+=tone(bl)*e*(1.2+2.*e)*vec3(1.,.9,.74);                       // halo de l'optique, amplifié (déjà lu)
-    c=mix(c,vec3(1.,.95,.85),e*e*(.5+.4*(1.-v)));                   // voile blanc chaud
+    c+=tone(bl)*e*(.8+1.2*e)*vec3(1.,.9,.74);                       // halo de l'optique, amplifié (déjà lu)
+    c=mix(c,vec3(1.,.95,.85),e*e*(.3+.4*(1.-v)));                   // voile blanc chaud
     c=mix(c,vec3(dot(c,vec3(.333)))*.7+.3,.35*e);                   // le contraste s'effondre
     float sq=smoothstep(.3,1.,e), ax=abs(q.x)*2., ouv=mix(1.25,.34,sq)*(1.-.55*ax*ax);
     c*=1.-.93*sq*smoothstep(ouv,ouv+.28,abs(q.y)*2.);               // paupières : une amande qui se resserre en haut et en bas

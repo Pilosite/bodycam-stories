@@ -694,8 +694,12 @@ function simulate(dt){
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*(a.libre?1:gesteK())*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
+<<<<<<< HEAD
     else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK(),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
     else if(a.type==="soleil") soleilPas(a,dt);
+=======
+    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK()*(vitK()>1?1.5:1),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
+>>>>>>> 044db2eff428e6f72f3aba25ab91946e19aab011
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*gesteK()*dt); if(Math.abs(d)<.012) queue.shift(); }
     else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*gesteK()*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
     else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet,a.cadre);   // vers un objet : la page calcule cap et inclinaison
@@ -3225,8 +3229,9 @@ function planCorps(a){
   }
   if(a.type==="chercher"){                                          // aller chercher : un endroit plausible, il y va, se baisse, ramasse, se relève
     const L=supportsProches(), lieu=MENEUR.lieuChercher(a.quoi,{x:cam.x,z:cam.z,yaw:cam.yaw},L,z=>S.kit!==1?pathX(z):cam.x,S.traj[1]||1,MODELES);
+    if(vitK()>1){ const dx=lieu.x-cam.x, dz=lieu.z-cam.z, m=Math.hypot(dx,dz), M=2; if(m>M){ lieu.x=cam.x+dx/m*M; lieu.z=cam.z+dz/m*M; } }   // démo : il trouve tout près (2 m), l'aller-retour ne traîne pas
     dernierLieu=lieu;
-    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},...(k=>[{type:"ramasser",rest:1.6*k,duree:1.6*k},{type:"tourner",rest:.45},{type:"ramasser",rest:1.5*k,duree:1.5*k}])(vitK()>1?.5:1),
+    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},...(k=>[{type:"ramasser",rest:1.6*k,duree:1.6*k},{type:"tourner",rest:.45},{type:"ramasser",rest:1.5*k,duree:1.5*k}])(vitK()>1?.3:1),
       {type:"posture",h:1},{type:"regarder",pitch:-.1}];
   }
   const q=cibleMonde(a.objet); if(!q) return [];
@@ -3397,9 +3402,9 @@ $("fin-quitter").onclick=()=>quitterHistoire(false);
    Mise à jour par lots, 10 fois par seconde au plus, et seulement entre une phrase et la fin de ce qu'elle déclenche. */
 const activite=(()=>{
   let on=true; try{ on=localStorage.getItem("bodycam-activite")!=="0"; }catch(_){}
-  const st=document.createElement("style"); st.textContent="#activite{position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:22vh;width:340px;max-height:52vh;overflow:hidden;z-index:6;pointer-events:none;"
-    +"font-family:var(--f-mono);font-size:12.5px;line-height:1.45;color:#cfd8c4;background:rgba(6,8,6,.46);border-left:2px solid rgba(160,200,140,.35);padding:8px 10px;border-radius:4px;"
-    +"opacity:0;transition:opacity .8s;white-space:pre-wrap;word-break:break-word;display:flex;flex-direction:column;justify-content:flex-end}#activite.on{opacity:1}"
+  const st=document.createElement("style"); st.textContent="#activite{position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:26vh;width:250px;max-height:40vh;overflow:hidden;z-index:6;pointer-events:none;"
+    +"font-family:var(--f-mono);font-size:10.5px;line-height:1.4;text-shadow:0 0 3px rgba(0,0,0,.95),0 1px 2px rgba(0,0,0,.8);color:#cfd8c4;background:rgba(10,12,9,.16);border-left:1px solid rgba(243,240,232,.25);padding:6px 8px;border-radius:4px;"
+    +"opacity:0;transition:opacity .8s;white-space:pre-wrap;word-break:break-word;display:flex;flex-direction:column;justify-content:flex-end}#activite.on{opacity:.8}"
     +"#activite .l{display:flex;gap:6px}#activite .h{flex:none;width:2.6em;color:#7d8a74;font-size:10.5px;padding-top:1px}#activite .s{flex:none;width:1em}"
     +"#activite .k-gt .s,#activite .k-gt{color:#fff}#activite .k-lt{color:#a9d6f0}#activite .k-ex{color:#f0b47a}#activite .k-go{color:#e8e39a}#activite .k-ok{color:#8fbf7f}#activite .k-ti{color:#9ab}"
     +"#activite .c{display:inline-block;width:.55em;background:#cfd8c4;animation:actc 1s steps(1) infinite}@keyframes actc{50%{opacity:0}}@media (max-width:760px),(orientation:portrait){#activite{display:none}}";

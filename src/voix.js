@@ -160,12 +160,15 @@ export function voixNavigateur(w) {
     let vs = [];
     try { vs = S.getVoices() || []; } catch (_) {}
     const fr = vs.filter(v => /^fr\b/i.test(v.lang || ''));
-    return fr.find(v => /^fr[-_]FR/i.test(v.lang) && v.localService) || fr.find(v => /^fr[-_]FR/i.test(v.lang)) || fr[0] || null;
+    const F = /am[eé]lie|audrey|aurelie|aurélie|marie|julie|denise|hortense|brigitte|virginie|c[eé]line|l[eé]a|chlo[eé]|female|femme|google fran/i, f = fr.filter(v => F.test(v.name || ''));   // une voix de femme d'abord (Sam)
+    return f.find(v => /^fr[-_]FR/i.test(v.lang)) || f[0] || fr.find(v => /^fr[-_]FR/i.test(v.lang) && v.localService) || fr.find(v => /^fr[-_]FR/i.test(v.lang)) || fr[0] || null;
   };
   let voix = null;
   try { voix = choisir(); if (S.addEventListener) S.addEventListener('voiceschanged', () => { voix = choisir(); }); } catch (_) {}
   return {
     speak(texte, o, cb) {
+      if (!voix) voix = choisir();
+      if (!voix) { cb.fin(); return; }                     // aucune voix française : on se tait (une voix anglaise lisait le français)
       const u = new U(texte);
       u.lang = voix ? voix.lang : 'fr-FR';
       if (voix) u.voice = voix;
