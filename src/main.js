@@ -3629,6 +3629,7 @@ function storyLabels(T){ if(!T) return;
   $("parler").textContent=frozen&&mode==="parler"?T.resume:T.talk; $("msg").placeholder=T.placeholder; $("envoi").textContent=T.say; }
 const STORY_PAGE={
   win:window, doc:document, CORE, ADAPTER, REFLEX, VOIX, packs:STORY_PACKS, reflexes:REFLEXES, bruitages:BRUITAGES, tts:capacite("tts"),
+  MODELPORT, sample:()=>sampler, forgetSample:()=>{ sampler=null; },        // the model port (M3, src/model-port.js): the host's model through the same sampler as the demo
   cam, look, now:()=>performance.now(),
   pathYaw:z=>pathYaw(z), pathYawDeg:z=>pathYaw(z)*180/Math.PI, wrapDeg:d=>((d%360)+540)%360-180,
   posObjet, obstacles:()=>obstaclesConnus(), objetMeneur, patchScene, sunAzimuth:()=>(fiche.ambiance&&fiche.ambiance.soleil&&fiche.ambiance.soleil.azimut)||35,

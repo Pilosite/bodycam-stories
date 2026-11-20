@@ -1,6 +1,8 @@
 /* Story mode (M2): the narrative core (CORE, core/) drives the page through the executor (src/adaptateur-core.js).
    Sam stands at stations and goes from one to the next by transitions; the player looks around and speaks or types; the
-   answer comes from reflex code, compiled rules and the pack's line banks (src/reflex-model.js, no model at all).
+   answer comes from reflex code, compiled rules and the pack's line banks (src/reflex-model.js), and, when a model is
+   reachable (M3), from the page's model port (src/model-port.js: home node, else the host's model): judgement when the
+   reflex is unsure, invention in the scene loop.
    This file is the page glue: it owns the session, the world's clock (it runs whether or not the player speaks; it holds
    while the player is talking, when the world freezes), the input port (speech, gaze dwell), the voices, the subtitles,
    the debug panel and the journal. Everything the engine itself does goes through `P`, hooks given by src/main.js.
@@ -16,7 +18,7 @@ const GAZE_DEG = 11, GAZE_M = 40, GAZE_AT = [1.5, 3];          // a thing looked
 
 export function createStoryMode(P) {
   const st = { on: false, id: null, pk: null, session: null, clocks: null, model: null, ex: null, lang: 'en', timer: 0, gazeTimer: 0, manual: false, cut: false,
-    ended: false, speech: { volume: 'normal', shorten: 0 }, gaze: { target: null, s: 0, fired: new Set() }, commands: [], handlers: [], place: null, voices: null, ui: null, errors: [] };
+    ended: false, speech: { volume: 'normal', shorten: 0 }, home: null, summarized: false, gaze: { target: null, s: 0, fired: new Set() }, commands: [], handlers: [], place: null, voices: null, ui: null, errors: [] };
   const L = () => LABELS[st.lang] || LABELS.en;
 
   /* ------------------------------------------------------------ the input port (core/ports.js): speech and gaze */
@@ -114,14 +116,14 @@ export function createStoryMode(P) {
   }
   const segDist = (a, b, o) => { const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((o.x - a.x) * dx + (o.z - a.z) * dz) / l2)); return Math.hypot(a.x + u * dx - o.x, a.z + u * dz - o.z); };
   function end(id) {
-    st.ended = true;
+    st.ended = true; summarize();
     const e = (st.pk.endings || []).find(x => x.id === id) || { id };
     const title = e.family ? e.family[st.lang] || e.family.en : id, ln = e.line && st.session.world.vocab.lines[e.line];
     P.end(title, ln ? P.ADAPTER.lineText(Object.fromEntries(Object.entries(ln).map(([k, v]) => [k, [].concat(v)[0]])), st.lang) : '', { replay: () => start(st.id, st.opts), leave: () => stop() }, L());
   }
 
   /* ------------------------------------------------------------ the world's clock and the gaze */
-  function tick() { if (!st.on || st.ended || st.manual || P.frozen()) return; st.session.advance(1); panel(); }
+  function tick() { indicator(); if (!st.on || st.ended || st.manual || P.frozen()) return; st.session.advance(1); panel(); }
   function gazeTick(dt) {
     if (!st.on || st.ended || st.manual || P.frozen()) return;          // manual clock (scripted runs): only explicit look() observations
     const yaw = P.cam.yaw + P.look.yaw, w = st.session.world;
@@ -156,8 +158,12 @@ export function createStoryMode(P) {
     const seed = opts.seed || ((Date.now() % 1e9) + 1);
     st.session = P.CORE.createSession({ scene: pk.scene, seed, executor: st.ex });
     st.place = Object.assign({}, st.session.world.place);
-    st.model = P.REFLEX.createReflexModel({ verbs: P.reflexes, anchors: pk.anchors, stations: pk.stations, carrier: pk.carrier, world: () => st.session.world, serialize: P.CORE.serializeTokens });
-    st.clocks = P.CORE.createClocks({ session: st.session, model: st.model, character: pk.carrier, clock: () => P.now() });
+    st.summarized = false;
+    st.model = makeModel(pk);
+    const R = P.reflexes || {}, A = pk.anchors || {};
+    st.clocks = P.CORE.createClocks({ session: st.session, model: st.model, character: pk.carrier, name: pk.carrier.charAt(0).toUpperCase() + pk.carrier.slice(1), clock: () => P.now(),
+      lines: { ask: R.ask_line, doubt: R.doubt_line, hold: R.hold_line }, thresholds: { act_from: R.act_from, ask_below: R.ask_below },
+      classes: { intent: Object.keys(A.intent_classes || {}), commit: Object.keys(A.commit_classes || {}) }, endings: pk.endings || [] });
     st.clocks.attach(input);
     makeVoices();
     st.session.loadPrinciples(pk.principles);
@@ -172,6 +178,7 @@ export function createStoryMode(P) {
   }
   function stop(restarting) {
     if (!st.on) return;
+    summarize();
     clearInterval(st.timer); clearInterval(st.gazeTimer);
     if (st.voices) for (const v of Object.values(st.voices)) try { v.taire(); } catch (_) {}
     st.on = false;
@@ -184,8 +191,38 @@ export function createStoryMode(P) {
     const letters = text.replace(/[^\p{L}]/gu, ''), loud = opts.loud ?? ((/!{2,}/.test(text)) || (letters.length >= 4 && letters === letters.toUpperCase()));
     P.showSaid(text);
     const r = await emit({ kind: 'speech', text, lang: st.lang, loud: loud || undefined });
-    panel();
+    panel(); indicator();
+    if (r && r[0] && r[0].scene) r[0].scene.then(() => { panel(); indicator(); }, () => {});
     return r && r[0] ? { intent: r[0].intent.seq, status: r[0].intent.status, now: r[0].now.map(x => x.status) } : null;
+  }
+
+  /* ------------------------------------------------------------ the model port (M3): reflex, then home node, then the host's model */
+  function makeModel(pk) {
+    const reflex = P.REFLEX.createReflexModel({ verbs: P.reflexes, anchors: pk.anchors, stations: pk.stations, carrier: pk.carrier, world: () => st.session.world, serialize: P.CORE.serializeTokens });
+    const M = P.MODELPORT, W = P.win;
+    if (!M) return reflex;
+    const env = { now: () => P.now(), setTimeout: (f, ms) => W.setTimeout(f, ms), clearTimeout: t => W.clearTimeout(t), setInterval: (f, ms) => W.setInterval(f, ms), clearInterval: t => W.clearInterval(t), AbortController: W.AbortController };
+    let storage = null; try { storage = W.localStorage; } catch (_) {}
+    if (!st.home) {
+      const link = M.homeNodeFromHash(W.location && W.location.hash);   // a link printed by the node: stored in this browser, then removed from the address
+      if (link && storage && M.writeHomeNode(storage, link)) try { W.history.replaceState(null, '', W.location.pathname + W.location.search); } catch (_) {}
+      st.home = M.createHomeNode({ fetch: W.fetch ? (u, o) => W.fetch(u, o) : null, storage, env });
+      st.home.start();
+    }
+    const host = M.createHostModel({ sample: () => (P.sample ? P.sample() : null), lost: () => { if (P.forgetSample) P.forgetSample(); } });
+    return M.createModelPort({ reflex, adapters: [st.home, host], env });
+  }
+  /* The small indicator: what serves judgement and invention right now (code alone, the home node, the host's model). */
+  function indicator() {
+    if (!st.ui || !st.ui.models) return;
+    const s = st.model && st.model.status ? st.model.status() : { judge: 'code', invent: 'none' };
+    st.ui.models.textContent = 'judge: ' + s.judge + ' · invent: ' + s.invent;
+  }
+  /* The session's model summary, journaled once at its end (derived, not an input). */
+  function summarize() {
+    if (!st.session || st.summarized) return;
+    st.summarized = true;
+    st.session.journal.append(Object.assign({ t: st.session.world.clock.t }, P.CORE.modelSummary(st.session.journal)));
   }
 
   /* ------------------------------------------------------------ debug panel (hidden by default) and story controls */
@@ -206,7 +243,10 @@ export function createStoryMode(P) {
     tog.onclick = () => { show(box.hidden); panel(); };
     const lang = mk('button', { type: 'button', className: 'ghost', id: 'story-lang', textContent: L().lang }, tools);
     lang.onclick = () => { st.lang = st.lang === 'en' ? 'fr' : 'en'; P.storeLang(st.lang); lang.textContent = L().lang; makeVoices(); P.labels(L()); panel(); };
-    st.ui = { els, box, pre };
+    const models = mk('div', { id: 'story-models' });
+    models.setAttribute('style', 'position:fixed;top:8px;right:10px;z-index:30;font:400 10px/1.3 ui-monospace,monospace;color:rgba(243,240,232,.75);background:rgba(10,12,9,.45);padding:2px 6px;border-radius:6px;pointer-events:none');
+    st.ui = { els, box, pre, models };
+    indicator();
   }
   function panel() {
     if (!st.ui || st.ui.box.hidden || !st.session) return;
@@ -217,7 +257,11 @@ export function createStoryMode(P) {
       'station ' + w.body.station + ' · beat ' + w.story.beat + ' · battery ' + Math.round(w.camera.battery * 100) + ' % · sun ' + w.place.sun_height + '°' + (w.story.ending ? ' · ending ' + w.story.ending : ''),
       'commitments: ' + (Object.values(w.commitments).map(c => c.id + ' ' + c.status).join(', ') || 'none'),
       'engine gaps: ' + (st.ex.gaps.map(g => g.call + ' (' + g.why + ')').join('; ') || 'none'),
-      'journal: ' + E.length + ' entries · hash ' + st.session.hash(), '', ...last,
+      'journal: ' + E.length + ' entries · hash ' + st.session.hash(),
+      'models: ' + (() => { const m = P.CORE.modelSummary(E), s = st.model.status ? st.model.status() : {}; return 'judge ' + (s.judge || 'code') + ', invent ' + (s.invent || 'none') + (st.home && st.home.state.configured ? ', home node ' + (st.home.state.up ? 'up' : 'down') : '')
+        + ' · calls ' + JSON.stringify(m.calls) + ' · first ' + m.first_reaction_ms + ' ms, full ' + m.full_reaction_ms + ' ms · repaired ' + m.repaired + ', rejected ' + m.rejected + (m.rejected_by.length ? ' (' + m.rejected_by.join(', ') + ')' : ''); })(),
+      ...E.filter(e => e.type === 'model_call' && e.status !== 'pending').slice(-3).map(e => '  ' + e.seq + ' ' + e.purpose + ' ' + e.status + ' ' + (e.adapter || e.tier) + ' ' + (e.instrument || '') + (e.latency_ms !== undefined ? ' ' + Math.round(e.latency_ms) + ' ms' : '') + (e.error ? ' ' + e.error : '')),
+      '', ...last,
     ].join('\n');
   }
 
@@ -231,6 +275,9 @@ export function createStoryMode(P) {
     look(target, s = 1.5) { return emit({ kind: 'look', target, s }); },
     journal: () => st.session ? P.CORE.toJSONL(st.session.journal) : '',
     gaps: () => st.ex ? st.ex.gaps.slice() : [],
+    models: () => st.model && st.model.status ? st.model.status() : { judge: 'code', invent: 'none' },
+    summary: () => st.session ? P.CORE.modelSummary(st.session.journal) : null,
+    homeNode(cfg) { let ok = false; try { ok = P.MODELPORT.writeHomeNode(P.win.localStorage, cfg); } catch (_) {} if (st.home) st.home.health().then(indicator); return ok; },
     commands: () => st.commands.slice(),
     state() {
       if (!st.session) return null;
