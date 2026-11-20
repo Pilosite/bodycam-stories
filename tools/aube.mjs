@@ -30,6 +30,7 @@ const POSES = {
   face: { z: 22 },                                               // le long du sentier, soleil à droite entre les troncs
   dos: { z: 22, cap: az + Math.PI },                            // dos au soleil : les ombres partent devant
   tronc: { z: 17.64, dx: -2.7, cap: 4.66 },                     // bouleau à un mètre et demi, soleil sur la droite (de côté)
+  soleil: { z: +(process.env.SZ || 22), dx: +(process.env.SDX || 0), cap: az },   // soleil en face, au centre de l'image (disque, halo, reflets)
 };
 const REGLAGES = [
   { nom: 'h03', h: 3, brume: true, etiquette: 'soleil 3° · vers 8 h 05' },
@@ -55,7 +56,8 @@ async function rendre(nom, cfg, vw, vh) {
       const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
       c.getContext('2d').drawImage(canvas, 0, 0); ok(c.toDataURL('image/png')); })), { timeout: 600000 });
     writeFileSync(out, Buffer.from(url.split(',')[1], 'base64'));
-    console.log(nom, ((Date.now() - t0) / 1000).toFixed(0) + ' s', s && s.v3 ? Math.round(s.v3.msMoy) + ' ms/image' : '', logs.slice(0, 2).join(' | '));
+    const ex = await p.evaluate(() => { try { return window.balade.exposition(); } catch (e) { return null; } });
+    console.log(nom, ((Date.now() - t0) / 1000).toFixed(0) + ' s', s && s.v3 ? Math.round(s.v3.msMoy) + ' ms/image' : '', ex ? 'expo ' + ex.puce.toFixed(2) : '', logs.slice(0, 2).join(' | '));
   } catch (e) { console.log(nom, 'ÉCHEC', String(e.message || e).split('\n')[0]); }
   await b.close().catch(() => {});
 }
@@ -100,6 +102,7 @@ if (quoi === 'vues' || quoi === 'tout') {
     'plein-face': [{ ...base, ...POSES.face, scene: fiche, w: W, h: H }, 1280, 800],
     'plein-dos': [{ ...base, ...POSES.dos, scene: fiche, w: W, h: H }, 1280, 800],
     'plein-tronc': [{ ...base, ...POSES.tronc, scene: fiche, w: W, h: H }, 1280, 800],
+    'plein-soleil': [{ ...base, ...POSES.soleil, scene: fiche, w: W, h: H }, 1280, 800],
     'telephone': [{ ...base, ...POSES.face, scene: fiche, full: false, mobile: true }, 390, 780],
   };
   for (const [nom, [cfg, vw, vh]] of Object.entries(V)) if (!noms.length || noms.includes(nom)) await rendre(nom, cfg, vw, vh);
