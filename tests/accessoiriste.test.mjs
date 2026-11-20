@@ -155,7 +155,8 @@ test('objet raté : réponse illisible ou lente de l\'accessoiriste, sans mot-cl
   await avancer(1);
   await m.voix('sculpte un ours'); await avancer(2);
   await m.voix('sculpte un autre ours'); await avancer(30);
-  assert.ok(!ordres.some(o => o.type === 'objet' && o.op !== 'reserver'));
+  assert.ok(!ordres.some(o => o.type === 'objet' && o.op !== 'reserver' && o.op !== 'abandon'));
+  assert.equal(ordres.filter(o => o.type === 'objet' && o.op === 'abandon').length, 2, 'la page n\'attend plus rien à ces places');
   const st = m.trace().appels.filter(a => a.type === 'objet').map(a => a.statut);
   assert.deepEqual(st, ['invalide', 'delai']);
   assert.equal(m.trace().evenements.filter(e => e.type === 'objet_rate').length, 2);
