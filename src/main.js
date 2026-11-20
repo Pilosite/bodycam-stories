@@ -654,6 +654,9 @@ function simulate(dt){
       else if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
     else if(a.type==="rejoindre"||a.type==="cadrer"||a.type==="monter"||a.type==="chercher"){ queue.shift(); queue.unshift(...planCorps(a)); }   // trajet calculé au moment de partir
     else if(a.type==="marche"){ queue.shift(); queue.unshift(...planMarchePage(a.metres)); }   // trajet calculé au moment de partir
+    else if(a.type==="deplacer"){ queue.shift(); queue.unshift(...planDeplacerPage(a)); }   // « déplace-toi » : une direction dégagée, au moment de partir (§19)
+    else if(a.type==="poser"){ queue.shift(); poserIci(a.ref); }                          // la place de la chose : là où il est arrivé (§19)
+    else if(a.type==="attendreObjet"){ if(reserves.has(a.ref)&&a.rest>0) a.rest-=dt; else queue.shift(); }   // il attend la chose avant de repartir
     else if(a.type==="faconner") faconnerPas(a,dt);
     else if(a.type==="ramasser") ramasserPas(a,dt);
     else if(a.type==="finMarche"){ queue.shift(); finMarche(a); }
@@ -1565,7 +1568,7 @@ function perception(){
 }
 const clampN=(v,a,b,d)=>{ v=Number(v); return Number.isFinite(v)?Math.min(b,Math.max(a,v)):d; };
 function enqueue(actions){
-  for(const a of (Array.isArray(actions)?actions:[]).slice(0,8)){
+  for(const a of (Array.isArray(actions)?actions:[]).slice(0,12)){   // 8 gestes au plus, plus les marqueurs de la page (poser, attendreObjet, §19)
     if(!a||typeof a!=="object") continue;
     if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});
     else if(a.type==="marcher") queue.push({type:"marche",metres:clampN(a.metres,-10,30,0)});   // « avance de N m » : le trajet est calculé au moment de partir (§18)
@@ -1578,6 +1581,9 @@ function enqueue(actions){
     else if(a.type==="descendre") queue.push({type:"descendre"});
     else if(a.type==="chercher"&&typeof a.quoi==="string") queue.push({type:"chercher",quoi:a.quoi.slice(0,60)});
     else if(a.type==="faconner"&&typeof a.objet==="string") queue.push({type:"faconner",objet:a.objet.slice(0,30),t:0,i:-1,attente:0});
+    else if(a.type==="poser"&&typeof a.ref==="string") queue.push({type:"poser",ref:a.ref.slice(0,12)});   // §19 : la place de la chose se prend ici, au geste
+    else if(a.type==="attendreObjet"&&typeof a.ref==="string") queue.push({type:"attendreObjet",ref:a.ref.slice(0,12),rest:clampN(a.secondes,0,30,20)});
+    else if(a.type==="deplacer") queue.push({type:"deplacer",metres:clampN(a.metres,1,30,4),rayon:clampN(a.rayon,0,3,.3)});
   }
 }
 function patchScene(sc){                                      // ce qu'il imagine peut changer le monde
@@ -2094,11 +2100,11 @@ function percevoirMeneur(){ const p=perception(), x0=S.kit!==1?pathX(0):0;
 function executer(o){                                         // les ordres du meneur, traduits pour le moteur
   if(o.type==="pensee") penser(o.texte);
   else if(o.type==="scene") patchScene(o.scene);
-  else if(o.type==="actions"){ if(o.vider){ cam.zoomCible=1; queue.length=0; patience=PATIENCE_APRES_TEMPS; } enqueue(o.actions); }   // un temps vient d'arriver : elle s'arrête et attend la voix
+  else if(o.type==="actions"){ if(o.vider){ cam.zoomCible=1; queue.length=0; patience=PATIENCE_APRES_TEMPS; libererPoses(); } enqueue(o.actions); }   // un temps vient d'arriver : elle s'arrête et attend la voix
   else if(o.type==="pulse") $("parler").classList.toggle("pulse",!!o.on);
   else if(o.type==="figer"){ if(!frozen) setFrozen(true,"parler"); }
-  else if(o.type==="arret"){ hold=true; queue.length=0; }
-  else if(o.type==="stop"){ queue.length=0; immobile=true; errance=false; }     // « arrête-toi » : tout de suite, sans attendre Claude
+  else if(o.type==="arret"){ hold=true; queue.length=0; libererPoses(); }
+  else if(o.type==="stop"){ queue.length=0; immobile=true; errance=false; libererPoses(); }     // « arrête-toi » : tout de suite, sans attendre Claude
   else if(o.type==="reprendre") immobile=false;
   else if(o.type==="apercu") penser(o.texte);                       // la pensée, dès qu'elle est écrite
   else if(o.type==="objet") objetMeneur(o);
@@ -2110,22 +2116,42 @@ function executer(o){                                         // les ordres du m
 function posObjet(o){ const dv=clampN(o.devant,-60,400,12), ct=clampN(o.cote,-120,120,3), a=1.15;   // même placement que buildShapes
   return S.kit!==1?{x:pathX(dv)+ct,z:dv}:{x:Math.sin(a)*dv+Math.cos(a)*ct,z:Math.cos(a)*dv-Math.sin(a)*ct}; }
 function versFiche(x,z){ if(S.kit!==1) return {devant:z,cote:x-pathX(z)}; const a=1.15; return {devant:Math.sin(a)*x+Math.cos(a)*z,cote:Math.cos(a)*x-Math.sin(a)*z}; }
-const reserves=new Map();                                     // places prises au tour de voix, là où le geste a lieu
+/* §19 : la place d'une chose se prend AU GESTE, quand la file atteint le marqueur {type:"poser", ref} (après la marche que la
+   phrase demande d'abord), jamais au tour de voix. reserves : ref -> {ou, distance, pos (null tant qu'il n'y est pas), attente
+   (la chose arrivée trop tôt, posée au marqueur)}. Sans marqueur dans la file (ancien ordre, file vidée), la place se prend
+   tout de suite. Une place prise reste la sienne s'il bouge ensuite sans qu'on le lui demande. */
+const reserves=new Map();
 const differes=new Map(), faconnages=new Map();               // façonnage (§15.3) : ce qu'il rapporte (posé à son retour) ; les états à jouer
 let dernierLieu=null;                                          // où il est allé chercher (tests, démo)
+const marquePose=ref=>queue.some(a=>a.type==="poser"&&a.ref===ref);
+function poserIci(ref){                                          // la file atteint le geste : la place se prend ici ; la chose arrivée trop tôt y est posée
+  const rs=reserves.get(ref); if(!rs||rs.pos) return;
+  rs.pos=placeGeste(rs); journalPoses.push({ref,x:+cam.x.toFixed(2),z:+cam.z.toFixed(2),t:+(performance.now()/1000).toFixed(1)}); if(journalPoses.length>20) journalPoses.shift();
+  if(rs.attente){ const o=rs.attente; delete rs.attente; objetMeneur(o); } }
+function libererPoses(){                                         // file vidée (nouvel ordre, stop) : une chose qui attendait son geste est posée là où il est
+  for(const [ref,rs] of reserves) if(rs.attente&&!marquePose(ref)){ const o=rs.attente; delete rs.attente; rs.pos=null; objetMeneur(o); } }
+const journalPoses=[]; window.balPoses=journalPoses;   // essais (tools/ordre.mjs) : où chaque place a été prise
 function placeGeste(o){ const q=MENEUR.placePose(cam.x,cam.z,cam.yaw,o.ou,o.distance); return versFiche(q.x,q.z); }   // par rapport au corps, au tour de voix (MENEUR.OU_POSE)
 function objetMeneur(o){
   const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], id=o.id||(o.objet&&o.objet.id), i=L.findIndex(x=>x&&x.id===id);
-  if(o.op==="reserver"){ reserves.set(o.ref,placeGeste(o)); if(reserves.size>8) reserves.delete(reserves.keys().next().value); return; }
+  if(o.op==="reserver"){ reserves.set(o.ref,o.au_geste&&marquePose(o.ref)?{ou:o.ou,distance:o.distance,pos:null}:{pos:placeGeste(o)}); if(reserves.size>8) reserves.delete(reserves.keys().next().value); return; }
+  if(o.op==="abandon"){ reserves.delete(o.ref); return; }          // l'accessoiriste n'a rien donné : il n'attend plus
   if(o.op==="creer"&&o.differe){ differes.set(o.differe,[...(differes.get(o.differe)||[]),o]); return; }   // ramassé : posé près de la chose quand il revient
   if(o.op==="faconner"){ faconnages.set(id,o); if(!queue.some(a=>a.type==="faconner"&&a.objet===id)) faconnerTout(id); return; }
   if(o.op==="creer"){
     const visibles=L.filter(x=>x&&!(x.visible===false||cacheObj.has(x.id))).length;
     if(i>=0||visibles>=8||!o.objet) return;
+    const rs=o.reserve&&reserves.get(o.reserve);
+    if(rs&&!rs.pos&&!o.pres_de&&marquePose(o.reserve)){ rs.attente=o; return; }   // il n'y est pas encore : posée quand la file atteindra le geste
+    if(rs) reserves.delete(o.reserve);
     const base=o.pres_de&&L.find(x=>x&&x.id===o.pres_de), d=Array.isArray(o.decale)?o.decale:[0,0];
+    const voisin=typeof o.contre==="string"&&L.find(x=>x&&x.id===o.contre);   // « juste à côté de l'autre » : tout contre elle, côté porteur
     let pos;
     if(base){ const b=posObjet(base); pos=versFiche(b.x+(+d[0]||0),b.z+(+d[1]||0)); }
-    else if(o.reserve&&reserves.has(o.reserve)){ pos=reserves.get(o.reserve); reserves.delete(o.reserve); }
+    else if(voisin){ const b=posObjet(voisin), F=(o.objet.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));
+      const rB=Math.max(0,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2)), e=mesureObjet(voisin).taille/2+rB+.05, dx=cam.x-b.x, dz=cam.z-b.z, l=Math.hypot(dx,dz)||1;
+      pos=versFiche(b.x+dx/l*e,b.z+dz/l*e); }
+    else if(rs&&rs.pos) pos=rs.pos;
     else pos=placeGeste(o);
     { const w=posObjet(pos), F=(o.objet.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));   // jamais dans le corps du porteur
       const r=Math.max(0,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2)), corps={x:cam.x,z:cam.z,yaw:cam.yaw};
@@ -2133,7 +2159,9 @@ function objetMeneur(o){
       // ni sur lui (derrière les talons si elle sort du corps), ni sur une autre chose, un tronc, un rocher, ni DANS ou SOUS un
       // élément de semis (cailloux, branches mortes, tombes : cas réel, une crotte cadrée à travers un éclat de grès)
       const occupe=p=>semisSous(p.x,p.z,r,haut);
+      // ni contre une autre chose, sauf si le joueur l'a demandé (écart fonction des deux envergures, MENEUR.ecartChoses, §19)
       const q=base?(occupe(w)?MENEUR.placeLibre(w,r,[],{x:posObjet(base).x,z:posObjet(base).z},MENEUR.REGLAGES.MARGE_CORPS,occupe):w)
+        :voisin?MENEUR.placeLibre(w,r,obstaclesConnus().filter(x=>x.id!==voisin.id),posObjet(voisin),MENEUR.REGLAGES.MARGE_CORPS,occupe,{contre:true})
         :MENEUR.placeLibre(MENEUR.horsDuCorps(w,corps,r,MENEUR.REGLAGES.MARGE_CORPS,o.ou),r,obstaclesConnus(),corps,MENEUR.REGLAGES.MARGE_CORPS,occupe);
       if(q.x!==w.x||q.z!==w.z) pos=versFiche(q.x,q.z); }
     const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
@@ -2395,6 +2423,14 @@ function planMarchePage(metres){
   console.log("marche : "+p.demande.toFixed(1)+" m demandés, "+p.fait.toFixed(1)+" m possibles"+(p.angle?", à "+p.angle+"°":"")+(p.bloque?", arrêté par "+p.bloque:"")+(p.enjambe?", enjambe":"")+(p.bouche?", bouché":""));
   return out;
 }
+/* « Déplace-toi » sans distance ni cible (§19) : une direction dégagée, le long du sentier d'abord (devant, puis derrière), pas
+   vers une chose toute proche, arrivée loin des choses déjà là (MENEUR.planDeplacement) ; il se tourne, puis c'est une marche. */
+function planDeplacerPage(a){
+  const caps=S.kit!==1?[pathYaw(cam.z)+(Math.cos(cam.yaw-pathYaw(cam.z))<0?Math.PI:0)]:[]; if(caps.length) caps.push(caps[0]+Math.PI);
+  const d=MENEUR.planDeplacement({x:cam.x,z:cam.z,yaw:cam.yaw},a.metres,obstaclesConnus(),{caps,rayon:a.rayon});
+  console.log("déplacement : "+a.metres.toFixed(1)+" m à "+Math.round(d.cap*180/Math.PI)+"°"+(d.libre?"":", pas de place loin des choses"));
+  return [{type:"tourner",rest:wrapA(d.cap-cam.yaw)},{type:"marche",metres:a.metres}];
+}
 function finMarche(a){                                           // à la fin d'une marche demandée : ce qu'il a fait, ce qui l'arrête
   const o=a.ordre; if(!o||o.dit) return; o.dit=true;
   const fait=Math.hypot(cam.x-o.x,cam.z-o.z), bouche=fait<1&&(o.plan.bouche||a.arrete);
@@ -2438,7 +2474,7 @@ function obstaclesConnus(){
   for(const o of (Array.isArray(fiche.objets)?fiche.objets:[])){ if(!o||o.visible===false||cacheObj.has(o.id)) continue;
     const q=posObjet(o), k2=clampN(o.echelle,.1,5,1), F=(o.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));
     if(!F.length||loin(q.x,q.z)) continue;
-    L.push({id:o.id,nom:o.nom||o.id,x:q.x,z:q.z,r:Math.max(.02,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2))*k2,haut:mesureObjet(o).haut}); }
+    L.push({id:o.id,nom:o.nom||o.id,x:q.x,z:q.z,r:Math.max(.02,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2))*k2,haut:mesureObjet(o).haut,chose:true}); }
   obsCache={k,x:cam.x,z:cam.z,L};
   return L;
 }
