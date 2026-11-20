@@ -109,6 +109,11 @@ export function creerOuverture(deps) {
   const racine = d.createElement('section');
   racine.id = 'ouverture'; racine.className = 'ouv'; racine.setAttribute('aria-labelledby', 'ouv-q'); racine.hidden = true;
   racine.innerHTML = `<div class="ouv-cadre">
+  <header class="ouv-marque">
+    <p class="ouv-nom">Bodycam Stories</p>
+    <p class="ouv-concept">Génération procédurale complète par intelligence artificielle</p>
+    <p class="ouv-expl">Tu décris un monde. Une IA l'écrit, le moteur le fabrique entièrement par code, sans image ni modèle 3D, et le filme comme une caméra-piéton. Puis tu parles à celui qui la porte.</p>
+  </header>
   <p class="ouv-sur"><span class="ouv-pt"></span>CAM 07 · nouveau tournage</p>
   <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>
   <form id="ouv-form" class="ouv-form" autocomplete="off">
