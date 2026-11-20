@@ -24,7 +24,7 @@ Done since: the page's model port (home node client, host's model, code), `judge
 
 Trailer mode, played by the engine (`src/trailer.js`, `stories/louis-round/trailer.json`; « Trailer » on the launch screen, `?trailer=1`, `&lang=fr`, `&clean=1` for recording, `&pace=`): a real session of « Louis's Round » with captions and read-outs fed by the journal. To tune on a GPU: pacing, voices, cuts versus walks.
 
-In progress (ADR 0011, after Toine's free session on his phone): **conception before play** (a story sketch and a few questions to the creator when a world is prompted; the free mode moved onto the core) and **harvest** (one collectable record per session; lists of what was asked and not doable, what was improvised, what was slow).
+In progress (ADR 0011, after Toine's free session on his phone): **conception before play** (a story sketch and a few questions to the creator when a world is prompted; the free mode moved onto the core) and **harvest**, done: `core/harvest.js`, `src/harvest.js`, `node tools/harvest.mjs`, first reports in `harvest/` (kept after a notice in the page; the shared store holds stripped records only, full ones stay in the player's browser).
 
 Next: the home node server (ADR 0008, after Toine's answers) · model tiers live and measured (M3) · background, frontier, a rule written by a model (M4) · creator view (M5).
 
