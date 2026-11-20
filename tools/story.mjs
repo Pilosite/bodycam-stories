@@ -787,21 +787,25 @@ export function replayJournal(entries) {
 
 /* What the pack's principles say differently: added, removed, changed (text, strength, weight, compiled form). */
 export function principleChanges(a = [], b = []) {
-  const A = new Map(a.map(p => [p.id, p])), B = new Map(b.map(p => [p.id, p])), out = { added: [], removed: [], changed: [] };
-  for (const [id, p] of B) if (!A.has(id)) out.added.push({ id, mark: markOf(p), text: p.text });
-  for (const [id, p] of A) if (!B.has(id)) out.removed.push({ id, mark: markOf(p), text: p.text });
-  for (const [id, p] of B) {
-    const o = A.get(id); if (!o) continue;
-    const what = ['text', 'strength', 'weight', 'note', 'scope', 'layer'].filter(k => canonicalJSON(o[k] ?? null) !== canonicalJSON(p[k] ?? null));
+  // statements without an explicit {id} get a positional one (doc.section.n): they are matched by content instead
+  const key = p => p.auto_id ? `${p.doc}|${markOf(p)}|` + canonicalJSON([p.text ?? null, p.lines ?? null, p.context ?? null, p.why ?? null, p.weight ?? null, p.note ?? null]) : p.id;
+  const say = p => p.text ?? (p.lines ? (p.context ? `[${p.context}] ` : '') + Object.entries(p.lines).map(([l, t]) => `${l}: ${t}`).join(' | ') : '');
+  const A = new Map(a.map(p => [key(p), p])), B = new Map(b.map(p => [key(p), p])), out = { added: [], removed: [], changed: [] };
+  for (const [k, p] of B) if (!A.has(k)) out.added.push({ id: p.id, mark: markOf(p), text: say(p) });
+  for (const [k, p] of A) if (!B.has(k)) out.removed.push({ id: p.id, mark: markOf(p), text: say(p) });
+  for (const [k, p] of B) {
+    const o = A.get(k); if (!o || p.auto_id) continue;
+    const what = ['text', 'strength', 'weight', 'note', 'lines', 'context', 'why', 'scope', 'layer'].filter(f => canonicalJSON(o[f] ?? null) !== canonicalJSON(p[f] ?? null));
     if (canonicalJSON(o.compiled ?? null) !== canonicalJSON(p.compiled ?? null) && !what.includes('text')) what.push('compiled');
-    if (what.length) out.changed.push({ id, what, from: o.text, to: p.text });
+    if (what.length) out.changed.push({ id: p.id, what: what.map(f => f === 'weight' ? `weight ${o.weight ?? '-'}→${p.weight ?? '-'}` : f), from: say(o), to: say(p) });
   }
   return out;
 }
 const count = xs => xs.reduce((m, x) => (m[x] = (m[x] || 0) + 1, m), {});
 function outcome(E) {
   const a = auditJournal(E);
-  return { commitments: Object.fromEntries(a.commitments.map(c => [c.id, c.status])), ending: a.ending, beat: a.beat, rejected: a.rejected.length };
+  const cam = E.filter(e => e.type === 'event' && e.event === 'camera.changed').pop();
+  return { commitments: Object.fromEntries(a.commitments.map(c => [c.id, c.status])), ending: a.ending, beat: a.beat, rejected: a.rejected.length, battery: cam ? cam.data.battery : null };
 }
 
 /* Replays a journal against another compiled pack (principles and scene): the same player and the same model answers,
@@ -903,7 +907,7 @@ export function renderWhatif(w, entries) {
   const L = [], ctx = contextOf(entries), ctxB = contextOf(w.journal);
   const pc = w.pack;
   L.push(`pack changes: ${pc.added.length} added, ${pc.removed.length} removed, ${pc.changed.length} changed${w.scene.length ? '; scene: ' + w.scene.join(', ') : ''}${w.carried.length ? `; compiled forms carried from the journal: ${w.carried.join(', ')}` : ''}`);
-  for (const x of pc.changed) L.push(`  ~ ${x.id} (${x.what.join(', ')})${x.what.includes('text') ? `\n      was: ${x.from}\n      now: ${x.to}` : ''}`);
+  for (const x of pc.changed) L.push(`  ~ ${x.id} (${x.what.join(', ')})${x.from !== x.to ? `\n      was: ${x.from}\n      now: ${x.to}` : ''}`);
   for (const x of pc.added) L.push(`  + ${x.id} ${x.mark} ${short(x.text, 90)}`);
   for (const x of pc.removed) L.push(`  - ${x.id} ${x.mark} ${short(x.text, 90)}`);
   if (w.equal) { L.push('\nsame session: every entry and the hash are unchanged'); return L.join('\n'); }
@@ -920,6 +924,7 @@ export function renderWhatif(w, entries) {
   const c = new Set([...Object.keys(w.before.commitments), ...Object.keys(w.now.commitments)]);
   for (const id of c) L.push(`promise ${id}: ${w.before.commitments[id] || '—'} → ${w.now.commitments[id] || '—'}`);
   L.push(`beat: ${w.before.beat || '—'} → ${w.now.beat || '—'} · ending: ${w.before.ending || '—'} → ${w.now.ending || '—'} · rejected transactions: ${w.before.rejected} → ${w.now.rejected}`);
+  if (w.before.battery !== w.now.battery) L.push(`battery at the end: ${w.before.battery} → ${w.now.battery}`);
   L.push(`final hash: ${w.hashes.before} → ${w.hashes.now}`);
   return L.join('\n');
 }
