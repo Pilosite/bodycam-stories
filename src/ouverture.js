@@ -52,31 +52,87 @@ export function traduction(f) {
   return L;
 }
 
+/* PDL, « Procedural Diaphasic Language » : la fiche réelle et les réglages réels du personnage, transcrits en notation serrée
+   (une ligne par idée). C'est un affichage : le moteur lit la fiche JSON, pas cette notation (docs/ouverture.md).
+   Rend { lignes, donnees (le même contenu, en objet), tokens, json, gain } ; tokens ≈ caractères / 4, sur les deux textes. */
+export function pdl(f, perso, lieu) {
+  const n = x => typeof x === 'number' ? String(+x.toFixed(3)).replace(/^(-?)0\./, '$1.') : String(x);
+  const mot = x => String(x).split(',')[0].trim().replace(/\s+/g, '.');
+  const L = [], D = {}, ajoute = (cle, val, ligne) => { D[cle] = val; L.push(ligne); };
+  const a = f.ambiance || {}, so = a.soleil || {}, fo = f.foret || {}, co = lieu && lieu.coordonnees;
+  const kit = f.kit === 'dunes' ? 'dunes' : f.kit === 'nu' || (!f.kit && Array.isArray(f.semis)) ? 'nu' : 'foret';
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const mois = MOIS.find(m => (f.inspiration || '').toLowerCase().includes(m));
+  ajoute('lieu', { kit, rochers: kit === 'foret' ? fo.rochers ?? 1 : undefined, coordonnees: co, saison: a.saison || 'automne', mois, soleil: { hauteur: so.hauteur, azimut: so.azimut } },
+    `@lieu ${kit}${kit === 'foret' && (fo.rochers ?? 1) ? '.gres' : ''}${co ? ` ${n(co[0])}N ${n(co[1])}E` : ''} · ${a.saison || 'automne'}${mois ? '.' + mois.slice(0, 3) : ''}${so.hauteur !== undefined ? ` · ☼${n(so.hauteur)}° az${n(so.azimut)}` : ''}`);
+  const R = f.relief;
+  if (R) ajoute('relief', R, `~relief ondul ${n(R.amplitude ?? .8)}m/${n(R.echelle ?? 150)}m${R.bosses ? ` · bosses ${n(R.bosses.hauteur)}m/${n(R.bosses.echelle)}m` : ''}${R.buttes ? ` · buttes ${n(R.buttes.hauteur)}m/${n(R.buttes.echelle)}m part${n(R.buttes.part)}` : ''}`);
+  const T = f.trajet, pa = f.parcours || {};
+  if (T) ajoute('trajet', Object.assign({ type: pa.type, pas: pa.pas }, T), `~trajet ${pa.type || 'sentier'} l${n(T.largeur ?? 1.5)} sinu${n(T.sinuosite ?? 1)}${T.creux !== undefined ? ' creux' + n(T.creux) : ''}${T.bord ? ' bord:' + T.bord : ''}${pa.pas ? ' pas' + n(pa.pas) : ''}`);
+  if (kit === 'foret') {
+    const H = fo.houppiers || {}, esp = o => Object.values(o || {}).map(h => ({ nom: h.nom, hauteur: h.hauteur, largeur: h.largeur }));
+    const txt = l => l.map(h => `${mot(h.nom)} h${(h.hauteur || []).map(n).join('-')} l${n(h.largeur)}`).join(' | ');
+    const ar = esp(H.arbres), pe = esp(H.perches);
+    ajoute('arbres', { densite: fo.densite ?? .7, especes: ar }, `+arbres d${n(fo.densite ?? .7)}${ar.length ? ' · ' + txt(ar) : ''}`);
+    ajoute('perches', { part: fo.perches ?? 1, especes: pe }, `+perches ${n(fo.perches ?? 1)}${pe.length ? ' · ' + txt(pe) : ''}`);
+    const tr = fo.trouee;
+    ajoute('gres', { rochers: fo.rochers ?? 1, feuillage: fo.feuillage ?? 1, trouee: tr }, `+gres ${n(fo.rochers ?? 1)} · feuillage ${n(fo.feuillage ?? 1)}${tr ? ` · trouee→${tr.vers} ${n(tr.longueur)}×${n(tr.largeur)}` : ''}`);
+  }
+  (f.semis || []).forEach((x, i) => ajoute('semis' + i, { id: x.id, nom: x.nom, cellule: x.cellule, densite: x.densite, formes: (x.formes || []).length },
+    `+${x.id || 'semis'} ${(x.cellule || []).map(n).join('×')} d${n(x.densite ?? 1)} ×${(x.formes || []).length}f`));
+  const S = f.surfaces;
+  if (S) {
+    const v = x => typeof x === 'object' ? `${x.a}/${x.b} ${n(x.part)}` : x;
+    ajoute('surfaces', S, `%${Object.entries(S).map(([k, x]) => k + ' ' + v(x)).join(' · ')}`);
+  }
+  ajoute('air', { meteo: a.meteo, brume: a.brume, brume_basse: a.brume_basse, trouble: a.atmosphere && a.atmosphere.trouble },
+    `☁${a.meteo || 'clair'}${a.brume !== undefined ? ' · brume ' + n(a.brume) : ''}${a.brume_basse ? ` · brume.sol ${n(a.brume_basse.densite)}/${n(a.brume_basse.hauteur)}m` : ''}${a.atmosphere && a.atmosphere.trouble !== undefined ? ' · trouble ' + n(a.atmosphere.trouble) : ''}`);
+  const c = f.camera || {};
+  ajoute('camera', { profil: c.profil, hauteur: c.hauteur || 1.36, champ: c.champ || 125 }, `◎cam ${c.profil || 'bodycam'} ${n(c.hauteur || 1.36)}m ${n(c.champ || 125)}°`);
+  const P = perso;
+  if (P) {
+    const id = P.id || 'perso', j = x => [].concat(x || []).join(',');
+    ajoute('personnage', P, `#${id} ${P.genre || ''}${P.age || ''} ${P.pays || ''}${P.annee || ''}${P.seule ? ' seule' : ''}${P.metier ? ' · ' + P.metier : ''} · ton:${j(P.ton)} · peur:${P.peur ?? 0}`);
+    if (P.vocabulaire || P.humour) L.push(`#${id}.voix ${P.vocabulaire || ''}${P.humour ? ' · humour:' + P.humour : ''}`);
+    if (P.sait) L.push(`#${id}.sait ${j(P.sait)}`);
+    if (P.tenue || P.poches) L.push(`#${id}.porte ${[].concat(P.tenue || []).join('+')}${P.poches ? ' · poches:' + j(P.poches) : ''}`);
+    if (P.camera) L.push(`#${id}.cam ${P.camera}`);
+  }
+  const tokens = Math.ceil(L.join('\n').length / 4), json = Math.ceil(JSON.stringify(D).length / 4);
+  return { lignes: L, donnees: D, tokens, json, gain: Math.round(100 * (1 - tokens / json)) };
+}
+
 /* Le programme du rejeu : une suite d'événements datés (secondes), aux durées un peu irrégulières comme en direct.
-   Les durées de chaque étape viennent du journal ; chaque élément reçoit sa part, tirée au hasard (±40 %). */
+   Les durées de chaque étape viennent du journal ; chaque élément reçoit sa part, tirée au hasard (±40 %).
+   Les requêtes partent en rafale (petite part chacune) ; sources et constats défilent tous (compteurs), mais seuls quelques-uns
+   s'affichent (« montre ») : 3 sources, les constats marqués « vitrine ». */
 export function programme(r, f, hasard = Math.random, controle = null) {
   const ev = [], jit = (d, k = .4) => d * (1 - k + 2 * k * hasard());
   let t = 0;
-  const etape = (id, titre, duree, items, rendre) => {
-    ev.push({ t, type: 'etape', id, titre });
+  const POIDS = { requete: .22, source: 1, constat: 1, pdl: 1, valeur: 1, controle: 1, bilan: .6 };
+  const etape = (id, titre, duree, items, rendre, opts = {}) => {
+    ev.push({ t, type: 'etape', id, titre, apport: opts.apport || '', replie: !!opts.replie });
     t += jit(.3, .5);
-    const n = items.length, poids = items.map(() => .4 + hasard() * 1.2), somme = poids.reduce((a, b) => a + b, 0) || 1;
-    items.forEach((it, i) => { ev.push(Object.assign({ t, type: 'ligne', etape: id }, rendre(it, i))); t += jit(duree) * poids[i] / somme; });
+    const L = items.map(rendre), n = L.length, poids = L.map(x => (POIDS[x.genre] || 1) * (.4 + hasard() * 1.2)), somme = poids.reduce((a, b) => a + b, 0) || 1;
+    L.forEach((x, i) => { ev.push(Object.assign({ t, type: 'ligne', etape: id, i, n }, x)); t += jit(duree) * poids[i] / somme; });
     ev.push({ t, type: 'fin-etape', id }); t += jit(.25, .6);
   };
-  ev.push({ t: 0, type: 'pense', texte: r.comprendre.texte });
+  const vitrine = l => { const v = l.some(c => c.vitrine); return (c, i) => v ? !!c.vitrine : i < 4; };
+  ev.push({ t: 0, type: 'pense', texte: r.comprendre.texte, reperes: r.comprendre.reperes || [] });
   t = jit(r.comprendre.duree, .2);
-  etape('recherche', 'Recherche', r.recherche.duree, r.recherche.requetes, q => ({ genre: 'requete', texte: q }));
-  etape('lecture', 'Lecture des sources', r.lecture.duree, r.lecture.sources, s => ({ genre: 'source', texte: s.titre, domaine: s.domaine, etat: s.etat, pourquoi: s.pourquoi || '' }));
+  const recherche = (rq, sources) => [...rq.map(q => ['q', q]), ...sources.map((s, i) => ['s', s, i])];
+  const rendreRech = ([k, x, i]) => k === 'q' ? { genre: 'requete', texte: x }
+    : { genre: 'source', texte: x.titre, domaine: x.domaine, etat: x.etat, pourquoi: x.pourquoi || '', montre: i < 3 };
+  etape('recherche', 'Le lieu · recherche', r.recherche.duree + r.lecture.duree, recherche(r.recherche.requetes, r.lecture.sources), rendreRech, { apport: r.recherche.apport, replie: true });
   const V = r.vignettes && Array.isArray(r.vignettes.photos) && r.vignettes.photos.length ? r.vignettes : null;
   if (V) {
     // Photos du lieu (Wikimedia Commons) : les vignettes arrivent par rafales, 80 à 200 ms d'écart, chacune « en lecture » un
     // court instant avant que son observation (ou « hors sujet ») ne s'écrive. Environ 3 s en tout.
-    ev.push({ t, type: 'etape', id: 'photos', titre: 'Photos du lieu' });
+    ev.push({ t, type: 'etape', id: 'photos', titre: 'Le lieu · photos', apport: V.apport || 'Les photos montrent ce que les textes oublient : la couleur du sable, la mousse sur les blocs, la lumière. Une photo gardée appuie un réglage.' });
     t += jit(.25, .5);
     const rq = V.requetes || [], nm = Math.min(rq.length, V.requetesMontrees ?? rq.length);
-    rq.slice(0, nm).forEach(q => { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: q, ou: 'Commons' }); t += jit(.16, .4); });
-    if (rq.length > nm) { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: `… et ${rq.length - nm} autres`, ou: 'Commons' }); t += jit(.15, .4); }
+    rq.slice(0, nm).forEach(q => { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: q, ou: 'Commons' }); t += jit(.08, .4); });
+    if (rq.length > nm) { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: `… et ${rq.length - nm} autres`, ou: 'Commons' }); t += jit(.08, .4); }
     let fin = t;
     V.photos.forEach((p, i) => {
       ev.push({ t, type: 'ligne', etape: 'photos', genre: 'photo', photo: p.id, garde: !p.ecartee });
@@ -89,10 +145,22 @@ export function programme(r, f, hasard = Math.random, controle = null) {
     t = Math.max(t, fin);
     ev.push({ t, type: 'fin-etape', id: 'photos' }); t += jit(.15, .5);
   }
-  etape('constats', 'Ce que j\'en retiens', r.constats.duree, r.constats.liste, c => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage, photo: c.photo || null }));
-  etape('traduction', 'Traduction en vocabulaire du moteur', r.traduction.duree, traduction(f), ([k, x]) => ({ genre: 'valeur', cle: k, texte: x }));
+  const vl = vitrine(r.constats.liste);
+  etape('constats', 'Le lieu · ce que j\'en retiens', r.constats.duree, r.constats.liste, (c, i) => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage, photo: c.photo || null, montre: vl(c, i) }), { apport: r.constats.apport });
+  const P = r.personnage;
+  if (P) {
+    etape('personnage', 'Le personnage · recherche', P.duree, recherche(P.requetes, P.sources), rendreRech, { apport: P.apport, replie: true });
+    const vp = vitrine(P.constats);
+    etape('p-constats', 'Le personnage · ce que j\'en retiens', P.constats_duree, P.constats, (c, i) => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage, montre: vp(c, i) }), { apport: P.constats_apport });
+  }
+  const X = pdl(f, P && P.reglages, r.comprendre);
+  let cumul = 0;
+  const lignesPdl = X.lignes.map(l => { cumul += Math.ceil((l.length + 1) / 4); return { genre: 'pdl', texte: l, tok: Math.min(cumul, X.tokens) }; });
+  lignesPdl.push({ genre: 'bilan', texte: `${X.tokens} tokens · même contenu en JSON : ${X.json} · −${X.gain} %`, tok: X.tokens, json: X.json, gain: X.gain });
+  const pd = r.pdl || {};
+  etape('pdl', 'Écriture en PDL', pd.duree ?? r.traduction.duree, lignesPdl, x => x, { apport: pd.apport || 'PDL, « Procedural Diaphasic Language » : la fiche et le personnage, transcrits en notation serrée.' });
   const lignes = controle ? (controle.lignes.length ? controle.lignes.filter(l => l.niveau !== 'info').slice(0, 3).map(l => (l.niveau === 'erreur' ? 'erreur : ' : 'à noter : ') + l.texte) : []) : [];
-  etape('controle', 'Contrôle', r.controle.duree, [r.controle.texte, ...lignes, controle ? (controle.ok ? 'passage libre, rien de bloquant' : 'des erreurs : voir le constat') : 'contrôle indisponible'], x => ({ genre: 'controle', texte: x }));
+  etape('controle', 'Contrôle', r.controle.duree, [r.controle.texte, ...lignes, controle ? (controle.ok ? 'passage libre, rien de bloquant' : 'des erreurs : voir le constat') : 'contrôle indisponible'], x => ({ genre: 'controle', texte: x }), { apport: r.controle.apport });
   if (V) ev.push({ t, type: 'credits' });                  // le détail des crédits des photos, en fin de rejeu
   ev.push({ t, type: 'monde' });
   t += r.fondu.duree;
@@ -231,15 +299,23 @@ export function creerOuverture(deps) {
       blocs.large = !!(window.matchMedia && matchMedia(LARGE).matches);
       if (blocs.large) racine.classList.add('ouv-large');   // colonne des photos réservée dès le début : pas de saut de mise en page
     }
+    if (blocs.large) {                                    // colonne de droite : le réseau d'agents, puis la mosaïque de photos dessous
+      blocs.droite = d.createElement('div'); blocs.droite.className = 'ouv-droite';
+      racine.querySelector('.ouv-cadre').appendChild(blocs.droite);
+      blocs.res = creerReseau(blocs.droite);
+    }
     for (const e of ev) timers.push(setTimeout(() => jouer(e, blocs), e.t * 1000));
   }
 
   function jouer(e, blocs) {
     if (fini) return;
-    if (e.type === 'pense') { $('ouv-pense').hidden = false; $('ouv-pense').textContent = e.texte; return; }
+    if (e.type === 'pense') { const p = $('ouv-pense'); p.hidden = false; p.textContent = e.texte;
+      if (e.reperes && e.reperes.length) { const u = d.createElement('span'); u.className = 'ouv-reperes'; u.innerHTML = e.reperes.map(x => `<i>${esc(x)}</i>`).join(''); p.appendChild(u); }
+      return; }
     if (e.type === 'etape') {
-      const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">${esc(e.titre)}</span><span class="ouv-compte"></span></div><ul class="ouv-items"></ul>`);
-      blocs[e.id] = { x, ul: x.querySelector('.ouv-items'), n: 0 };
+      const x = li('ouv-etape en-cours' + (e.replie ? ' replie' : ''), `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">${esc(e.titre)}</span><span class="ouv-compte"></span></div>${e.apport ? `<p class="ouv-apport">${esc(e.apport)}</p>` : ''}<span class="ouv-barre" aria-hidden="true"><i></i></span><ul class="ouv-items"></ul>`);
+      blocs[e.id] = { x, ul: x.querySelector('.ouv-items'), n: 0, cpt: {}, lus: 0, queue: {} };
+      if (blocs.res) reseauEtape(blocs.res, e.id);
       return;
     }
     const b = blocs[e.etape || e.id];
@@ -247,7 +323,27 @@ export function creerOuverture(deps) {
     if (e.type === 'photo-lue') { vignetteLue(e, blocs); return; }
     if (e.type === 'credits') { credits(blocs); return; }
     if (e.type === 'ligne' && b) {
+      if (blocs.res) reseauLigne(blocs.res, e);
+      if (e.n) b.x.querySelector('.ouv-barre i').style.transform = `scaleX(${((e.i + 1) / e.n).toFixed(3)})`;
+      if (e.etape !== 'photos' && (e.genre === 'requete' || e.genre === 'source' || e.genre === 'constat')) {
+        b.cpt[e.genre] = (b.cpt[e.genre] || 0) + 1; if (e.genre === 'source' && e.etat === 'lu') b.lus++;
+        const NOM = { requete: 'requête', source: 'source', constat: 'constat' }, pl = (k, v) => v + ' ' + NOM[k] + (v > 1 ? 's' : '');
+        b.x.querySelector('.ouv-compte').textContent = Object.entries(b.cpt).map(([k, v]) => pl(k, v) + (k === 'source' ? ` (${b.lus} lues)` : '')).join(' · ');
+        if (e.genre !== 'requete' && !e.montre) {          // pas affichée : le compteur monte, une ligne « +N » la résume
+          let q = b.queue[e.genre]; if (!q) { q = b.queue[e.genre] = d.createElement('li'); q.className = 'ouv-it ouv-plus'; q.n = 0; b.ul.appendChild(q); }
+          q.n++; q.textContent = `+${q.n} ${NOM[e.genre]}${q.n > 1 ? 's' : ''}`; return;
+        }
+      }
       const it = d.createElement('li'); it.className = 'ouv-it ouv-' + e.genre;
+      if (e.genre === 'requete' && e.etape !== 'photos') {   // les requêtes partent en rafale : une grille serrée de puces
+        if (!b.grille) { b.grille = d.createElement('li'); b.grille.className = 'ouv-it ouv-grille'; b.ul.insertBefore(b.grille, b.ul.firstChild); }
+        const q = d.createElement('span'); q.className = 'ouv-q-puce'; q.textContent = e.texte; b.grille.appendChild(q); b.n++; return;
+      }
+      if (e.genre === 'pdl') { it.innerHTML = ''; b.ul.appendChild(it); taper(it, e.texte); b.x.querySelector('.ouv-compte').textContent = e.tok + ' tokens'; b.n++; return; }
+      if (e.genre === 'bilan') {
+        it.innerHTML = `<span class="ouv-k">PDL</span><b>${e.tok}</b> tokens <span class="ouv-k">· JSON</span>${e.json} <span class="ouv-gain">−${e.gain} %</span><span class="ouv-jauge"><i style="transform:scaleX(${(e.tok / e.json).toFixed(3)})"></i></span>`;
+        b.ul.appendChild(it); b.x.querySelector('.ouv-compte').textContent = `${e.tok} tokens · −${e.gain} %`; it.scrollIntoView({ block: 'end', behavior: 'smooth' }); return;
+      }
       if (e.genre === 'requete') it.innerHTML = `<span class="ouv-k">cherche${e.ou ? ' · ' + esc(e.ou) : ''}</span> ${esc(e.texte)}`;
       else if (e.genre === 'source') it.innerHTML = `<span class="ouv-dom">${esc(e.domaine)}</span> <span class="ouv-src">${esc(e.texte)}</span> <span class="ouv-etat ouv-${esc(e.etat)}">${esc(ETAT[e.etat] || e.etat)}${e.pourquoi ? ' · ' + esc(e.pourquoi) : ''}</span>`;
       else if (e.genre === 'constat') it.innerHTML = `<span class="ouv-c">${esc(e.texte)}</span><span class="ouv-r">→ ${esc(e.reglage)}</span>`;
@@ -260,7 +356,6 @@ export function creerOuverture(deps) {
         if (ph.carte) ph.carte.classList.add('epinglee');
       }
       b.ul.appendChild(it); b.n++;
-      const c = b.x.querySelector('.ouv-compte'); if ((e.genre === 'requete' || e.genre === 'source') && e.etape !== 'photos') c.textContent = b.n;
       it.scrollIntoView({ block: 'end', behavior: 'smooth' });
       return;
     }
@@ -279,6 +374,49 @@ export function creerOuverture(deps) {
 
   /* Vignettes de photos (ouvertures/photos/*.json) : une bande qui défile en transform, chaque carte un peu de travers,
      « en lecture » (cadre et balayage) puis son observation, ou grisée « hors sujet ». Animations en transform et opacity. */
+  function taper(el, texte) { let i = 0; const pas = () => { if (fini) return; i = Math.min(texte.length, i + 4); el.textContent = texte.slice(0, i); if (i < texte.length) timers.push(setTimeout(pas, 14)); }; pas(); }
+
+  /* Réseau d'agents (colonne de droite, PC) : une mise en scène de la répartition du travail entre modèles — Haiku cherchent,
+     Sonnet analysent, Opus écrivent le PDL. Il ne mesure rien de ce qui tourne : chaque nœud s'allume sur un événement du rejeu. */
+  const NS = 'http://www.w3.org/2000/svg';
+  function creerReseau(hote) {
+    const W = 520, H = 230, rang = (n, y, m) => Array.from({ length: n }, (_, i) => ({ x: m + (W - 2 * m) * (n > 1 ? i / (n - 1) : .5), y }));
+    const R = { h: rang(15, 34, 18), s: rang(5, 118, 70), o: rang(2, 198, 190), n: { q: 0, s: 0, t: 0 }, k: 0 };
+    const el = d.createElement('div'); el.className = 'ouv-reseau';
+    let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><g class="ouv-ar">`;
+    R.h.forEach((p, i) => { const q = R.s[i % 5]; svg += `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>`; });
+    R.s.forEach(p => R.o.forEach(q => { svg += `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>`; }));
+    svg += '</g>';
+    const noeud = (p, r, cls) => `<circle class="ouv-nd ${cls}" cx="${p.x}" cy="${p.y}" r="${r}" style="transform-origin:${p.x}px ${p.y}px"/>`;
+    R.h.forEach(p => svg += noeud(p, 6, 'h')); R.s.forEach(p => svg += noeud(p, 10, 's')); R.o.forEach(p => svg += noeud(p, 14, 'o'));
+    svg += `<text x="4" y="${34 + 22}">haiku × 15</text><text x="4" y="${118 + 26}">sonnet × 5</text><text x="4" y="${198 + 26}">opus × 2</text><g class="ouv-imp"></g></svg>`;
+    el.innerHTML = `<p class="ouv-planche-t">Réseau d'agents</p>${svg}<p class="ouv-leg"><span><i class="h"></i>recherche</span> · <span><i class="s"></i>analyse</span> · <span><i class="o"></i>écriture PDL</span><b class="ouv-rc"></b></p>`;
+    hote.appendChild(el);
+    R.el = el; R.svg = el.querySelector('svg'); R.imp = el.querySelector('.ouv-imp'); R.rc = el.querySelector('.ouv-rc');
+    R.nd = { h: [...el.querySelectorAll('.ouv-nd.h')], s: [...el.querySelectorAll('.ouv-nd.s')], o: [...el.querySelectorAll('.ouv-nd.o')] };
+    R.cpt = () => { R.rc.textContent = `${R.n.q} requêtes · ${R.n.s} sources · ${R.n.t} tokens`; };
+    R.cpt();
+    return R;
+  }
+  function allumer(c) { c.classList.remove('on'); requestAnimationFrame(() => c.classList.add('on')); timers.push(setTimeout(() => c.classList.remove('on'), 700)); }
+  function impulsion(R, a, b) {                             // un point qui file le long d'une arête, en transform
+    const c = d.createElementNS(NS, 'circle'); c.setAttribute('r', '2.6'); c.setAttribute('cx', a.x); c.setAttribute('cy', a.y);
+    c.style.transform = 'translate(0,0)'; R.imp.appendChild(c);
+    requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transform = `translate(${b.x - a.x}px,${b.y - a.y}px)`; c.style.opacity = '.15'; }));
+    timers.push(setTimeout(() => c.remove(), 650));
+  }
+  function reseauEtape(R, id) {
+    if (id === 'photos') R.el.classList.add('bandeau');      // les photos arrivent : le réseau se réduit en bandeau au-dessus
+    R.el.classList.toggle('pdl', id === 'pdl');
+  }
+  function reseauLigne(R, e) {
+    if (e.genre === 'requete') { const i = R.k++ % 15; allumer(R.nd.h[i]); impulsion(R, R.h[i], R.s[i % 5]); if (e.etape !== 'photos') R.n.q++; }
+    else if (e.genre === 'photo') { const i = R.k++ % 15; allumer(R.nd.h[i]); impulsion(R, R.h[i], R.s[i % 5]); }
+    else if (e.genre === 'source' || e.genre === 'constat') { const i = R.k++ % 5; allumer(R.nd.s[i]); impulsion(R, R.s[i], R.o[i % 2]); if (e.genre === 'source') R.n.s++; }
+    else if (e.genre === 'pdl' || e.genre === 'bilan') { const i = R.k++ % 2; allumer(R.nd.o[i]); impulsion(R, R.s[R.k % 5], R.o[i]); if (e.tok) R.n.t = e.tok; }
+    R.cpt();
+  }
+
   const creditDe = p => `${p.titre} · ${p.auteur} · ${p.licence} · Wikimedia Commons · recadrée et réduite`;
   function vignette(e, b, blocs) {
     const ph = blocs.vg && blocs.vg[e.photo]; if (!ph) return;
@@ -290,7 +428,7 @@ export function creerOuverture(deps) {
       if (b.large) it.setAttribute('aria-label', 'Photos du lieu');
       const V = blocs.V, uniq = a => [...new Set(a)];
       it.innerHTML = `${b.large ? '<p class="ouv-planche-t">Photos du lieu · Wikimedia Commons</p>' : ''}<div class="ouv-bande"><div class="ouv-rail"></div></div><p class="ouv-credit">Photos : Wikimedia Commons, ${esc(uniq(V.photos.map(p => p.auteur.replace(/ \(.*$/, ''))).join(', '))} · ${esc(uniq(V.photos.map(p => p.licence)).join(', '))} · recadrées et réduites, détail en fin de rejeu</p>`;
-      if (b.large) { racine.querySelector('.ouv-cadre').appendChild(it); blocs.planche = it; }
+      if (b.large) { (blocs.droite || racine.querySelector('.ouv-cadre')).appendChild(it); blocs.planche = it; }
       else b.ul.appendChild(it);
       b.bande = it.querySelector('.ouv-bande'); b.rail = it.querySelector('.ouv-rail'); b.nv = 0; b.largeur = 0;
       if (!b.large) it.scrollIntoView({ block: 'end', behavior: 'smooth' });
