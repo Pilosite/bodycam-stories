@@ -163,7 +163,7 @@ rules that fired before and no longer: r.jay-first, c.jay
 rules that fire now and did not: —
 promise c.jay: kept → amended
 beat: hide → hide · ending: — → — · rejected transactions: 1 → 1
-final hash: 04839b198109b2 → 1bcbf791e04398
+final hash: 04839b198109b2 → 1bcbf791e04398   (recorded before stations carried their light; the base hash of p8 is now 03708ce55e2d0f, re-run to refresh)
 ```
 
 Against the scripted session, where the player shouts at the approach:
@@ -199,7 +199,7 @@ rules that fire now and did not: —
 promise c.jay: kept → kept
 beat: hide → hide · ending: — → — · rejected transactions: 1 → 1
 battery at the end: 0.3273 → 0.4768
-final hash: 04839b198109b2 → 1a7ed820c003aa
+final hash: 04839b198109b2 → 1a7ed820c003aa   (recorded before stations carried their light; the base hash of p8 is now 03708ce55e2d0f, re-run to refresh)
 ```
 
 What to tell the creator: the same session ends with 48 % of battery instead of 33 %; `battery-clock.half` still fires at the end (transitions cost their `cost_s` on top of time); the low notice will come at 20 % instead of 25 % (this session does not reach it either way). If the creator wants no clock at all, propose the swap of `docs/patterns.md` (ticking-clock → slow-light) and report the warning `check` then gives: the `battery-dies` ending is no longer triggered by anything.

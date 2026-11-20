@@ -1,0 +1,20 @@
+{
+  "_doc": "The model port served by code (src/reflex-model.js, M2): anchors for the closed PDL intent verbs (docs/pdl-spec.md §6.1), per language, and the fallback line a verb answers with (a line id of the pack's bank). Story-specific anchors (things, classes, commitments) are in the pack (stories/<id>/anchors.json). Thresholds: below `ask_below` Sam asks back; between it and `act_from` she acts with the doubt showing.",
+  "act_from": 0.8,
+  "ask_below": 0.5,
+  "ask_line": "ask.back",
+  "verbs": {
+    "go": { "en": ["go", "walk", "move on", "keep going", "continue", "next", "let's go", "go on", "forward", "carry on", "go ahead", "go down", "follow", "take the", "move"], "fr": ["avance", "vas y", "va", "continue", "on y va", "marche", "suis", "descends", "prends le", "bouge"], "line": "move.ok" },
+    "back": { "en": ["go back", "turn back", "back to"], "fr": ["retourne", "reviens", "recule"], "line": "move.ok" },
+    "look": { "en": ["look", "see", "show me", "film", "what's that", "what is that", "check", "point the camera"], "fr": ["regarde", "montre", "filme", "vois", "c'est quoi", "qu'est ce que"], "line": "look.ok" },
+    "touch": { "en": ["touch", "feel"], "fr": ["touche", "tate"], "line": "touch.ok" },
+    "take": { "en": ["pick up", "grab", "take it"], "fr": ["ramasse", "attrape", "prends le", "prends la"], "line": "touch.ok" },
+    "posture": { "en": ["crouch", "kneel", "sit", "get down", "stand up", "squat"], "fr": ["accroupis", "agenouille", "assieds", "baisse toi", "leve toi", "releve toi"], "line": "move.ok",
+      "heights": { "crouch": 0.55, "kneel": 0.55, "get down": 0.55, "squat": 0.55, "sit": 0.65, "stand up": 1, "accroupis": 0.55, "agenouille": 0.55, "baisse toi": 0.55, "assieds": 0.65, "leve toi": 1, "releve toi": 1 } },
+    "turn": { "en": ["turn around", "behind you", "turn left", "turn right"], "fr": ["retourne toi", "derriere toi", "tourne a gauche", "tourne a droite"], "line": "look.ok",
+      "degrees": { "turn around": 180, "behind you": 180, "turn left": -90, "turn right": 90, "retourne toi": 180, "derriere toi": 180, "tourne a gauche": -90, "tourne a droite": 90 } },
+    "wait": { "en": ["wait", "breathe", "take your time", "hold on", "pause"], "fr": ["attends", "respire", "prends ton temps", "pause"], "line": null },
+    "stop": { "en": ["stop", "freeze", "halt", "don't move", "do not move", "stay still"], "fr": ["arrete", "stop", "halte", "bouge pas", "ne bouge pas"], "line": null },
+    "make": { "en": ["make", "build", "draw", "put a", "place a", "leave a"], "fr": ["fais", "construis", "dessine", "pose", "laisse un"], "line": "make.cant" }
+  }
+}

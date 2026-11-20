@@ -110,7 +110,13 @@ function soundPlayer() {
   if (SOUND.player) SOUND.player.geste();
   return SOUND.player;
 }
-function recipeFor(cue) { var R = MEDIA.sound.recettes || {}; return R[cue] ? cue : null; }
+function recipeFor(cue) { var I = MEDIA.sound.indices || {}; return Array.isArray(I[cue]) && I[cue].length ? I[cue] : null; }
+// A pack cue through the synthesizer: its plans (src/bruitages.json "indices"), each at its start time.
+function playCue(cue, key) {
+  var plans = recipeFor(cue), p = SOUND.player; if (!plans || !p) return false;
+  plans.forEach(function (pl, i) { var ev = Object.assign({ graine: 7, cle: cue + ':' + key + ':' + i }, pl); setTimeout(function () { p.jouer(ev); }, Math.round((pl.t || 0) * 1000)); });
+  return true;
+}
 var synthN = 0;
 function synthFall(mass) {
   var p = soundPlayer(), rec = MEDIA.sound.recettes.chute;
@@ -281,7 +287,7 @@ function describe(e) {
     if (o === 'look') return { k: 'act', text: t('tr.look', '<code>' + esc(b.target || ('pitch ' + b.pitch)) + '</code>') + st };
     return { k: 'act', text: t('tr.act', '<code>' + esc(o + (b.target ? ' ' + b.target : b.height ? ' ' + b.height : b.seconds ? ' ' + b.seconds + ' s' : '')) + '</code>') + st };
   }
-  if (e.kind === 'effect' && b.op === 'sound.play') return { k: 'sound', text: t('tr.sound', '<code>' + esc(b.cue) + '</code>') + ' ' + (recipeFor(b.cue) ? '' : '<span class="norec">' + t('tr.norec') + '</span>') + st };
+  if (e.kind === 'effect' && b.op === 'sound.play') return { k: 'sound', text: t('tr.sound', '<code>' + esc(b.cue) + '</code>') + ' ' + (recipeFor(b.cue) ? '<span class="dim">' + t('tr.synth') + '</span>' : '<span class="norec">' + t('tr.norec') + '</span>') + st };
   if (e.kind === 'effect') return { k: 'act', text: t('tr.effect', '<code>' + esc(b.op) + '</code>') + st };
   if (e.kind === 'fact') {
     if (b.commit) return { k: 'promise', text: t('tr.promise', '<code>' + esc(b.commit.id) + '</code>', '<b>' + esc(t('cm.' + b.commit.status)) + '</b>') + st };
@@ -324,8 +330,8 @@ function heroDraw() {
   cues.forEach(function (cue) {
     if (!T.played) T.played = {};
     var rec = recipeFor(cue);
-    snd.append(h('span', { class: 'snd' + (rec ? '' : ' none') }, '♪ ' + cue, rec ? null : h('small', {}, t('tr.norec'))));
-    if (rec && !T.played[cue] && SOUND.player) { T.played[cue] = 1; SOUND.player.jouer({ recette: cue, graine: 7, cle: T.first, duree: 0.6, f0: 300, force: 0.6, gain: 0.6 }); }
+    snd.append(h('span', { class: 'snd' + (rec ? '' : ' none'), title: CUES[cue] ? CUES[cue].en : '' }, '♪ ' + cue, h('small', {}, rec ? rec.map(function (x) { return x.recette; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(' + ') : t('tr.norec'))));
+    if (rec && !T.played[cue]) { T.played[cue] = 1; playCue(cue, T.first); }
   });
   // the trace on three clocks
   var lanes = { now: [], scene: [], story: [] };
@@ -345,7 +351,7 @@ function heroDraw() {
     h('p', { class: 'thread' }, t('tr.thread'), ' ', chip(t('tr.beatnow', beat ? L(beat.name) : '—')), ' ', chip(t('tr.facts', facts)), ' ',
       cms.map(function (c) { return chip(c.id + ' · ' + t('cm.' + c.status), c.status === 'kept' ? 'strong' : c.status === 'broken' ? 'bad' : ''); }), ' ', chip(t('tr.battery', pct(w.camera.battery)), w.camera.battery < 0.5 ? 'bad' : '')));
   var jl = E.slice(T.first).filter(function (e) { return e.type !== 'principles'; });
-  clear($('tl-jbox')).append(jl.map(function (e) { return h('div', { class: 'jl' }, h('span', { class: 'seq' }, '#' + e.seq), h('code', {}, (e.loop ? '[' + e.loop + '] ' : '') + summary(e)), e.author && e.author.kind === 'model' ? canned() : null); }));
+  put(clear($('tl-jbox')), jl.map(function (e) { return h('div', { class: 'jl' }, h('span', { class: 'seq' }, '#' + e.seq), h('code', {}, (e.loop ? '[' + e.loop + '] ' : '') + summary(e)), e.author && e.author.kind === 'model' ? canned() : null); }));
   $('tl-j').querySelector('summary').textContent = t('hero.journal') + ' · ' + jl.length;
 }
 function heroHeard(c, text) {
@@ -849,6 +855,62 @@ function s11Col() {
 }
 
 
+
+/* ---------------------------------------------------------------- I.0 other worlds, and the game page */
+function worlds() {
+  var box = clear($('worlds-strip'));
+  (MEDIA.worlds || []).forEach(function (w) {
+    box.append(h('figure', { class: 'world' }, h('img', { src: w.src, alt: t('world.' + w.id), loading: 'lazy', width: 270, height: 480 }), h('figcaption', {}, t('world.' + w.id))));
+  });
+  if (MEDIA.game) $('play-img').setAttribute('src', MEDIA.game); else $('play-img').hidden = true;
+}
+
+/* ================================================================ PART II · the map of the semantic framework */
+// Statuses from docs/milestones.md (M1, M2 measured), ADR 0004, 0008, 0009 (proposed): tested = built and tested;
+// built = built, not measured; designed = written down, not built.
+var MAP = [
+  { id: 'words', go: '#play', st: [['tested', 'map.s.words']] },
+  { id: 'decide', go: '#s5', st: [['tested', 'map.s.reflex'], ['designed', 'map.s.dm']] },
+  { id: 'pdl', go: '#s3', st: [['tested', 'map.s.core']] },
+  { id: 'validate', go: '#invert', st: [['tested', 'map.s.core'], ['designed', 'map.s.compile']] },
+  { id: 'executor', go: '#play', st: [['tested', 'map.s.m2']] },
+  { id: 'events', go: '#promise', st: [['tested', 'map.s.core']] },
+  { id: 'rules', go: '#promise', st: [['tested', 'map.s.m2c']] },
+  { id: 'journal', go: '#rewind', st: [['tested', 'map.s.golden']] },
+];
+var MAP_SIDE = [
+  { id: 'clocks', go: '#clocks', st: [['built', 'map.s.clocks'], ['designed', 'map.s.story']] },
+  { id: 'generate', go: '#s10', st: [['designed', 'map.s.m3']] },
+  { id: 'gauges', go: '#s7', st: [['tested', 'map.s.core']] },
+];
+function badge(x) { return h('span', { class: 'badge b-' + x[0], title: t(x[1]) }, t('st.' + x[0]), h('small', {}, ' · ' + t(x[1]))); }
+function mapBox(b, i) {
+  return h('a', { class: 'mb mb-' + b.id, href: b.go, role: 'listitem' }, i !== undefined ? h('span', { class: 'mb-n' }, String(i + 1)) : null,
+    h('b', { html: t('map.' + b.id) }), h('span', { class: 'mb-p', html: t('map.' + b.id + '.p') }), h('span', { class: 'mb-st' }, b.st.map(badge)));
+}
+function map() {
+  var m = clear($('map'));
+  m.append(h('div', { class: 'map-clk' }, mapBox(MAP_SIDE[0])),
+    h('div', { class: 'map-flow' }, MAP.reduce(function (a, b, i) { return a.concat([mapBox(b, i), i < MAP.length - 1 ? h('span', { class: 'arr', 'aria-hidden': 'true' }, '→') : null]); }, [])),
+    h('div', { class: 'map-side' }, mapBox(MAP_SIDE[1]), mapBox(MAP_SIDE[2])));
+  put(clear($('map-leg')), ['tested', 'built', 'designed'].map(function (k) { return h('li', {}, h('span', { class: 'badge b-' + k }, t('st.' + k)), ' ', t('st.' + k + '.p')); }));
+}
+/* ADR 0009, output economy: real examples from this pack, their real sizes in characters (tokens are not measured here). */
+function eco() {
+  var tok = 'm:stager/stage now act.look tg=thing:marque-1', tx = C.tokens.parseTokens(tok)[0];
+  var canon = JSON.stringify({ author: tx.author, horizon: tx.horizon, kind: tx.kind, body: tx.body });
+  var src = SRC['r.jay-first'] ? SRC['r.jay-first'].raw : '';
+  var rows = [
+    { k: 'now', ex: 'mark.read.1', vs: lineText('mark.read.1') },
+    { k: 'scene', ex: tok.replace(/^m:stager\/stage /, ''), vs: canon },
+    { k: 'story', ex: src, vs: null },
+  ];
+  put(clear($('eco')), rows.map(function (r) {
+    return h('div', { class: 'eco-r' }, h('span', { class: 'eco-k' }, r.k), h('div', { class: 'eco-v' }, h('b', {}, t('eco.' + r.k)), h('span', { class: 'dim' }, t('eco.' + r.k + '.p')),
+      h('code', { class: 'eco-ex' }, r.ex), h('span', { class: 'eco-n' }, t('eco.chars', r.ex.length) + (r.vs ? ' · ' + t('eco.vs.' + r.k, r.vs.length) : ''))));
+  }));
+}
+
 /* ---------------------------------------------------------------- language, theme, wiring */
 var HOOD = ['s3', 's5', 's7', 's9', 's10', 's11'];
 function applyCopy() {
@@ -862,7 +924,7 @@ function applyCopy() {
 function renderAll() {
   applyCopy(); renderCheck();
   heroDraw();
-  field(); book(); if (s2Id) s2Load(s2Id); else s2Load('sam.voice.dry');
+  worlds(); field(); book(); map(); eco(); if (s2Id) s2Load(s2Id); else s2Load('sam.voice.dry');
   var k3 = $('s3-tokens').value; s3Presets(); if (k3) s3(); else s3Load();
   s4Sentences(); s4Out();
   s5Questions(); s5(); s6(); if (!$('s7-src').value) $('s7-src').value = S7_DEFAULT; s7();
