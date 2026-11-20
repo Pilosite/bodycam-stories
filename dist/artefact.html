@@ -436,11 +436,12 @@ const REGLAGES = {
   EFFORT: null,                    // {base_s, par_palier_s, max_s} : remplace la durée d'effort de la bibliothèque (exploit.effort)
   PAUSE_S: null,                   // les temps morts entre deux gestes (avant le cadrage, avant la réaction) ; null : ceux d'origine
   FACONNAGE_S: 15,                 // durée du façonnage (MENEUR.gesteFaconnage, lue par la page)
+  DEGOUT_K: 1,                     // hésitation et mains essuyées (§22) : durées des données × ce facteur
   MARCHE_K: 1,                     // la page : vitesse des marches dirigées (rejoindre, chercher, cadrer), gestes de ramassage et de regard
 };
 /* Mode démo : réagir vite (première réaction sous 0,5 s, chose à l'écran en quelques secondes). Les tests gardent REGLAGES. */
 const REGLAGES_DEMO = { ANTICIPER: true, DELAI_VOIX_S: 4, DELAI_AUTRE_S: 6, DELAI_OBJET_S: 10, CONSIGNE_REDUIRE: 4,
-  EFFORT: { base_s: 2, par_palier_s: 1.4, max_s: 6 }, PAUSE_S: 0.2, FACONNAGE_S: 9.5, MARCHE_K: 1.35 };
+  EFFORT: { base_s: 2, par_palier_s: 1.4, max_s: 6 }, PAUSE_S: 0.2, FACONNAGE_S: 9.5, MARCHE_K: 1.35, DEGOUT_K: 0.5 };
 /* Les deux caractères : valeurs posées par REGLAGES.CARACTERE avant les réglages de l'histoire. */
 const CARACTERES = {
   obeissant: { CEDER_APRES_REFUS: 0, COUT_HORS_MONDE: 0 },
@@ -2278,7 +2279,7 @@ function creerMeneur(o) {
       const compris = s.compris !== false && (liste(s.actions).length > 0 || isObj(s.scene)) || !!g || corps.length > 0 || !!def || !!cible || stop;
       let actions = stop ? [] : validerActions(s.actions);
       if (g || corps.length || def) actions = validerActions([...(g ? g.actions : []), ...corps, ...(def ? [{ type: 'posture', hauteur: 0.6 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }] : []), ...(g || def || corps.some(a => a.type !== 'posture') ? [] : actions)]);
-      const pensee = stop ? tirer(['Je bouge plus.', 'OK. Je reste là.', 'Je m\'arrête. Quoi ?']) : cible ? tirer(['Attends… là. Et là. Voilà. Pas mal, hein ?', 'Bon. Avec ce qui traîne par terre… Voilà.']) : g ? g.pensee : def ? tirer(['Vite. De la terre dessus, je piétine, je piétine…', 'Voilà. C\'est fait. Plus rien.']) : corps.length && !liste(s.actions).length ? tirer(['Hm. Voilà.', 'Là. Tu vois ce que je vois ?', 'Bon.']) : str(s.pensee, 240);
+      const pensee = stop ? tirer(['Je bouge plus.', 'OK. Je reste là.', 'Je m\'arrête. Quoi ?']) : cible ? tirer(anticipant ? ['Bon. Je trouve ce qu\'il faut, et je m\'y mets.', 'D\'accord. Deux secondes, je cherche de quoi faire.'] : ['Attends… là. Et là. Voilà. Pas mal, hein ?', 'Bon. Avec ce qui traîne par terre… Voilà.']) : g ? g.pensee : def ? tirer(['Vite. De la terre dessus, je piétine, je piétine…', 'Voilà. C\'est fait. Plus rien.']) : corps.length && !liste(s.actions).length ? tirer(['Hm. Voilà.', 'Là. Tu vois ce que je vois ?', 'Bon.']) : str(s.pensee, 240);
       v = { sas: null, pensee: compris ? pensee : tirer(INCOMPRIS), attitude: compris ? 'suit' : 'hesite',
         actions, scene: g || def ? null : s.scene || null, temps: null, fin: null, etat: { peur: 0, confiance: 0, agacement: 0 },
         faits: [], intention: '', question: false, fabrique: g ? { nom: g.nom, quoi: '', ou: g.ou } : null, suite: null, defaire: def ? [def] : [], modifie: cible ? { objet: cible, quoi: rt ? rt.quoi : str(tm.modele.nom, 60) } : null, resume: null, secours: true };
@@ -2568,7 +2569,7 @@ function creerMeneur(o) {
     let pendant = liste(ia.pendant).map(t => { const x = ok(t); if (!x && t) jetees.push(t); return x; }).filter(Boolean).slice(0, 3);
     if (pendant.length) src.pendant = 'ia';
     else { const L = banque('pendant'); src.pendant = 'banque'; while (pendant.length < nP && L.length) pendant.push(L.splice(Math.floor(alea(partie) * L.length), 1)[0]); }
-    const sec = k => num(isObj(DG[k]) ? DG[k][pal] : 2, 0.5, 6, 2), esp = num(DG.espacement_s, 0.5, 20, 3);
+    const sec = k => num(isObj(DG[k]) ? DG[k][pal] : 2, 0.5, 6, 2) * num(R.DEGOUT_K, 0.1, 1, 1), esp = num(DG.espacement_s, 0.5, 20, 3);
     // la nausée possible (§22.2) : le seuil se juge sur l'intensité (le contact se mesure sur le geste réel : planDegout, même
     // tirage) ; la chose qu'elle laisse vient de la bibliothèque, comptée comme ambiance, posée seulement quand elle vomit
     const NZ = isObj(DG.nausee) ? DG.nausee : null; let nausee = null;
