@@ -584,6 +584,7 @@ function reliefDetail(x,z,ax){
 const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1, elev:0, pied:null, perche:null, zoom:1, zoomCible:1 };   // zoom : zoom numérique du téléphone (cadrer une petite chose)
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
+let sons=null, compteurSons=0;                    // les bruitages (src/son.js), créés plus bas ; compteur : deux gestes, deux tirages
 let pauseQuand=null;                                            // essais : {type, t} (balade.pauseQuand)
 let frozen=false, hold=false, pauseTest=false, walkDist=0, walking=false;   // pauseTest : balade.pause (captures d'essai), le corps s'arrête net
 function pose(){
@@ -592,6 +593,8 @@ function pose(){
   if(ef){ const t=performance.now()/1000, k=.35+.65*ef.force;   // §20 : il pousse ; le téléphone sur la poitrine tremble et s'enfonce un peu par à-coups
     ty=k*(.006*Math.sin(t*31.7)+.004*Math.sin(t*53.1+1.3)); tp=k*(.008*Math.sin(t*27.3+.7)+.005*Math.sin(t*61.9)-.02*(.5+.5*Math.sin(t*2.1)));
     bob+=k*.012*Math.sin(t*2.1); }
+  const env=sons?sons.enveloppe():0;               // le bruit de l'effort secoue le téléphone (son enveloppe, force comprise), même sans son
+  if(env>.01){ const t=performance.now()/1000; ty+=env*(.007*Math.sin(t*71.3)+.004*Math.sin(t*113.7+.4)); tp+=env*(.01*Math.sin(t*83.1+1.1)+.005*Math.sin(t*131.9)); bob+=env*.008*Math.sin(t*97.3); }
   const yw=cam.yaw+look.yaw+ty, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch+tp));
   const cy=Math.cos(yw),sy=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
   const f=[sy*cp,sp,cy*cp], r=[cy,0,-sy], u=[f[1]*r[2]-f[2]*r[1],f[2]*r[0]-f[0]*r[2],f[0]*r[1]-f[1]*r[0]];
@@ -722,7 +725,10 @@ function simulate(dt){
     else if(a.type==="faconner") faconnerPas(a,dt);
     else if(a.type==="ramasser") ramasserPas(a,dt);
     else if(a.type==="finMarche"){ queue.shift(); finMarche(a); }
-    else if(a.type==="penser"){ queue.shift(); say(a.texte,a.bref); voixP.dire(a.texte); notePensee(a.texte,"file"); }
+    else if(a.type==="penser"){ queue.shift(); say(a.texte,a.bref); direVoix(a.texte); notePensee(a.texte,"file"); }
+    else if(a.type==="effort"){ a.ecoule=(a.ecoule||0)+dt;   // §20 : il pousse ; les bruits calés sur cet effort tombent à leur instant (src/son.js)
+      if(a.bruits) for(const b of a.bruits) if(!b.joue&&a.ecoule>=b.t){ b.joue=true; jouerBruit(b); }
+      a.rest-=dt; if(a.rest<=0) queue.shift(); }
     else if(a.type==="bloque"){ queue.shift(); if(!a.muet) say(a.texte||"Je passe pas, là. C'est bouché.",true); }   // il s'arrête devant, et il le dit
     else if(a.type==="elever"||a.type==="descendre") elever(a,dt);
     else if(a.type==="zoom"){ cam.zoomCible=clampN(a.z,1,8,1); queue.shift(); }
@@ -1793,6 +1799,9 @@ function perception(){
 }
 const clampN=(v,a,b,d)=>{ v=Number(v); return Number.isFinite(v)?Math.min(b,Math.max(a,v)):d; };
 function enqueue(actions){
+  if(Array.isArray(actions)&&actions.some(a=>a&&a.type==="effort"&&a.exploit)&&MODELES.exploit&&MODELES.exploit.bruit){   // les bruits de l'effort, calés entre les souffles (docs/bruitages.md)
+    try{ const r=SON.caler(actions,MODELES.exploit.bruit,{graine:seedN,compteur:++compteurSons}); actions=r.actions; if(sons) sons.preparer(r.plan.bruits); journalSons.push({t:+(performance.now()/1000).toFixed(2),plan:r.plan.bruits.map(b=>({t:b.t_abs,duree:b.duree,f0:b.f0,force:b.force,principal:b.principal})),souffles:r.plan.souffles,pose_t:r.plan.pose_t}); }
+    catch(e){ console.warn("sons :",e&&e.message); } }
   for(const a of (Array.isArray(actions)?actions:[]).slice(0,12)){   // 8 gestes au plus, plus les marqueurs de la page (poser, attendreObjet, §19)
     if(!a||typeof a!=="object") continue;
     if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});
@@ -1809,7 +1818,7 @@ function enqueue(actions){
     else if(a.type==="poser"&&typeof a.ref==="string") queue.push({type:"poser",ref:a.ref.slice(0,12)});   // §19 : la place de la chose se prend ici, au geste
     else if(a.type==="attendreObjet"&&typeof a.ref==="string") queue.push({type:"attendreObjet",ref:a.ref.slice(0,12),rest:clampN(a.secondes,0,30,20)});
     else if(a.type==="deplacer") queue.push({type:"deplacer",metres:clampN(a.metres,1,30,4),rayon:clampN(a.rayon,0,3,.3)});
-    else if(a.type==="effort") queue.push({type:"effort",rest:clampN(a.secondes,0,12,3),force:clampN(a.force,0,1,.3)});   // §20 : accroupi, il pousse ; la caméra force et tremble
+    else if(a.type==="effort") queue.push({type:"effort",rest:clampN(a.secondes,0,12,3),force:clampN(a.force,0,1,.3),bruits:Array.isArray(a.bruits)?a.bruits.slice(0,6):null});   // §20 : accroupi, il pousse ; la caméra force et tremble
     else if(a.type==="penser"&&typeof a.texte==="string") queue.push({type:"penser",texte:a.texte.slice(0,240),bref:a.bref===true});   // une pensée dite quand la file l'atteint (souffle, réaction après avoir vu)
   }
 }
@@ -2065,7 +2074,7 @@ function ecouter(){                                           // appelé directe
 $("mic").onclick=()=>{ if(listening) dict.stop().catch(()=>{}); else ecouter(); };
 function setFrozen(v,m){
   if(!v && listening && dict) dict.stop().catch(()=>{});
-  frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v;
+  frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v; if(sons) sons.baisser(v);   // le joueur parle : le bruit baisse
   $("parler").textContent=v&&mode==="parler"?"Reprendre":"Lui parler";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
@@ -2084,13 +2093,30 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
    Capacité « tts » de l'artefact, sinon la voix du navigateur. Éteinte par défaut (« Voix » dans « Plus »), allumée par CFG.demo. */
 const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal},
   onParle:p=>{ $("taire").hidden=!p; } });
-function penser(t){ say(t); voixP.dire(t); notePensee(t,"meneur"); }
+function penser(t){ say(t); direVoix(t); notePensee(t,"meneur"); }
 const journalPensees=[]; window.balPensees=journalPensees;   // essais (tools/demo.mjs) : chaque pensée et son instant
 function notePensee(t,source){ journalPensees.push({t:+(performance.now()/1000).toFixed(2),texte:String(t||""),source,file:queue.map(a=>a.type).slice(0,4)}); if(journalPensees.length>80) journalPensees.shift(); }                  // une pensée du personnage : affichée, et dite si la voix est allumée
 function voixInter(on){ voixP.actif(on); $("voix-inter").setAttribute("aria-pressed",String(on)); $("voix-inter").textContent=on?"Voix : oui":"Voix : non"; return on; }
 voixInter(!!CFG.demo||(()=>{ try{ return localStorage.getItem("bodycam-voix")==="1"; }catch(_){ return false; } })());
 $("voix-inter").onclick=()=>{ const on=voixInter(!voixP.actif()); try{ localStorage.setItem("bodycam-voix",on?"1":"0"); }catch(_){} };
 $("taire").onclick=()=>voixP.taire();
+/* ------------------------------------------------------------------ les bruitages (src/son.js, src/bruitages.json, docs/bruitages.md)
+   Le contexte audio naît au premier geste du joueur ; « Sons » dans « Plus », allumé par défaut, mémorisé ; coupé quand la page
+   est cachée ; plus bas quand le joueur parle ; une pensée n'est pas dite par-dessus un gros bruit (elle attend qu'il finisse). */
+const journalSons=[]; window.balSons=journalSons;   // essais (tools/demo.mjs, tools/son.mjs) : chaque plan et chaque bruit, avec son instant
+sons=SON.creerSons({ bruitages:BRUITAGES, maintenant:()=>performance.now()/1000, journal:m=>console.warn(m),
+  fabriquer:()=>{ const C=window.AudioContext||window.webkitAudioContext; return C?new C({latencyHint:"interactive"}):null; } });
+function jouerBruit(b){ const x=sons.jouer(b); journalSons.push({t:+(performance.now()/1000).toFixed(2),recette:b.recette,rang:b.rang,principal:!!b.principal,duree:b.duree,f0:b.f0,force:b.force,gain:b.gain,masse:b.masse,audio:!!(x&&x.audio)}); if(journalSons.length>80) journalSons.shift(); }
+function chuteSon(ob){ try{ const F=(ob.formes||[]).filter(f=>f&&Array.isArray(f.taille)), e=ob.echelle||1, w=posObjet(ob);
+  const masse=Math.max(.01,Math.min(500,MENEUR.volumeFormes(F)*e*e*e*500));   // une chose pleine à moitié d'eau : un ordre de grandeur suffit au son
+  jouerBruit(SON.planChute(BRUITAGES.recettes.chute,{masse,distance:Math.hypot(w.x-cam.x,w.z-cam.z),graine:seedN,cle:++compteurSons})); }catch(e){ console.warn("chute :",e&&e.message); } }
+function direVoix(t){ const r=sons.occupe(); if(r>0){ setTimeout(()=>voixP.dire(t),r*1000+200); journalSons.push({t:+(performance.now()/1000).toFixed(2),voix_differee_s:+r.toFixed(2),texte:String(t).slice(0,40)}); } else voixP.dire(t); }
+function sonsInter(on){ sons.actif(on); $("sons-inter").setAttribute("aria-pressed",String(on)); $("sons-inter").textContent=on?"Sons : oui":"Sons : non"; if(on) sons.geste(); return on; }
+sonsInter(CFG.sons!==undefined?!!CFG.sons:(()=>{ try{ return localStorage.getItem("bodycam-sons")!=="0"; }catch(_){ return true; } })());
+$("sons-inter").onclick=()=>{ const on=sonsInter(!sons.actif()); try{ localStorage.setItem("bodycam-sons",on?"1":"0"); }catch(_){} };
+addEventListener("pointerdown",()=>sons.geste(),true); addEventListener("keydown",()=>sons.geste(),true); $("dire").addEventListener("submit",()=>sons.geste());
+document.addEventListener("visibilitychange",()=>sons.masquer(document.hidden));
+window.sons={ etat:()=>sons.etat(), actif:v=>v===undefined?sons.actif():sonsInter(!!v), journal:journalSons };
 for(const id of ["parler","mic","banque-dicter"]) if($(id)) $(id).addEventListener("click",()=>voixP.taire());   // le joueur prend la parole : il se tait
 $("msg").addEventListener("input",()=>voixP.taire());
 capacite("dictation").then(d=>{ if(d&&typeof d.onState==="function") d.onState(({state})=>{ if(state==="listening") voixP.taire(); }); });
@@ -2459,6 +2485,7 @@ function objetMeneur(o){
     const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
     if(!v||!v[0]) return;
     v[0].id=String(id).slice(0,30); v[0].devant=pos.devant; v[0].cote=pos.cote; L.push(v[0]);
+    if(o.reserve) chuteSon(v[0]);                                  // une chose demandée arrive au sol : on l'entend tomber
   } else if(i<0) return;
   else if(o.op==="retirer") L.splice(i,1);
   else if(o.op==="remplacer"){                                    // retouchée sur place : mêmes id, place et cap ; d'autres formes

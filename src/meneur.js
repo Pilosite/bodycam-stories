@@ -1101,7 +1101,7 @@ export function gesteExploit(facteur, ex, tirer = l => l[0]) {
   const souffles = pal === 'normal' ? [] : phrasesExploit(isObj(ex) ? ex.souffle : []);
   const n = souffles.length ? (pal === 'demesure' ? 2 : 1) : 0, out = [{ type: 'posture', hauteur: 0.45 }];
   for (let i = 0; i <= n; i++) {
-    out.push({ type: 'effort', secondes: Math.round(s / (n + 1) * 10) / 10, force });
+    out.push({ type: 'effort', secondes: Math.round(s / (n + 1) * 10) / 10, force, exploit: { palier: pal, facteur: num(facteur, 0, 100, 1) } });   // exploit : la page y cale les bruits (src/son.js, docs/bruitages.md)
     if (i < n) out.push({ type: 'penser', texte: tirer(souffles), bref: true });
   }
   out.push({ type: 'posture', hauteur: 1 });
