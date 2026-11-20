@@ -5758,6 +5758,7 @@ function creerOuverture(deps) {
         if (ph.carte) ph.carte.classList.add('epinglee');
       }
       b.ul.appendChild(it); b.n++;
+      for (const q of Object.values(b.queue)) b.ul.appendChild(q);   // le « +N » reste en bas de l'étape
       it.scrollIntoView({ block: 'end', behavior: 'smooth' });
       return;
     }
