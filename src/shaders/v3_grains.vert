@@ -114,7 +114,7 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
     vec3 c, rad; masse(T,k,m,c,rad);
     int b=int(rnd()*4.); hb=h33(T.h.xyz*31.7+vec3(float(k*7+m),float(b),float(m*3+b)));
     vec3 db=normalize(hb*2.-1.+vec3(0.,.15,0.));             // bouquet b : décalé dans la masse, plus petit
-    c+=db*rad*.55; rad*=.52+.2*hb.z;
+    c+=db*rad*.7; rad*=.38+.16*hb.z;                         // bouquets séparés : le ciel passe entre eux
     vec3 vl=vueCellule(T,c);
     float z=2.*rnd()-1., a=6.2831853*rnd(), sn=sqrt(max(1.-z*z,0.)); vec3 d=vec3(sn*cos(a),z,sn*sin(a));
     if(dot(d/rad,vl)<0. && rnd()<.93) d=-d;                  // surtout la face vue ; un peu de l'arrière, vu par les trous

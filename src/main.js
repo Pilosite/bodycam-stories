@@ -228,8 +228,9 @@ function applyFiche(f){
 /* Houppiers (foret.houppiers) : un port par écorce (arbres a et b, perches a et b, même partage). Rien n'est une essence :
    la fiche dit où commence le houppier sur la hauteur du tronc, sa largeur, son profil, ses charpentières (nombre, montée,
    retombée), leurs rameaux, et les masses de feuillage au bout (taille, remplissage, taille des feuilles, couleurs). Rangé dans
-   uHp et uHpC (monde.glsl, v3_grains.vert, variante HOUPPIER du moteur v3). Le lanceur de rayons n'en montre que le départ
-   des trois premières charpentières. */
+   uHp et uHpC (monde.glsl, v3_grains.vert, variante HOUPPIER du moteur v3). Le lanceur de rayons ne les connaît pas : il garde
+   les trois branches et la canopée d'avant ; dans le moteur v3, un tronc proche dessiné en boîte (v3_proches) montre le
+   départ des trois premières charpentières. */
 function portHoup(o,i,part){
   const r=i*16, c=i*9;
   if(!isObj(o)) return false;
