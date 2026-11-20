@@ -1,0 +1,14 @@
+# battery-clock — pattern instance
+@id battery-clock  @kind pattern-instance  @pattern ticking-clock  @layer base  @author toine
+
+## bind
+bind clock = battery
+bind keeper = sam
+bind half_line = battery.half
+bind low_line = battery.low
+bind critical_line = battery.critical
+bind warning_cue = camera.beep
+bind run_out = battery-dies
+
+## set
+set critical = 0.10

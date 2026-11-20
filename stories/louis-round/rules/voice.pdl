@@ -1,0 +1,6 @@
+# voice — rules about the conversation
+@id voice-rules  @kind rules  @layer base  @author toine  @lang en  @scope story  @horizon scene
+
+## rules
+when voice.silent(90) cooldown 120s -> say(silence.long) {r.silence}
+when said.matches(move_free) cooldown 30s -> say(move.v2) {r.no-free-roam}

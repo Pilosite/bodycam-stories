@@ -1,0 +1,60 @@
+{
+  "format": 0,
+  "id": "louis-round",
+  "title": { "en": "Louis's Round", "fr": "La tournée de Louis" },
+  "summary": { "en": "Sam turns her dead brother's bodycam back on and walks his last round through the Grands Avaux at dawn. Someone is still on the line.", "fr": "Sam rallume la caméra-piéton de son frère mort et refait sa dernière tournée dans les Grands Avaux, à l'aube. Quelqu'un est encore en ligne." },
+  "languages": ["fr", "en"],
+  "story_language": "fr",
+  "authors": [
+    { "id": "toine", "role": "creator" },
+    { "id": "contributor-a", "role": "contributor" }
+  ],
+  "place": "place.json",
+  "stations": "stations.json",
+  "beats": "beats.json",
+  "lines": { "fr": "lines/fr.json", "en": "lines/en.json" },
+  "bench": "tests/requests.json",
+  "carrier": "sam",
+  "layers": [
+    {
+      "id": "base",
+      "author": "toine",
+      "files": [
+        "characters/sam.pdl", "characters/louis.pdl", "characters/voice.pdl", "characters/walker.pdl",
+        "facts/base.pdl",
+        "rules/place.pdl", "rules/hide.pdl", "rules/voice.pdl",
+        "patterns/louis.pdl", "patterns/battery.pdl", "patterns/marks.pdl"
+      ]
+    },
+    {
+      "id": "ranger-notes",
+      "author": "contributor-a",
+      "files": ["facts/ranger-notes.pdl"]
+    }
+  ],
+  "patterns": ["louis-absent", "battery-clock", "louis-marks"],
+  "clocks": {
+    "battery": { "start": 1.0, "runs_out_s": 840, "note": "14 minutes of battery; transitions cost their cost_s on top of real time" }
+  },
+  "cues": {
+    "jay.alarm": { "en": "a jay's harsh alarm call, two or three rasps, from the canopy", "in_engine": false },
+    "camera.beep": { "en": "the bodycam's low-battery double beep, close to the microphone", "in_engine": false },
+    "bracken.rustle": { "en": "something heavy moving in dry bracken, ten metres away, then nothing", "in_engine": false }
+  },
+  "intent_classes": ["shout", "bare_order", "direction", "approach_sett", "move_free"],
+  "commit_classes": ["jay", "silence", "battery", "louis", "leave"],
+  "engine_wanted": [
+    { "id": "stations", "what": "named viewpoints with transitions between them (v1 frame); the fiche has no place graph", "used_by": "stations.json" },
+    { "id": "station-light", "what": "light set per station on arrival (sun height, ground mist), eased over the transition; today only story 'temps' can step soleil/brume", "used_by": "stations.json light" },
+    { "id": "sound-cues", "what": "synthesized cues as recipes: bird alarm call, electronic beep, rustle in vegetation; bruitages.json has only two recipes", "used_by": "cues" },
+    { "id": "second-voice", "what": "a second speaker heard off-screen with its own voice and subtitles (the walker)", "used_by": "characters/walker.pdl" },
+    { "id": "visible-people", "what": "a person in the frame, even far and blurred", "used_by": "walker (v2)" },
+    { "id": "moving-animal", "what": "an animal shape that moves (badger at the edge of frame, jay in flight)", "used_by": "p.badger-seen (v2)" },
+    { "id": "image-degrade", "what": "a sensor degradation control driven by the battery (noise, dropped frames, colour loss)", "used_by": "ticking-clock rules" },
+    { "id": "camera-off", "what": "the carrier switching the feed off as an ending, with a last frame", "used_by": "ending camera-off" },
+    { "id": "posture-at-station", "what": "a station that sets a seated camera height on arrival", "used_by": "station hide" },
+    { "id": "decal-on-trunk", "what": "paint on an existing seeded trunk; today a marked trunk must be a separate object made of shapes", "used_by": "marque-1, chablis, ruban" },
+    { "id": "objects-by-station", "what": "objects placed relative to a station rather than by distance along the path", "used_by": "place.json objets" },
+    { "id": "legible-writing", "what": "short handwriting on a surface (Louis's board); Sam reads it aloud instead", "used_by": "rn.last-line" }
+  ]
+}

@@ -1,0 +1,30 @@
+# louis — character (strong, absent)
+@id louis  @kind character  @strength strong  @presence absent  @layer base  @author toine  @lang fr  @scope character  @horizon story
+
+// Louis Vasseur, 34, ranger (garde forestier) for the département. Dead three weeks before the story.
+// He never speaks and is never seen. He exists only through traces: marks, objects, habits Sam remembers, his notes.
+
+## identity
+!! Louis is dead; he is never seen, heard or found alive, and no recording of his voice is played. {louis.dead}
+! He died of a heart attack at his hide, three weeks ago, before dawn, sitting against a pine. {louis.death}
+~1.0 Methodical, patient, a little secretive; preferred mornings, sandstone and animals to meetings. {louis.who}
+
+## traces
+! His paint marks: a short orange stripe at chest height on the path side of a trunk means "my way"; two stripes mean "leave the path here". {louis.trace.marks}
+! His stop on the platière: three flat stones stacked, the habit of a ten-year-old who never stopped. {louis.trace.cairn}
+! Orange flagging tape knotted on a birch at the edge of the platière, the loose end pointing downslope. {louis.trace.tape}
+! The hide: a low screen of dead branches and bracken against a pine, a flat stone to sit on, facing a sandy bank. {louis.trace.hide}
+~0.8 His habits show in the place: the hide faces into the usual wind, the approach avoids the sett's side. {louis.trace.habits}
+
+## what he did
+! For weeks, alone and on his own time, he watched a badger sett in the sandy bank below the platière. {louis.watched}
+! He told no one, not Sam: a sett that is known can be dug, and November is in the underground hunting season. {louis.secret}
+! On his last night he stayed past his shift to watch the clan come home at dawn. That is why his round stops in the middle. {louis.stayed}
+
+## how others speak of him
+~0.9 Sam remembers him in small concrete things (his thermos, his bad jokes, his handwriting), never in eulogies. {louis.memory}
+~0.6 The walker knew him by sight: "the ranger with the orange paint". {louis.walker}
+
+## counter-examples
+x [anywhere] fr: Une voix murmure : « Sam… c'est moi… » | en: A voice whispers: "Sam… it's me…" | why: no ghost, no recording of Louis; he is absent.
+x [at the hide] fr: Sam trouve un message de Louis qui explique tout. | en: Sam finds a message from Louis that explains everything. | why: no letter, no confession; she understands from traces.

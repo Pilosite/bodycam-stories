@@ -1,0 +1,36 @@
+# absent-one — pattern
+@id absent-one  @kind pattern  @layer library  @author toine  @lang en
+
+## summary
+~ Someone who matters is gone. The carrier knows them, the player does not; the story is the slow reading of what they left, until the carrier understands what they were doing. The absent one never appears.
+
+## roles
+role absent : character : the one who is gone
+role witness : character : the carrier, who knew them
+role trace* : thing : something they left, read in place (attrs: fact, line)
+role resting_place : thing : where their story stops
+role truth_clue : fact : what must be seen before the truth can land
+role truth : fact : what they were doing, the answer to the story's question
+role understand_line : line : what the witness says when the truth lands
+
+## facts_required
+need absence : fact : why they are gone, stated once, never contradicted
+need truth : fact : the answer, true from the start, revealed late
+
+## principles
+!! $absent never appears, speaks or is found alive.
+~0.8 $witness speaks of $absent through small concrete things, never in eulogies.
+? How much does $witness already suspect? -- little at first; each trace moves her a step, not to the end.
+
+## rules
+when look.at($trace) once -> reveal($trace.fact), say($trace.line) {trace-read}
+when look.at($resting_place) once if fact($truth_clue) -> reveal($truth), say($understand_line) {truth-lands}
+
+## beats_hint
+hint first beat: one trace that only the witness can read
+hint middle beat: a trace that asks a choice of the player
+hint last beat: the resting place; the truth lands on the witness, not on the player
+
+## variations
+variation alive : the absent one is only missing; the last beat may find them (changes the absolute, needs a visible character)
+variation unknown : the witness did not know them either; the player and the witness read the traces together

@@ -95,7 +95,8 @@ test('synchronisation : pendant l\'effort, entre les souffles, le plus gros just
     for (const e of efforts) for (const b of e.bruits || []) assert.ok(b.t >= 0 && b.t + b.duree <= e.secondes + 1e-6, k + ' : dans son effort');
     const p = plan.bruits.at(-1);
     assert.ok(p.principal);
-    assert.ok(plan.pose_t - (p.t_abs + p.duree) >= 0.2 && plan.pose_t - (p.t_abs + p.duree) <= 0.35, k + ' : le principal finit juste avant la pose');
+    const avantPose = plan.pose_t - (p.t_abs + p.duree);   // la marge est celle des données (marge_pose_s), aux arrondis au dixième près
+    assert.ok(Math.abs(avantPose - BR.marge_pose_s) <= 0.06, k + ' : le principal finit juste avant la pose (' + avantPose.toFixed(2) + ' s)');
     for (let i = 1; i < plan.bruits.length; i++) assert.ok(plan.bruits[i].t_abs >= plan.bruits[i - 1].t_abs + plan.bruits[i - 1].duree, 'pas de chevauchement');
     for (const s of plan.souffles) for (const b of plan.bruits) {   // un souffle dit : aucun bruit pendant qu'il le dit, ni le principal autour
       assert.ok(!(b.t_abs < s + BR.ecart_voix_s && b.t_abs + b.duree > s), k + ' : bruit sur un souffle');

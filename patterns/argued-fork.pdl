@@ -1,0 +1,23 @@
+# argued-fork — pattern
+@id argued-fork  @kind pattern  @layer library  @author toine  @lang en
+
+## summary
+~ At one point the way splits. The player proposes, the carrier argues with reasons of her own, then decides; the player's proposal changes the argument, not the right to decide.
+
+## roles
+role chooser : character : who decides
+role fork : station : where the way splits
+role option* : station : the stations the fork leads to (attrs: line)
+
+## principles
+! $chooser always argues once before going, whatever is proposed.
+~0.7 If the voice proposes nothing, $chooser asks once, then picks herself.
+
+## rules
+when said.matches(direction) once if at($fork) -> say($option.line) {argue}
+
+## beats_hint
+hint the fork sits in the middle beat; each option leads to a different ending family
+
+## variations
+variation blind : the carrier cannot see either option; the player must remember something seen earlier

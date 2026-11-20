@@ -1,0 +1,229 @@
+{
+  "version": 0,
+  "note": "v1 is station-based (docs/scope.md). Positions are along the path axis of place.json (along_m = the fiche's 'devant', side_m = 'cote'). heading: 'path' = along the path, or degrees relative to it (negative = left). Light is the sun height and ground mist at that point of the morning; the engine applies it on arrival. A transition is played by the engine; cost_s is battery time it takes. arrive_line: the fallback line said on first arrival (the staging tier may replace it). posture: camera height on arrival (part of standing height).",
+  "start": "trailhead",
+  "stations": [
+    {
+      "id": "trailhead",
+      "name": {
+        "en": "The trailhead",
+        "fr": "L'entrée du sentier"
+      },
+      "beat": "path",
+      "along_m": 0,
+      "side_m": 0,
+      "heading": "path",
+      "within_reach": [],
+      "ground": [
+        "wet litter",
+        "dead branches",
+        "pine cones"
+      ],
+      "visible": [
+        "marque-1"
+      ],
+      "connects": [
+        {
+          "to": "first-mark",
+          "cost_s": 25
+        }
+      ],
+      "light": {
+        "sun_height": 8,
+        "mist_ground": 0.035
+      },
+      "arrive_line": "greet.first"
+    },
+    {
+      "id": "first-mark",
+      "name": {
+        "en": "The first mark",
+        "fr": "La première marque"
+      },
+      "beat": "path",
+      "along_m": 21,
+      "side_m": 0.6,
+      "heading": 70,
+      "within_reach": [
+        "marque-1"
+      ],
+      "ground": [
+        "sandy path",
+        "litter",
+        "dead branches"
+      ],
+      "visible": [
+        "marque-1",
+        "chablis"
+      ],
+      "connects": [
+        {
+          "to": "trailhead",
+          "cost_s": 25
+        },
+        {
+          "to": "fallen-pine",
+          "cost_s": 35
+        }
+      ],
+      "light": {
+        "sun_height": 9,
+        "mist_ground": 0.03
+      }
+    },
+    {
+      "id": "fallen-pine",
+      "name": {
+        "en": "The bend with the fallen pine",
+        "fr": "Le virage du pin tombé"
+      },
+      "beat": "path",
+      "along_m": 46,
+      "side_m": -0.8,
+      "heading": -40,
+      "within_reach": [
+        "chablis"
+      ],
+      "ground": [
+        "sandy path",
+        "pine needles",
+        "sandstone chips"
+      ],
+      "visible": [
+        "chablis"
+      ],
+      "connects": [
+        {
+          "to": "first-mark",
+          "cost_s": 35
+        },
+        {
+          "to": "platiere",
+          "cost_s": 45
+        }
+      ],
+      "light": {
+        "sun_height": 10.5,
+        "mist_ground": 0.025
+      },
+      "arrive_line": "jay.remember"
+    },
+    {
+      "id": "platiere",
+      "name": {
+        "en": "The platière",
+        "fr": "La platière"
+      },
+      "beat": "platiere",
+      "along_m": 80,
+      "side_m": 2.5,
+      "heading": "path",
+      "within_reach": [
+        "platiere"
+      ],
+      "ground": [
+        "sandstone slabs",
+        "shallow pool",
+        "heather",
+        "lichen"
+      ],
+      "visible": [
+        "platiere",
+        "ruban"
+      ],
+      "connects": [
+        {
+          "to": "fallen-pine",
+          "cost_s": 45
+        },
+        {
+          "to": "approach",
+          "via": "tape",
+          "cost_s": 60,
+          "establishes": "f.came-by-tape"
+        },
+        {
+          "to": "approach",
+          "via": "path",
+          "cost_s": 150,
+          "establishes": "f.came-by-path"
+        }
+      ],
+      "light": {
+        "sun_height": 12,
+        "mist_ground": 0.012
+      },
+      "arrive_line": "platiere.arrive"
+    },
+    {
+      "id": "approach",
+      "name": {
+        "en": "The approach",
+        "fr": "La descente"
+      },
+      "beat": "hide",
+      "along_m": 95,
+      "side_m": -8,
+      "heading": -60,
+      "within_reach": [],
+      "ground": [
+        "bracken",
+        "birch leaves",
+        "sand"
+      ],
+      "visible": [
+        "affut",
+        "ruban"
+      ],
+      "connects": [
+        {
+          "to": "platiere",
+          "cost_s": 60
+        },
+        {
+          "to": "hide",
+          "cost_s": 30
+        }
+      ],
+      "light": {
+        "sun_height": 14,
+        "mist_ground": 0.008
+      }
+    },
+    {
+      "id": "hide",
+      "name": {
+        "en": "The hide",
+        "fr": "L'affût"
+      },
+      "beat": "hide",
+      "along_m": 103,
+      "side_m": -14,
+      "heading": -90,
+      "posture": 0.65,
+      "within_reach": [
+        "affut"
+      ],
+      "ground": [
+        "bracken",
+        "pine needles",
+        "flat stone"
+      ],
+      "visible": [
+        "terrier",
+        "affut"
+      ],
+      "connects": [
+        {
+          "to": "approach",
+          "cost_s": 30
+        }
+      ],
+      "light": {
+        "sun_height": 17,
+        "mist_ground": 0.004
+      },
+      "arrive_line": "hide.arrive"
+    }
+  ]
+}

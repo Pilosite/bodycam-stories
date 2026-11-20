@@ -1,5 +1,7 @@
 # Bodycam Stories — POC architecture (v0)
 
+**This page serves `docs/principles.md`, the project's constitution. If the two disagree, the principles win and this page is wrong.**
+
 This is the shared contract for the real proof of concept. It follows `docs/poc-principes.md` (why) and `docs/plan-poc.md` (plan), and adds what Toine asked on 20 Nov: PDL as a transaction language over three horizons, model-written rules executed by code, narrative patterns, light and strong characters, collaboration, creator-facing logs, and language policy.
 
 **Language policy.** Backend, code, data keys, logs, journals and tool UI are in English. What a character says is in the story's language, shown as subtitles. A player setting can force everything into one language. Existing engine code stays in French until touched; new POC code is English.
@@ -22,6 +24,29 @@ This is the shared contract for the real proof of concept. It follows `docs/poc-
 | 8 | **Soft-to-hard principles** | Assets are written as PDL source with strengths from tendency to absolute; hard ones compile to code, soft ones are evaluated by models and audited. | One tendency, one open question, one hard rule and one absolute on Sam, each visibly at work, and an audit score after the session. |
 | 9 | **Commitments** | The player plans ahead through the character: a conditional request becomes a promise and a rule, with a strength, that she keeps (or breaks) later. | One commitment made at an early station and honoured two stations later, linked in the journal. |
 | 10 | **Collaboration and creator view** | The narrative space is layered and every transaction carries its author. Creators see what players did and how the world reacted, and refine rules. | Two creator layers merged with provenance; a session viewer; one rule edited and the session replayed against it. |
+
+## Shape: a hexagon and three clocks (P20, P21)
+
+```
+        input port            model port             store port
+   (speech, text, look)   (embed, decide, generate)   (journal, packs)
+            \                    |                      /
+             +----------- NARRATIVE CORE ---------------+
+             |  world state · principles · gauges        |
+             |  commitments · rules · PDL validate/repair|
+             |                                           |
+             |  NOW loop      SCENE loop     STORY loop  |
+             |  < 100 ms      seconds        continuous  |
+             +-------------------------------------------+
+                                 |
+                            engine port
+                    (executor: image, sound, body)
+```
+
+- **The core is pure** and knows only ports. The engine, the models, the input and the storage are adapters. Tests run the core with a paper world and canned models.
+- **Three loops, three budgets.** `now`: reflex code first, then the leanest model; first visible reaction under 0.5 s, and it never awaits another loop. `scene`: full reaction in seconds. `story`: continuous, prepares the frontier and the long arcs.
+- **Loops communicate only by PDL transactions and events, asynchronously.** A slower loop may add to, amend or cancel what a faster one did, through transactions tagged with `cause`; it cannot block it. Every transaction records the loop and the latency against its budget, so a blocked present shows up in the journal as a defect.
+- **Uncertainty is routed by horizon.** What the player just said goes to `now`. What he might do next goes to `story`, which prepares for it.
 
 ## The authoring format: one text, a spectrum from soft to hard
 
@@ -95,6 +120,22 @@ The player never acts on the world, but can ask the character to **prepare**: "i
 5. When it fires, the journal links the act back to the commitment, and she can say so ("You told me to stop if the jay called.").
 
 Commitments are what makes the indirect control a game: the player's lever is foresight, not steering. They are also the first authoring tool: a player who writes commitments is already writing rules, which is the path from player to creator.
+
+### Gauges: fuzzy quantities anyone can name
+
+Principle P10 asks that notions like "too often", "close", "angry" or "wanted" be first-class, so that classic game systems emerge from principles instead of features (P9). The mechanism is one generic thing, the **gauge**:
+
+```
+gauge { id, label, value 0..1, author, layer, scope
+        rises:  [ { on: event pattern, by } ]     // what feeds it
+        fades:  { per_minute }                     // how it decays
+        words:  { low, medium, high }              // the vocabulary principles use
+}
+```
+
+A creator (or a player, through a commitment) names a gauge in words and says what feeds it. Hard statements can test it (`when heat is high -> …`, thresholds from `words`); soft statements mention it and the models receive its current value and word (`~ when heat is high, the police take an interest`). Reputation, suspicion, trust, fatigue, a wanted level, disturbance near an animal: all are gauges plus principles. The engine knows none of these names.
+
+**Default permissive (P8).** The validator's order is: accept; else repair toward what was asked; reject only when a `!!` statement or a physical bound forbids it, and say which.
 
 ### Vocabulary (closed, typed)
 

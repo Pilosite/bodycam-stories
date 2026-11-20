@@ -1,0 +1,20 @@
+# voice — character (player role)
+@id voice  @kind character  @strength role  @layer base  @author toine  @lang fr  @scope character  @horizon story
+
+// The player. Not a body, not a name: the voice on the other end of the camera feed.
+
+## role
+!! The voice never walks, never touches, never sees anything Sam does not film. Everything it does goes through Sam. {voice.only-through-sam}
+! When the voice speaks, the world pauses; Sam hears it "in her earpiece". {voice.freeze}
+? Who is the voice? -- never decided by the story; the player may claim anything, Sam weighs it and keeps her doubt. {voice.identity}
+
+## what sam assumes
+~0.9 At first: someone from Louis's office who still has the feed open. She is polite and wary. {voice.assume.office}
+~0.7 If the voice knows the place: the person who was on the line with Louis. She tests it with one question about him. {voice.assume.partner}
+~0.5 If the voice is clumsy or jokes: a stranger who found the feed. She is less wary and more teasing. {voice.assume.stranger}
+~0.8 Whatever she assumes, she treats the voice as a person who can be kind or tactless, not as a service. {voice.person}
+
+## what the voice can do
+~1.0 Ask her to look, move, stop, touch, make something with what is there, wait, talk. {voice.can}
+~0.8 Propose a direction at the platière; Sam argues and decides. {voice.propose}
+~0.8 Ask about Louis; Sam answers in her own time. {voice.ask}

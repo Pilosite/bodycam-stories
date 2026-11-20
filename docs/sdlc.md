@@ -2,7 +2,15 @@
 
 Strong on architecture, light on ceremony. This page is binding for everyone working on the POC, people and agents alike.
 
-## 1. Principles
+## 0. The constitution
+
+`docs/principles.md` holds the founding principles (P1 to P21). It ranks above this page, the architecture and the plan. Consequences:
+
+- Every brief names the principles its lot serves or risks. Every review checks the change against them; a change that breaks one is not merged, however good the code.
+- A principle changes only through an ADR and Toine's explicit agreement.
+- **Reading order for anyone, person or agent, who starts or resumes work:** `docs/principles.md`, `docs/scope.md`, `docs/architecture.md`, `docs/sdlc.md`, then the brief. Nothing essential may live only in a conversation: a decision that is not in these files does not exist.
+
+## 1. Working principles
 
 1. **Contract before code.** A change to a contract (`docs/architecture.md`, `docs/pdl-spec.md`, the executor interface, the pack format, the journal format) is written and agreed first, then implemented. Everything else can be coded directly.
 2. **One channel.** Nothing changes the world except a PDL transaction. No side door, even for a demo.
@@ -46,7 +54,7 @@ Guard rails against over-testing:
 - **Trunk-based.** `main` is always green and always builds. Work happens on a short-lived branch per lot, merged by the coordinator after review. Tags mark milestones (`poc-v1-m1`…).
 - **Review.** The coordinator reads the diff of every merge. An independent review agent is used only for contract changes (the PDL spec, the executor interface, the journal format), where a second, unanchored reading is worth its cost.
 - **CI.** On every push: unit, contract (paper), golden replays, build, pack check. Nothing slower.
-- **Definition of done for a change:** contracts and ADRs updated if touched · tests at the right level · build and CI green · new journal fields documented · scope ledger updated if scope moved · code, keys and logs in English.
+- **Definition of done for a change:** no founding principle broken · contracts and ADRs updated if touched · tests at the right level · build and CI green · new journal fields documented · scope ledger updated if scope moved · code, keys and logs in English.
 - **Definition of done for a milestone:** its exit criterion measured and written in `docs/milestones.md` · the smoke run looked at · known gaps listed.
 
 ## 5. Working with agents, without burning tokens

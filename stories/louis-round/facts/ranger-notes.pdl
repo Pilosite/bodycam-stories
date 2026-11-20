@@ -1,0 +1,17 @@
+# ranger-notes — contributor layer: Louis's field notes
+@id ranger-notes  @kind facts  @layer ranger-notes  @author contributor-a  @lang en  @scope story  @horizon story
+
+// A second contributor adds Louis's field notes (the pages that were not in the bag: Sam finds them as facts
+// she recalls from his Sunday calls, or reads off the inside of the hide's screen where he pencilled them on a board).
+// It overrides one base fact (f.sett, made more precise) and adds one rule.
+
+## facts
+! The sett has seven entrances, four in use; fresh spoil noted on 3 November. {f.sett}
+! "They drag the bracken in backwards, at dawn." {rn.bedding}
+! "The jay tells me before I see them." {rn.jay}
+! "Come in with the wind in your face. Never from the path side." {rn.wind}
+! "Not reporting it. A sett on a map gets dug." {rn.not-reported}
+! The notes stop on the night he stayed; the last line is a time, 06:41, and the word "rentrés". {rn.last-line}
+
+## rules
+when look.at(affut, 3) once if beat(hide) -> reveal(rn.last-line), say(notes.last_line) {rn.rule.last-line}
