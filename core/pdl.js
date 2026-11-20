@@ -359,6 +359,7 @@ function postAct(b, path, c) {
 }
 function postEffect(b, path, c) {
   const w = c.world, B = c.B;
+  if (b.op === 'story.end' && w && !c.template && (w.story.endings || []).length && !w.story.endings.includes(b.id)) { no(c, path + '.id', 'unknown_value', b.id); return; }
   if (b.op !== 'thing.place') return;
   // the size: the player's request is the reference, else the budget
   const span = spanOf(b.shapes), want = c.intent && c.intent.verb === 'make' && pick(c.intent, 'params.size_m');

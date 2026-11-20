@@ -76,7 +76,8 @@ const ouvFiles = readdirSync(join(root, 'ouvertures')).filter(f => f.endsWith('.
 const ouvJournal = f => { const r = JSON.parse(read('ouvertures/' + f)); if (r.photos) r.vignettes = JSON.parse(read('ouvertures/photos/' + r.photos + '.json')); return r; };
 const ouvertureJs = embarquer('OUVERTURE', 'src/ouverture.js') + `\nconst OUVERTURES=${JSON.stringify(ouvFiles.map(ouvJournal)).replace(/<\//g, '<\\/')};`;
 // Story mode (M2, src/story.js): the narrative core (core/, bundled as CORE), the compiled packs of stories/ (STORY_PACKS),
-// the engine adapter (ADAPTER), the model port served by code (REFLEX, REFLEXES) and the page glue (STORY).
+// the engine adapter (ADAPTER), the model port served by code (REFLEX, REFLEXES), the page's model port (MODELPORT: home node,
+// host's model, M3) and the page glue (STORY).
 const esc = o => JSON.stringify(o).replace(/<\//g, '<\\/');
 function storyPack(id) {
   const dir = join(root, 'stories', id), pack = loadPack(dir), c = compilePack(pack, loadLibrary(join(root, 'patterns')));
@@ -88,7 +89,7 @@ function storyPack(id) {
 }
 const storyIds = readdirSync(join(root, 'stories')).filter(d => !d.startsWith('_') && !d.startsWith('.') && existsSync(join(root, 'stories', d, 'pack.json'))).sort();
 const STORY_PACKS = Object.fromEntries(storyIds.map(id => [id, storyPack(id)]));
-const storyJs = bundleCore(root) + '\n' + embarquer('ADAPTER', 'src/adaptateur-core.js') + '\n' + embarquer('REFLEX', 'src/reflex-model.js') + '\n' + embarquer('STORY', 'src/story.js')
+const storyJs = bundleCore(root) + '\n' + embarquer('ADAPTER', 'src/adaptateur-core.js') + '\n' + embarquer('REFLEX', 'src/reflex-model.js') + '\n' + embarquer('MODELPORT', 'src/model-port.js') + '\n' + embarquer('STORY', 'src/story.js')
   + `\nconst REFLEXES=${esc(JSON.parse(read('src/reflexes.json')))};\nconst STORY_PACKS=${esc(STORY_PACKS)};`;
 if (/<\/script/i.test(storyJs.replace(/<\\\//g, ''))) throw new Error('story mode: </script> in the embedded code');
 const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n' + constructeurJs + '\n' + ouvertureJs + '\n' + storyJs + '\n</script>\n<script>\n' + js);

@@ -11,6 +11,8 @@ import { inScope } from './source.js';
 /* The three clocks (P20): latency budgets in ms. A transaction records its loop and its latency against the budget;
    a slower loop adds to, amends or cancels what a faster one did (cause.amends), it never makes it wait. */
 export const LOOPS = { now: 500, scene: 8000, story: 120000 };
+/* The keys of a `model_call` journal entry, in order (§9.4); replay re-submits them as they were. */
+export const MODEL_CALL_KEYS = ['loop', 'status', 'ref_seq', 'tier', 'purpose', 'character', 'adapter', 'instrument', 'principles', 'gauges', 'p', 'play', 'latency_ms', 'timings', 'error', 'stale', 'dropped'];
 
 const clone = o => o === undefined ? undefined : JSON.parse(JSON.stringify(o));
 const r4 = x => Math.round(x * 1e4) / 1e4;
@@ -92,13 +94,15 @@ export function createSession({ scene, seed = 1, executor, budget, journal, onDu
     if (meta.cause && !tx.cause) tx.cause = meta.cause;
     const res = validate(tx, w, B);
     if (res.status !== 'rejected' && res.tx.kind === 'fact' && res.tx.body.commit) checkCommit(res);
+    const veto = input && Array.isArray(input.veto) && input.veto.length ? clone(input.veto) : null;   // a judgement outside the validator (D4, an ending not open)
+    if (veto) { res.reasons.push(...veto); res.status = 'rejected'; }
     const t = res.tx || tx;
     const loop = (input && input.loop) || meta.loop || (t.author && t.author.tier === 'background' ? 'story' : t.author && t.author.tier === 'stage' ? 'scene' : 'now');
     const lat = input && typeof input.latency_ms === 'number' ? input.latency_ms : undefined;
     const entry = { t: w.clock.t, type: 'tx', loop, latency_ms: lat, budget_ms: lat !== undefined ? LOOPS[loop] : undefined, late: lat !== undefined ? lat > LOOPS[loop] : undefined,
       author: t.author, tier: t.author && t.author.tier, horizon: t.horizon, kind: t.kind, status: res.status,
       repair: res.repair.length ? res.repair : undefined, reasons: res.reasons.length ? res.reasons : undefined, cause: t.cause, depth: meta.depth || 0,
-      body: res.status === 'rejected' ? clone(tx0.body) : t.body, ttl: t.ttl, timings: input ? input.timings : undefined, input: !!input, proposed: input ? clone(tx0) : undefined };
+      body: res.status === 'rejected' ? clone(tx0.body) : t.body, ttl: t.ttl, timings: input ? input.timings : undefined, input: !!input, proposed: input ? clone(tx0) : undefined, veto: veto || undefined };
     J.append(entry);
     if (res.status === 'rejected') return { seq, status: res.status, reasons: res.reasons, repair: res.repair, tx: t };
     const src = { seq, depth: meta.depth || 0, chain: meta.chain || [], loop };
@@ -215,7 +219,7 @@ export function createSession({ scene, seed = 1, executor, budget, journal, onDu
   /* ------------------------------------------------------------ public inputs */
   const S = {
     world: w, journal: J, budget: B,
-    submit(tx, { timings, loop, latency_ms } = {}) { const r = process(tx, {}, { timings, loop, latency_ms }); drain(); return r; },
+    submit(tx, { timings, loop, latency_ms, veto } = {}) { const r = process(tx, {}, { timings, loop, latency_ms, veto }); drain(); return r; },
     submitAll(txs, opts) { return [].concat(txs).map(t => S.submit(t, opts)); },
     advance(dt) {
       const e = J.append({ t: w.clock.t, type: 'advance', dt, input: true });
@@ -253,15 +257,20 @@ export function createSession({ scene, seed = 1, executor, budget, journal, onDu
       return out;
     },
     /* A model call happened: record its tier, timings and the soft principles in scope (§2.7, §9.2). */
-    /* Soft principles that mention a gauge carry its value and word (P10). status: done | pending | landed (ref_seq: the
-       pending call it answers). */
-    modelCall({ tier, purpose, character, timings, loop, status, ref_seq, latency_ms } = {}) {
+    /* Soft principles that mention a gauge carry its value and word (P10). status: done | pending | landed | failed (ref_seq:
+       the pending call it answers). `adapter` says what answered (home, host, reflex…), `instrument` judgement or invention
+       (P22); the other MODEL_CALL_KEYS (p, play, error, stale, dropped, …) are copied as given. */
+    modelCall(o = {}) {
+      const { character } = o;
       const P = inScope(Object.values(w.principles), { character, scene: w.clock.scene });
       const gauges = Object.values(w.gauges).map(g => {
         const by = P.filter(p => mentions(p, g)).map(p => p.id);
         return by.length ? { id: g.id, value: g.value, word: gaugeWord(g), mentioned_by: by } : null;
       }).filter(Boolean);
-      return J.append({ t: w.clock.t, type: 'model_call', loop, status, ref_seq, tier, purpose, character, principles: P.map(p => p.id), gauges: gauges.length ? gauges : undefined, latency_ms, timings, input: true });
+      const e = { t: w.clock.t, type: 'model_call' };
+      for (const k of MODEL_CALL_KEYS) if (k === 'principles') e.principles = P.map(p => p.id); else if (k === 'gauges') e.gauges = gauges.length ? gauges : undefined; else e[k] = clone(o[k]);
+      e.input = true;
+      return J.append(e);
     },
     audit(records) { for (const a of records) J.append(Object.assign({ t: w.clock.t }, clone(a), { type: 'audit', input: true })); },
     inReach: id => inReach(w, id),

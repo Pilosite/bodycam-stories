@@ -3629,6 +3629,7 @@ function storyLabels(T){ if(!T) return;
   $("parler").textContent=frozen&&mode==="parler"?T.resume:T.talk; $("msg").placeholder=T.placeholder; $("envoi").textContent=T.say; }
 const STORY_PAGE={
   win:window, doc:document, CORE, ADAPTER, REFLEX, VOIX, packs:STORY_PACKS, reflexes:REFLEXES, bruitages:BRUITAGES, tts:capacite("tts"),
+  MODELPORT, sample:()=>sampler, forgetSample:()=>{ sampler=null; },        // the model port (M3, src/model-port.js): the host's model through the same sampler as the demo
   cam, look, now:()=>performance.now(),
   pathYaw:z=>pathYaw(z), pathYawDeg:z=>pathYaw(z)*180/Math.PI, wrapDeg:d=>((d%360)+540)%360-180,
   posObjet, obstacles:()=>obstaclesConnus(), objetMeneur, patchScene, sunAzimuth:()=>(fiche.ambiance&&fiche.ambiance.soleil&&fiche.ambiance.soleil.azimut)||35,
@@ -3668,7 +3669,8 @@ function storyChoice(){                                           // the launch 
 }
 { const o=$("outils"); for(const id of Object.keys(STORY_PACKS)){ const b=document.createElement("button"); b.type="button"; b.className="ghost"; b.textContent="Story: "+(STORY_PACKS[id].title.en||id); b.onclick=()=>lancerStory(id); o.prepend(b); } }
 window.story={ start:(id,o)=>lancerStory(id,o), hear:t=>storyMode.hear(t), advance:n=>storyMode.advance(n), look:(t,s)=>storyMode.look(t,s), state:()=>storyMode.state(), journal:()=>storyMode.journal(),
-  gaps:()=>storyMode.gaps(), commands:()=>storyMode.commands(), stop:()=>storyMode.stop(), checkpoint:()=>storyMode.checkpoint() };
+  gaps:()=>storyMode.gaps(), commands:()=>storyMode.commands(), stop:()=>storyMode.stop(), checkpoint:()=>storyMode.checkpoint(),
+  models:()=>storyMode.models(), summary:()=>storyMode.summary(), homeNode:c=>storyMode.homeNode(c) };
 
 /* ------------------------------------------------------------------ ouverture de démo et arrivée dans un lieu
    Le code est dans src/ouverture.js (OUVERTURE) et ouvertures/*.json (OUVERTURES, journaux de préparation réels) ; ici, les
