@@ -1,0 +1,1000 @@
+{
+  "version": 0,
+  "id": "louis-round-grands-avaux",
+  "titre": "Grands Avaux, la tournée de Louis",
+  "inspiration": "Forêt départementale des Grands Avaux, Champcueil (Essonne), début novembre, une quarantaine de minutes après le lever du soleil : lumière rasante entre les troncs, brume basse sur le sentier. Le sentier mène à une platière de grès (mares temporaires, bouleaux, callune), puis, en contrebas, à un talus de sable sous les pins.",
+  "graine": 4821,
+  "kit": "foret",
+  "foret": {
+    "densite": 0.7,
+    "rochers": 1,
+    "feuillage": 0.2,
+    "variete": 1,
+    "trouee": {
+      "le_long": 4,
+      "vers": "soleil",
+      "longueur": 110,
+      "largeur": 12
+    },
+    "houppiers": {
+      "arbres": {
+        "a": {
+          "nom": "pin sylvestre",
+          "hauteur": [
+            0.68,
+            0.97
+          ],
+          "largeur": 2.6,
+          "aplati": 0.6,
+          "branches": 8,
+          "montee": 0.3,
+          "retombe": 0.15,
+          "rameaux": 3,
+          "masse": 0.75,
+          "feuilles": 0.8,
+          "inegal": 0.2,
+          "taille": 0.1,
+          "couleurs": [
+            "#34482a",
+            "#40552f",
+            "#26351f"
+          ]
+        },
+        "b": {
+          "nom": "chêne sessile, début novembre",
+          "hauteur": [
+            0.36,
+            0.92
+          ],
+          "largeur": 3.4,
+          "aplati": 0.25,
+          "branches": 8,
+          "montee": 0.55,
+          "retombe": 0.1,
+          "rameaux": 3,
+          "masse": 0.6,
+          "feuilles": 0.68,
+          "inegal": 0.85,
+          "taille": 0.06,
+          "couleurs": [
+            "#a8692a",
+            "#c08a3c",
+            "#7a5528"
+          ]
+        }
+      },
+      "perches": {
+        "a": {
+          "nom": "bouleau verruqueux",
+          "hauteur": [
+            0.45,
+            0.98
+          ],
+          "largeur": 1.3,
+          "aplati": 0,
+          "branches": 6,
+          "montee": 0.75,
+          "retombe": 0.85,
+          "rameaux": 3,
+          "masse": 0.42,
+          "feuilles": 0.36,
+          "inegal": 0.9,
+          "taille": 0.05,
+          "couleurs": [
+            "#cfa83a",
+            "#b8902c",
+            "#8f7f3c"
+          ]
+        },
+        "b": {
+          "nom": "jeune hêtre marcescent",
+          "hauteur": [
+            0.08,
+            0.72
+          ],
+          "largeur": 1.2,
+          "aplati": 0.2,
+          "branches": 7,
+          "montee": 0.3,
+          "retombe": 0.25,
+          "rameaux": 2,
+          "masse": 0.5,
+          "feuilles": 0.62,
+          "inegal": 0.5,
+          "taille": 0.07,
+          "couleurs": [
+            "#b5733a",
+            "#c58e4c",
+            "#8c5a30"
+          ]
+        }
+      }
+    }
+  },
+  "ambiance": {
+    "saison": "automne",
+    "meteo": "clair",
+    "soleil": {
+      "azimut": 35,
+      "hauteur": 8
+    },
+    "brume": 0.005,
+    "atmosphere": {
+      "trouble": 0.35
+    },
+    "brume_basse": {
+      "densite": 0.035,
+      "hauteur": 2.5
+    }
+  },
+  "camera": {
+    "profil": "bodycam-poitrine",
+    "hauteur": 1.36,
+    "champ": 125
+  },
+  "parcours": {
+    "type": "sentier",
+    "pas": 5.5,
+    "depart": {
+      "lumiere": "soleil"
+    }
+  },
+  "evenements": [],
+  "surfaces": {
+    "sol": "litiere-automne",
+    "trajet": "sable-blanc",
+    "rochers": "gres-fontainebleau",
+    "arbres": {
+      "a": "ecorce-pin-sylvestre",
+      "b": "ecorce-chene",
+      "part": 0.45
+    },
+    "perches": {
+      "a": "ecorce-bouleau-verruqueux",
+      "b": "ecorce-chataignier",
+      "part": 0.55
+    }
+  },
+  "semis": [
+    {
+      "id": "bois-mort",
+      "nom": "branches mortes tombées",
+      "cellule": [
+        4.5,
+        4.5
+      ],
+      "rotation": 8,
+      "trajet": {
+        "min": 1.2
+      },
+      "densite": 0.45,
+      "echelle": [
+        0.6,
+        1.3
+      ],
+      "teinte": 0.3,
+      "desordre": 1,
+      "formes": [
+        {
+          "f": "capsule",
+          "p": [
+            0,
+            0.05,
+            0
+          ],
+          "taille": [
+            0.1,
+            2.2,
+            0.1
+          ],
+          "penche": [
+            87,
+            0
+          ],
+          "matiere": "bois-mort"
+        },
+        {
+          "f": "capsule",
+          "p": [
+            0.45,
+            0.06,
+            0.28
+          ],
+          "taille": [
+            0.055,
+            0.9,
+            0.055
+          ],
+          "cap": 35,
+          "penche": [
+            84,
+            0
+          ],
+          "matiere": "bois-mort"
+        },
+        {
+          "f": "capsule",
+          "p": [
+            -0.55,
+            0.09,
+            -0.12
+          ],
+          "taille": [
+            0.035,
+            0.6,
+            0.035
+          ],
+          "cap": -40,
+          "penche": [
+            76,
+            12
+          ],
+          "matiere": "bois-mort"
+        },
+        {
+          "f": "capsule",
+          "p": [
+            0.2,
+            0.03,
+            -0.6
+          ],
+          "taille": [
+            0.05,
+            1.1,
+            0.05
+          ],
+          "cap": 100,
+          "penche": [
+            89,
+            0
+          ],
+          "matiere": "bois-mort"
+        }
+      ]
+    },
+    {
+      "id": "cailloux",
+      "nom": "éclats et cailloux de grès à demi enterrés",
+      "cellule": [
+        2.0,
+        2.0
+      ],
+      "rotation": 53,
+      "trajet": {
+        "min": 0.5,
+        "max": 12
+      },
+      "densite": 0.32,
+      "groupes": 0.6,
+      "groupes_echelle": 9,
+      "echelle": [
+        0.6,
+        1.4
+      ],
+      "desordre": 1,
+      "formes": [
+        {
+          "f": "boule",
+          "p": [
+            0,
+            -0.01,
+            0
+          ],
+          "taille": [
+            0.3,
+            0.1,
+            0.22
+          ],
+          "cap": 20,
+          "matiere": "gres-eclat"
+        },
+        {
+          "f": "boule",
+          "p": [
+            0.32,
+            -0.005,
+            0.18
+          ],
+          "taille": [
+            0.15,
+            0.06,
+            0.11
+          ],
+          "cap": 70,
+          "matiere": "gres-eclat"
+        },
+        {
+          "f": "boule",
+          "p": [
+            -0.25,
+            -0.005,
+            0.3
+          ],
+          "taille": [
+            0.1,
+            0.045,
+            0.08
+          ],
+          "matiere": "gres-eclat"
+        },
+        {
+          "f": "boule",
+          "p": [
+            -0.1,
+            -0.01,
+            -0.35
+          ],
+          "taille": [
+            0.2,
+            0.08,
+            0.13
+          ],
+          "cap": -30,
+          "matiere": "gres-eclat"
+        }
+      ]
+    }
+  ],
+  "relief": {
+    "amplitude": 1.5,
+    "echelle": 150,
+    "bosses": {
+      "hauteur": 1.1,
+      "echelle": 11,
+      "trajet": 0.35
+    },
+    "buttes": {
+      "hauteur": 5,
+      "echelle": 55,
+      "part": 0.35,
+      "plat": 0.55,
+      "trajet": 0.45
+    }
+  },
+  "trajet": {
+    "sinuosite": 1,
+    "largeur": 1.7,
+    "creux": 0.45,
+    "bord": "irregulier"
+  },
+  "objets": [
+    {
+      "id": "marque-1",
+      "nom": "tronc de pin marqué d'un trait orange à hauteur de poitrine",
+      "devant": 22,
+      "cote": 1.9,
+      "degage": 1.2,
+      "formes": [
+        {
+          "f": "cylindre",
+          "p": [
+            0,
+            2.2,
+            0
+          ],
+          "taille": [
+            0.44,
+            4.4,
+            0.44
+          ],
+          "matiere": "ecorce-pin-sylvestre",
+          "couleur": "#6d5a48"
+        },
+        {
+          "f": "cylindre",
+          "p": [
+            0,
+            1.35,
+            0
+          ],
+          "taille": [
+            0.455,
+            0.07,
+            0.455
+          ],
+          "matiere": "mat",
+          "couleur": "#d8662a"
+        },
+        {
+          "f": "cone",
+          "p": [
+            0,
+            4.55,
+            0
+          ],
+          "taille": [
+            0.44,
+            0.3,
+            0.44
+          ],
+          "matiere": "bois-mort",
+          "couleur": "#8a7a66"
+        }
+      ]
+    },
+    {
+      "id": "chablis",
+      "nom": "pin tombé en travers du bord du sentier, souche marquée d'un trait orange frais",
+      "devant": 48,
+      "cote": -2.6,
+      "cap": 70,
+      "degage": 3.5,
+      "formes": [
+        {
+          "f": "capsule",
+          "p": [
+            0,
+            0.35,
+            0
+          ],
+          "taille": [
+            0.42,
+            9,
+            0.42
+          ],
+          "penche": [
+            88,
+            0
+          ],
+          "matiere": "ecorce-pin-sylvestre",
+          "couleur": "#6d5a48"
+        },
+        {
+          "f": "boule",
+          "p": [
+            0,
+            0.7,
+            -4.6
+          ],
+          "taille": [
+            1.6,
+            1.5,
+            0.5
+          ],
+          "matiere": "terre",
+          "couleur": "#6b5a44"
+        },
+        {
+          "f": "cylindre",
+          "p": [
+            0.9,
+            0.55,
+            -4.4
+          ],
+          "taille": [
+            0.46,
+            1.1,
+            0.46
+          ],
+          "matiere": "ecorce-pin-sylvestre",
+          "couleur": "#6d5a48"
+        },
+        {
+          "f": "cylindre",
+          "p": [
+            0.9,
+            0.85,
+            -4.4
+          ],
+          "taille": [
+            0.475,
+            0.07,
+            0.475
+          ],
+          "matiere": "mat",
+          "couleur": "#d8662a"
+        }
+      ]
+    },
+    {
+      "id": "platiere",
+      "nom": "dalles de grès de la platière, une mare peu profonde, trois pierres plates empilées",
+      "devant": 80,
+      "cote": 5,
+      "degage": 9,
+      "formes": [
+        {
+          "f": "boite",
+          "p": [
+            0,
+            0.05,
+            0
+          ],
+          "taille": [
+            5.5,
+            0.3,
+            4.2
+          ],
+          "cap": 12,
+          "matiere": "gres-fontainebleau",
+          "couleur": "#b8ad98"
+        },
+        {
+          "f": "boite",
+          "p": [
+            -4.2,
+            0.0,
+            1.5
+          ],
+          "taille": [
+            3.4,
+            0.25,
+            2.8
+          ],
+          "cap": -20,
+          "matiere": "gres-fontainebleau",
+          "couleur": "#ada290"
+        },
+        {
+          "f": "boite",
+          "p": [
+            3.6,
+            0.0,
+            -2.4
+          ],
+          "taille": [
+            3.0,
+            0.22,
+            3.1
+          ],
+          "cap": 40,
+          "matiere": "gres-fontainebleau",
+          "couleur": "#b3a893"
+        },
+        {
+          "f": "boite",
+          "p": [
+            -1.0,
+            0.2,
+            0.6
+          ],
+          "taille": [
+            2.2,
+            0.02,
+            1.4
+          ],
+          "cap": 5,
+          "matiere": "verre",
+          "couleur": "#3a4246"
+        },
+        {
+          "f": "boite",
+          "p": [
+            1.6,
+            0.27,
+            -0.9
+          ],
+          "taille": [
+            0.42,
+            0.07,
+            0.3
+          ],
+          "cap": 20,
+          "matiere": "gres-fontainebleau",
+          "couleur": "#a89c86"
+        },
+        {
+          "f": "boite",
+          "p": [
+            1.6,
+            0.34,
+            -0.9
+          ],
+          "taille": [
+            0.32,
+            0.06,
+            0.24
+          ],
+          "cap": -15,
+          "matiere": "gres-fontainebleau",
+          "couleur": "#b0a48e"
+        },
+        {
+          "f": "boite",
+          "p": [
+            1.6,
+            0.4,
+            -0.9
+          ],
+          "taille": [
+            0.2,
+            0.05,
+            0.16
+          ],
+          "cap": 35,
+          "matiere": "gres-fontainebleau",
+          "couleur": "#a69a84"
+        }
+      ]
+    },
+    {
+      "id": "ruban",
+      "nom": "jeune bouleau au bord de la platière, deux traits orange et un ruban noué dont le bout pend vers le bas de la pente",
+      "devant": 88,
+      "cote": -3.5,
+      "degage": 1.5,
+      "formes": [
+        {
+          "f": "cylindre",
+          "p": [
+            0,
+            2.5,
+            0
+          ],
+          "taille": [
+            0.16,
+            5,
+            0.16
+          ],
+          "matiere": "ecorce-bouleau-verruqueux",
+          "couleur": "#d8d4cc"
+        },
+        {
+          "f": "cylindre",
+          "p": [
+            0,
+            1.3,
+            0
+          ],
+          "taille": [
+            0.17,
+            0.05,
+            0.17
+          ],
+          "matiere": "mat",
+          "couleur": "#d8662a"
+        },
+        {
+          "f": "cylindre",
+          "p": [
+            0,
+            1.42,
+            0
+          ],
+          "taille": [
+            0.17,
+            0.05,
+            0.17
+          ],
+          "matiere": "mat",
+          "couleur": "#d8662a"
+        },
+        {
+          "f": "boite",
+          "p": [
+            0,
+            1.62,
+            0.09
+          ],
+          "taille": [
+            0.06,
+            0.05,
+            0.04
+          ],
+          "matiere": "tissu",
+          "couleur": "#f07a1e"
+        },
+        {
+          "f": "boite",
+          "p": [
+            0,
+            1.45,
+            0.14
+          ],
+          "taille": [
+            0.03,
+            0.36,
+            0.004
+          ],
+          "penche": [
+            14,
+            0
+          ],
+          "matiere": "tissu",
+          "couleur": "#f07a1e"
+        }
+      ]
+    },
+    {
+      "id": "affut",
+      "nom": "affût bas de branches mortes et de fougère contre un pin, une pierre plate pour s'asseoir, une planchette crayonnée",
+      "devant": 104,
+      "cote": -15,
+      "degage": 3,
+      "formes": [
+        {
+          "f": "capsule",
+          "p": [
+            -1.1,
+            0.55,
+            0.9
+          ],
+          "taille": [
+            0.07,
+            1.6,
+            0.07
+          ],
+          "penche": [
+            18,
+            0
+          ],
+          "matiere": "bois-mort"
+        },
+        {
+          "f": "capsule",
+          "p": [
+            -0.4,
+            0.6,
+            1.0
+          ],
+          "taille": [
+            0.06,
+            1.5,
+            0.06
+          ],
+          "penche": [
+            12,
+            8
+          ],
+          "matiere": "bois-mort"
+        },
+        {
+          "f": "capsule",
+          "p": [
+            0.4,
+            0.55,
+            1.0
+          ],
+          "taille": [
+            0.07,
+            1.5,
+            0.07
+          ],
+          "penche": [
+            16,
+            -6
+          ],
+          "matiere": "bois-mort"
+        },
+        {
+          "f": "capsule",
+          "p": [
+            1.1,
+            0.5,
+            0.9
+          ],
+          "taille": [
+            0.06,
+            1.4,
+            0.06
+          ],
+          "penche": [
+            20,
+            0
+          ],
+          "matiere": "bois-mort"
+        },
+        {
+          "f": "boite",
+          "p": [
+            0,
+            0.5,
+            1.05
+          ],
+          "taille": [
+            2.4,
+            0.9,
+            0.05
+          ],
+          "dents": 40,
+          "matiere": "tissu",
+          "couleur": "#8a5a2c"
+        },
+        {
+          "f": "boite",
+          "p": [
+            0.3,
+            0.62,
+            1.12
+          ],
+          "taille": [
+            1.6,
+            0.6,
+            0.04
+          ],
+          "dents": 30,
+          "cap": 8,
+          "matiere": "tissu",
+          "couleur": "#7a4e26"
+        },
+        {
+          "f": "boite",
+          "p": [
+            0,
+            0.18,
+            0
+          ],
+          "taille": [
+            0.5,
+            0.36,
+            0.4
+          ],
+          "matiere": "gres-fontainebleau",
+          "couleur": "#a89c86"
+        },
+        {
+          "f": "boite",
+          "p": [
+            -0.9,
+            0.75,
+            0.95
+          ],
+          "taille": [
+            0.22,
+            0.3,
+            0.015
+          ],
+          "penche": [
+            -8,
+            0
+          ],
+          "matiere": "bois",
+          "couleur": "#b7a17e"
+        }
+      ]
+    },
+    {
+      "id": "terrier",
+      "nom": "talus de sable clair sous les pins, déblais frais devant plusieurs gueules, fougère traînée dans l'une",
+      "devant": 112,
+      "cote": -25,
+      "cap": 180,
+      "degage": 4,
+      "formes": [
+        {
+          "f": "boule",
+          "p": [
+            0,
+            0.25,
+            0
+          ],
+          "taille": [
+            5.5,
+            1.2,
+            2.6
+          ],
+          "lisse": 0.3,
+          "matiere": "sable-blanc",
+          "couleur": "#d9cdb0"
+        },
+        {
+          "f": "boule",
+          "p": [
+            -1.4,
+            0.12,
+            1.3
+          ],
+          "taille": [
+            1.4,
+            0.35,
+            1.1
+          ],
+          "lisse": 0.2,
+          "matiere": "sable-blanc",
+          "couleur": "#e2d6ba"
+        },
+        {
+          "f": "boule",
+          "p": [
+            1.3,
+            0.1,
+            1.4
+          ],
+          "taille": [
+            1.2,
+            0.3,
+            1.0
+          ],
+          "lisse": 0.2,
+          "matiere": "sable-blanc",
+          "couleur": "#e0d4b6"
+        },
+        {
+          "f": "boule",
+          "p": [
+            -1.4,
+            0.45,
+            0.75
+          ],
+          "taille": [
+            0.38,
+            0.32,
+            0.5
+          ],
+          "creux": 0.08
+        },
+        {
+          "f": "boule",
+          "p": [
+            1.3,
+            0.42,
+            0.85
+          ],
+          "taille": [
+            0.34,
+            0.3,
+            0.5
+          ],
+          "creux": 0.08
+        },
+        {
+          "f": "boule",
+          "p": [
+            0.1,
+            0.5,
+            0.95
+          ],
+          "taille": [
+            0.3,
+            0.28,
+            0.45
+          ],
+          "creux": 0.08
+        },
+        {
+          "f": "boite",
+          "p": [
+            1.0,
+            0.12,
+            1.9
+          ],
+          "taille": [
+            0.9,
+            0.02,
+            0.45
+          ],
+          "dents": 24,
+          "cap": 30,
+          "matiere": "tissu",
+          "couleur": "#8a5a2c"
+        }
+      ]
+    }
+  ],
+  "histoire": {
+    "pitch": "Sam rallume la caméra-piéton de son frère Louis, garde forestier mort il y a trois semaines au-dessous de la platière, et refait sa tournée. Quelqu'un est encore en ligne.",
+    "protagonistes": [
+      {
+        "id": "sam",
+        "role": "porteuse de la caméra",
+        "trait": "sèche, drôle, peu peureuse, élagueuse"
+      }
+    ],
+    "temps": [
+      {
+        "id": "platiere",
+        "quand": "Sam arrive sur la platière",
+        "ce_qui_se_passe": "le terrain s'ouvre, la brume se lève",
+        "scene": {
+          "soleil": {
+            "azimut": 35,
+            "hauteur": 12
+          },
+          "brume": 0.004
+        }
+      },
+      {
+        "id": "affut",
+        "quand": "Sam s'assoit derrière l'affût",
+        "ce_qui_se_passe": "pleine lumière sur le talus de sable",
+        "scene": {
+          "soleil": {
+            "azimut": 35,
+            "hauteur": 17
+          },
+          "brume": 0.003
+        }
+      }
+    ]
+  }
+}

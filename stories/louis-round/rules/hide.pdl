@@ -11,5 +11,7 @@ when said.loud cooldown 45s if at(approach) and fact(f.jay-heard) -> sound(jay.a
 when said.matches(shout) if at(approach) -> speech.volume(whisper), say(hide.no_shout) {r.no-shout-approach}
 when said.matches(shout) if at(hide) -> speech.volume(whisper), say(hide.no_shout) {r.no-shout-hide}
 when station.entered(hide) once -> body.posture(0.65), say(hide.arrive) {r.hide-sit}
+when station.dwell(hide, 40) once -> sound(bracken.rustle), reveal(f.rustle) {r.rustle}
+when fact.established(f.rustle) once if not promised(silence) -> say(rustle.freeze) {r.rustle-speak}
 when said.matches(approach_sett) if at(hide) -> say(sett.too_close) {r.sett-distance}
 when station.entered(approach) once if fact(f.came-by-path) -> sound(jay.alarm), say(approach.wrong_side) {r.wrong-side}

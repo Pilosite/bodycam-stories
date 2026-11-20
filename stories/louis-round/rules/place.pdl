@@ -14,5 +14,7 @@
 
 ## rules
 when station.entered(trailhead) once -> say(greet.first) {r.start}
+when station.entered(fallen-pine) once -> say(jay.remember) {r.jay-remember}
 when station.entered(platiere) once -> say(platiere.arrive) {r.platiere-arrive}
-when time.elapsed(70) once if at(platiere) and not ending.any -> say(walker.meet), reveal(f.walker-saw) {r.walker}
+when station.dwell(platiere, 30) once -> say(down.unknown) {r.down-unknown}
+when station.dwell(platiere, 70) once if not ending.any -> say(walker.meet), reveal(f.walker-saw) {r.walker}

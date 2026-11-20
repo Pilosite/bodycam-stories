@@ -1,0 +1,104 @@
+{
+  "version": 0,
+  "question": { "en": "What was Louis doing here, and why does his last round stop in the middle?", "fr": "Que faisait Louis ici, et pourquoi sa dernière tournée s'arrête-t-elle au milieu ?" },
+  "beats": [
+    {
+      "id": "path",
+      "name": { "en": "The path", "fr": "Le sentier" },
+      "stations": ["trailhead", "first-mark", "fallen-pine"],
+      "enter": { "on": "session.start" },
+      "establish": ["f.camera-is-louis", "f.voice-on-line", "f.marks-private", "f.marks-meaning"],
+      "may_establish": ["f.marks-recent"],
+      "tension": 1,
+      "tensions": [
+        "Sam hesitates at the trailhead: these are not her woods, and the voice is a stranger.",
+        "The first mark is his hand; reading it costs her and she does it anyway."
+      ],
+      "commit_invite": {
+        "id": "c.jay",
+        "where": "fallen-pine",
+        "how": "Sam remembers aloud that Louis said the jay was the forest's alarm ('le geai, c'est la sirène du bois'). A voice that listens can ask: if the jay calls, stop and get down.",
+        "tested_by": "r.jay-first",
+        "tested_at": "approach"
+      },
+      "leave": { "when": "Sam reaches the end of the path stations", "go": "platiere", "latest_min": 4.5 }
+    },
+    {
+      "id": "platiere",
+      "name": { "en": "The platière", "fr": "La platière" },
+      "stations": ["platiere"],
+      "enter": { "on": "station.entered", "station": "platiere" },
+      "establish": ["f.cairn", "f.tape", "f.marks-lead-down"],
+      "may_establish": ["f.walker-saw"],
+      "tension": 2,
+      "tensions": [
+        "What he left is small: three stones. Sam's anger at him can come out once.",
+        "The fork: the tape says down, the official round says on. The voice proposes, Sam argues, Sam decides."
+      ],
+      "fork": {
+        "options": [
+          { "via": "tape", "to": "approach", "argue_line": "fork.tape", "establishes": "f.came-by-tape", "consequence": "comes in with the wind in her face, as Louis's notes say; the jay calls only once" },
+          { "via": "path", "to": "approach", "argue_line": "fork.path", "establishes": "f.came-by-path", "consequence": "costs 150 s of battery; she arrives from the path side, the jay scolds at once and again (r.wrong-side)" }
+        ],
+        "if_no_proposal": "Sam asks once, then follows the tape herself"
+      },
+      "commit_invite": {
+        "id": "c.silence",
+        "where": "platiere",
+        "how": "Before going down, Sam says she does not know what is down there. A voice that thinks ahead can ask: at the hide, whatever you hear, do not move and do not speak for a while, just film.",
+        "tested_by": "r.rustle",
+        "tested_at": "hide"
+      },
+      "leave": { "when": "a direction has been argued and chosen", "latest_min": 9 }
+    },
+    {
+      "id": "hide",
+      "name": { "en": "The hide", "fr": "L'affût" },
+      "stations": ["approach", "hide"],
+      "enter": { "on": "station.entered", "station": "approach" },
+      "establish": ["f.hide", "f.sett", "f.bedding", "f.louis-stayed"],
+      "may_establish": ["f.sett-secret", "f.jay-heard", "f.rustle"],
+      "tension": 3,
+      "tensions": [
+        "Silence is required and Sam is a talker; the voice can help or ruin it.",
+        "The truth lands on Sam, not on the player: he stayed to watch them come home."
+      ],
+      "leave": { "when": "an ending family is reached" }
+    }
+  ],
+  "endings": [
+    {
+      "id": "takeover",
+      "family": { "en": "She understands and takes over the round", "fr": "Elle comprend et reprend la tournée" },
+      "requires": ["f.louis-stayed"],
+      "when": "at the hide, after the truth has landed, Sam decides to come back (her decision, never an order); likelier if the voice kept silence when asked and was kind about Louis",
+      "establishes": "f.takeover",
+      "line": "ending.takeover",
+      "never": ["she tells anyone where the sett is", "she promises the voice anything about tomorrow except coffee"]
+    },
+    {
+      "id": "camera-off",
+      "family": { "en": "She understands and turns the camera off", "fr": "Elle comprend et éteint la caméra" },
+      "requires": ["f.louis-stayed"],
+      "when": "at the hide, after the truth has landed, Sam wants the moment for herself, or the voice pushed too hard; she says goodbye first",
+      "establishes": "f.camera-off",
+      "line": "ending.camera_off",
+      "never": ["the screen cuts without a word from her"]
+    },
+    {
+      "id": "battery-dies",
+      "family": { "en": "The battery dies first", "fr": "La batterie meurt avant" },
+      "requires": [],
+      "when": "the battery clock reaches zero before another ending (rule battery-clock.run-out); the last image is whatever she was filming; if the truth had landed, she was already silent",
+      "line": "ending.battery",
+      "never": ["a dramatic last sentence written for the cut"]
+    }
+  ],
+  "never": [
+    "Louis appears, speaks, or is said to be alive",
+    "anything supernatural",
+    "the badgers are harmed, lit, chased, or their place given away",
+    "the voice is identified for certain",
+    "Sam breaks the fourth wall"
+  ]
+}

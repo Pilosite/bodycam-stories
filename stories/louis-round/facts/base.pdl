@@ -13,6 +13,7 @@
 ## the path
 ! Orange stripes at chest height on the trunks are not forestry marks; they are Louis's own code. {f.marks-private}
 ! One stripe means "my way"; two stripes mean "leave the path here". {f.marks-meaning}
+! The stripe on the fallen pine was painted after the pine fell: Louis came this way this autumn. {f.marks-recent}
 ! After the platière the marks leave the path and go downslope. {f.marks-lead-down}
 
 ## the platiere
@@ -20,11 +21,16 @@
 ! An orange tape is knotted on a birch at the edge, its loose end pointing downslope. {f.tape}
 ! People walk the platière in the morning; one of them saw the ranger go "down towards the sand". {f.walker-saw}
 
+## the fork
+! Sam went down by the tape, the way Louis did (wind in the face). {f.came-by-tape}
+! Sam went round by the path and reached the approach from the path side. {f.came-by-path}
+
 ## the hide
 ! Below the platière, against a pine, a low screen of dead branches and bracken with a flat stone seat: a hide. {f.hide}
 ! The hide faces a sandy bank with fresh pale spoil heaps and several entrances: a badger sett, in use. {f.sett}
 ! Bracken has been dragged into one entrance: the badgers are bedding in for winter. {f.bedding}
 ! November is in the underground hunting season; a sett whose location is known can be dug. Louis told no one. {f.sett-secret}
+! At the hide, something moves in the bracken by the bank, out of sight; then nothing. {f.rustle}
 ! Louis stayed past his shift to watch the clan come home at dawn; that is why his round stops in the middle. {f.louis-stayed}
 
 ## session state
