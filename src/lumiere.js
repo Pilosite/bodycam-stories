@@ -8,7 +8,8 @@
    parcours.depart.lumiere) et le point éclairé (ou à l'ombre) le plus proche (chercherLumiere, action « lumiere »).
    docs/fiche-de-lieu.md, « Départ et trouée » ; docs/meneur-de-jeu.md §23. */
 
-const F32 = Math.fround, fr32 = x => F32(x - Math.floor(x));
+export const F32 = Math.fround;
+export const fr32 = x => F32(x - Math.floor(x));
 export const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const clampN = (v, a, b, d) => { v = Number(v); return Number.isFinite(v) ? Math.min(b, Math.max(a, v)) : d; };
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
@@ -30,7 +31,6 @@ export function vnoise2(x, y) {
   const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
   const m = (a, b, t) => a + (b - a) * t; return m(m(h21(ix, iy), h21(ix + 1, iy), fx), m(h21(ix, iy + 1), h21(ix + 1, iy + 1), fx), fy);
 }
-export { F32, fr32 };
 /* h31, h33, vnoise3 : en flottants 64 bits (statistiquement les mêmes que le shader, pas au bit près : trouées des feuilles) */
 const fr = x => x - Math.floor(x);
 function h31(x, y, z) { x = fr(x * .1031); y = fr(y * .1031); z = fr(z * .1031); const t = x * (z + 31.32) + y * (y + 31.32) + z * (x + 31.32); x += t; y += t; z += t; return fr((x + y) * z); }
@@ -368,10 +368,13 @@ export function creerSoleil(W) {
 /* Disque autour du porteur : centre, 6 points à 1,2 m, 8 à 2,5 m (devant ET derrière : il pose derrière ses talons). */
 export const DISQUE = [[0, 0], ...[0, 1, 2, 3, 4, 5].map(k => [1.2 * Math.sin(k * Math.PI / 3), 1.2 * Math.cos(k * Math.PI / 3)]),
   ...[0, 1, 2, 3, 4, 5, 6, 7].map(k => [2.5 * Math.sin(k * Math.PI / 4 + .39), 2.5 * Math.cos(k * Math.PI / 4 + .39)])];
+/* Un point au soleil : la lumière directe, et la pente qui la reçoit (une pente tournée vers l'ombre compte sombre ; à partir de
+   60 % de l'éclairement du sol plat, pleine). */
+export const vu = (L, r) => r.v * sstep(0, .6 * L.tanE / Math.hypot(1, L.tanE), r.cos);
 /* Part du disque au soleil (moyenne de v × min(1, cos / cos du sol plat)), et la plus petite valeur. */
 export function disqueAuSoleil(L, x, z, rayon = 2.5) {
-  const k = rayon / 2.5, plat = L.tanE / Math.hypot(1, L.tanE); let s = 0, mn = 1;
-  for (const [dx, dz] of DISQUE) { const r = L.soleilEn(x + dx * k, z + dz * k), v = r.v * Math.min(1, r.cos / Math.max(plat, .02)); s += v; mn = Math.min(mn, v); }
+  const k = rayon / 2.5; let s = 0, mn = 1;
+  for (const [dx, dz] of DISQUE) { const v = vu(L, L.soleilEn(x + dx * k, z + dz * k)); s += v; mn = Math.min(mn, v); }
   return { part: s / DISQUE.length, min: mn };
 }
 /* Libre d'obstacle : ni tronc, ni perche, ni bloc à moins de marge du point. */
@@ -393,7 +396,7 @@ export function chercherDepart(W, opts = {}) {
   const cands = [];
   for (let z = de; z <= a; z += pas) for (const dx of [0, -.7, .7, -1.4, 1.4]) {
     const x = W.pathX(z) + dx; if (!degageEn(W, x, z, 1.2)) continue;
-    const r = L.soleilEn(x, z), v = r.v * Math.min(1, r.cos / .14);
+    const v = vu(L, L.soleilEn(x, z));
     cands.push({ x, z, v, dx });
   }
   const bon = c => veut === 'soleil' ? c.v : 1 - c.v;
@@ -429,7 +432,7 @@ export function chercherLumiere(W, depuis, vers = 'soleil', opts = {}) {
     const n = r === 0 ? 1 : Math.max(6, Math.round(2 * Math.PI * r / 1.6));
     for (let k = 0; k < n; k++) { const a = k / n * 2 * Math.PI, x = depuis.x + r * Math.sin(a), z = depuis.z + r * Math.cos(a);
       if (!ok(x, z)) continue;
-      const s = L.soleilEn(x, z), v = s.v * Math.min(1, s.cos / .14), ax = Math.abs(x - W.pathX(z));
+      const v = vu(L, L.soleilEn(x, z)), ax = Math.abs(x - W.pathX(z));
       cands.push({ x, z, v, d: r, ax }); }
   }
   // le plus près parmi ceux dont le centre est franc ; le disque entier est vérifié dans l'ordre de la distance (le trajet compte un peu)

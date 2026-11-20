@@ -127,7 +127,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }

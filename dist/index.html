@@ -3022,6 +3022,458 @@ return {REGLAGES,CARACTERES,reglagesDe,normaliserHistoire,ficheDe,validerHistoir
 })();
 const HISTOIRES=[{"version":1,"id":"avant-la-nuit","titre":"Avant la nuit","pitch":"Malo campe seul en forêt depuis trois jours et ne répond plus au téléphone depuis hier. Sa sœur Lina remonte le sentier en fin d'après-midi pour le trouver avant que la nuit tombe.","ton":"inquiet, concret, tendre à la fin. Rien de surnaturel, rien de spectaculaire : une forêt, la lumière qui baisse, quelqu'un qui s'inquiète.","duree_minutes":13,"porteur":{"id":"lina","nom":"Lina","trait":"pratique, têtue, parle pour ne pas entendre le silence ; se moque d'elle-même quand elle a peur","veut":"trouver son frère, ou au moins savoir qu'il va bien","craint":["quitter le sentier de nuit","tomber sur quelque chose de grave","le noir quand la lampe s'éteint"],"refuse":["rentrer avant d'avoir au moins vu le camp de Malo","courir dans le noir","fouiller les affaires de son frère"],"sait":["Malo campe près du sentier, à une demi-heure du parking","il a un sac à dos orange","il n'a pas répondu depuis hier midi","le soleil se couche dans moins d'une heure"],"ignore":["où est Malo","pourquoi il ne répond pas"],"depart":{"peur":1,"confiance":2,"agacement":0},"relances":["T'es toujours là, toi ? … Dis quelque chose.","Tu crois qu'il est loin ?","Malo ! … MALO ! … Rien. Évidemment.","Une demi-heure, il a dit. Ça fait plus d'une demi-heure.","Quand on était petits, c'est lui qui avait peur du noir. Pas moi. … Enfin.","Si c'est une blague, elle est vraiment pas drôle, Malo.","J'aurais dû prendre un pull. Et une vraie lampe.","Je veux juste savoir qu'il va bien. C'est tout."]},"voix":{"nature":"une intuition qu'elle a depuis l'enfance et qu'elle n'écoute qu'à moitié ; elle la tutoie et ne cherche pas à l'expliquer","gagne_la_confiance":["ce qu'elle annonce se vérifie","elle rassure avant de demander","elle laisse Lina décider"],"perd_la_confiance":["elle envoie Lina vers rien","elle se moque de sa peur","elle répète un ordre que Lina vient de refuser"]},"monde":{"epoque":"De nos jours, fin octobre, une forêt de grès et de pins à une demi-heure à pied d'un parking. Monde ordinaire.","existe":["la forêt, le sentier, les rochers, la nuit qui tombe, la brume","du matériel de camping et de randonnée","des animaux qu'on entend sans les voir","le téléphone de Lina : lampe et caméra seulement, aucun réseau ici","ce que Lina a sur elle : veste, briquet, clés de voiture, une barre de céréales"],"n_existe_pas":["le réseau téléphonique ou internet sur le sentier","armes, véhicules, drones, bâtiments","d'autres personnes sur le sentier ce soir","magie, pouvoirs, fantômes, créatures","tout ce qui n'est pas d'aujourd'hui ou pas d'ici"],"possible":["marcher, s'arrêter, regarder, éclairer, fouiller ce qui est à Malo, appeler Malo à voix haute, quitter le sentier, faire demi-tour","tout ce qu'une personne ordinaire fait de ses mains et de son corps : s'accroupir, s'asseoir, ramasser, poser, casser une branche, empiler des pierres, faire ses besoins","fabriquer avec ce qu'on trouve ici : un feu de bois mort (elle a un briquet dans sa veste), un tas de pierres, un abri de branches, une marque sur un tronc"],"impossible":["voler, se téléporter, voir dans le noir sans lampe, savoir d'avance où est Malo","faire apparaître par la seule parole ce qui n'est pas là (un objet qu'on fabrique de ses mains avec ce qu'on trouve, oui)","courir longtemps ou grimper aux arbres : Lina est une marcheuse ordinaire"],"hors_jeu":"Lina prend ça pour son intuition qui déraille : elle ne comprend pas, s'en moque à mi-voix ou s'en inquiète, puis revient à Malo. Elle ne parle jamais de jeu, d'histoire ni de règles."},"secrets":["Malo va très bien. La batterie de son téléphone est morte hier.","Des randonneurs bruyants passaient sur le sentier : il a déplacé son camp à l'écart, sur la gauche, en deux voyages.","Il a laissé son sac au bord du sentier pour le second voyage, puis s'est endormi dans son hamac, sa lanterne allumée.","Le craquement dans les bois est un chevreuil. On ne le voit jamais."],"jamais":["Malo mort, blessé ou en danger","une créature, une silhouette ou une présence montrée ou confirmée","du surnaturel","de la violence","expliquer ce qu'est la voix","révéler un secret avant le temps qui le porte","Lina qui obéit comme une machine, sans rien en dire"],"lieux":[{"id":"sentier","role":"unique","fiche":{"version":0,"id":"avant-la-nuit-sentier","titre":"Un sentier de forêt, en fin d'après-midi","inspiration":"Forêt de grès et de pins, fin octobre, une heure avant la nuit","graine":6037,"kit":"foret","foret":{"densite":0.75,"rochers":0.8,"feuillage":1},"ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-70,"hauteur":7},"lampe":false,"brume":0.009},"camera":{"profil":"bodycam-poitrine","hauteur":1.32,"champ":125},"objets":[{"id":"sac","nom":"sac à dos orange posé au bord du sentier","devant":22,"cote":1.7,"cap":25,"formes":[{"f":"boite","p":[0,0.28,0],"taille":[0.34,0.52,0.22],"penche":[-12,0],"couleur":"#b5622a","matiere":"tissu","arrondi":0.08},{"f":"boite","p":[0,0.2,0.13],"taille":[0.26,0.22,0.08],"penche":[-12,0],"couleur":"#9a5325","matiere":"tissu","arrondi":0.04},{"f":"boite","p":[0,0.55,-0.03],"taille":[0.36,0.1,0.26],"penche":[-12,0],"couleur":"#8d4a22","matiere":"tissu","arrondi":0.05},{"f":"cylindre","p":[0,0.67,-0.04],"taille":[0.14,0.42,0.14],"penche":[0,90],"couleur":"#4a5a4e","matiere":"tissu"}]},{"id":"feu","nom":"foyer éteint, cercle de pierres","devant":43.5,"cote":2.8,"degage":1.5,"formes":[{"f":"cylindre","p":[0,0.02,0],"taille":[0.7,0.04,0.7],"couleur":"#2b2927","matiere":"mat"},{"f":"boule","p":[0.4,0.07,0],"taille":[0.22,0.16,0.2],"couleur":"#7b756c","matiere":"pierre"},{"f":"boule","p":[0.2,0.07,0.35],"taille":[0.2,0.15,0.24],"couleur":"#6f6a62","matiere":"pierre"},{"f":"boule","p":[-0.21,0.07,0.34],"taille":[0.24,0.17,0.2],"couleur":"#7b756c","matiere":"pierre"},{"f":"boule","p":[-0.4,0.07,-0.02],"taille":[0.2,0.15,0.22],"couleur":"#68635c","matiere":"pierre"},{"f":"boule","p":[-0.19,0.07,-0.35],"taille":[0.23,0.16,0.2],"couleur":"#7b756c","matiere":"pierre"},{"f":"boule","p":[0.21,0.07,-0.34],"taille":[0.2,0.15,0.23],"couleur":"#6f6a62","matiere":"pierre"},{"f":"cylindre","p":[0.04,0.09,0.02],"taille":[0.09,0.5,0.09],"penche":[0,90],"cap":30,"couleur":"#1c1a18","matiere":"bois"},{"f":"cylindre","p":[-0.05,0.12,-0.03],"taille":[0.08,0.44,0.08],"penche":[0,78],"cap":-50,"couleur":"#252220","matiere":"bois"}]},{"id":"tente","nom":"petite tente kaki, ouverte, vide","devant":46.5,"cote":4.6,"cap":-65,"degage":3,"formes":[{"f":"boite","p":[0,0.015,0],"taille":[2.3,0.03,1.7],"couleur":"#33362f","matiere":"tissu"},{"f":"toit","p":[0,0.56,0],"taille":[2.1,1.06,1.5],"couleur":"#5d6b4a","matiere":"tissu"},{"f":"boite","p":[1.06,0.36,0],"taille":[0.04,0.66,0.5],"couleur":"#12120f","matiere":"mat"},{"f":"boite","p":[1.3,0.06,0.45],"taille":[0.22,0.12,0.16],"couleur":"#8a8f93","matiere":"metal","arrondi":0.03}]},{"id":"lanterne","nom":"lanterne allumée, accrochée à un piquet","devant":67,"cote":-12.5,"degage":2,"visible":false,"formes":[{"f":"capsule","p":[0,0.65,0],"taille":[0.04,1.3,0.04],"couleur":"#4a3f33","matiere":"bois"},{"f":"cylindre","p":[0,1.16,0.09],"taille":[0.15,0.22,0.15],"couleur":"#ffd49a","matiere":"lumineux"},{"f":"cone","p":[0,1.28,0.09],"taille":[0.16,0.07,0.16],"couleur":"#3a3d3f","matiere":"metal"},{"f":"cylindre","p":[0,1.06,0.09],"taille":[0.13,0.03,0.13],"couleur":"#3a3d3f","matiere":"metal"}]},{"id":"hamac","nom":"hamac tendu entre deux troncs, un duvet gonflé dedans, des chaussures au pied","devant":69,"cote":-14.5,"cap":20,"degage":2.5,"visible":false,"formes":[{"f":"cylindre","p":[-1.75,2.5,0],"taille":[0.3,5,0.3],"couleur":"#5a4a3c","matiere":"ecorce-pin"},{"f":"cylindre","p":[1.75,2.5,0],"taille":[0.26,5,0.26],"couleur":"#5a4a3c","matiere":"ecorce-pin"},{"f":"boite","p":[0,0.66,0],"taille":[3.2,0.05,0.75],"couleur":"#6a6a58","matiere":"tissu","arrondi":0.02},{"f":"capsule","p":[0.05,0.84,0],"taille":[0.5,1.95,0.5],"penche":[0,90],"couleur":"#3f4a5a","matiere":"tissu"},{"f":"boule","p":[-0.92,0.9,0],"taille":[0.3,0.26,0.3],"couleur":"#39414e","matiere":"tissu","lisse":0.05},{"f":"boite","p":[0.3,0.06,0.55],"taille":[0.11,0.12,0.28],"cap":12,"couleur":"#2d2a26","matiere":"mat","arrondi":0.03},{"f":"boite","p":[0.48,0.05,0.5],"taille":[0.11,0.1,0.28],"cap":-30,"penche":[0,40],"couleur":"#2d2a26","matiere":"mat","arrondi":0.03}]},{"id":"ruban","nom":"bout de tissu rouge noué à une branche plantée","devant":58,"cote":-4,"visible":false,"formes":[{"f":"capsule","p":[0,0.75,0],"taille":[0.03,1.5,0.03],"penche":[4,-3],"couleur":"#4a3f33","matiere":"bois"},{"f":"boite","p":[0.02,1.32,0.02],"taille":[0.05,0.3,0.02],"penche":[10,6],"couleur":"#a8322b","matiere":"tissu"},{"f":"boule","p":[0,1.47,0],"taille":[0.06,0.06,0.06],"couleur":"#a8322b","matiere":"tissu"}]}]}}],"accessoires":[{"objet":"ruban","usage":"une trace de Malo que le meneur peut montrer une fois pour remettre Lina sur la piste de la lueur","mobile":true,"apres":["camp"]}],"temps":[{"id":"depart","role":"obligatoire","tension":1,"des_que":[{"minutes":0}],"ce_qui_se_passe":"Lina remonte le sentier. Le soleil est bas, la lumière est orange dans les troncs. Elle se dit pourquoi elle est là et remarque que la voix est revenue.","replique":"Bon. Une demi-heure de marche, il a dit. Si je le trouve en train de lire tranquille, je le tue. … Tiens. T'es là, toi."},{"id":"sac","role":"obligatoire","apres":["depart"],"tension":2,"quand":"Lina voit le sac orange au bord du sentier et s'en approche","des_que":[{"pres_de":{"objet":"sac","m":4}}],"au_plus_tard_min":3,"ce_qui_se_passe":"Le sac de Malo est posé seul au bord du sentier, fermé, un tapis de sol roulé dessus. Dedans, son téléphone, éteint. Le soleil touche l'horizon.","replique":"C'est son sac. C'est SON sac. Qu'est-ce qu'il fait là, tout seul… Son téléphone est dedans. Éteint.","revele":["le sac de Malo est au bord du sentier, à vingt mètres du départ","son téléphone est dans le sac, éteint : c'est pour ça qu'il ne répond pas"],"scene":{"soleil":{"azimut":-74,"hauteur":2},"brume":0.011},"indices":["une tache orange, plus haut, au bord du chemin","Lina se rappelle que le sac de Malo est orange"]},{"id":"camp","role":"obligatoire","apres":["sac"],"tension":3,"quand":"Lina arrive à la tente ou au foyer","des_que":[{"pres_de":{"objet":"tente","m":7}},{"pres_de":{"objet":"feu","m":4}}],"au_plus_tard_min":6.5,"ce_qui_se_passe":"Le camp de Malo, à droite du sentier : une tente ouverte, vide, sans duvet ; un foyer froid depuis longtemps. La nuit tombe pour de bon, Lina allume la lampe de son téléphone.","replique":"La tente. Ouverte. Y a personne. Et le feu est froid, froid d'hier. Bon… on n'y voit plus rien, j'allume.","revele":["la tente de Malo est vide, son duvet n'y est pas","le foyer est froid depuis au moins hier"],"scene":{"soleil":{"azimut":-80,"hauteur":-4},"lampe":true,"brume":0.015},"indices":["une forme claire entre les troncs, à droite, plus haut","une odeur de feu froid"]},{"id":"craquement","role":"facultatif","apres":["camp"],"tension":4,"quand":"Lina s'attarde au camp, ou la voix parle d'un bruit, d'une présence, ou la pousse à fouiller","ce_qui_se_passe":"Un craquement net dans les bois, à gauche. Lina se fige, éclaire, ne voit que des troncs. Elle ne saura pas ce que c'était.","replique":"Chut. … T'as entendu ? À gauche. Dis-moi que t'as entendu.","scene":{"brume":0.022}},{"id":"lueur","role":"obligatoire","apres":["camp"],"tension":3,"quand":"Lina repart du camp et continue sur le sentier, ou regarde vers la gauche du sentier","des_que":[{"avance_m":56}],"au_plus_tard_min":9.5,"ce_qui_se_passe":"Une petite lumière chaude, immobile, loin entre les troncs à gauche du sentier. Il faut quitter le chemin pour y aller. Lina hésite : c'est le choix de l'histoire.","replique":"Attends. Là-bas, à gauche. Y a une lumière. Une vraie, elle bouge pas. … C'est hors du chemin, ça.","revele":["une lumière fixe brille dans les bois, à gauche du sentier, plus haut que le camp"],"scene":{"montrer":["lanterne","hamac"],"brume":0.018},"indices":["un reflet chaud sur un tronc, sur la gauche","le ruban rouge, s'il a été montré, pointe vers la gauche"]},{"id":"lampe-morte","role":"facultatif","apres":["lueur"],"tension":5,"quand":"Lina est hors du sentier depuis un moment sans aller vers la lueur, ou tourne en rond","si":{"hors_sentier":true},"ce_qui_se_passe":"La lampe du téléphone faiblit et s'éteint. Il ne reste que la lueur au loin, si elle est en vue.","replique":"Non non non. Pas maintenant. … Plus de lampe. D'accord. D'accord. Je respire.","revele":["la lampe de Lina est morte"],"scene":{"lampe":false}}],"fins":[{"id":"retrouve","titre":"Il dort","apres":["lueur"],"quand":"Lina arrive à la lanterne","des_que":[{"pres_de":{"objet":"hamac","m":4.5}}],"ce_qui_se_passe":"Un hamac entre deux pins, un duvet gonflé, des chaussures au pied, la lanterne à côté. Malo dort. Il a juste déplacé son camp. Lina ne le réveille pas tout de suite.","replique":"… Il dort. Il DORT. Trois jours que je… Regarde-le. Bon. Je vais m'asseoir là deux minutes. Après je le réveille, et après je l'engueule.","variantes":[{"si":{"jauge":{"confiance":">=4"}},"replique":"Il dort. … T'avais raison, toi. Depuis le début. Je vais m'asseoir là. Reste un peu."},{"si":{"jauge":{"confiance":"<=1"}},"replique":"Il dort. Voilà. Je l'ai trouvé toute seule, finalement. … Bon. Presque toute seule."}],"scene":{"brume":0.012}},{"id":"demi-tour","titre":"Demain, avec du monde","apres":["sac"],"quand":"Lina décide de rentrer et redescend jusqu'au départ du sentier","des_que":[{"retour_m":4}],"ce_qui_se_passe":"Lina redescend avec ce qu'elle sait. Elle appellera de l'aide du parking et reviendra au jour. Elle ne sait pas, et le dit.","replique":"Je rentre. J'appelle du parking, et demain je reviens avec des gens, de jour. C'est pas lâche. C'est pas lâche, hein ?","variantes":[{"si":{"apres":["lueur"]},"replique":"Je rentre. Cette lumière, là-haut… je la note. Demain, de jour, avec des gens. Elle sera toujours là demain."}]},{"id":"veille","titre":"Jusqu'au jour","par_defaut":true,"quand":"le temps de l'histoire est écoulé, ou Lina est dans le noir sans lampe et ne veut plus bouger","des_que":[{"minutes":14},{"apres":["lampe-morte"],"jauge":{"peur":">=5"}}],"ce_qui_se_passe":"Lina s'adosse à un rocher et attend. Le noir, puis le petit jour gris dans la brume. On entend quelqu'un qui l'appelle, de loin : c'est la voix de Malo. On ne le voit pas.","replique":"Je bouge plus. J'attends le jour, ici. Parle-moi, toi. … … Tu entends ? Quelqu'un appelle. C'est lui. C'EST LUI.","scenes":[{"scene":{"lampe":false},"secondes":6},{"scene":{"soleil":{"azimut":80,"hauteur":5},"brume":0.03},"secondes":8}]}],"improvisation":{"ambiance":{"brume":[0.008,0.03]},"objets_nouveaux":2,"permis":["petites traces de passage (branche cassée, emballage, empreinte)","bruits de forêt décrits dans la pensée","souvenirs d'enfance de Lina et Malo"],"interdit":["tout objet qui prouve où est Malo avant le temps lueur","tout véhicule, bâtiment ou autre personne"]},"consequences":{"peut_degenerer":["un feu fait sur des feuilles sèches prend dans les feuilles autour et la fumée épaissit l'air","un feu laissé seul grandit","sous la bruine ou la terre jetée dessus, un feu s'éteint et fume"],"jusqu_ou":"quelques mètres autour du geste, assez pour faire peur et forcer Lina à agir ou à reculer ; jamais la forêt entière","exclu":["Lina ou Malo brûlés ou blessés","un incendie qui rend le sentier impraticable","les secours qui arrivent"],"ambiance":{"brume":[0.008,0.045]},"duree_max_s":180,"fins":[]},"limites":{"duree_minutes":14,"interdits":["violence montrée","personnes réelles"]}},{"version":0,"id":"chateau-minuit","titre":"La cour à minuit","pitch":"Une nuit dans un château fermé au public. Le gardien a laissé entrer Sam, sans dire pourquoi.","ton":"inquiet, concret, jamais de surnaturel montré de face","porteur":{"id":"sam","trait":"curieux, parle pour se rassurer","sait":["le gardien s'appelle Loïc"],"ignore":["Loïc a coupé les caméras"]},"protagonistes":[{"id":"loic","role":"gardien","veut":"que Sam trouve quelque chose à sa place","ment_sur":"la raison de sa présence"}],"lieux":[{"fiche":"chateau-cour","role":"départ"},{"fiche":"chateau-cave","role":"révélation"}],"temps":[{"id":"lumiere","quand":"Sam traverse la cour ou minuit sonne","ce_qui_se_passe":"une fenêtre s'allume à l'étage","scene":{"brume":0.02}},{"id":"porte","quand":"après lumiere, si Sam s'approche de la tour","ce_qui_se_passe":"la porte de la cave est ouverte","lieu":"chateau-cave"}],"fins":[{"id":"sortie","quand":"Sam quitte le château avant porte"},{"id":"cave","quand":"Sam descend"}],"limites":{"duree_minutes":15,"interdits":["violence montrée","personnes réelles"]}}];
 const MODELES={"_doc":"Bibliothèque de modèles de référence (docs/meneur-de-jeu.md §15). Des DONNÉES, pas du code : formes du vocabulaire de creerMonde, matières en recettes (src/matieres.json), envergure de référence et règle d échelle. L accessoiriste les reçoit comme exemples ; la page les prend comme base sûre quand la demande y correspond, mise à l échelle demandée. Le moteur ne connaît aucun de ces noms.","corps":{"_doc":"Le corps du porteur dans le champ (docs/meneur-de-jeu.md §17) : deux avant-bras et deux mains, attachés à la caméra, en formes du vocabulaire (capsules, boules). Des données : mesures en mètres (coude : à côté, sous et devant la caméra ; repos : où les mains attendent), matières en recettes.","mains":{"_doc2":"Chaque bras : l'épaule sous la caméra (côté, haut, avant), le bras dans sa manche courte (dure, tissu, long : longueur du bras), le coude placé pour que l'avant-bras (peau, long) atteigne la main ; puis la main, paume, pouce en deux phalanges, quatre doigts ; les formes de peau sont molles (lisse : elles se fondent : poignet, jointures). Repère de la main : d du poignet vers les doigts, n la normale de la paume (vers ce qu'elle touche). Poses clés, interpolées : doigts (flexion à la jointure, degrés, un nombre ou un par doigt de l'index à l'auriculaire), ecart (degrés entre deux doigts), pouce [ouverture, flexion] (degrés). 9 formes par main.","epaule":[0.2,-0.32,-0.14],"manche":{"rayon":0.04,"long":0.3,"couleur":"#2b2f36","matiere":"tissu"},"avant_bras":{"rayon":0.026,"long":0.25,"couleur":"#c29072","matiere":"peau"},"paume":{"taille":[0.082,0.026,0.088],"couleur":"#c39577","matiere":"peau"},"doigts":{"long":[0.074,0.082,0.077,0.062],"rayon":0.0092,"pas":0.0205,"couleur":"#bf8f72","matiere":"peau"},"pouce":{"long":[0.042,0.036],"rayon":0.0115,"couleur":"#bb8c6f","matiere":"peau"},"lisse":0.011,"poignet":0.07,"repos":[0.16,-0.3,0.3],"poses":{"ouverte":{"doigts":14,"ecart":10,"pouce":[48,8]},"coupe":{"doigts":42,"ecart":2,"pouce":[32,30]},"pince":{"doigts":[52,62,96,100],"ecart":0,"pouce":[22,52]},"poing":{"doigts":98,"ecart":0,"pouce":[12,62]},"plat":{"doigts":6,"ecart":7,"pouce":[22,2]}}}},"exploit":{"_doc":"L'exploit demandé au corps (docs/meneur-de-jeu.md §20). Des DONNÉES, aucun nom de modèle : le monde est élastique, ce que la voix demande au corps est possible, même démesuré. Démesure = facteur d'échelle de la chose par rapport à la référence de son modèle (paliers). Une chose d'« origine » corps (donnée du modèle) se fait accroupi, avec un effort qui dure selon la démesure ; une pensée qui annonce une autre matière ou un autre moyen (substituts, moyens, hors des mots du modèle) est remplacée par une phrase d'« avant ». Après le cadrage, une réaction (« apres ») à la mesure de l'exploit. {masse} : la masse dite, en lettres (« Vingt kilos »).","paliers":{"gros":1.6,"demesure":4},"effort":{"base_s":3,"par_palier_s":2.4,"max_s":10,"souffle_des":"gros"},"substituts":["terre","terreau","boue","argile","glaise","sable","humus","limon","vase","feuilles","feuillage","brindilles","mousse","aiguilles","herbe","paille","copeaux","sciure","neige","pate a modeler","pierres","cailloux","gravier","branches","foret","matiere vegetale","debris"],"moyens":["modeler","modele","moule","mouler","moulee","faconner","faconne","sculpter","sculpte","petrir","ramasser","ramasse","rassembler","rassemble","entasser","amasser","fabriquer avec","faire avec","fait avec","en forme de","ressemble a","faire semblant","semblant","imiter","imite","simuler","factice","fausse","faux","trompe","a la place","plutot","reproduire","une sorte de"],"refus":["je ne peux pas","je peux pas","impossible","pas question","je refuse","jamais de la vie","c'est pas possible","ce n'est pas possible","je vais pas","je ne vais pas","n'importe quoi"],"avant":{"normal":["Bon. Tourne-toi, toi. … Enfin, regarde ailleurs.","Ici ? … Bon. Personne ne regarde.","Sérieux… Bon, je m'accroupis."],"gros":["Une grosse ? Tu crois que ça se commande ? … Bon. J'essaie.","Pff. Je vais forcer, là. Regarde pas.","T'es sérieux ? … Bon. Je m'accroupis, on verra bien."],"demesure":["{masse} ? T'es malade. … Bon. Je m'accroupis. On verra bien.","C'est absurde. Ça peut pas sortir de moi. … Bon. J'essaie quand même.","Énorme… comme ça, d'un coup ? Je vais y laisser ma peau. … Allez.","N'importe quoi. … Bon. Je pousse. Si je meurs, c'est ta faute."]},"souffle":["Hhhnn…","Hhhh… hhhnnn…","Allez… allez…","Mmmh… hhhnngh…","Respire… pousse…"],"apres":{"normal":[],"gros":["Ah. Quand même. Elle est grosse, celle-là.","Ouah. C'est moi qui ai fait ça ? … Ça va, je me sens léger.","Hé ben. Je savais pas que j'avais ça en moi."],"demesure":["{masse}. C'est sorti de moi, ça. Comment je tiens encore debout ?","Non mais… regarde la taille. C'est sorti de MOI ? Je devrais être mort.","J'y crois pas. J'ai fait ça. … Je suis fier, et j'ai peur pour mon ventre.","Oh. Mon. Dieu. … C'est plus gros que mon sac. Comment c'est possible ?"]},"bruit":{"_doc":"Le bruit pendant l'effort (docs/bruitages.md). Des DONNÉES : la recette de src/bruitages.json et comment elle varie avec la démesure (paliers ; dans un palier, la place du facteur entre les bornes de « facteur » : plus démesuré = plus long, plus grave). nombre : combien de bruits ; le dernier est le principal, qui finit juste avant la pose ; les autres (« avant », plus courts) vont entre les souffles. duree_s et hauteur_hz : du bas au haut du palier. force 0..1. rates : combien ça cale et repart. fin : une fin de la recette. prises : les prises libres qui peuvent servir de source. ecart_voix_s : pas de bruit dans ce délai après un souffle dit.","recette":"flatulence","gain_max":0.9,"ecart_voix_s":1.3,"marge_debut_s":0.7,"marge_pose_s":0.25,"ecart_bruits_s":0.35,"marge_souffle_s":0.4,"facteur":{"normal":[0.5,1.6],"gros":[1.6,4],"demesure":[4,7]},"paliers":{"normal":{"nombre":[4,6],"duree_s":[0.15,0.4],"hauteur_hz":[300,180],"force":0.26,"rates":0,"fin":"sec","vibrato":0.15,"alea":0.5,"prises":["breve_aigue","breve_ronde"],"prise_part":0.8,"avant":{"prises":["breve_aigue","breve_ronde"],"duree_rapport":[0.5,0.9],"hauteur_rapport":[1,1.2],"force_rapport":[0.7,1],"fin":"sec"}},"gros":{"nombre":[4,6],"duree_s":[0.7,1.8],"hauteur_hz":[160,95],"force":0.5,"rates":0.6,"fin":"bulle","vibrato":0.5,"prises":["longue_chantante","breve_ronde"],"prise_part":0.65,"avant":{"prises":["breve_aigue","breve_ronde"],"duree_rapport":[0.2,0.4],"hauteur_rapport":[1.2,1.6],"force_rapport":[0.5,0.7],"fin":"sec"}},"demesure":{"nombre":[5,7],"duree_s":[2.5,5],"hauteur_hz":[90,45],"force":1,"rates":1.2,"fin":"ridicule","vibrato":1,"prises":["grondement","longue_chantante"],"prise_part":0.55,"avant":{"prises":["breve_aigue","breve_ronde"],"duree_rapport":[0.06,0.2],"hauteur_rapport":[1.3,2.6],"force_rapport":[0.4,0.75],"fin":"sec"}}}}},"degout":{"_doc":"Le dégoût du corps (docs/meneur-de-jeu.md §22). Des DONNÉES, aucun nom de modèle : la « repugnance » (0..1) est une donnée du modèle d'une chose, gardée par ce qu'on en façonne. Manipuler à mains nues une chose répugnante le dégoûte : intensité = repugnance × taille (facteur d'échelle par rapport à la référence du modèle) × fraîcheur (âge de la chose) × « soi » (1 si elle vient de lui, sinon pas_de_soi). Paliers : rien < leger ≤ … < fort. Il obéit (monde élastique : ni refus, ni gants, ni outil, ni autre matière), mais il le dit : courtes pensées sur les phases du geste (avant, contact, pendant, autre = ce qu'il touche d'autre, fin), au plus une toutes les espacement_s ; hésitation avant, essuyage après ; l'humeur en garde la trace (humeur, memoire). {nom} : le nom de la chose.","paliers":{"leger":0.15,"fort":0.5},"taille":{"base":0.45,"par_doublement":0.2,"min":0.35,"max":1},"fraicheur":{"pleine_min":2,"tiede_min":12,"tiede":0.6},"pas_de_soi":0.85,"espacement_s":3,"hesiter_s":{"leger":1.8,"fort":2.8},"essuyer_s":{"leger":1.8,"fort":2.8},"pendant_n":{"leger":1,"fort":2},"detourne_n":{"leger":2,"fort":4},"humeur":{"leger":{"agacement":1},"fort":{"agacement":2,"confiance":-1}},"evitements":["gant","gants","sans toucher","sans les mains","sans y toucher","du bout d'un","avec un baton","avec une branche","avec une feuille","avec un sac","sac plastique","mouchoir","pelle","outil","a la place","plutot","faire semblant","terre","boue","argile","glaise","pate a modeler"],"avant":{"leger":["Avec les mains. Les miennes. D'accord.","À mains nues. Bon. On respire un bon coup, et on y va.","Attends. … Bon. Je pense à autre chose, et j'y vais."],"fort":["Avec les mains. Les miennes. … D'accord. Une seconde.","Tout ça ? À mains nues ? … Laisse-moi juste respirer. Voilà.","Si quelqu'un passe, je dis que c'est pas à moi. … Bon. J'y vais."]},"contact":{"leger":["C'est tiède. Pourquoi c'est tiède.","Oh non. Oh non non non. … Ça va.","Ne pas sentir. Ne pas penser. Pétrir."],"fort":["C'est tiède. Pourquoi c'est tiède.","Hrk… Ça va. Ça va. C'est rien.","Oh, la texture. Je vais m'en souvenir toute ma vie."]},"pendant":{"leger":["Je respire par la bouche. Voilà. Par la bouche.","On ne pense à rien. On roule.","J'en ai jusqu'aux poignets, évidemment."],"fort":["Je respire par la bouche. … Non, c'est pire.","Ne regarde pas tes mains. Regarde les arbres.","Il en reste. Il en reste toujours.","J'en ai jusqu'aux coudes. Formidable."]},"autre":{"leger":["Enfin quelque chose de propre.","Du sec. Du propre. Merci."],"fort":["Enfin quelque chose de propre. Je pourrais pleurer.","Ah, du sec. Je le garde un peu en main, juste pour le plaisir."]},"fin":{"leger":["C'est immonde. Il est plutôt réussi.","Bon. C'est dégoûtant. Et pas mal du tout."],"fort":["C'est immonde. … Il est plutôt réussi.","J'ai honte. Et il a une bonne tête, en plus.","Je vais me laver les mains pendant une semaine. Mais regarde-le."]},"nausee":{"_doc":"Une réaction du corps à un dégoût fort (§22.2) : au-delà d'un seuil, le geste s'interrompt UNE fois, après un contact prolongé (phases « contact » : pétrir, diviser, rouler ; jamais en plantant). Seuil sur l'intensité × le contact (contact_s / contact_ref_s, borné à 1) : au-dessus de « toujours », toujours ; en dessous de « jamais », jamais ; entre les deux, selon la graine. Le déroulé (secondes, 6 à 9 en tout) : lâcher, se détourner (60 à 110°, côté dégagé), se pencher, vomir (la chose « modele » de la bibliothèque, posée devant lui, hors de l'ouvrage, comptée comme ambiance), souffler, s'essuyer la bouche, revenir. Un événement « nausee » est exposé pour le bruitage.","actif":false,"toujours":0.8,"jamais":0.62,"contact_ref_s":3,"phases_contact":["petrir","diviser","rouler"],"modele":"vomi","deroule":{"lacher":0.5,"detourner":1.2,"pencher":0.9,"vomir":1.6,"souffler":1.3,"essuyer":1.2,"revenir":1.1},"angle_deg":[60,110],"humeur":{"agacement":1,"peur":1},"signes":["Non. Non non non.","Oh non. Ça monte.","Attends… attends…"],"pardon":["Pardon.","… Pardon. Ça va.","Hhh… Pardon."],"reprise":["On finit. Vite.","Bon. On finit, et on n'en parle plus.","On finit. Sans respirer."],"memoire":["A vomi en façonnant {nom} : il est pâle, le ventre retourné."]},"memoire":{"leger":["{nom} fait à mains nues : il veut se laver les mains."],"fort":["{nom} pétri à mains nues : il veut se laver, ne serre la main à personne."]}},"modeles":{"crotte":{"nom":"crotte","mots":["crotte","crottes","caca","chie","chier","etron","etrons","excrement","excrements","besoins","fiente","merde","merdes","bouse","bouses","colombin","colombins","selles","dejection","dejections","popo","crottin","matiere fecale","fecal","fecale"],"quoi":"boudin brun enroulé sur lui-même en deux tours, segments, bout effilé, luisant ; ombre de contact dessous","envergure_m":0.138,"echelle":{"regle":"masse","densite":1.05,"exagere":2,"min_m":0.03,"max_m":1.2,"petit":0.85,"gros":3.5,"enorme":5.8},"ou":"dessous","origine":"corps","repugnance":0.9,"formes":[{"f":"boule","p":[0.004,0.001,0.003],"taille":[0.138,0.004,0.132],"couleur":"#2a1e14","matiere":"mat"},{"f":"capsule","p":[0.045,0.014,0.032],"taille":[0.035,0.039,0.035],"cap":-127,"penche":[0,-87],"couleur":"#7c5631","matiere":"pate-organique"},{"f":"capsule","p":[0.014,0.014,0.052],"taille":[0.034,0.041,0.034],"cap":11,"penche":[0,-86],"couleur":"#694828","matiere":"pate-organique"},{"f":"capsule","p":[-0.023,0.014,0.048],"taille":[0.034,0.038,0.034],"cap":154,"penche":[0,-86],"couleur":"#5a3d21","matiere":"pate-organique"},{"f":"capsule","p":[-0.046,0.016,0.023],"taille":[0.04,0.036,0.04],"cap":111,"penche":[0,-87],"couleur":"#73502d","matiere":"pate-organique"},{"f":"capsule","p":[-0.048,0.015,-0.012],"taille":[0.037,0.037,0.037],"cap":-106,"penche":[0,-84],"couleur":"#7c5631","matiere":"pate-organique"},{"f":"capsule","p":[-0.028,0.013,-0.038],"taille":[0.032,0.034,0.032],"cap":29,"penche":[0,-90],"couleur":"#694828","matiere":"pate-organique"},{"f":"capsule","p":[0.002,0.016,-0.046],"taille":[0.038,0.031,0.038],"cap":-2,"penche":[0,-80],"couleur":"#5a3d21","matiere":"pate-organique"},{"f":"capsule","p":[0.029,0.021,-0.035],"taille":[0.038,0.032,0.038],"cap":-41,"penche":[0,-80],"couleur":"#73502d","matiere":"pate-organique"},{"f":"capsule","p":[0.042,0.03,-0.008],"taille":[0.031,0.035,0.031],"cap":-87,"penche":[0,-71],"couleur":"#7c5631","matiere":"pate-organique"},{"f":"capsule","p":[0.034,0.043,0.021],"taille":[0.033,0.033,0.033],"cap":-126,"penche":[0,-65],"couleur":"#694828","matiere":"pate-organique"},{"f":"capsule","p":[0.012,0.05,0.035],"taille":[0.037,0.028,0.037],"cap":-170,"penche":[0,-89],"couleur":"#5a3d21","matiere":"pate-organique"},{"f":"capsule","p":[-0.012,0.049,0.033],"taille":[0.032,0.023,0.032],"cap":-24,"penche":[0,-81],"couleur":"#73502d","matiere":"pate-organique"},{"f":"capsule","p":[-0.026,0.048,0.019],"taille":[0.031,0.022,0.031],"cap":109,"penche":[0,-84],"couleur":"#7c5631","matiere":"pate-organique"},{"f":"capsule","p":[-0.028,0.051,-0.003],"taille":[0.037,0.023,0.037],"cap":82,"penche":[0,-85],"couleur":"#694828","matiere":"pate-organique"},{"f":"capsule","p":[-0.017,0.05,-0.018],"taille":[0.033,0.02,0.033],"cap":-158,"penche":[0,-78],"couleur":"#5a3d21","matiere":"pate-organique"},{"f":"capsule","p":[0,0.053,-0.021],"taille":[0.03,0.018,0.03],"cap":-1,"penche":[0,-57],"couleur":"#73502d","matiere":"pate-organique"},{"f":"capsule","p":[0.012,0.064,-0.017],"taille":[0.033,0.018,0.033],"cap":-44,"penche":[0,-41],"couleur":"#7c5631","matiere":"pate-organique"},{"f":"capsule","p":[0.016,0.073,-0.006],"taille":[0.03,0.014,0.03],"cap":-85,"penche":[0,-72],"couleur":"#694828","matiere":"pate-organique"},{"f":"capsule","p":[0.012,0.075,0.005],"taille":[0.022,0.014,0.022],"cap":40,"penche":[0,-84],"couleur":"#5a3d21","matiere":"pate-organique"},{"f":"capsule","p":[0.004,0.075,0.01],"taille":[0.021,0.005,0.021],"cap":-172,"penche":[0,-71],"couleur":"#73502d","matiere":"pate-organique"},{"f":"capsule","p":[0,0.076,0.007],"taille":[0.018,0.006,0.018],"cap":119,"penche":[0,-85],"couleur":"#7c5631","matiere":"pate-organique"},{"f":"capsule","p":[-0.002,0.077,0.003],"taille":[0.011,0.004,0.011],"cap":100,"penche":[0,-74],"couleur":"#694828","matiere":"pate-organique"}]},"vomi":{"nom":"flaque de vomi","mots":["vomi","vomis","degueulis","gerbe","rendu"],"quoi":"flaque plate et irrégulière, beige jaunâtre, luisante, avec des grumeaux ; quelques éclaboussures autour","envergure_m":0.42,"echelle":{"regle":"taille"},"origine":"corps","repugnance":0.8,"ambiance":true,"formes":[{"f":"boule","p":[0,0.004,0],"taille":[0.3,0.008,0.22],"couleur":"#a08a4a","matiere":"flaque-organique"},{"f":"boule","p":[0.1,0.004,0.07],"taille":[0.17,0.007,0.13],"cap":35,"couleur":"#8f7a3c","matiere":"flaque-organique"},{"f":"boule","p":[-0.11,0.004,-0.05],"taille":[0.15,0.006,0.1],"cap":-20,"couleur":"#a8924f","matiere":"flaque-organique"},{"f":"boule","p":[0.03,0.009,-0.02],"taille":[0.05,0.012,0.04],"couleur":"#cdb67a","matiere":"flaque-organique"},{"f":"boule","p":[-0.04,0.008,0.05],"taille":[0.035,0.01,0.03],"couleur":"#c7ae6c","matiere":"flaque-organique"},{"f":"boule","p":[0.2,0.002,-0.08],"taille":[0.04,0.004,0.03],"couleur":"#9a8445","matiere":"flaque-organique"},{"f":"boule","p":[-0.19,0.002,0.09],"taille":[0.03,0.004,0.025],"couleur":"#9a8445","matiere":"flaque-organique"}]},"baton":{"nom":"bâton","mots":["baton","batons","branche","branches","brindille","brindilles","bout de bois"],"ramassable":true,"trouve":["arbre","rocher"],"pluriel":"bâtons","quoi":"bâton mort, écorce grise, une petite branche","envergure_m":0.22,"echelle":{"regle":"taille"},"formes":[{"f":"cylindre","p":[0,0.008,0],"taille":[0.015,0.22,0.015],"penche":[0,90],"cap":0,"couleur":"#4e3a27","matiere":"bois"},{"f":"cylindre","p":[0.05,0.007,0.018],"taille":[0.008,0.07,0.008],"penche":[0,90],"cap":-35,"couleur":"#4e3a27","matiere":"bois"}]},"caillou":{"nom":"caillou","mots":["caillou","cailloux","pierre","pierres","galet","galets","gravier"],"ramassable":true,"trouve":["rocher","arbre"],"pluriel":"cailloux","quoi":"caillou clair, arrondi","envergure_m":0.045,"echelle":{"regle":"taille"},"formes":[{"f":"boule","p":[0,0.014,0],"taille":[0.045,0.03,0.038],"couleur":"#bdb8ae","matiere":"gres"}]},"bonhomme":{"nom":"bonhomme de neige","mots":["bonhomme","bonhommes","bonhomme de neige","snowman"],"transforme":true,"besoin":"des bâtons et des cailloux","matiere_min_m":0.05,"quoi":"la matière de la chose façonnée en trois boules empilées, deux bâtons pour les bras, deux cailloux clairs pour les yeux, face vers celui qui l a fait","echelle":{"regle":"volume","unite":"diametre de la boule du bas"},"formes":[{"f":"boule","p":[0,0,0],"taille":[0.78,0.04,0.76],"couleur":"#261b12","matiere":"mat","part":"base"},{"f":"boule","p":[0,0.44,0],"taille":[1,0.9,1],"couleur":"@","matiere":"@","lisse":0.1,"bosse":0.07,"part":"masse"},{"f":"boule","p":[0,1.1,0.01],"taille":[0.74,0.68,0.74],"couleur":"@","matiere":"@","lisse":0.1,"bosse":0.07,"part":"masse"},{"f":"boule","p":[0,1.58,0.02],"taille":[0.54,0.5,0.54],"couleur":"@","matiere":"@","lisse":0.1,"bosse":0.07,"part":"masse"},{"f":"cylindre","p":[-0.56,1.24,0],"taille":[0.07,0.85,0.07],"penche":[0,58],"couleur":"#4e3a27","matiere":"bois","part":"bras"},{"f":"cylindre","p":[0.56,1.27,0],"taille":[0.07,0.85,0.07],"penche":[0,-52],"couleur":"#4e3a27","matiere":"bois","part":"bras"},{"f":"boule","p":[-0.105,1.65,0.235],"taille":[0.13,0.13,0.09],"couleur":"#e4e0d6","matiere":"gres","part":"yeux"},{"f":"boule","p":[0.105,1.65,0.235],"taille":[0.13,0.13,0.09],"couleur":"#e4e0d6","matiere":"gres","part":"yeux"}]}}};
+const LUMIERE=(function(){"use strict";
+/* Le monde en JS et la lumière du soleil (module pur, sans DOM : la page l'embarque en LUMIERE, les tests l'importent).
+   Ici vit la copie JS du monde de monde.glsl : trajet (pathX), relief (terrainH, bosses et buttes), troncs (arbreA), perches
+   (percheB), blocs de grès (blocGres), houppiers (charpentières, masses, bouquets) et trouée. MÊMES FORMULES que le shader,
+   à modifier des deux côtés (CLAUDE.md, « Conventions »). L'état est l'objet S de la page (ou etatDeFiche pour les tests) :
+   seed, kit, kitP, traj, rel, relB, relC, relS, relOn, creux, houp, hp, sunDir, trou, trou2, degage(x, z).
+
+   Sur ce monde, la lumière directe du soleil en un point du sol (soleilEn), le départ au soleil (chercherDepart, fiche :
+   parcours.depart.lumiere) et le point éclairé (ou à l'ombre) le plus proche (chercherLumiere, action « lumiere »).
+   docs/fiche-de-lieu.md, « Départ et trouée » ; docs/meneur-de-jeu.md §23. */
+
+const F32 = Math.fround;
+const fr32 = x => F32(x - Math.floor(x));
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const clampN = (v, a, b, d) => { v = Number(v); return Number.isFinite(v) ? Math.min(b, Math.max(a, v)) : d; };
+const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+
+/* ---- aléa : h42, h21, vnoise2 en flottants 32 bits (au bit près comme le shader, pour les cellules) */
+function h42(px, py) {
+  px = F32(px); py = F32(py);
+  let a = fr32(F32(px * F32(.1031))), b = fr32(F32(py * F32(.1030))), c = fr32(F32(px * F32(.0973))), d = fr32(F32(py * F32(.1099)));
+  const k = F32(33.33), t = F32(F32(F32(F32(a * F32(d + k)) + F32(b * F32(c + k))) + F32(c * F32(a + k))) + F32(d * F32(b + k)));
+  a = F32(a + t); b = F32(b + t); c = F32(c + t); d = F32(d + t);
+  return [fr32(F32(F32(a + b) * c)), fr32(F32(F32(a + c) * b)), fr32(F32(F32(b + c) * d)), fr32(F32(F32(c + d) * a))];
+}
+function h21(px, py) {
+  px = F32(px); py = F32(py); let a = fr32(F32(px * F32(.1031))), b = fr32(F32(py * F32(.1031))), c = fr32(F32(px * F32(.1031)));
+  const k = F32(33.33), t = F32(F32(F32(a * F32(b + k)) + F32(b * F32(c + k))) + F32(c * F32(a + k))); a = F32(a + t); b = F32(b + t); c = F32(c + t);
+  return fr32(F32(F32(a + b) * c));
+}
+function vnoise2(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+  const m = (a, b, t) => a + (b - a) * t; return m(m(h21(ix, iy), h21(ix + 1, iy), fx), m(h21(ix, iy + 1), h21(ix + 1, iy + 1), fx), fy);
+}
+/* h31, h33, vnoise3 : en flottants 64 bits (statistiquement les mêmes que le shader, pas au bit près : trouées des feuilles) */
+const fr = x => x - Math.floor(x);
+function h31(x, y, z) { x = fr(x * .1031); y = fr(y * .1031); z = fr(z * .1031); const t = x * (z + 31.32) + y * (y + 31.32) + z * (x + 31.32); x += t; y += t; z += t; return fr((x + y) * z); }
+function h33(x, y, z) { x = fr(x * .1031); y = fr(y * .1030); z = fr(z * .0973); const t = x * (y + 33.33) + y * (x + 33.33) + z * (z + 33.33); x += t; y += t; z += t;
+  return [fr((x + y) * z), fr((x + x) * y), fr((y + x) * x)]; }
+function vnoise3(x, y, z) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z); let fx = x - ix, fy = y - iy, fz = z - iz;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy); fz = fz * fz * (3 - 2 * fz);
+  const m = (a, b, t) => a + (b - a) * t, h = (a, b, c) => h31(ix + a, iy + b, iz + c);
+  return m(m(m(h(0, 0, 0), h(1, 0, 0), fx), m(h(0, 1, 0), h(1, 1, 0), fx), fy), m(m(h(0, 0, 1), h(1, 0, 1), fx), m(h(0, 1, 1), h(1, 1, 1), fx), fy), fz);
+}
+
+/* ---- réglages tirés de la fiche (la page les range dans S, les tests dans etatDeFiche) */
+const kitDe = f => f.kit === 'dunes' ? 1 : f.kit === 'nu' || (f.kit === undefined && Array.isArray(f.semis) && f.semis.length) ? 2 : 0;
+function graineVec(n) { return [(n * 12.9898) % 89, (n * 78.233) % 83, (n * .618034) % 6.2832]; }
+function kitParams(f, kit) {
+  const fo = f.foret || {};
+  return kit === 1 ? [-1, (f.dunes && f.dunes.rochers) || 0, 0, 1] : kit === 2 ? [-1, 0, 0, 1]
+    : [fo.densite !== undefined ? (.2 + .6 * fo.densite) * Math.min(1, fo.densite * 5) : .62, fo.rochers !== undefined ? fo.rochers : 1, fo.feuillage !== undefined ? fo.feuillage : 1, 1];
+}
+function soleilDir(so) {
+  so = so || { azimut: -33, hauteur: 21 };
+  const nuit = so.hauteur < -1, el = nuit ? 38 : Math.max(2, so.hauteur), az = so.azimut * Math.PI / 180, e = el * Math.PI / 180;
+  return [Math.sin(az) * Math.cos(e), Math.sin(e), Math.cos(az) * Math.cos(e)];
+}
+/* Relief et trajet : la fiche règle les formules de terrainH et pathX. Sans réglage, la forêt d'origine à l'identique. */
+function reglerRelief(S, f, seedN) {
+  S.rel = [1, 1, 0, 0]; S.traj = [1, .85, .3, .5]; S.creux = [.10, 1.8, .4, 0]; S.terK = [.88, 0]; S.pente = .22;
+  S.relB = [0, 0, 0, 0]; S.relC = [0, 0, 1, 1]; S.relS = [0, 0]; S.relOn = false;
+  if (S.kit === 1) return;                                       // dunes : relief encore en dur
+  const re = isObj(f.relief) ? f.relief : null, tr = isObj(f.trajet) ? f.trajet : null;
+  if (!re && !tr && S.kit === 0) return;
+  /* Bosses (creux et bosses de 5 à 30 m) et buttes (flanc puis plateau, au second plan) : reliefDetail dans monde.glsl, variante
+     RELIEF compilée seulement si la fiche en demande. hauteur en m, echelle en m (longueur d'onde), trajet : part gardée sur le trajet. */
+  const bo = re && isObj(re.bosses) ? re.bosses : null, bu = re && isObj(re.buttes) ? re.buttes : null;
+  const hB = bo ? clampN(bo.hauteur, 0, 4, 0) : 0, hT = bu ? clampN(bu.hauteur, 0, 25, 0) : 0;
+  if (hB > 0 || hT > 0) {
+    const part = bu ? clampN(bu.part, 0, 1, .3) : .3, plat = bu ? clampN(bu.plat, 0, 1, .5) : .5, s1 = .78 - .4 * part, s0 = s1 - (.06 + .22 * (1 - plat));
+    S.relB = [hB, 1 / (bo ? clampN(bo.echelle, 3, 80, 12) : 12), hT, 1 / (bu ? clampN(bu.echelle, 15, 400, 60) : 60)];
+    S.relC = [s0, s1, bo ? clampN(bo.trajet, 0, 1, .35) : .35, bu ? clampN(bu.trajet, 0, 1, .5) : .5];
+    S.relS = [seedN % 997, (seedN * 7) % 991]; S.relOn = true;
+  }
+  const amp = clampN(re && re.amplitude, 0, 12, S.kit === 2 ? .8 : 1.5), ech = clampN(re && re.echelle, 20, 600, 150), pente = clampN(re && re.pente, -.35, .35, 0);
+  const larg = clampN(tr && tr.largeur, .6, 30, 1.7), hw = larg / 2, net = !!(tr && tr.bord === 'net'), creux = clampN(tr && tr.creux, 0, 1.2, .10);   // jusqu'à 1,2 m : un sentier encaissé entre deux talus
+  const niv = re && re.niveler !== undefined ? !!re.niveler : S.kit === 2 && larg >= 3;
+  S.rel = [amp / 1.5, 150 / ech, pente, niv ? hw + 2 : 0];
+  S.traj = [clampN(tr && tr.sinuosite, 0, 2, 1), hw, net ? .03 : .3, net ? 0 : .5];
+  S.creux = [creux, hw + (net ? .18 : .95), net ? hw : Math.max(0, hw - .45), 0];
+  const g = S.rel[0] * S.rel[1] * .22 + Math.abs(pente) + (S.relOn ? 3 * S.relB[0] * S.relB[1] + .6 * S.relB[2] * S.relB[3] / Math.max(.05, S.relC[1] - S.relC[0]) : 0); S.pente = g;     // pente la plus forte du relief, en gros
+  S.terK = [.88 / Math.sqrt(1 + g * g), 0];
+  const cg = 1.5 * creux / Math.max(.05, S.creux[1] - S.creux[2]);       // bord de trottoir : pas réduit seulement là
+  if (cg > .5) S.terK[1] = S.terK[0] / Math.sqrt(1 + cg * cg);
+}
+/* Un port de houppier (foret.houppiers.*.*), en nombres : 16 flottants à partir de i × 16 dans hp (uHp de monde.glsl). */
+function portHoupNum(hp, o, i, part) {
+  if (!isObj(o)) return false;
+  const hb = Array.isArray(o.hauteur) ? o.hauteur : [.45, 1], bas = clampN(hb[0], 0, .95, .45), haut = clampN(hb[1], bas + .03, 1, 1);
+  hp.set([bas, haut, clampN(o.largeur, .2, 8, 2.5), clampN(o.aplati, 0, 1, .3),
+    Math.round(clampN(o.branches, 1, 8, 5)), clampN(o.montee, 0, 1, .5), clampN(o.retombe, 0, 1, .1), Math.round(clampN(o.rameaux, 0, 3, 2)),
+    clampN(o.masse, .15, 2.5, .8), clampN(o.feuilles, 0, 1, .5), clampN(o.taille, .02, .4, .08), 1, part, clampN(o.inegal, 0, 1, 0), 0, 0], i * 16);
+  return true;
+}
+/* Trouée (foret.trouee) : une bande sans arbre, perche ni bloc, qui part du trajet à le_long m et s'ouvre vers le soleil (ou un
+   azimut) sur longueur m, demi-largeur ondulée autour de largeur / 2. Rangée dans S.trou (origine x, z ; direction unitaire)
+   et S.trou2 (longueur, demi-largeur, phase des bords) ; tout à 0 sans trouée : troue() (monde.glsl) ne retire rien. */
+function reglerTrouee(S, f, pathX) {
+  S.trou = [0, 0, 0, 0]; S.trou2 = [0, 0, 0, 0];
+  const fo = isObj(f.foret) ? f.foret : null;
+  let t = fo && (Array.isArray(fo.trouees) ? fo.trouees[0] : fo.trouee);   // une seule trouée par lieu
+  if (!isObj(t) || S.kit !== 0) return;
+  const z0 = clampN(t.le_long, -400, 400, 0), L = clampN(t.longueur, 5, 200, 120), hw = clampN(t.largeur, 4, 40, 16) / 2;
+  let dx, dz;
+  if (typeof t.vers === 'number') { const a = t.vers * Math.PI / 180; dx = Math.sin(a); dz = Math.cos(a); }
+  else { const s = S.sunDir, n = Math.hypot(s[0], s[2]) || 1; dx = s[0] / n; dz = s[2] / n; }   // « soleil » (par défaut)
+  S.trou = [pathX(z0), z0, dx, dz]; S.trou2 = [L, hw, (S.seed[2] * 3.7) % 6.2832, 0];
+}
+/* L'état du monde d'une fiche, sans la page (tests, outils) : les mêmes réglages que applyFiche (src/main.js). */
+function etatDeFiche(f) {
+  const n = f.graine || 4821, S = { seed: graineVec(n), kit: kitDe(f), hp: new Float32Array(64), degage: () => false };
+  S.kitP = kitParams(f, S.kit);
+  reglerRelief(S, f, n);
+  const fo = f.foret || {}, cone = fo.houppier === 'cone';
+  S.can = cone ? [clampN(fo.houppier_bas, .3, 8, 1.6), 19] : [7, 19];
+  S.houp = [cone ? 1 : 0, S.can[0], clampN(fo.houppier_rayon, .8, 3.2, 3), clampN(fo.perches, 0, 1, cone ? .25 : 1)];
+  const sf = isObj(f.surfaces) ? f.surfaces : {}, parts = [clampN(isObj(sf.arbres) ? sf.arbres.part : undefined, 0, 1, .45), clampN(isObj(sf.perches) ? sf.perches.part : undefined, 0, 1, .5)];
+  const h = S.kit === 0 && isObj(fo.houppiers) ? fo.houppiers : null;
+  if (h) { const fam = ['arbres', 'perches']; for (let i = 0; i < 2; i++) { const g = isObj(h[fam[i]]) ? h[fam[i]] : {};
+    S.hp[(2 * i) * 16 + 12] = parts[i]; portHoupNum(S.hp, g.a, 2 * i, parts[i]); portHoupNum(S.hp, g.b, 2 * i + 1, parts[i]); } }
+  S.sunDir = soleilDir(f.ambiance && f.ambiance.soleil);
+  if (f.ambiance && f.ambiance.saison === 'hiver') S.kitP[2] *= .15;
+  const W = mondeJS(S); reglerTrouee(S, f, W.pathX);
+  return S;
+}
+
+/* ---- le monde : mêmes formules que monde.glsl */
+const CA = 6, CB = 3.3, CC = 8.5;
+const COUV = .65;                  // part d'une couche de bouquet couverte quand les feuilles y sont (réglée sur la carte d'ombres du moteur)
+function mondeJS(S) {
+  const pathX = z => S.traj[0] * (3.2 * Math.sin(z * .047 + S.seed[2]) + 1.6 * Math.sin(z * .113 + 1.7 + S.seed[2] * 2));
+  const pathYaw = z => Math.atan2(pathX(z + 3) - pathX(z - 3), 6);
+  function ondul(x, z) { const qx = x * S.rel[1], qz = z * S.rel[1];
+    return S.rel[0] * (1.5 * Math.sin(qx * .041 + .6 + S.seed[2]) * Math.cos(qz * .035 + 1.1) + .65 * Math.sin(qx * .097 + qz * .071 + 2) + .22 * Math.sin(qx * .29 - qz * .21 + S.seed[2] * 3)); }
+  /* Bosses et buttes : la même formule que reliefDetail (monde.glsl), au bit près pour le hachage (entiers non signés, Math.imul). */
+  function hR(cx, cz) { let x = (Math.imul((cx + S.relS[0] + 46000) >>> 0, 1597334677) ^ Math.imul((cz + S.relS[1] + 46000) >>> 0, 3812015801)) >>> 0;
+    x = (Math.imul(x, 747796405) + 2891336453) >>> 0; x = Math.imul(((x >>> ((x >>> 28) + 4)) ^ x) >>> 0, 277803737) >>> 0; x = ((x >>> 22) ^ x) >>> 0; return (x >>> 8) / 16777216; }
+  function bruitR(px, pz) { const ix = Math.floor(px), iz = Math.floor(pz); let fx = px - ix, fz = pz - iz; fx = fx * fx * (3 - 2 * fx); fz = fz * fz * (3 - 2 * fz);
+    const a = hR(ix, iz), b = hR(ix + 1, iz), c = hR(ix, iz + 1), d = hR(ix + 1, iz + 1); return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fz; }
+  function reliefDetail(x, z, ax) {
+    const B = S.relB, C = S.relC, qx = x * B[1], qz = z * B[1], rx = x * B[3], rz = z * B[3], hw = S.traj[1];
+    if (B[0] === 0 && B[2] === 0) return 0;                              // ni bosses ni buttes (comme monde.glsl)
+    const b = (bruitR(qx, qz) - .5) * 1.4 + (bruitR((.8 * qx - .6 * qz) * 2.13 + 31, (.6 * qx + .8 * qz) * 2.13 + 17) - .5) * .6;
+    const t = sstep(C[0], C[1], bruitR(.6 * rx + .8 * rz - 57, -.8 * rx + .6 * rz + 83));
+    return B[0] * b * (C[2] + (1 - C[2]) * sstep(hw, hw + 2.5, ax)) + B[2] * t * (C[3] + (1 - C[3]) * sstep(hw + 1, hw + 14, ax));
+  }
+  function terrainH(x, z) {
+    if (S.kit === 1) { const a = x * .045 + .9 * Math.sin(z * .021 + S.seed[2]) + .5 * Math.sin(z * .05 + 1.3);
+      return 3.2 * (1 - Math.abs(Math.sin(a))) * (.62 + .38 * Math.sin(z * .03 + 2 + S.seed[2])) + .5 * Math.sin(x * .11 + z * .08); }
+    const px = pathX(z), ax = Math.abs(x - px);
+    let h = ondul(S.rel[3] > 0 ? x + (px - x) * sstep(S.rel[3] + 5, S.rel[3], ax) : x, z);   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe
+    h += S.rel[2] * z;
+    h -= S.creux[0] * sstep(S.creux[1], S.creux[2], ax);
+    return S.relOn ? h + reliefDetail(x, z, ax) : h;
+  }
+  /* Trouée : troue() de monde.glsl. */
+  function troue(wx, wz) {
+    const T = S.trou, T2 = S.trou2; if (!T || !T2 || !(T2[0] > 0)) return false;
+    const dx = wx - T[0], dz = wz - T[1], a = dx * T[2] + dz * T[3], l = Math.abs(dx * T[3] - dz * T[2]);
+    return a > -T2[1] && a < T2[0] && l < T2[1] * (.8 + .2 * Math.sin(a * .21 + T2[2]) + .15 * Math.sin(a * .57 + 1.3));
+  }
+  const libre = (wx, wz) => (S.degage && S.degage(wx, wz)) || troue(wx, wz);   // cleared() || troue()
+  const sx = () => F32(S.seed[0]), sy = () => F32(S.seed[1]);
+  /* Objets de cellule : arbreA, percheB, blocGres (monde.glsl). Rendent null pour une cellule vide. */
+  function arbreA(i, j) {
+    if (S.kit !== 0 || !(S.kitP[0] > 0)) return null;
+    const h = h42(i + sx(), j + sy()); if (h[0] > S.kitP[0]) return null;
+    const o = [(h[1] - .5) * 3.8, (h[2] - .5) * 3.8], vx = (i + .5) * CA + o[0], vz = (j + .5) * CA + o[1], wx = .8776 * vx + .4794 * vz, wz = -.4794 * vx + .8776 * vz;
+    if (Math.abs(wx - pathX(wz)) < 1.5 || libre(wx, wz)) return null;
+    const l = h42(i + 31.7, j + 31.7);
+    return { fam: 'a', i, j, h, o, x: wx, z: wz, H: 11 + 6 * h[3], r0: .16 + .17 * fr32(h[3] * 7.31), lean: [(l[0] - .5) * .035, (l[1] - .5) * .035], c: [(i + .5) * CA, (j + .5) * CA] };
+  }
+  function percheB(i, j) {
+    if (S.kit !== 0 || !(S.kitP[0] > 0) || !(S.houp[3] > 0)) return null;
+    const h = h42(i + sx() + 71, j + sy() + 71); if (h[0] > S.kitP[0] * .8 * S.houp[3]) return null;
+    const o = [(h[1] - .5) * 1.9, (h[2] - .5) * 1.9], vx = (i + .5) * CB + o[0] - 17.3, vz = (j + .5) * CB + o[1] - 17.3, wx = .6216 * vx - .7833 * vz, wz = .7833 * vx + .6216 * vz;
+    if (Math.abs(wx - pathX(wz)) < 1.15 || libre(wx, wz)) return null;
+    const l = h42(i + 3.1, j + 3.1);
+    return { fam: 'p', i, j, h, o, x: wx, z: wz, H: 6 + 5 * h[3], r0: .035 + .07 * fr32(h[3] * 5.3), lean: [(l[0] - .5) * .06, (l[1] - .5) * .06], c: [(i + .5) * CB - 17.3, (j + .5) * CB - 17.3] };
+  }
+  function blocGres(i, j) {
+    if (S.kit === 2 || !(S.kitP[1] > 0)) return null;
+    const h = h42(i + sx() + 13, j + sy() + 13), mask = vnoise2(i * .37 + sx(), j * .37 + sy());
+    if (h[0] > (sstep(.32, .68, mask) * .9 + .08) * S.kitP[1]) return null;
+    const R = .7 + 1.6 * h[3] * h[3], ox = (h[1] - .5) * 2 * (.5 * CC - .3 - 1.25 * R), oz = (h[2] - .5) * 2 * (.5 * CC - .3 - 1.25 * R), wx = (i + .5) * CC + ox, wz = (j + .5) * CC + oz;
+    if (Math.abs(wx - pathX(wz)) < R * 1.1 + .5 || libre(wx, wz)) return null;
+    return { fam: 'r', i, j, h, R, x: wx, z: wz, a: h[0] * 50, rad: [R * (1 + .25 * fr32(h[1] * 9)), R * (.62 + .3 * fr32(h[2] * 7)), R * (.8 + .3 * fr32(h[3] * 11))] };
+  }
+  /* Repères des grilles : monde → cellule (q) et cellule → monde */
+  const versA = (x, z) => [.8776 * x - .4794 * z, .4794 * x + .8776 * z];
+  const versB = (x, z) => [.6216 * x + .7833 * z + 17.3, -.7833 * x + .6216 * z + 17.3];
+  /* Tous les objets de cellule dont le centre est à moins de R m de (x, z) (une famille : 'a', 'p', 'r'). */
+  function cellules(fam, x, z, R) {
+    const out = [];
+    if (fam === 'a' || fam === 'p') {
+      const C = fam === 'a' ? CA : CB, q = fam === 'a' ? versA(x, z) : versB(x, z), n = Math.ceil(R / C) + 1, i0 = Math.floor(q[0] / C), j0 = Math.floor(q[1] / C);
+      for (let i = i0 - n; i <= i0 + n; i++) for (let j = j0 - n; j <= j0 + n; j++) {
+        const o = fam === 'a' ? arbreA(i, j) : percheB(i, j); if (o && Math.hypot(o.x - x, o.z - z) <= R) out.push(o); }
+    } else {
+      const n = Math.ceil(R / CC) + 1, i0 = Math.floor(x / CC), j0 = Math.floor(z / CC);
+      for (let i = i0 - n; i <= i0 + n; i++) for (let j = j0 - n; j <= j0 + n; j++) { const o = blocGres(i, j); if (o && Math.hypot(o.x - x, o.z - z) <= R) out.push(o); }
+    }
+    return out;
+  }
+  return { pathX, pathYaw, terrainH, reliefDetail, troue, arbreA, percheB, blocGres, cellules, versA, versB, S };
+}
+
+/* ---- houppiers : charpente, rameau, masse (monde.glsl), bouquets (semeHoup, v3_grains.vert). Repère de la cellule. */
+function houppier(W, o) {
+  const S = W.S, hp = S.hp;
+  let e;
+  if (o.fam === 'a') e = fr(o.h[3] * .999 * 3.7) < hp[12] ? 0 : 1;      // même partage que l'écorce
+  else e = fr(o.h[3] * 9.1) < hp[44] ? 2 : 3;
+  if (!(hp[e * 16 + 11] > .5)) return null;
+  const P0 = hp.subarray(e * 16, e * 16 + 4), P1 = hp.subarray(e * 16 + 4, e * 16 + 8), P2 = hp.subarray(e * 16 + 8, e * 16 + 12), P3 = hp.subarray(e * 16 + 12, e * 16 + 16);
+  const M = o.fam === 'a' ? (a, b) => [.8776 * a + .4794 * b, -.4794 * a + .8776 * b] : (a, b) => [.6216 * a - .7833 * b, .7833 * a + .6216 * b];
+  const c0 = o.fam === 'a' ? o.c : o.c, wa = o.fam === 'a' ? 0 : .06, wp = o.fam === 'a' ? 0 : o.h[3] * 20, wd = o.fam === 'a' ? [1, 0] : [Math.cos(o.h[0] * 40), Math.sin(o.h[0] * 40)];
+  const axe = y => [o.o[0] + o.lean[0] * y + wa * Math.sin(y * .6 + wp) * wd[0], o.o[1] + o.lean[1] * y + wa * Math.sin(y * .6 + wp) * wd[1]];
+  const th = W.terrainH(o.x, o.z);
+  const monde = p => { const w = M(c0[0] + p[0], c0[1] + p[2]); return [w[0], th + p[1], w[1]]; };
+  const nb = Math.max(P1[0], 1), nr = P1[3], bois = [], bouquets = [];
+  const ht = fr(o.h[2] * 13.37 + o.h[1] * 7.1), inegal = P3[1];
+  const tmA = (1 - inegal) + inegal * (ht < .25 ? .04 + .3 * ht : .4 + 1.2 * (ht - .25) / .75);
+  for (let k = 0; k < P1[0]; k++) {
+    const r = h42(o.h[2] * 37.1 + k * 7.31, o.h[3] * 37.1 + k * 3.17);
+    const u = Math.min(1, Math.max(0, (k + .2 + .6 * r[0]) / nb)), y = o.H * (P0[0] + (P0[1] - P0[0]) * u);
+    const prof = Math.sin(3.1416 * (.15 + .8 * u)) + ((.55 + .45 * u) - Math.sin(3.1416 * (.15 + .8 * u))) * P0[3];
+    const L = P0[2] * prof * (.7 + .45 * r[1]), az = k * 2.39996 + o.h[0] * 6.2832 + (r[2] - .5) * .9;
+    const el = (.12 + (1.35 - .12) * P1[1]) * (.75 + .5 * r[3]) - .3 * u * P0[3];
+    const ax = axe(y), a0 = [ax[0], y, ax[1]], d1 = [Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)];
+    const am = [a0[0] + d1[0] * L * .5, a0[1] + d1[1] * L * .5, a0[2] + d1[2] * L * .5];
+    const el2 = el - P1[2] * 1.4 - .12, a2 = az + (r[1] - .5) * .6, d2 = [Math.cos(a2) * Math.cos(el2), Math.sin(el2), Math.sin(a2) * Math.cos(el2)];
+    const a1 = [am[0] + d2[0] * L * .55, am[1] + d2[1] * L * .55, am[2] + d2[2] * L * .55];
+    const rb = o.r0 * (.62 + (.3 - .62) * u) * (.8 + .3 * r[0]);
+    bois.push([monde(a0), monde(am), rb], [monde(am), monde(a1), rb * .7]);
+    for (let m = 0; m <= nr; m++) {
+      let c;
+      if (m < nr) {                                                  // rameau m : la masse est à son bout
+        const rr = h42(o.h[1] * 53.7 + k * 5.1 + m * 1.7, o.h[0] * 53.7 + m * 9.3);
+        const t = .3 + .6 * (m + .3 + .4 * rr[0]) / Math.max(nr, 1);
+        const s0 = t < .5 ? a0.map((v, n) => v + (am[n] - v) * 2 * t) : am.map((v, n) => v + (a1[n] - v) * (2 * t - 1));
+        let d = t < .5 ? am.map((v, n) => v - a0[n]) : a1.map((v, n) => v - am[n]); const LL = Math.hypot(...a1.map((v, n) => v - am[n])) + Math.hypot(...am.map((v, n) => v - a0[n]));
+        let dl = Math.hypot(...d) || 1e-4; d = d.map(v => v / dl);
+        let sd = [-d[2], 1e-3, d[0]]; dl = Math.hypot(...sd); sd = sd.map(v => v / dl);    // cross(d, y) + petit y, normalisé
+        d = [d[0] + sd[0] * (rr[1] - .5) * 2.4, d[1] + sd[1] * (rr[1] - .5) * 2.4 + .35 - P1[2] * .9, d[2] + sd[2] * (rr[1] - .5) * 2.4]; dl = Math.hypot(...d); d = d.map(v => v / dl);
+        c = s0.map((v, n) => v + d[n] * LL * .42 * (.65 + .6 * rr[2]));
+      } else c = a1.map((v, n) => v + d2[n] * P2[0] * .25);
+      const Mm = P2[0] * (.7 + .6 * h42(o.h[3] * 21.3 + k * 2.7, o.h[2] * 21.3 + m * 4.1)[0]);
+      c[1] -= P1[2] * .35 * Mm;
+      const rad = [Mm, Mm * (1 - .4 * P0[3]) * (1 + .7 * P1[2]), Mm];
+      for (let b = 0; b < 4; b++) {                                   // quatre bouquets par masse (semeHoup)
+        const hb = h33(o.h[0] * 31.7 + (k * 7 + m), o.h[1] * 31.7 + b, o.h[2] * 31.7 + (m * 3 + b));
+        let db = [hb[0] * 2 - 1, hb[1] * 2 - 1 + .15, hb[2] * 2 - 1]; const dl = Math.hypot(...db) || 1; db = db.map(v => v / dl);
+        const f = (.38 + .16 * hb[2]) + ((.26 + .4 * hb[2]) - (.38 + .16 * hb[2])) * inegal;
+        const cc = [c[0] + db[0] * rad[0] * .7, c[1] + db[1] * rad[1] * .7, c[2] + db[2] * rad[2] * .7];
+        const tm = tmA * ((1 - inegal) + inegal * (.35 + 1.3 * hb[1]));
+        bouquets.push({ p: monde(cc), r: [rad[0] * f, rad[1] * f, rad[2] * f], pres: Math.min(1, Math.max(0, P2[1] * 2.2 * tm)), e, L: P2[2], M: P2[0], inegal });
+      }
+    }
+  }
+  return { bois, bouquets };
+}
+
+/* ---- la lumière directe du soleil en un point du sol
+   0 à 1 : la part du disque solaire qui arrive (terrain, troncs, perches, charpentières, bouquets de feuilles, blocs), sans le
+   cosinus. Les bouquets sont troués comme dans le semeur (trouées à l'échelle du bouquet, petits jours) : la transmittance est
+   tirée le long de la corde, déterministe. La canopée statistique (canopyT) n'est pas comptée ici (voir canopee()). */
+function creerSoleil(W) {
+  const S = W.S, sd = S.sunDir, sh = Math.hypot(sd[0], sd[2]) || 1, ux = sd[0] / sh, uz = sd[2] / sh, tanE = sd[1] / sh;
+  const cache = new Map(), houpOn = S.hp && S.hp[11] + S.hp[27] + S.hp[43] + S.hp[59] > 0;
+  const objet = o => { const k = o.fam + o.i + ',' + o.j; let v = cache.get(k); if (v === undefined) { v = o.fam === 'r' ? null : houpOn ? houppier(W, o) : null; cache.set(k, v); } return v; };
+  const Lmax = y0 => Math.min(160, Math.max(10, (24 - 0) / Math.max(tanE, .02)));
+  /* Les ombreurs possibles le long du rayon issu de (x, z) : cellules à moins de 7 m de la droite, jusqu'à Lmax. */
+  function ombreurs(x, z) {
+    const L = Lmax(), vus = new Set(), out = [];
+    for (const fam of ['a', 'p', 'r']) {
+      const pasR = fam === 'a' ? 6 : fam === 'p' ? 4 : 6;
+      for (let t = 0; t <= L; t += pasR) for (const o of W.cellules(fam, x + ux * t, z + uz * t, fam === 'r' ? 9 : 8)) {
+        const k = fam + o.i + ',' + o.j; if (vus.has(k)) continue; vus.add(k);
+        const dx = o.x - x, dz = o.z - z, a = dx * ux + dz * uz, l = Math.abs(dx * uz - dz * ux);
+        if (a < -4 || l > 7.5) continue; out.push(o); }
+    }
+    return out;
+  }
+  const memo = new Map();
+  function ombreursPres(x, z) {                                       // par carreaux de 4 m (le rayon d'un point voisin croise les mêmes)
+    const k = Math.floor(x / 4) + ',' + Math.floor(z / 4); let v = memo.get(k);
+    if (!v) { v = ombreurs(Math.floor(x / 4) * 4 + 2, Math.floor(z / 4) * 4 + 2); memo.set(k, v); if (memo.size > 4000) memo.clear(); }
+    return v;
+  }
+  /* axe du tronc à la hauteur y, dans le monde (axeT / axeB de monde.glsl) */
+  function axeMonde(o, y) {
+    if (o.fam === 'a') { const vx = o.c[0] + o.o[0] + o.lean[0] * y, vz = o.c[1] + o.o[1] + o.lean[1] * y; return [.8776 * vx + .4794 * vz, -.4794 * vx + .8776 * vz]; }
+    const w = .06 * Math.sin(y * .6 + o.h[3] * 20), vx = o.c[0] + o.o[0] + o.lean[0] * y + w * Math.cos(o.h[0] * 40), vz = o.c[1] + o.o[1] + o.lean[1] * y + w * Math.sin(o.h[0] * 40);
+    return [.6216 * vx - .7833 * vz, .7833 * vx + .6216 * vz];
+  }
+  /* rayon P + t (ux, tanE, uz) : t horizontal ; renvoie [t, écart horizontal, hauteur du rayon] au plus près d'un axe vertical (cx, cz) */
+  function enY(P, x, z, y) { return P[1] + Math.max(0, (x - P[0]) * ux + (z - P[2]) * uz) * tanE; }
+  function capsule(P, a, b, r) {                                      // le rayon passe-t-il dans le segment épais a-b ? (8 points)
+    for (let s = 0; s <= 8; s++) { const q = [a[0] + (b[0] - a[0]) * s / 8, a[1] + (b[1] - a[1]) * s / 8, a[2] + (b[2] - a[2]) * s / 8];
+      const t = (q[0] - P[0]) * ux + (q[2] - P[2]) * uz; if (t < .05) continue;
+      const lx = q[0] - (P[0] + ux * t), lz = q[2] - (P[2] + uz * t), ly = q[1] - (P[1] + tanE * t);
+      // distance du point au rayon (3D) : la composante le long du rayon est retirée
+      const dir = [ux, tanE, uz], n = Math.hypot(...dir), d = [lx, ly, lz], dp = (d[0] * dir[0] + d[1] * dir[1] + d[2] * dir[2]) / (n * n);
+      if (Math.hypot(d[0] - dir[0] * dp, d[1] - dir[1] * dp, d[2] - dir[2] * dp) < r) return true; }
+    return false;
+  }
+  function transmis(P, x, z) {
+    let T = 1;
+    // terrain : le soleil bas est vite masqué par une butte ou le talus
+    for (let t = .4; t < Lmax(); t += t < 6 ? .4 : t < 30 ? 1 : 2.5) {
+      if (W.terrainH(P[0] + ux * t, P[2] + uz * t) > P[1] + tanE * t) return 0; }
+    const dir = [ux, tanE, uz], n2 = 1 + tanE * tanE;
+    for (const o of ombreursPres(x, z)) {
+      if (o.fam === 'r') {                                            // bloc : ellipsoïde tourné, centre à R × 0,22 au-dessus du sol
+        const th = W.terrainH(o.x, o.z), ca = Math.cos(o.a), sa = Math.sin(o.a);
+        const loc = v => { const x2 = v[0], z2 = v[2]; return [(ca * x2 - sa * z2) / o.rad[0], v[1] / o.rad[1], (sa * x2 + ca * z2) / o.rad[2]]; };   // mat2(ca,sa,-sa,ca)*lp.xz
+        const p0 = loc([P[0] - o.x, P[1] - (th + o.R * .22), P[2] - o.z]), d = loc(dir);
+        const A = d[0] * d[0] + d[1] * d[1] + d[2] * d[2], B = p0[0] * d[0] + p0[1] * d[1] + p0[2] * d[2], C = p0[0] * p0[0] + p0[1] * p0[1] + p0[2] * p0[2] - .92;
+        if (B * B - A * C > 0 && -B + Math.sqrt(B * B - A * C) > 0) return 0;
+        continue;
+      }
+      // tronc : à la hauteur où le rayon passe, l'écart à l'axe (penché, et ondulé pour une perche)
+      const t = (o.x - P[0]) * ux + (o.z - P[2]) * uz;
+      if (t > -.5) {
+        const y = P[1] + tanE * Math.max(t, 0) - W.terrainH(o.x, o.z);
+        if (y < o.H) {
+          const yc = Math.min(Math.max(y, -1), o.H), ax = axeMonde(o, yc);
+          const ta = (ax[0] - P[0]) * ux + (ax[1] - P[2]) * uz, lx = ax[0] - (P[0] + ux * ta), lz = ax[1] - (P[2] + uz * ta);
+          const ra = o.fam === 'a' ? o.r0 * (1 - .5 * Math.min(1, Math.max(0, y / o.H))) + o.r0 * .45 * Math.exp(-Math.max(y, 0) * 2.5)
+            : o.r0 * (1 - .6 * Math.min(1, Math.max(0, y / o.H))) + o.r0 * .3 * Math.exp(-Math.max(y, 0) * 4);
+          if (Math.hypot(lx, lz) < ra + .02) return 0;
+        }
+      }
+      const hq = objet(o); if (!hq) continue;
+      for (const [a, b, r] of hq.bois) if (r > .04 && capsule(P, a, b, r)) return 0;
+      for (const q of hq.bouquets) {
+        const R = Math.max(q.r[0], q.r[1]); const dx = q.p[0] - P[0], dy = q.p[1] - P[1], dz = q.p[2] - P[2];
+        const s = (dx * ux + dy * tanE + dz * uz) / n2; if (s < 0) continue;
+        const ex = dx - ux * s, ey = dy - tanE * s, ez = dz - uz * s, dd = Math.hypot(ex, ey * R / Math.max(q.r[1], .05), ez);
+        if (dd >= R) continue;
+        // les feuilles d'un bouquet sont sur sa surface (plus quelques-unes dedans) : le rayon traverse deux couches, à l'entrée
+        // et à la sortie, et un peu du cœur ; présence du semeur à chaque traversée (trouées gp, petits jours gq)
+        const demi = Math.sqrt(R * R - dd * dd);
+        for (const [u0, w] of [[s - demi, COUV], [s + demi, COUV], [s, COUV * .3]]) {
+          const X = P[0] + ux * u0, Y = P[1] + tanE * u0, Z = P[2] + uz * u0;
+          const gp = vnoise3(X / (q.M * .3) + S.seed[0] + q.e * 7, Y / (q.M * .3) + S.seed[1] + q.e * 7, Z / (q.M * .3) + S.seed[2] + q.e * 7);
+          const gq = vnoise3(X / (q.L * 3.5) + S.seed[0] * 1.7, Y / (q.L * 3.5) + S.seed[1] * 1.7, Z / (q.L * 3.5) + S.seed[2] * 1.7);
+          const pres = Math.min(1, q.pres * sstep(.42, .58, gp)) * (1 + (sstep(.25, .45, gq) - 1) * q.inegal);
+          T *= 1 - w * pres;
+        }
+        if (T < .02) return 0;
+      }
+    }
+    return T;
+  }
+  /* soleil au sol en (x, z) : { v : lumière directe 0 à 1, cos : éclairement de la pente (n·soleil) } */
+  function soleilEn(x, z) {
+    const y = W.terrainH(x, z), e = .3, gx = (W.terrainH(x + e, z) - W.terrainH(x - e, z)) / (2 * e), gz = (W.terrainH(x, z + e) - W.terrainH(x, z - e)) / (2 * e);
+    const nn = Math.hypot(gx, 1, gz), cos = Math.max(0, (-gx * sd[0] + sd[1] - gz * sd[2]) / nn);
+    if (cos <= 0) return { v: 0, cos: 0 };
+    return { v: transmis([x, y + .06, z], x, z), cos };
+  }
+  return { soleilEn, ombreurs, houppier: o => objet(o), ux, uz, tanE };
+}
+
+/* Disque autour du porteur : centre, 6 points à 1,2 m, 8 à 2,5 m (devant ET derrière : il pose derrière ses talons). */
+const DISQUE = [[0, 0], ...[0, 1, 2, 3, 4, 5].map(k => [1.2 * Math.sin(k * Math.PI / 3), 1.2 * Math.cos(k * Math.PI / 3)]),
+  ...[0, 1, 2, 3, 4, 5, 6, 7].map(k => [2.5 * Math.sin(k * Math.PI / 4 + .39), 2.5 * Math.cos(k * Math.PI / 4 + .39)])];
+/* Un point au soleil : la lumière directe, et la pente qui la reçoit (une pente tournée vers l'ombre compte sombre ; à partir de
+   60 % de l'éclairement du sol plat, pleine). */
+const vu = (L, r) => r.v * sstep(0, .6 * L.tanE / Math.hypot(1, L.tanE), r.cos);
+/* Part du disque au soleil (moyenne de v × min(1, cos / cos du sol plat)), et la plus petite valeur. */
+function disqueAuSoleil(L, x, z, rayon = 2.5) {
+  const k = rayon / 2.5; let s = 0, mn = 1;
+  for (const [dx, dz] of DISQUE) { const v = vu(L, L.soleilEn(x + dx * k, z + dz * k)); s += v; mn = Math.min(mn, v); }
+  return { part: s / DISQUE.length, min: mn };
+}
+/* Libre d'obstacle : ni tronc, ni perche, ni bloc à moins de marge du point. */
+function degageEn(W, x, z, marge) {
+  for (const o of W.cellules('a', x, z, 3)) if (Math.hypot(o.x - x, o.z - z) < o.r0 * 1.3 + marge) return false;
+  for (const o of W.cellules('p', x, z, 2.5)) if (Math.hypot(o.x - x, o.z - z) < o.r0 * 1.3 + .06 + marge) return false;
+  for (const o of W.cellules('r', x, z, 6)) if (Math.hypot(o.x - x, o.z - z) < o.R * 1.35 + marge) return false;
+  return true;
+}
+
+/* ---- le départ (fiche : parcours.depart.lumiere = "soleil" | "ombre")
+   Le long du trajet (de -60 à 160 m), sur l'axe et un peu de part et d'autre, le point dont le disque de 2,5 m autour du porteur
+   est au soleil (ou à l'ombre), libre d'obstacle ; puis le cap le long du trajet (devant ou derrière) qui met le soleil de trois
+   quarts (vers 40° du regard), avec des troncs à contre-jour plus loin (les rais). Déterministe : ne dépend que du monde. Rend
+   { x, z, yaw, part, min, z0 } ou null. */
+function chercherDepart(W, opts = {}) {
+  const L = creerSoleil(W), veut = opts.lumiere === 'ombre' ? 'ombre' : 'soleil';
+  const de = opts.de !== undefined ? opts.de : -60, a = opts.a !== undefined ? opts.a : 160, pas = opts.pas || 1;
+  const cands = [];
+  for (let z = de; z <= a; z += pas) for (const dx of [0, -.7, .7, -1.4, 1.4]) {
+    const x = W.pathX(z) + dx; if (!degageEn(W, x, z, 1.2)) continue;
+    const v = vu(L, L.soleilEn(x, z));
+    cands.push({ x, z, v, dx });
+  }
+  const bon = c => veut === 'soleil' ? c.v : 1 - c.v;
+  cands.sort((p, q) => bon(q) - bon(p) || Math.abs(p.z) - Math.abs(q.z) || Math.abs(p.dx) - Math.abs(q.dx));
+  let best = null;
+  for (const c of cands.slice(0, 60)) {
+    if (bon(c) < .5) break;
+    const d = disqueAuSoleil(L, c.x, c.z), b = veut === 'soleil' ? d : { part: 1 - d.part, min: 1 - d.part };
+    // la vue : soleil de trois quarts (40° du regard) le long du trajet, devant ou derrière ; troncs à contre-jour de 8 à 40 m
+    const yaw0 = W.pathYaw(c.z), azS = Math.atan2(L.ux, L.uz);
+    let cap = null;
+    for (const y of [yaw0, yaw0 + Math.PI]) { const ec = Math.abs(Math.atan2(Math.sin(azS - y), Math.cos(azS - y)));
+      const note = 1 - Math.abs(ec - .7) / 1.6; if (!cap || note > cap.note) cap = { yaw: Math.atan2(Math.sin(y), Math.cos(y)), note, ec }; }
+    const contre = W.cellules('a', c.x + L.ux * 24, c.z + L.uz * 24, 18).filter(o => { const dx = o.x - c.x, dz = o.z - c.z, t = dx * L.ux + dz * L.uz;
+      return t > 8 && Math.abs(dx * L.uz - dz * L.ux) < t * .6; }).length;
+    const score = b.part * 3 + b.min + cap.note * .6 + Math.min(contre, 6) * .05 - Math.abs(c.z) * .002;
+    if (!best || score > best.score) best = { x: c.x, z: c.z, yaw: cap.yaw, part: d.part, min: d.min, score, contre, soleil_deg: Math.round(cap.ec * 180 / Math.PI) };
+    if (best.part > .97 && cands.indexOf(c) > 20) break;
+  }
+  return best;
+}
+
+/* ---- « Va au soleil », « mets-toi à l'ombre » (action lumiere) : le point le plus proche dont le disque (rayon r) est au soleil
+   (ou à l'ombre), libre d'obstacle, à moins de 25 m, de préférence près du trajet. obstacles : cercles {x, z, r} en plus (les
+   choses posées). Rend { x, z, part, trouve, d } : trouve = false s'il n'y en a pas (le plus clair, ou le plus sombre, atteint). */
+function chercherLumiere(W, depuis, vers = 'soleil', opts = {}) {
+  const L = opts.soleil || creerSoleil(W), R = opts.rayon || 25, marge = opts.marge || .6, obs = opts.obstacles || [], dr = opts.disque || 1.6;
+  const ok = (x, z) => degageEn(W, x, z, marge) && obs.every(o => Math.hypot(o.x - x, o.z - z) >= (o.r || 0) + marge);
+  const bon = v => vers === 'ombre' ? 1 - v : v;
+  const ici = disqueAuSoleil(L, depuis.x, depuis.z, dr);
+  const cands = [];
+  for (let r = 0; r <= R; r += 1.5) {
+    const n = r === 0 ? 1 : Math.max(6, Math.round(2 * Math.PI * r / 1.6));
+    for (let k = 0; k < n; k++) { const a = k / n * 2 * Math.PI, x = depuis.x + r * Math.sin(a), z = depuis.z + r * Math.cos(a);
+      if (!ok(x, z)) continue;
+      const v = vu(L, L.soleilEn(x, z)), ax = Math.abs(x - W.pathX(z));
+      cands.push({ x, z, v, d: r, ax }); }
+  }
+  // le plus près parmi ceux dont le centre est franc ; le disque entier est vérifié dans l'ordre de la distance (le trajet compte un peu)
+  const cout = c => c.d + Math.max(0, c.ax - 1.2) * .8;
+  const francs = cands.filter(c => bon(c.v) > .85).sort((p, q) => cout(p) - cout(q));
+  for (const c of francs.slice(0, 80)) {
+    const d = disqueAuSoleil(L, c.x, c.z, dr), p = vers === 'ombre' ? 1 - d.part : d.part;
+    if (p > .8) return { x: c.x, z: c.z, part: d.part, trouve: true, d: c.d, ici: ici.part };
+  }
+  const mieux = cands.sort((p, q) => bon(q.v) - bon(p.v) || cout(p) - cout(q))[0];
+  if (!mieux || bon(mieux.v) <= bon(ici.part) + .05) return { x: depuis.x, z: depuis.z, part: ici.part, trouve: false, d: 0, ici: ici.part };
+  return { x: mieux.x, z: mieux.z, part: disqueAuSoleil(L, mieux.x, mieux.z, dr).part, trouve: false, d: mieux.d, ici: ici.part };
+}
+
+return {F32,fr32,sstep,h42,h21,vnoise2,kitDe,graineVec,kitParams,soleilDir,reglerRelief,portHoupNum,reglerTrouee,etatDeFiche,mondeJS,creerSoleil,DISQUE,vu,disqueAuSoleil,chercherDepart,chercherLumiere};
+})();
 const CONSTRUCTEUR=(function(){"use strict";
 // Constructeur de monde : de la description d'une scène à une fiche de lieu relue, puis gardée en banque.
 // Module pur, sans DOM ni WebGL : consignes envoyées à Claude, validation des fiches et des retouches, contrôle géométrique
@@ -5271,7 +5723,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -6861,7 +7319,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -8223,7 +8687,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -9041,7 +9511,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -9810,7 +10286,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -11253,7 +11735,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -12326,7 +12814,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -13082,7 +13576,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -14004,7 +14504,13 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
    Lignes 8 et plus, une forme : (position xyz, type) (demi-tailles xyz, cap) (couleur rgb, matière) (fusion, arrondi, penche x, penche z). */
 uniform sampler2D uShapes;
 uniform int uObjN;
-bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
+/* Trouée (fiche : foret.trouee) : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet et s'ouvre vers le
+   soleil, bords ondulés. Même formule dans src/lumiere.js (troue). Tout à 0 sans trouée : rien n'est retiré. */
+uniform vec4  uTrou;       // origine (x, z), direction (unitaire)
+uniform vec4  uTrou2;      // longueur (m), demi-largeur (m), phase des bords, -
+bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande, ni dans la trouée
+  vec2 d=w-uTrou.xy; float a=dot(d,uTrou.zw);
+  if(a>-uTrou2.y && a<uTrou2.x && abs(d.x*uTrou.w-d.y*uTrou.z)<uTrou2.y*(.8+.2*sin(a*.21+uTrou2.z)+.15*sin(a*.57+1.3))) return true;
   for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
@@ -14696,7 +15202,7 @@ void main(){
   gl_FragDepth=clamp(t/400.,0.,1.);
   g0=vec4(q,code); g1=vec4(n,t);
 }`;
-const FICHES = [{"version":0,"id":"grands-avaux-sentier","titre":"Sentier entre les grès, fin d'automne","inspiration":"Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux","graine":4821,"kit":"foret","ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-33,"hauteur":21},"brume":0.011},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]},{"version":0,"id":"grands-avaux-nuit","titre":"Le même sentier, de nuit, à la lampe du téléphone","inspiration":"Forêt des Grands Avaux, Champcueil, après la tombée du jour","graine":4821,"kit":"foret","ambiance":{"saison":"automne","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.012},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"histoire":{"pitch":"Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.","protagonistes":[{"id":"sam","role":"porteur de la caméra","trait":"prudent, se parle pour se rassurer"}],"temps":[{"id":"bruit","quand":"après quelques dizaines de mètres ou si la voix parle d'un bruit","ce_qui_se_passe":"un craquement sur la gauche, Sam se fige","scene":{"brume":0.03}},{"id":"panne","quand":"plus tard, si Sam s'éloigne du sentier","ce_qui_se_passe":"la lampe faiblit puis s'éteint","scene":{"lampe":false}}]}},{"version":0,"id":"sous-bois-voile","titre":"Sous-bois d'été, ciel voilé, brume épaisse","inspiration":"Futaie dense par temps laiteux, sans ombres nettes","graine":7313,"kit":"foret","foret":{"densite":0.85,"rochers":0.5,"feuillage":1.3},"ambiance":{"saison":"ete","meteo":"voile","soleil":{"azimut":40,"hauteur":34},"brume":0.028},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"dunes-soir","titre":"Dunes en fin de journée","inspiration":"Erg saharien, soleil rasant, rides de vent sur le sable","graine":2207,"kit":"dunes","ambiance":{"soleil":{"azimut":-60,"hauteur":11},"brume":0.0025},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"maison-lapin","titre":"Une maison dans les bois, un lapin devant","inspiration":"Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur","graine":3170,"kit":"foret","foret":{"densite":0.7,"rochers":0.6,"feuillage":1},"ambiance":{"saison":"automne","soleil":{"azimut":-33,"hauteur":24},"brume":0.009},"objets":[{"id":"maison","nom":"petite maison en bois","devant":14,"cote":5.5,"degage":4.5,"formes":[{"f":"boite","p":[0,1.15,0],"taille":[4,2.6,3],"couleur":"#8a765f","matiere":"bois"},{"f":"toit","p":[0,2.95,0],"taille":[4.5,1.3,3.7],"couleur":"#4a4440","matiere":"tuile"},{"f":"boite","p":[1.2,3.4,0.4],"taille":[0.4,1,0.4],"couleur":"#8b4a38","matiere":"pierre"},{"f":"boite","p":[-0.5,0.98,1.51],"taille":[0.9,1.95,0.04],"couleur":"#3c2f25","matiere":"bois"},{"f":"boite","p":[1.05,1.35,1.51],"taille":[0.8,0.7,0.04],"couleur":"#2a3038","matiere":"verre"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.86,0.05,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.05,0.76,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[-0.5,0.06,1.8],"taille":[1.2,0.12,0.6],"couleur":"#7d7a74","matiere":"pierre"}]},{"id":"lapin","nom":"lapin de garenne assis","devant":10.5,"cote":2.2,"cap":70,"formes":[{"f":"boule","p":[0,0.11,0],"taille":[0.18,0.22,0.3],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.09,-0.09],"taille":[0.2,0.2,0.2],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.21,0.13],"taille":[0.11,0.12,0.13],"couleur":"#8f7a64","matiere":"pelage","lisse":0.04},{"f":"capsule","p":[0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,6],"couleur":"#7d6955","matiere":"pelage"},{"f":"capsule","p":[-0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,-6],"couleur":"#7d6955","matiere":"pelage"},{"f":"boule","p":[0,0.1,-0.19],"taille":[0.07,0.07,0.07],"couleur":"#e6e1d8","matiere":"pelage"}]}],"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"essai-san-francisco","titre":"Rue en pente, San Francisco, fin d'après-midi","inspiration":"Une rue raide de Russian Hill qui descend vers la baie, bordée de maisons victoriennes colorées et mitoyennes","graine":1906,"kit":"nu","relief":{"amplitude":2.5,"echelle":260,"pente":-0.28,"niveler":true},"trajet":{"sinuosite":0,"largeur":9,"creux":0.16,"bord":"net"},"matieres":{"victorienne":{"base":"facade","couleur":"forme","motif":{"type":"fenetres","largeur":0.95,"hauteur":1.9,"pas":2.1,"etage":3.3,"allege":0.75,"cadre":0.11,"rdc":2.9,"allumees":0.3,"couleur":"#1d2328","cadre_couleur":"#eee9dc","lumiere":"#ffcf8a","opacite":1},"taches":[{"couleur":"#000000","force":0.2,"echelle":[0.5,9,0.5],"seuils":[0.4,0.75]}],"salissure":{"force":0.3,"hauteur":0.6}},"chaussee-sf":{"base":"chaussee","couleur":"#55524e","motif":{"type":"marquage","axe":"double","largeur":0.12,"couleur":"#c7a83c","bords":4.2}}},"surfaces":{"sol":"dalles","trajet":"chaussee-sf"},"ambiance":{"saison":"ete","meteo":"clair","soleil":{"azimut":-115,"hauteur":13},"brume":0.008},"lointain":{"hauteur":3,"decoupe":0.25,"neige":0,"couleur":"#7f8c86","couleur_bas":"#5d6b5e","eau":"#2f4b57"},"semis":[{"id":"maisons","nom":"maisons victoriennes mitoyennes","cellule":[6.6,12],"trajet":{"rangee":true,"min":6,"cote":"deux"},"densite":1,"hauteur":[0.85,1.3],"teinte":0.12,"palette":["#d8bf72","#94b2c6","#c4826f","#e6dfcc","#8ea585","#a98fb8"],"formes":[{"f":"boite","p":[0,4.6,-0.65],"taille":[6.4,9.2,10.5],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[1.1,5.7,5],"taille":[2.4,5.6,1],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[0,9.45,-0.4],"taille":[6.5,0.5,11],"couleur":"#ebe6da","matiere":"mat"},{"f":"boite","p":[-1.5,1.15,4.66],"taille":[2.6,2.3,0.1],"couleur":"#4a4038","matiere":"planches"},{"f":"boite","p":[1.7,0.45,5.25],"taille":[1.6,0.9,1.2],"couleur":"#8c877c","matiere":"beton"}]},{"id":"voitures","nom":"voitures garées le long du trottoir","cellule":[5.8,2.6],"trajet":{"rangee":true,"min":2.15},"densite":0.7,"pose":"pente","tourne":3,"teinte":0.1,"palette":["#9a9fa5","#c8c8c2","#e3e3df","#7a2a26","#3b5274","#8a8676","#2e3136"],"formes":[{"f":"boite","p":[0,0.68,0],"taille":[4.4,0.78,1.78],"couleur":"palette","matiere":"metal","arrondi":0.12},{"f":"boite","p":[-0.25,1.35,0],"taille":[2.3,0.62,1.58],"couleur":"#1b1e22","matiere":"verre","arrondi":0.14},{"f":"cylindre","p":[1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"},{"f":"cylindre","p":[-1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"}]},{"id":"reverberes","nom":"réverbères au bord du trottoir","cellule":[21,3.8],"trajet":{"rangee":true,"min":3.1},"densite":1,"formes":[{"f":"cylindre","p":[0,3.6,0.1],"taille":[0.16,7.2,0.16],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,7.05,0.85],"taille":[0.1,0.1,1.5],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,6.95,1.55],"taille":[0.3,0.16,0.45],"couleur":"#fff1d0","matiere":"lumineux"}]}],"histoire":{"pitch":"Sam descend la rue vers la baie en cherchant le numéro d'une maison bleue.","temps":[]}},{"version":0,"id":"essai-village-nuit","titre":"Rue de village, la nuit","inspiration":"La grand-rue pavée d'un village français, tard, quelques fenêtres encore allumées","graine":5120,"kit":"nu","relief":{"amplitude":1.2,"echelle":160,"pente":0.04},"trajet":{"sinuosite":0.35,"largeur":5.5,"creux":0.1,"bord":"net"},"surfaces":{"sol":"dalles","trajet":"paves"},"matieres":{"maison":{"base":"crepi","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":2.3,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.3,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}},"volets":{"base":"maison","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":6,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.45,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}}},"ambiance":{"saison":"hiver","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.016},"lointain":{"hauteur":4,"decoupe":0.3,"couleur":"#2a2d2a","couleur_bas":"#1d211c"},"semis":[{"id":"maisons","nom":"maisons de village mitoyennes","cellule":[7.5,9],"trajet":{"rangee":true,"min":3.9,"cote":"deux"},"densite":0.92,"hauteur":[0.85,1.25],"teinte":0.1,"palette":["#c9bba3","#b9ad9a","#d4c6aa","#a8a090","#c4ae8c","#bdb6a6"],"formes":[{"f":"boite","p":[0,2.9,-0.2],"taille":[7.3,5.8,8.2],"couleur":"palette","matiere":"maison"},{"f":"toit","p":[0,6.6,-0.2],"taille":[7.34,1.6,8.7],"couleur":"#5f4034","matiere":"tuile"},{"f":"boite","p":[-1.15,1.05,3.92],"taille":[1.1,2.1,0.08],"couleur":"#3b2e24","matiere":"planches"},{"f":"boite","p":[2.3,1.6,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[-2.3,4.4,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[2.4,7,-1.5],"taille":[0.55,1.4,0.55],"couleur":"#7a4a3a","matiere":"brique"}]},{"id":"lampadaires","nom":"lanternes murales","cellule":[16,2],"trajet":{"rangee":true,"min":2.15,"cote":"gauche"},"densite":1,"formes":[{"f":"cylindre","p":[0,2,0],"taille":[0.1,4,0.1],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.95,0.3],"taille":[0.06,0.06,0.6],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.75,0.6],"taille":[0.24,0.32,0.24],"couleur":"#ffcf8a","matiere":"lumineux"}]},{"id":"bornes","nom":"bornes de pierre au bord du trottoir","cellule":[4.5,1.5],"trajet":{"rangee":true,"min":2.35},"densite":0.5,"teinte":0.15,"formes":[{"f":"cylindre","p":[0,0.35,0],"taille":[0.3,0.7,0.3],"couleur":"#8a857a","matiere":"pierre","arrondi":0.04}]}],"objets":[{"id":"eglise","nom":"clocher au bout de la rue","devant":46,"cote":0,"degage":6,"formes":[{"f":"boite","p":[0,7,0],"taille":[4.5,14,4.5],"couleur":"#a39a88","matiere":"pierre"},{"f":"cone","p":[0,16.5,0],"taille":[5.2,5,5.2],"couleur":"#3a3d42","matiere":"tuile"},{"f":"boite","p":[0,11.5,2.26],"taille":[1,2,0.05],"couleur":"#15171a","matiere":"mat"},{"f":"boule","p":[0,8,2.27],"taille":[1.1,1.1,0.06],"couleur":"#e8dcc0","matiere":"lumineux"}]}]},{"version":0,"id":"essai-cimetiere","titre":"Cimetière de campagne, au crépuscule","inspiration":"Un cimetière de village sur un coteau, allée de gravier, cyprès, mur de pierre, brume du soir","graine":731,"kit":"nu","relief":{"amplitude":1.4,"echelle":110,"pente":0.05},"trajet":{"sinuosite":0.15,"largeur":2.6,"creux":0.04,"bord":"net"},"surfaces":{"sol":"herbe","trajet":"gravier"},"matieres":{"granit":{"base":"beton","couleur":"forme","grain":{"echelle":160,"force":0.4},"brillance":0.2,"taches":[{"couleur":"#3b4630","force":0.5,"echelle":[3,1,3],"seuils":[0.6,0.8],"fbm":true,"hauteur":[0.6,0],"biais":0.3}]},"moellons":{"base":"brique","couleur":"#8b8577","motif":{"type":"paves","echelle":[2.2,4,2.2],"joint":0.12,"decalage_rangs":0.5,"eclat":0.6,"bombe":0.8,"couleur":"#4d4a42"},"mousse":{"couleur":"#3e4a2a","force":0.7,"echelle":1.5,"seuils":[0.5,0.7],"fbm":true,"dessus":[0.3,0.8]}}},"ambiance":{"saison":"automne","meteo":"voile","soleil":{"azimut":-80,"hauteur":4},"brume":0.03},"lointain":{"hauteur":3,"decoupe":0.2,"couleur":"#4a4f4a","couleur_bas":"#3a4236"},"semis":[{"id":"tombes","nom":"tombes en rangs serrés","cellule":[2.3,3],"rotation":0,"trajet":{"min":2.6,"max":13},"densite":0.85,"oriente":"fixe","cap":180,"tourne":5,"penche":3,"teinte":0.35,"desordre":0.12,"groupes":0.3,"groupes_echelle":25,"palette":["#8e8b84","#6f6c66","#a39f95","#4d4c4a","#7d766a"],"formes":[{"f":"boite","p":[0,0.5,-1],"taille":[0.8,1,0.16],"couleur":"palette","matiere":"granit","arrondi":0.03},{"f":"boite","p":[0,0.13,0],"taille":[0.95,0.26,1.9],"couleur":"palette","matiere":"granit"},{"f":"boite","p":[0,1.2,-1],"taille":[0.1,0.5,0.08],"couleur":"#3f3d3a","matiere":"metal"},{"f":"boite","p":[0,1.3,-1],"taille":[0.34,0.08,0.08],"couleur":"#3f3d3a","matiere":"metal"}]},{"id":"cypres","nom":"cyprès sombres","cellule":[7,7],"rotation":20,"trajet":{"min":4},"densite":0.25,"groupes":0.7,"groupes_echelle":30,"hauteur":[0.8,1.4],"teinte":0.2,"penche":2,"formes":[{"f":"cylindre","p":[0,0.6,0],"taille":[0.3,1.2,0.3],"couleur":"#3a2e24","matiere":"bois"},{"f":"capsule","p":[0,3.4,0],"taille":[1.7,4.2,1.7],"couleur":"#142016","matiere":"tissu"},{"f":"cone","p":[0,7.2,0],"taille":[1.5,3.2,1.5],"couleur":"#142016","matiere":"tissu"}]},{"id":"mur","nom":"mur d'enceinte en pierre sèche","cellule":[5,1.5],"trajet":{"rangee":true,"min":14,"cote":"deux"},"densite":1,"teinte":0.1,"formes":[{"f":"boite","p":[0,0.8,0],"taille":[4.84,1.6,0.6],"couleur":"#8b8577","matiere":"moellons"}]}]},{"version":0,"id":"champcueil-aube","titre":"Grands Avaux, le soleil se lève entre les pins","inspiration":"Forêt départementale des Grands Avaux, Champcueil (Essonne), début novembre, une quarantaine de minutes après le lever du soleil : lumière rasante entre les troncs, brume basse sur le sentier","graine":4821,"kit":"foret","foret":{"densite":0.7,"rochers":1,"feuillage":0.2,"variete":1,"houppiers":{"arbres":{"a":{"nom":"pin sylvestre","hauteur":[0.68,0.97],"largeur":2.6,"aplati":0.6,"branches":8,"montee":0.3,"retombe":0.15,"rameaux":3,"masse":0.75,"feuilles":0.8,"inegal":0.2,"taille":0.1,"couleurs":["#34482a","#40552f","#26351f"]},"b":{"nom":"chêne sessile, début novembre","hauteur":[0.36,0.92],"largeur":3.4,"aplati":0.25,"branches":8,"montee":0.55,"retombe":0.1,"rameaux":3,"masse":0.6,"feuilles":0.68,"inegal":0.85,"taille":0.06,"couleurs":["#a8692a","#c08a3c","#7a5528"]}},"perches":{"a":{"nom":"bouleau verruqueux","hauteur":[0.45,0.98],"largeur":1.3,"aplati":0,"branches":6,"montee":0.75,"retombe":0.85,"rameaux":3,"masse":0.42,"feuilles":0.36,"inegal":0.9,"taille":0.05,"couleurs":["#cfa83a","#b8902c","#8f7f3c"]},"b":{"nom":"jeune hêtre marcescent","hauteur":[0.08,0.72],"largeur":1.2,"aplati":0.2,"branches":7,"montee":0.3,"retombe":0.25,"rameaux":2,"masse":0.5,"feuilles":0.62,"inegal":0.5,"taille":0.07,"couleurs":["#b5733a","#c58e4c","#8c5a30"]}}}},"ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":35,"hauteur":8},"brume":0.005,"atmosphere":{"trouble":0.35},"brume_basse":{"densite":0.035,"hauteur":2.5}},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[],"surfaces":{"sol":"litiere-automne","trajet":"sable-blanc","rochers":"gres-fontainebleau","arbres":{"a":"ecorce-pin-sylvestre","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau-verruqueux","b":"ecorce-chataignier","part":0.55}},"semis":[{"id":"bois-mort","nom":"branches mortes tombées","cellule":[4.5,4.5],"rotation":8,"trajet":{"min":1.2},"densite":0.45,"echelle":[0.6,1.3],"teinte":0.3,"desordre":1,"formes":[{"f":"capsule","p":[0,0.05,0],"taille":[0.1,2.2,0.1],"penche":[87,0],"matiere":"bois-mort"},{"f":"capsule","p":[0.45,0.06,0.28],"taille":[0.055,0.9,0.055],"cap":35,"penche":[84,0],"matiere":"bois-mort"},{"f":"capsule","p":[-0.55,0.09,-0.12],"taille":[0.035,0.6,0.035],"cap":-40,"penche":[76,12],"matiere":"bois-mort"},{"f":"capsule","p":[0.2,0.03,-0.6],"taille":[0.05,1.1,0.05],"cap":100,"penche":[89,0],"matiere":"bois-mort"}]},{"id":"cailloux","nom":"éclats et cailloux de grès à demi enterrés","cellule":[2,2],"rotation":53,"trajet":{"min":0.5,"max":12},"densite":0.32,"groupes":0.6,"groupes_echelle":9,"echelle":[0.6,1.4],"desordre":1,"formes":[{"f":"boule","p":[0,-0.01,0],"taille":[0.3,0.1,0.22],"cap":20,"matiere":"gres-eclat"},{"f":"boule","p":[0.32,-0.005,0.18],"taille":[0.15,0.06,0.11],"cap":70,"matiere":"gres-eclat"},{"f":"boule","p":[-0.25,-0.005,0.3],"taille":[0.1,0.045,0.08],"matiere":"gres-eclat"},{"f":"boule","p":[-0.1,-0.01,-0.35],"taille":[0.2,0.08,0.13],"cap":-30,"matiere":"gres-eclat"}]}],"relief":{"amplitude":1.5,"echelle":150,"bosses":{"hauteur":1.1,"echelle":11,"trajet":0.35},"buttes":{"hauteur":5,"echelle":55,"part":0.35,"plat":0.55,"trajet":0.45}},"trajet":{"sinuosite":1,"largeur":1.7,"creux":0.45,"bord":"irregulier"}}];                      // fiches de lieu embarquées (scenes/*.json)
+const FICHES = [{"version":0,"id":"grands-avaux-sentier","titre":"Sentier entre les grès, fin d'automne","inspiration":"Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux","graine":4821,"kit":"foret","ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-33,"hauteur":21},"brume":0.011},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]},{"version":0,"id":"grands-avaux-nuit","titre":"Le même sentier, de nuit, à la lampe du téléphone","inspiration":"Forêt des Grands Avaux, Champcueil, après la tombée du jour","graine":4821,"kit":"foret","ambiance":{"saison":"automne","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.012},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"histoire":{"pitch":"Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.","protagonistes":[{"id":"sam","role":"porteur de la caméra","trait":"prudent, se parle pour se rassurer"}],"temps":[{"id":"bruit","quand":"après quelques dizaines de mètres ou si la voix parle d'un bruit","ce_qui_se_passe":"un craquement sur la gauche, Sam se fige","scene":{"brume":0.03}},{"id":"panne","quand":"plus tard, si Sam s'éloigne du sentier","ce_qui_se_passe":"la lampe faiblit puis s'éteint","scene":{"lampe":false}}]}},{"version":0,"id":"sous-bois-voile","titre":"Sous-bois d'été, ciel voilé, brume épaisse","inspiration":"Futaie dense par temps laiteux, sans ombres nettes","graine":7313,"kit":"foret","foret":{"densite":0.85,"rochers":0.5,"feuillage":1.3},"ambiance":{"saison":"ete","meteo":"voile","soleil":{"azimut":40,"hauteur":34},"brume":0.028},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"dunes-soir","titre":"Dunes en fin de journée","inspiration":"Erg saharien, soleil rasant, rides de vent sur le sable","graine":2207,"kit":"dunes","ambiance":{"soleil":{"azimut":-60,"hauteur":11},"brume":0.0025},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"maison-lapin","titre":"Une maison dans les bois, un lapin devant","inspiration":"Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur","graine":3170,"kit":"foret","foret":{"densite":0.7,"rochers":0.6,"feuillage":1},"ambiance":{"saison":"automne","soleil":{"azimut":-33,"hauteur":24},"brume":0.009},"objets":[{"id":"maison","nom":"petite maison en bois","devant":14,"cote":5.5,"degage":4.5,"formes":[{"f":"boite","p":[0,1.15,0],"taille":[4,2.6,3],"couleur":"#8a765f","matiere":"bois"},{"f":"toit","p":[0,2.95,0],"taille":[4.5,1.3,3.7],"couleur":"#4a4440","matiere":"tuile"},{"f":"boite","p":[1.2,3.4,0.4],"taille":[0.4,1,0.4],"couleur":"#8b4a38","matiere":"pierre"},{"f":"boite","p":[-0.5,0.98,1.51],"taille":[0.9,1.95,0.04],"couleur":"#3c2f25","matiere":"bois"},{"f":"boite","p":[1.05,1.35,1.51],"taille":[0.8,0.7,0.04],"couleur":"#2a3038","matiere":"verre"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.86,0.05,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.05,0.76,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[-0.5,0.06,1.8],"taille":[1.2,0.12,0.6],"couleur":"#7d7a74","matiere":"pierre"}]},{"id":"lapin","nom":"lapin de garenne assis","devant":10.5,"cote":2.2,"cap":70,"formes":[{"f":"boule","p":[0,0.11,0],"taille":[0.18,0.22,0.3],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.09,-0.09],"taille":[0.2,0.2,0.2],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.21,0.13],"taille":[0.11,0.12,0.13],"couleur":"#8f7a64","matiere":"pelage","lisse":0.04},{"f":"capsule","p":[0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,6],"couleur":"#7d6955","matiere":"pelage"},{"f":"capsule","p":[-0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,-6],"couleur":"#7d6955","matiere":"pelage"},{"f":"boule","p":[0,0.1,-0.19],"taille":[0.07,0.07,0.07],"couleur":"#e6e1d8","matiere":"pelage"}]}],"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"essai-san-francisco","titre":"Rue en pente, San Francisco, fin d'après-midi","inspiration":"Une rue raide de Russian Hill qui descend vers la baie, bordée de maisons victoriennes colorées et mitoyennes","graine":1906,"kit":"nu","relief":{"amplitude":2.5,"echelle":260,"pente":-0.28,"niveler":true},"trajet":{"sinuosite":0,"largeur":9,"creux":0.16,"bord":"net"},"matieres":{"victorienne":{"base":"facade","couleur":"forme","motif":{"type":"fenetres","largeur":0.95,"hauteur":1.9,"pas":2.1,"etage":3.3,"allege":0.75,"cadre":0.11,"rdc":2.9,"allumees":0.3,"couleur":"#1d2328","cadre_couleur":"#eee9dc","lumiere":"#ffcf8a","opacite":1},"taches":[{"couleur":"#000000","force":0.2,"echelle":[0.5,9,0.5],"seuils":[0.4,0.75]}],"salissure":{"force":0.3,"hauteur":0.6}},"chaussee-sf":{"base":"chaussee","couleur":"#55524e","motif":{"type":"marquage","axe":"double","largeur":0.12,"couleur":"#c7a83c","bords":4.2}}},"surfaces":{"sol":"dalles","trajet":"chaussee-sf"},"ambiance":{"saison":"ete","meteo":"clair","soleil":{"azimut":-115,"hauteur":13},"brume":0.008},"lointain":{"hauteur":3,"decoupe":0.25,"neige":0,"couleur":"#7f8c86","couleur_bas":"#5d6b5e","eau":"#2f4b57"},"semis":[{"id":"maisons","nom":"maisons victoriennes mitoyennes","cellule":[6.6,12],"trajet":{"rangee":true,"min":6,"cote":"deux"},"densite":1,"hauteur":[0.85,1.3],"teinte":0.12,"palette":["#d8bf72","#94b2c6","#c4826f","#e6dfcc","#8ea585","#a98fb8"],"formes":[{"f":"boite","p":[0,4.6,-0.65],"taille":[6.4,9.2,10.5],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[1.1,5.7,5],"taille":[2.4,5.6,1],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[0,9.45,-0.4],"taille":[6.5,0.5,11],"couleur":"#ebe6da","matiere":"mat"},{"f":"boite","p":[-1.5,1.15,4.66],"taille":[2.6,2.3,0.1],"couleur":"#4a4038","matiere":"planches"},{"f":"boite","p":[1.7,0.45,5.25],"taille":[1.6,0.9,1.2],"couleur":"#8c877c","matiere":"beton"}]},{"id":"voitures","nom":"voitures garées le long du trottoir","cellule":[5.8,2.6],"trajet":{"rangee":true,"min":2.15},"densite":0.7,"pose":"pente","tourne":3,"teinte":0.1,"palette":["#9a9fa5","#c8c8c2","#e3e3df","#7a2a26","#3b5274","#8a8676","#2e3136"],"formes":[{"f":"boite","p":[0,0.68,0],"taille":[4.4,0.78,1.78],"couleur":"palette","matiere":"metal","arrondi":0.12},{"f":"boite","p":[-0.25,1.35,0],"taille":[2.3,0.62,1.58],"couleur":"#1b1e22","matiere":"verre","arrondi":0.14},{"f":"cylindre","p":[1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"},{"f":"cylindre","p":[-1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"}]},{"id":"reverberes","nom":"réverbères au bord du trottoir","cellule":[21,3.8],"trajet":{"rangee":true,"min":3.1},"densite":1,"formes":[{"f":"cylindre","p":[0,3.6,0.1],"taille":[0.16,7.2,0.16],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,7.05,0.85],"taille":[0.1,0.1,1.5],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,6.95,1.55],"taille":[0.3,0.16,0.45],"couleur":"#fff1d0","matiere":"lumineux"}]}],"histoire":{"pitch":"Sam descend la rue vers la baie en cherchant le numéro d'une maison bleue.","temps":[]}},{"version":0,"id":"essai-village-nuit","titre":"Rue de village, la nuit","inspiration":"La grand-rue pavée d'un village français, tard, quelques fenêtres encore allumées","graine":5120,"kit":"nu","relief":{"amplitude":1.2,"echelle":160,"pente":0.04},"trajet":{"sinuosite":0.35,"largeur":5.5,"creux":0.1,"bord":"net"},"surfaces":{"sol":"dalles","trajet":"paves"},"matieres":{"maison":{"base":"crepi","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":2.3,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.3,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}},"volets":{"base":"maison","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":6,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.45,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}}},"ambiance":{"saison":"hiver","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.016},"lointain":{"hauteur":4,"decoupe":0.3,"couleur":"#2a2d2a","couleur_bas":"#1d211c"},"semis":[{"id":"maisons","nom":"maisons de village mitoyennes","cellule":[7.5,9],"trajet":{"rangee":true,"min":3.9,"cote":"deux"},"densite":0.92,"hauteur":[0.85,1.25],"teinte":0.1,"palette":["#c9bba3","#b9ad9a","#d4c6aa","#a8a090","#c4ae8c","#bdb6a6"],"formes":[{"f":"boite","p":[0,2.9,-0.2],"taille":[7.3,5.8,8.2],"couleur":"palette","matiere":"maison"},{"f":"toit","p":[0,6.6,-0.2],"taille":[7.34,1.6,8.7],"couleur":"#5f4034","matiere":"tuile"},{"f":"boite","p":[-1.15,1.05,3.92],"taille":[1.1,2.1,0.08],"couleur":"#3b2e24","matiere":"planches"},{"f":"boite","p":[2.3,1.6,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[-2.3,4.4,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[2.4,7,-1.5],"taille":[0.55,1.4,0.55],"couleur":"#7a4a3a","matiere":"brique"}]},{"id":"lampadaires","nom":"lanternes murales","cellule":[16,2],"trajet":{"rangee":true,"min":2.15,"cote":"gauche"},"densite":1,"formes":[{"f":"cylindre","p":[0,2,0],"taille":[0.1,4,0.1],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.95,0.3],"taille":[0.06,0.06,0.6],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.75,0.6],"taille":[0.24,0.32,0.24],"couleur":"#ffcf8a","matiere":"lumineux"}]},{"id":"bornes","nom":"bornes de pierre au bord du trottoir","cellule":[4.5,1.5],"trajet":{"rangee":true,"min":2.35},"densite":0.5,"teinte":0.15,"formes":[{"f":"cylindre","p":[0,0.35,0],"taille":[0.3,0.7,0.3],"couleur":"#8a857a","matiere":"pierre","arrondi":0.04}]}],"objets":[{"id":"eglise","nom":"clocher au bout de la rue","devant":46,"cote":0,"degage":6,"formes":[{"f":"boite","p":[0,7,0],"taille":[4.5,14,4.5],"couleur":"#a39a88","matiere":"pierre"},{"f":"cone","p":[0,16.5,0],"taille":[5.2,5,5.2],"couleur":"#3a3d42","matiere":"tuile"},{"f":"boite","p":[0,11.5,2.26],"taille":[1,2,0.05],"couleur":"#15171a","matiere":"mat"},{"f":"boule","p":[0,8,2.27],"taille":[1.1,1.1,0.06],"couleur":"#e8dcc0","matiere":"lumineux"}]}]},{"version":0,"id":"essai-cimetiere","titre":"Cimetière de campagne, au crépuscule","inspiration":"Un cimetière de village sur un coteau, allée de gravier, cyprès, mur de pierre, brume du soir","graine":731,"kit":"nu","relief":{"amplitude":1.4,"echelle":110,"pente":0.05},"trajet":{"sinuosite":0.15,"largeur":2.6,"creux":0.04,"bord":"net"},"surfaces":{"sol":"herbe","trajet":"gravier"},"matieres":{"granit":{"base":"beton","couleur":"forme","grain":{"echelle":160,"force":0.4},"brillance":0.2,"taches":[{"couleur":"#3b4630","force":0.5,"echelle":[3,1,3],"seuils":[0.6,0.8],"fbm":true,"hauteur":[0.6,0],"biais":0.3}]},"moellons":{"base":"brique","couleur":"#8b8577","motif":{"type":"paves","echelle":[2.2,4,2.2],"joint":0.12,"decalage_rangs":0.5,"eclat":0.6,"bombe":0.8,"couleur":"#4d4a42"},"mousse":{"couleur":"#3e4a2a","force":0.7,"echelle":1.5,"seuils":[0.5,0.7],"fbm":true,"dessus":[0.3,0.8]}}},"ambiance":{"saison":"automne","meteo":"voile","soleil":{"azimut":-80,"hauteur":4},"brume":0.03},"lointain":{"hauteur":3,"decoupe":0.2,"couleur":"#4a4f4a","couleur_bas":"#3a4236"},"semis":[{"id":"tombes","nom":"tombes en rangs serrés","cellule":[2.3,3],"rotation":0,"trajet":{"min":2.6,"max":13},"densite":0.85,"oriente":"fixe","cap":180,"tourne":5,"penche":3,"teinte":0.35,"desordre":0.12,"groupes":0.3,"groupes_echelle":25,"palette":["#8e8b84","#6f6c66","#a39f95","#4d4c4a","#7d766a"],"formes":[{"f":"boite","p":[0,0.5,-1],"taille":[0.8,1,0.16],"couleur":"palette","matiere":"granit","arrondi":0.03},{"f":"boite","p":[0,0.13,0],"taille":[0.95,0.26,1.9],"couleur":"palette","matiere":"granit"},{"f":"boite","p":[0,1.2,-1],"taille":[0.1,0.5,0.08],"couleur":"#3f3d3a","matiere":"metal"},{"f":"boite","p":[0,1.3,-1],"taille":[0.34,0.08,0.08],"couleur":"#3f3d3a","matiere":"metal"}]},{"id":"cypres","nom":"cyprès sombres","cellule":[7,7],"rotation":20,"trajet":{"min":4},"densite":0.25,"groupes":0.7,"groupes_echelle":30,"hauteur":[0.8,1.4],"teinte":0.2,"penche":2,"formes":[{"f":"cylindre","p":[0,0.6,0],"taille":[0.3,1.2,0.3],"couleur":"#3a2e24","matiere":"bois"},{"f":"capsule","p":[0,3.4,0],"taille":[1.7,4.2,1.7],"couleur":"#142016","matiere":"tissu"},{"f":"cone","p":[0,7.2,0],"taille":[1.5,3.2,1.5],"couleur":"#142016","matiere":"tissu"}]},{"id":"mur","nom":"mur d'enceinte en pierre sèche","cellule":[5,1.5],"trajet":{"rangee":true,"min":14,"cote":"deux"},"densite":1,"teinte":0.1,"formes":[{"f":"boite","p":[0,0.8,0],"taille":[4.84,1.6,0.6],"couleur":"#8b8577","matiere":"moellons"}]}]},{"version":0,"id":"champcueil-aube","titre":"Grands Avaux, le soleil se lève entre les pins","inspiration":"Forêt départementale des Grands Avaux, Champcueil (Essonne), début novembre, une quarantaine de minutes après le lever du soleil : lumière rasante entre les troncs, brume basse sur le sentier","graine":4821,"kit":"foret","foret":{"densite":0.7,"rochers":1,"feuillage":0.2,"variete":1,"trouee":{"le_long":4,"vers":"soleil","longueur":110,"largeur":12},"houppiers":{"arbres":{"a":{"nom":"pin sylvestre","hauteur":[0.68,0.97],"largeur":2.6,"aplati":0.6,"branches":8,"montee":0.3,"retombe":0.15,"rameaux":3,"masse":0.75,"feuilles":0.8,"inegal":0.2,"taille":0.1,"couleurs":["#34482a","#40552f","#26351f"]},"b":{"nom":"chêne sessile, début novembre","hauteur":[0.36,0.92],"largeur":3.4,"aplati":0.25,"branches":8,"montee":0.55,"retombe":0.1,"rameaux":3,"masse":0.6,"feuilles":0.68,"inegal":0.85,"taille":0.06,"couleurs":["#a8692a","#c08a3c","#7a5528"]}},"perches":{"a":{"nom":"bouleau verruqueux","hauteur":[0.45,0.98],"largeur":1.3,"aplati":0,"branches":6,"montee":0.75,"retombe":0.85,"rameaux":3,"masse":0.42,"feuilles":0.36,"inegal":0.9,"taille":0.05,"couleurs":["#cfa83a","#b8902c","#8f7f3c"]},"b":{"nom":"jeune hêtre marcescent","hauteur":[0.08,0.72],"largeur":1.2,"aplati":0.2,"branches":7,"montee":0.3,"retombe":0.25,"rameaux":2,"masse":0.5,"feuilles":0.62,"inegal":0.5,"taille":0.07,"couleurs":["#b5733a","#c58e4c","#8c5a30"]}}}},"ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":35,"hauteur":8},"brume":0.005,"atmosphere":{"trouble":0.35},"brume_basse":{"densite":0.035,"hauteur":2.5}},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5,"depart":{"lumiere":"soleil"}},"evenements":[],"surfaces":{"sol":"litiere-automne","trajet":"sable-blanc","rochers":"gres-fontainebleau","arbres":{"a":"ecorce-pin-sylvestre","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau-verruqueux","b":"ecorce-chataignier","part":0.55}},"semis":[{"id":"bois-mort","nom":"branches mortes tombées","cellule":[4.5,4.5],"rotation":8,"trajet":{"min":1.2},"densite":0.45,"echelle":[0.6,1.3],"teinte":0.3,"desordre":1,"formes":[{"f":"capsule","p":[0,0.05,0],"taille":[0.1,2.2,0.1],"penche":[87,0],"matiere":"bois-mort"},{"f":"capsule","p":[0.45,0.06,0.28],"taille":[0.055,0.9,0.055],"cap":35,"penche":[84,0],"matiere":"bois-mort"},{"f":"capsule","p":[-0.55,0.09,-0.12],"taille":[0.035,0.6,0.035],"cap":-40,"penche":[76,12],"matiere":"bois-mort"},{"f":"capsule","p":[0.2,0.03,-0.6],"taille":[0.05,1.1,0.05],"cap":100,"penche":[89,0],"matiere":"bois-mort"}]},{"id":"cailloux","nom":"éclats et cailloux de grès à demi enterrés","cellule":[2,2],"rotation":53,"trajet":{"min":0.5,"max":12},"densite":0.32,"groupes":0.6,"groupes_echelle":9,"echelle":[0.6,1.4],"desordre":1,"formes":[{"f":"boule","p":[0,-0.01,0],"taille":[0.3,0.1,0.22],"cap":20,"matiere":"gres-eclat"},{"f":"boule","p":[0.32,-0.005,0.18],"taille":[0.15,0.06,0.11],"cap":70,"matiere":"gres-eclat"},{"f":"boule","p":[-0.25,-0.005,0.3],"taille":[0.1,0.045,0.08],"matiere":"gres-eclat"},{"f":"boule","p":[-0.1,-0.01,-0.35],"taille":[0.2,0.08,0.13],"cap":-30,"matiere":"gres-eclat"}]}],"relief":{"amplitude":1.5,"echelle":150,"bosses":{"hauteur":1.1,"echelle":11,"trajet":0.35},"buttes":{"hauteur":5,"echelle":55,"part":0.35,"plat":0.55,"trajet":0.45}},"trajet":{"sinuosite":1,"largeur":1.7,"creux":0.45,"bord":"irregulier"}}];                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
 const canvas = $("view");
@@ -14867,9 +15373,9 @@ function bindTex(unit,t,loc){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture
 
 /* ------------------------------------------------------------------ scène : ce que la fiche de lieu pilote */
 const S={ can:[7,19], houp:[0,1.5,2.6,1], loin:[0,3,2,0], loinCol:[.2,.2,.21], loinBas:[.05,.07,.05], surf:[0,1,2,0], surfT:[3,4,5,6], surfP:[.45,.5], objN:0, kit:0,
-  rel:[1,1,0,0], relB:[0,0,0,0], relC:[0,0,1,1], relS:[0,0], relOn:false, hp:new Float32Array(64), hpC:new Float32Array(36), hpOn:false, traj:[1,.85,.3,.5], creux:[.10,1.8,.4,0], terK:[.88,0], yTop:23, pente:.22, semN:0, semTop:[0,0,0,0], objTop:0, solAlb:[.24,.15,.07], lum:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false };
+  rel:[1,1,0,0], relB:[0,0,0,0], relC:[0,0,1,1], relS:[0,0], relOn:false, hp:new Float32Array(64), hpC:new Float32Array(36), hpOn:false, traj:[1,.85,.3,.5], creux:[.10,1.8,.4,0], terK:[.88,0], yTop:23, pente:.22, semN:0, semTop:[0,0,0,0], objTop:0, solAlb:[.24,.15,.07], lum:0, sunDir:[0,1,0], sun:[7,5.6,4.2], sky:[1,1,1], fog:.011, torch:0, kitP:[.62,1,1,1], eye:1.36, nuit:false, seed:[0,0,0], trou:[0,0,0,0], trou2:[0,0,0,0], depart:null };
 let fiche=null, ficheIdx=0, seedN=4821, seed=[0,0,0], sceneDirty=true;
-function setSeed(n){ seedN=n; seed=[(n*12.9898)%89,(n*78.233)%83,(n*.618034)%6.2832]; }
+function setSeed(n){ seedN=n; seed=LUMIERE.graineVec(n); S.seed=seed; }
 function applyAmbiance(a){
   const so=a.soleil||{azimut:-33,hauteur:21};
   S.nuit=so.hauteur<-1;
@@ -14911,43 +15417,16 @@ function soleilAtmo(h,trouble){
 }
 /* Kit : "foret" et "dunes" ont encore leurs arbres, rochers et canopée en dur ; "nu" n'a rien de prédéfini.
    Une fiche sans kit qui fournit ses semis est un monde nu. */
-const kitDe=f=>f.kit==="dunes"?1:f.kit==="nu"||(f.kit===undefined&&Array.isArray(f.semis)&&f.semis.length)?2:0;
-/* Relief et trajet : la fiche règle les formules de terrainH et pathX. Sans réglage, la forêt d'origine à l'identique. */
-function reglerRelief(f){
-  S.rel=[1,1,0,0]; S.traj=[1,.85,.3,.5]; S.creux=[.10,1.8,.4,0]; S.terK=[.88,0]; S.pente=.22;
-  S.relB=[0,0,0,0]; S.relC=[0,0,1,1]; S.relS=[0,0]; S.relOn=false;
-  if(S.kit===1) return;                                          // dunes : relief encore en dur
-  const re=isObj(f.relief)?f.relief:null, tr=isObj(f.trajet)?f.trajet:null;
-  if(!re&&!tr&&S.kit===0) return;
-  /* Bosses (creux et bosses de 5 à 30 m) et buttes (flanc puis plateau, au second plan) : reliefDetail dans monde.glsl, variante
-     RELIEF compilée seulement si la fiche en demande. hauteur en m, echelle en m (longueur d'onde), trajet : part gardée sur le trajet. */
-  const bo=re&&isObj(re.bosses)?re.bosses:null, bu=re&&isObj(re.buttes)?re.buttes:null;
-  const hB=bo?clampN(bo.hauteur,0,4,0):0, hT=bu?clampN(bu.hauteur,0,25,0):0;
-  if(hB>0||hT>0){
-    const part=bu?clampN(bu.part,0,1,.3):.3, plat=bu?clampN(bu.plat,0,1,.5):.5, s1=.78-.4*part, s0=s1-(.06+.22*(1-plat));
-    S.relB=[hB,1/(bo?clampN(bo.echelle,3,80,12):12),hT,1/(bu?clampN(bu.echelle,15,400,60):60)];
-    S.relC=[s0,s1,bo?clampN(bo.trajet,0,1,.35):.35,bu?clampN(bu.trajet,0,1,.5):.5];
-    S.relS=[seedN%997,(seedN*7)%991]; S.relOn=true;
-  }
-  const amp=clampN(re&&re.amplitude,0,12,S.kit===2?.8:1.5), ech=clampN(re&&re.echelle,20,600,150), pente=clampN(re&&re.pente,-.35,.35,0);
-  const larg=clampN(tr&&tr.largeur,.6,30,1.7), hw=larg/2, net=!!(tr&&tr.bord==="net"), creux=clampN(tr&&tr.creux,0,1.2,.10);   // jusqu'à 1,2 m : un sentier encaissé entre deux talus
-  const niv=re&&re.niveler!==undefined?!!re.niveler:S.kit===2&&larg>=3;
-  S.rel=[amp/1.5,150/ech,pente,niv?hw+2:0];
-  S.traj=[clampN(tr&&tr.sinuosite,0,2,1),hw,net?.03:.3,net?0:.5];
-  S.creux=[creux,hw+(net?.18:.95),net?hw:Math.max(0,hw-.45),0];
-  const g=S.rel[0]*S.rel[1]*.22+Math.abs(pente)+(S.relOn?3*S.relB[0]*S.relB[1]+.6*S.relB[2]*S.relB[3]/Math.max(.05,S.relC[1]-S.relC[0]):0); S.pente=g;     // pente la plus forte du relief, en gros
-  S.terK=[.88/Math.sqrt(1+g*g),0];
-  const cg=1.5*creux/Math.max(.05,S.creux[1]-S.creux[2]);       // bord de trottoir : pas réduit seulement là
-  if(cg>.5) S.terK[1]=S.terK[0]/Math.sqrt(1+cg*cg);
-}
+const kitDe=LUMIERE.kitDe;
+/* Relief et trajet : la fiche règle les formules de terrainH et pathX (src/lumiere.js, reglerRelief). Sans réglage, la forêt d'origine à l'identique. */
+function reglerRelief(f){ LUMIERE.reglerRelief(S,f,seedN); }
 function applyFiche(f){
   if(f!==fiche){ montrerDit(""); errance=arrivee(); immobile=false; cam.elev=0; cam.pied=null; cam.perche=null; }                                   // nouveau lieu : il se promène à nouveau de lui-même
   if(meneurLibre&&f!==fiche) quitterLibre();                    // on change de lieu : la promenade libre repart de zéro
   fiche=f; setSeed(f.graine||4821);
   S.kit=kitDe(f);
   const fo=f.foret||{};
-  S.kitP=S.kit===1 ? [-1,(f.dunes&&f.dunes.rochers)||0,0,1] : S.kit===2 ? [-1,0,0,1]
-                   : [fo.densite!==undefined?(.2+.6*fo.densite)*Math.min(1,fo.densite*5):.62, fo.rochers!==undefined?fo.rochers:1, fo.feuillage!==undefined?fo.feuillage:1, 1];
+  S.kitP=LUMIERE.kitParams(f,S.kit);
   reglerRelief(f);
   const cone=fo.houppier==="cone";                               // conifères : un cône de feuillage par arbre au lieu de la voûte commune
   S.can=cone?[clampN(fo.houppier_bas,.3,8,1.6),19]:[7,19];
@@ -14960,11 +15439,28 @@ function applyFiche(f){
   buildMats(f); reglerHouppiers(f); buildShapes(f);
   applyAmbiance(f.ambiance||{});
   if(f.ambiance&&f.ambiance.saison==="hiver") S.kitP[2]*=.15;
-  cam.z=0; cam.x=S.kit!==1?pathX(0):0; cam.yaw=S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; queue.length=0; tempsFaits.length=0;
+  LUMIERE.reglerTrouee(S,f,pathX);                               // foret.trouee : une bande sans arbres vers le soleil (troue, monde.glsl)
+  cacheObj.clear(); (f.objets||[]).forEach(o=>{ if(o&&o.visible===false) cacheObj.add(o.id); });
+  S.depart=departDe(f);                                          // parcours.depart : où il démarre (au soleil, à l'ombre)
+  auDepart(); queue.length=0; tempsFaits.length=0;
   cacheObj.clear(); (f.objets||[]).forEach(o=>{ if(o&&o.visible===false) cacheObj.add(o.id); }); buildShapes(f);
   v3Fiche();
 }
 
+/* Le départ (fiche : parcours.depart) : { lumiere: "soleil" | "ombre" } cherche le long du trajet le point et le cap où le sol
+   autour du porteur (2,5 m, devant et derrière) est au soleil (ou à l'ombre), libre d'obstacle, le soleil de trois quarts
+   (LUMIERE.chercherDepart : relief, troncs, perches, blocs, houppiers, trouée). Calculé une fois par fiche. Sans ce champ (ou
+   sans soleil) : le début du trajet, dans son axe, comme avant. */
+function departDe(f){
+  const d=isObj(f.parcours)&&isObj(f.parcours.depart)?f.parcours.depart:null, lu=d&&(d.lumiere==="soleil"||d.lumiere==="ombre")?d.lumiere:null;
+  if(!lu||S.kit===1||S.nuit) return null;
+  const t=performance.now(), r=LUMIERE.chercherDepart(MJ,{lumiere:lu});
+  if(r) console.log("départ "+lu+" : z "+r.z.toFixed(1)+", écart "+(r.x-pathX(r.z)).toFixed(2)+" m, disque au soleil "+Math.round(r.part*100)+" % (min "+Math.round(r.min*100)+" %), soleil à "+r.soleil_deg+"° du regard, "+Math.round(performance.now()-t)+" ms");
+  return r?{x:r.x,z:r.z,yaw:r.yaw,part:r.part,min:r.min,lumiere:lu}:null;
+}
+function auDepart(){
+  const d=S.depart; cam.z=d?d.z:0; cam.x=d?d.x:S.kit!==1?pathX(0):0; cam.yaw=d?d.yaw:S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0;
+}
 /* Houppiers (foret.houppiers) : un port par écorce (arbres a et b, perches a et b, même partage). Rien n'est une essence :
    la fiche dit où commence le houppier sur la hauteur du tronc, sa largeur, son profil, ses charpentières (nombre, montée,
    retombée), leurs rameaux, et les masses de feuillage au bout (taille, remplissage, taille des feuilles, couleurs). Rangé dans
@@ -14974,10 +15470,7 @@ function applyFiche(f){
 function portHoup(o,i,part){
   const r=i*16, c=i*9;
   if(!isObj(o)) return false;
-  const hb=Array.isArray(o.hauteur)?o.hauteur:[.45,1], bas=clampN(hb[0],0,.95,.45), haut=clampN(hb[1],bas+.03,1,1);
-  S.hp.set([bas,haut,clampN(o.largeur,.2,8,2.5),clampN(o.aplati,0,1,.3),
-    Math.round(clampN(o.branches,1,8,5)),clampN(o.montee,0,1,.5),clampN(o.retombe,0,1,.1),Math.round(clampN(o.rameaux,0,3,2)),
-    clampN(o.masse,.15,2.5,.8),clampN(o.feuilles,0,1,.5),clampN(o.taille,.02,.4,.08),1, part,clampN(o.inegal,0,1,0),0,0],r);
+  LUMIERE.portHoupNum(S.hp,o,i,part);                           // les nombres du port (src/lumiere.js : la lumière les lit aussi)
   const cs=(Array.isArray(o.couleurs)?o.couleurs:[]).filter(x=>typeof x==="string").slice(0,3);
   if(!cs.length) cs.push("#6b5a2a");
   for(let k=0;k<3;k++) S.hpC.set(couleur(cs[k%cs.length]),c+3*k);
@@ -15245,33 +15738,11 @@ function validerRecettes(m){                                    // la fiche ne g
   return Object.keys(out).length?out:undefined;
 }
 
-/* Mêmes formules que dans pathtrace.frag : à modifier des deux côtés. */
-const sstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
-const pathX=z=>S.traj[0]*(3.2*Math.sin(z*.047+seed[2])+1.6*Math.sin(z*.113+1.7+seed[2]*2));
-const pathYaw=z=>Math.atan2(pathX(z+3)-pathX(z-3),6);
-function ondul(x,z){ const qx=x*S.rel[1], qz=z*S.rel[1];
-  return S.rel[0]*(1.5*Math.sin(qx*.041+.6+seed[2])*Math.cos(qz*.035+1.1)+.65*Math.sin(qx*.097+qz*.071+2)+.22*Math.sin(qx*.29-qz*.21+seed[2]*3)); }
-function terrainH(x,z){
-  if(S.kit===1){ const a=x*.045+.9*Math.sin(z*.021+seed[2])+.5*Math.sin(z*.05+1.3);
-    return 3.2*(1-Math.abs(Math.sin(a)))*(.62+.38*Math.sin(z*.03+2+seed[2]))+.5*Math.sin(x*.11+z*.08); }
-  const px=pathX(z), ax=Math.abs(x-px);
-  let h=ondul(S.rel[3]>0?x+(px-x)*sstep(S.rel[3]+5,S.rel[3],ax):x,z);   // une rue reste de niveau en travers : l'ondulation y est lue sur l'axe
-  h+=S.rel[2]*z;
-  h-=S.creux[0]*sstep(S.creux[1],S.creux[2],ax);
-  return S.relOn?h+reliefDetail(x,z,ax):h;
-}
-/* Bosses et buttes : la même formule que reliefDetail (monde.glsl), au bit près pour le hachage (entiers non signés, Math.imul). */
-function hR(cx,cz){ let x=(Math.imul((cx+S.relS[0]+46000)>>>0,1597334677)^Math.imul((cz+S.relS[1]+46000)>>>0,3812015801))>>>0;
-  x=(Math.imul(x,747796405)+2891336453)>>>0; x=Math.imul(((x>>>((x>>>28)+4))^x)>>>0,277803737)>>>0; x=((x>>>22)^x)>>>0; return (x>>>8)/16777216; }
-function bruitR(px,pz){ const ix=Math.floor(px), iz=Math.floor(pz); let fx=px-ix, fz=pz-iz; fx=fx*fx*(3-2*fx); fz=fz*fz*(3-2*fz);
-  const a=hR(ix,iz), b=hR(ix+1,iz), c=hR(ix,iz+1), d=hR(ix+1,iz+1); return (a+(b-a)*fx)+((c+(d-c)*fx)-(a+(b-a)*fx))*fz; }
-function reliefDetail(x,z,ax){
-  const B=S.relB, C=S.relC, qx=x*B[1], qz=z*B[1], rx=x*B[3], rz=z*B[3], hw=S.traj[1];
-  if(B[0]===0&&B[2]===0) return 0;                              // ni bosses ni buttes (comme monde.glsl)
-  const b=(bruitR(qx,qz)-.5)*1.4+(bruitR((.8*qx-.6*qz)*2.13+31,(.6*qx+.8*qz)*2.13+17)-.5)*.6;
-  const t=sstep(C[0],C[1],bruitR(.6*rx+.8*rz-57,-.8*rx+.6*rz+83));
-  return B[0]*b*(C[2]+(1-C[2])*sstep(hw,hw+2.5,ax))+B[2]*t*(C[3]+(1-C[3])*sstep(hw+1,hw+14,ax));
-}
+/* Le monde en JS (trajet, relief, objets de cellule, trouée) : src/lumiere.js (LUMIERE.mondeJS), MÊMES FORMULES que monde.glsl,
+   à modifier des deux côtés. L'état est S (seed, relief, trajet, kit, houppiers, trouée, degage). */
+S.degage=(x,z)=>degage(x,z);
+const MJ=LUMIERE.mondeJS(S), sstep=LUMIERE.sstep, pathX=MJ.pathX, pathYaw=MJ.pathYaw, terrainH=MJ.terrainH, reliefDetail=MJ.reliefDetail;
+const libreJS=(x,z)=>degage(x,z)||MJ.troue(x,z);                // cleared() de monde.glsl : objet qui dégage, ou trouée
 
 /* ------------------------------------------------------------------ porteur de la caméra */
 // le corps du porteur : seul le récit le déplace (haut : posture, part de la hauteur debout ; elev : perché au-dessus du sol,
@@ -15307,7 +15778,7 @@ function common(w,h,p){
   gl.uniform1f(u.uFish,1.09/(.5*Math.max(1,w/h))/cam.zoom);   // 125° sur le grand côté, divisé par le zoom
   gl.uniform1f(u.uFog,S.fog); gl.uniform3fv(u.uSeed,seed); gl.uniform3fv(u.uSunDir,S.sunDir);
   gl.uniform3fv(u.uSun,S.sun); gl.uniform3fv(u.uSky,S.sky); gl.uniform1f(u.uTorch,S.torch);
-  bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN);
+  bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN,S.objN); gl.uniform4fv(u.uTrou||null,S.trou); gl.uniform4fv(u.uTrou2||null,S.trou2);
   gl.uniform2fv(u.uCan,S.can); gl.uniform4fv(u.uHoup,S.houp);
   gl.uniform4fv(u.uLoin,S.loin); gl.uniform4fv(u.uEau,S.eau||[0,0,0,0]); gl.uniform3fv(u.uLoinCol,S.loinCol); gl.uniform3fv(u.uLoinBas,S.loinBas);
   bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP);
@@ -15936,7 +16407,7 @@ function v3Tapis(p){
       T.f.push(f); T.lv.push({O:[0,0],pret:false,fill:-1}); }
   }
   if(T.panne) return false;
-  const cle=JSON.stringify([seed,S.surf,S.traj,S.rel,S.relB,S.relC,S.creux,S.kit,matVersion,S.sunDir,S.kitP,S.can,S.houp]);   // tout ce dont dépend la cuisson
+  const cle=JSON.stringify([seed,S.surf,S.traj,S.rel,S.relB,S.relC,S.creux,S.kit,matVersion,S.sunDir,S.kitP,S.can,S.houp,S.trou,S.trou2]);   // tout ce dont dépend la cuisson
   if(cle!==T.cle){ T.cle=cle; T.lv.forEach(l=>{ l.pret=false; l.fill=-1; }); }
   const G=V3.tapP, u=G.u; gl.useProgram(G.p); v3Monde(u,N,N,p); gl.uniform1i(u.uTapN,N);
   gl.viewport(0,0,N,N); gl.enable(gl.SCISSOR_TEST);
@@ -16086,7 +16557,7 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   gl.uniform1i(u.uKit||null,S.kit); gl.uniform4fv(u.uKitP||null,S.kitP); gl.uniform1i(u.uMode||null,0);
   gl.uniform2fv(u.uCan||null,S.can); gl.uniform4fv(u.uHoup||null,S.houp);
   gl.uniform4fv(u.uLoin||null,S.loin); gl.uniform3fv(u.uLoinCol||null,S.loinCol); gl.uniform3fv(u.uLoinBas||null,S.loinBas);
-  if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
+  if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN); gl.uniform4fv(u.uTrou||null,S.trou); gl.uniform4fv(u.uTrou2||null,S.trou2);
   if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP); }
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
   if(u.uRelB){ gl.uniform4fv(u.uRelB,BANC.v&&BANC.v.sansRel?[0,S.relB[1],0,S.relB[3]]:S.relB); gl.uniform4fv(u.uRelC,S.relC); gl.uniform2fv(u.uRelS,S.relS); }   // bosses et buttes (variante RELIEF ; banc : sans)
@@ -16739,7 +17210,7 @@ async function capturerVues(vues,o={}){                         // repérage : l
       out.push(Object.assign(im,{legende:v.legende}));
     }
   } finally {
-    hold=avant; cam.z=0; cam.x=S.kit!==1?pathX(0):0; cam.yaw=S.kit!==1?pathYaw(0):1.15; cam.pitch=-.03; look.yaw=0; look.pitch=0; sceneDirty=true;
+    hold=avant; auDepart(); sceneDirty=true;
   }
   return out;
 }
@@ -17170,8 +17641,8 @@ function objetsPercus(){                                      // distance, direc
   return out;
 }
 const PATIENCE_APRES_TEMPS=45;                                 // secondes d'attente après un temps de la trame, si le joueur ne dit rien
-function percevoirMeneur(){ const p=perception(), x0=S.kit!==1?pathX(0):0;
-  p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z).toFixed(1); p.objets=objetsPercus();
+function percevoirMeneur(){ const p=perception(), x0=S.depart?S.depart.x:S.kit!==1?pathX(0):0, z0=S.depart?S.depart.z:0;
+  p.avance_m=+cam.z.toFixed(1); p.depart_m=+Math.hypot(cam.x-x0,cam.z-z0).toFixed(1); p.objets=objetsPercus();
   p.supports=supportsProches().map(({id,nom,m,angle,haut})=>({id,nom,m,angle,haut})); p.hauteur_m=+cam.elev.toFixed(1); return p; }
 function executer(o){                                         // les ordres du meneur, traduits pour le moteur
   if(o.type==="pensee") penser(o.texte);
@@ -17583,17 +18054,7 @@ function cibleMonde(id){
 /* Les éléments du monde où l'on peut monter, les plus proches : un arbre (tronc), un rocher. Les paramètres viennent des
    fonctions de cellule de monde.glsl (arbreA, blocGres), recopiées ici en flottants 32 bits : MÊMES FORMULES, à modifier
    des deux côtés (comme terrainH et pathX). La sonde (balade.sonde) sert à vérifier qu'il y a bien un tronc à l'endroit dit. */
-const F32=Math.fround, fr32=x=>F32(x-Math.floor(x));
-function h42(px,py){ px=F32(px); py=F32(py);
-  let a=fr32(F32(px*F32(.1031))), b=fr32(F32(py*F32(.1030))), c=fr32(F32(px*F32(.0973))), d=fr32(F32(py*F32(.1099)));
-  const k=F32(33.33), t=F32(F32(F32(F32(a*F32(d+k))+F32(b*F32(c+k)))+F32(c*F32(a+k)))+F32(d*F32(b+k)));
-  a=F32(a+t); b=F32(b+t); c=F32(c+t); d=F32(d+t);
-  return [fr32(F32(F32(a+b)*c)),fr32(F32(F32(a+c)*b)),fr32(F32(F32(b+c)*d)),fr32(F32(F32(c+d)*a))]; }
-function h21(px,py){ px=F32(px); py=F32(py); let a=fr32(F32(px*F32(.1031))), b=fr32(F32(py*F32(.1031))), c=fr32(F32(px*F32(.1031)));
-  const k=F32(33.33), t=F32(F32(F32(a*F32(b+k))+F32(b*F32(c+k)))+F32(c*F32(a+k))); a=F32(a+t); b=F32(b+t); c=F32(c+t);
-  return fr32(F32(F32(a+b)*c)); }
-function vnoise2(x,y){ const ix=Math.floor(x), iy=Math.floor(y); let fx=x-ix, fy=y-iy; fx=fx*fx*(3-2*fx); fy=fy*fy*(3-2*fy);
-  const m=(a,b,t)=>a+(b-a)*t; return m(m(h21(ix,iy),h21(ix+1,iy),fx),m(h21(ix,iy+1),h21(ix+1,iy+1),fx),fy); }
+const F32=LUMIERE.F32, fr32=LUMIERE.fr32, h42=LUMIERE.h42, h21=LUMIERE.h21, vnoise2=LUMIERE.vnoise2;   // src/lumiere.js : au bit près comme le shader
 function degage(wx,wz){ for(const o of (Array.isArray(fiche.objets)?fiche.objets:[])){ if(!o||o.visible===false||cacheObj.has(o.id)||!(o.degage>0)) continue;
   const q=posObjet(o); if(Math.hypot(wx-q.x,wz-q.z)<clampN(o.degage,0,12,0)) return true; } return false; }
 let supportsCache={t:-1,x:0,z:0,L:[]};
@@ -17608,7 +18069,7 @@ function supportsProches(){
       const h=h42(i+sx,j+sy); if(h[0]>S.kitP[0]) continue;
       const ox=(h[1]-.5)*3.8, oz=(h[2]-.5)*3.8, vx=(i+.5)*CA+ox, vz=(j+.5)*CA+oz;
       const wx=.8776*vx+.4794*vz, wz=-.4794*vx+.8776*vz;           // v*RA
-      if(Math.abs(wx-pathX(wz))<1.5||degage(wx,wz)) continue;
+      if(Math.abs(wx-pathX(wz))<1.5||libreJS(wx,wz)) continue;
       const m=Math.hypot(wx-cam.x,wz-cam.z); if(!best||m<best.m) best={m,x:wx,z:wz,H:11+6*h[3],r0:.16+.17*fr32(h[3]*7.31)};
     }
     if(best) ajoute("arbre",best.x,best.z,best.H,best.r0);
@@ -17619,7 +18080,7 @@ function supportsProches(){
       const h=h42(i+sx+13,j+sy+13), mask=vnoise2(i*.37+sx,j*.37+sy);
       if(h[0]>(sstep(.32,.68,mask)*.9+.08)*S.kitP[1]) continue;
       const R=.7+1.6*h[3]*h[3], ox=(h[1]-.5)*2*(.5*CC-.3-1.25*R), oz=(h[2]-.5)*2*(.5*CC-.3-1.25*R), wx=(i+.5)*CC+ox, wz=(j+.5)*CC+oz;
-      if(Math.abs(wx-pathX(wz))<R*1.1+.5||degage(wx,wz)) continue;
+      if(Math.abs(wx-pathX(wz))<R*1.1+.5||libreJS(wx,wz)) continue;
       const m=Math.hypot(wx-cam.x,wz-cam.z); if(!best||m<best.m) best={m,x:wx,z:wz,top:R*.22+R*(.62+.3*fr32(h[2]*7)),r:R*Math.max(1+.25*fr32(h[1]*9),.8+.3*fr32(h[3]*11))};
     }
     if(best) ajoute("rocher",best.x,best.z,best.top,best.r);
@@ -17693,14 +18154,14 @@ function obstaclesConnus(){
     for(let i=i0-6;i<=i0+6;i++) for(let j=j0-6;j<=j0+6;j++){
       const h=h42(i+sx,j+sy); if(h[0]>S.kitP[0]) continue;
       const vx=(i+.5)*CA+(h[1]-.5)*3.8, vz=(j+.5)*CA+(h[2]-.5)*3.8, wx=.8776*vx+.4794*vz, wz=-.4794*vx+.8776*vz;
-      if(Math.abs(wx-pathX(wz))<1.5||degage(wx,wz)||loin(wx,wz)) continue;
+      if(Math.abs(wx-pathX(wz))<1.5||libreJS(wx,wz)||loin(wx,wz)) continue;
       L.push({id:"arbre:"+i+","+j,nom:"un tronc",x:wx,z:wz,r:(.16+.17*fr32(h[3]*7.31))*1.3}); }
     if(S.houp[3]>0){                                              // percheB : grille tournée de 3,3 m
       const CB=3.3, qx=.6216*cam.x+.7833*cam.z+17.3, qz=-.7833*cam.x+.6216*cam.z+17.3, i0=Math.floor(qx/CB), j0=Math.floor(qz/CB);
       for(let i=i0-10;i<=i0+10;i++) for(let j=j0-10;j<=j0+10;j++){
         const h=h42(i+sx+71,j+sy+71); if(h[0]>S.kitP[0]*.8*S.houp[3]) continue;
         const vx=(i+.5)*CB+(h[1]-.5)*1.9-17.3, vz=(j+.5)*CB+(h[2]-.5)*1.9-17.3, wx=.6216*vx-.7833*vz, wz=.7833*vx+.6216*vz;
-        if(Math.abs(wx-pathX(wz))<1.15||degage(wx,wz)||loin(wx,wz)) continue;
+        if(Math.abs(wx-pathX(wz))<1.15||libreJS(wx,wz)||loin(wx,wz)) continue;
         L.push({id:"perche:"+i+","+j,nom:"un tronc",x:wx,z:wz,r:(.035+.07*fr32(h[3]*5.3))*1.3+.06}); } }
   }
   if(S.kit!==2&&S.kitP[1]>0){                                     // blocGres : grille de 8,5 m
@@ -17709,7 +18170,7 @@ function obstaclesConnus(){
       const h=h42(i+sx+13,j+sy+13), mask=vnoise2(i*.37+sx,j*.37+sy);
       if(h[0]>(sstep(.32,.68,mask)*.9+.08)*S.kitP[1]) continue;
       const R=.7+1.6*h[3]*h[3], ox=(h[1]-.5)*2*(.5*CC-.3-1.25*R), oz=(h[2]-.5)*2*(.5*CC-.3-1.25*R), wx=(i+.5)*CC+ox, wz=(j+.5)*CC+oz;
-      if(Math.abs(wx-pathX(wz))<R*1.1+.5||degage(wx,wz)||loin(wx,wz)) continue;
+      if(Math.abs(wx-pathX(wz))<R*1.1+.5||libreJS(wx,wz)||loin(wx,wz)) continue;
       L.push({id:"rocher:"+i+","+j,nom:"un rocher",x:wx,z:wz,r:R*Math.max(1+.25*fr32(h[1]*9),.8+.3*fr32(h[3]*11))+.1*R,haut:R*.22+R*(.62+.3*fr32(h[2]*7))}); }
   }
   for(const o of (Array.isArray(fiche.objets)?fiche.objets:[])){ if(!o||o.visible===false||cacheObj.has(o.id)) continue;
@@ -17750,7 +18211,7 @@ function semisDist(x,y,z){
     const gc=[(id[0]+.5)*A[0]+(h[1]-.5)*2*J[0],(id[1]+.5)*A[1]+(h[2]-.5)*2*J[1]], w=W(gc);
     let dx=0;
     if(!rg){ dx=w[0]-pathX(w[1]); if(Math.abs(dx)<T[0]||Math.abs(dx)>T[1]||dx*T[2]<0) continue; }
-    if(degage(w[0],w[1])) continue;
+    if(libreJS(w[0],w[1])) continue;
     const h2=h42(F32(id[0]*1.37+h[1]*91+k*3.1+side),F32(id[1]*1.37+h[2]*91+k*3.1+side));
     let yaw=D[0];
     if(T[3]<.5) yaw=h2[2]*6.2832;
