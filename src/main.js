@@ -2219,14 +2219,14 @@ function geste1(g,c,r,t,u=0){
   });
 }
 /* Les mains glissent vers leurs cibles (jamais de saut d'une transition à l'autre), puis l'objet des mains est refait. */
-function mainsVers(H,dt){
+function mainsVers(H,dt,quelles=[0,1]){                          // quelles : les mains dans le champ (0 gauche, 1 droite)
   if(!MAINS) return;
   if(!mainsEtat.H) mainsEtat.H=mainsRepos();
   const k=Math.min(1,dt*9);
   mainsEtat.H=mainsEtat.H.map((h,i)=>h.map((v,j)=>v+(H[i][j]-v)*k));
-  mainsObj=objetMains(mainsEtat.H);
+  mainsObj=objetMains(mainsEtat.H,quelles);
 }
-function objetMains(Hs){
+function objetMains(Hs,quelles=[0,1]){
   const M=MAINS, {e,f,r}=corpsAxes(), q=versFiche(cam.x,cam.z), o={id:"·mains",nom:"",devant:q.devant,cote:q.cote,formes:[]}, R=repereObjet(o);
   const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], add=(a,b,k=1)=>[a[0]+b[0]*k,a[1]+b[1]*k,a[2]+b[2]*k], nrm=a=>{ const l=Math.hypot(...a)||1; return a.map(v=>v/l); };
   // une forme dont l'axe (y) suit d dans le monde : cap et penche (même repère que sdPrim, voir dansForme dans meneur.js)
@@ -2234,7 +2234,7 @@ function objetMains(Hs){
     const w=Math.acos(Math.min(1,dy)), Y=Math.atan2(dz,-dx), cap=((Y-R.yaw)*180/Math.PI%360+540)%360-180;
     return {f:f0,p:versLocal(R,c),taille,cap,penche:[0,w*180/Math.PI],couleur,matiere}; };
   const ep=M.epaule||[.21,-.2,-.02], ma=M.manche||{}, pa=M.paume||{}, po=M.pouce||{}, pg=M.poignet||.07;
-  Hs.forEach((H,i)=>{ const s=i?1:-1, rac=[e[0]+r[0]*s*ep[0]+f[0]*ep[2],e[1]+ep[1],e[2]+r[2]*s*ep[0]+f[2]*ep[2]];
+  Hs.forEach((H,i)=>{ if(!quelles.includes(i)) return; const s=i?1:-1, rac=[e[0]+r[0]*s*ep[0]+f[0]*ep[2],e[1]+ep[1],e[2]+r[2]*s*ep[0]+f[2]*ep[2]];
     const d=nrm(sub(H,rac)), Wr=add(H,d,-pg), rm=ma.rayon||.045, a=add(Wr,d,-.015), L=Math.max(.03,Math.hypot(...sub(a,rac)));
     o.formes.push(axe("capsule",add(rac,sub(a,rac),.5),d,[2*rm,Math.max(.01,L-2*rm),2*rm],ma.couleur||"#2b2f36",ma.matiere||"tissu"));
     o.formes.push(axe("boule",add(H,d,-.01),d,(pa.taille||[.085,.17,.034]).slice(),pa.couleur||"#c39577",pa.matiere||"mat"));
@@ -2256,7 +2256,7 @@ function ramasserPas(a,dt){
   if(!a.sol){ const x=e[0]+f[0]*.45+r[0]*.06, z=e[2]+f[2]*.45+r[2]*.06; a.sol=[x,terrainH(x,z)+.035,z]; }
   const k=u<.45?(u/.45)**2*(3-2*u/.45):u<.62?1:1-((u-.62)/.38)**2*(3-2*(u-.62)/.38);
   const H=[[rep[0][0],rep[0][1]-.05,rep[0][2]],rep[1].map((v,i)=>v+(a.sol[i]-v)*k+(i===1&&u>.45&&u<.62?.01*Math.sin(u*80):0))];
-  mainsVers(H,dt); buildShapes(fiche,true);
+  mainsVers(H,dt,[1]); buildShapes(fiche,true);
   if(a.rest<=0){ queue.shift(); mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); }
 }
 function viserObjet(id,cadre){                                 // cap (relatif au corps) et inclinaison vers un objet de la fiche ou un support
@@ -2653,7 +2653,10 @@ window.balade={
   lieuCherche:()=>dernierLieu,
   pause(v){ pauseTest=!!v; },
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
-  faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1)}))}),
+  faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?mainsObj.formes.length:0,
+    file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4).toFixed(2):-1,
+      total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0}))}),
+  vue(id){ const q=cibleMonde(id); if(!q) return null; const c=corpsAxes().e; return vueDegagee(c[0],c[1],c[2],q.x,q.z,q.taille/2,q.haut,id); },   // rien entre la caméra et la chose ?
   resolution(px){ CFG.maxPx=+px||undefined; resize(); },        // pixels internes (essais : finesse d'une capture)
   sonde:(x,y,z)=>probe(x,y,z)[0],
   semis:(x,y,z)=>semisDist(x,y,z),

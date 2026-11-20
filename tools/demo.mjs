@@ -1,16 +1,21 @@
 // La démonstration jouée dans dist/index.html, moteur v3, en promenade libre, avec un Claude simulé (window.claude remplacé
-// avant le chargement : mêmes réponses que le faux Claude de tests/demo.test.mjs, 1,5 s de délai) :
-//   « fais une petite crotte », « maintenant fais une énorme bouse », « fais comme un bonhomme de neige avec »
-//   (d'autres phrases : PHRASES='…|…|…'). Claude simulé nomme la grosse « bouse énorme » et vise la petite pour le bonhomme,
-//   sans dire d'aller chercher : la page corrige la cible, et il décide seul d'aller chercher bâtons et cailloux.
-// Puis une marche forcée droit sur un bloc de grès (§16) : avant, pendant, après.
-// Captures (format téléphone 390 × 780, et une vue PC 960 × 540), journal et vérifications dans out/demo/.
+// avant le chargement, 1,5 s de délai). Par défaut, un Claude « méchant », comme le vrai Claude sur le PC de Toine : il pose la
+// crotte « devant », répond par du texte seul à « énorme » (« je vais plutôt la faire avec de la terre »), ne donne aucune étape
+// de façonnage ; la page tient la demande (docs/meneur-de-jeu.md §17).
+//   « fais une petite crotte », « fais une crotte de 5 kg », « maintenant fais une énorme crotte », « fais comme un bonhomme
+//   de neige avec » (d'autres phrases : PHRASES='…|…|…|…' ; les phrases manquantes sont celles du scénario par défaut).
+// Captures : la petite cadrée ; la 5 kg pendant qu'il est accroupi (elle est derrière lui, invisible) puis cadrée ; l'énorme ;
+// il part chercher, ramasse (la main) ; la PLANCHE du façonnage (PLANCHE images réparties sur le geste, 14 par défaut,
+// assemblées dans planche.png) ; le bonhomme en pied. Puis une marche forcée droit sur un bloc de grès (§16).
+// Graine du monde ET du meneur : celle de la fiche (4821 pour la scène 09).
 //
 // Usage : node tools/demo.mjs [pixels internes pendant les gestes] [pixels des captures] [docile]
 //   docile : le Claude simulé « oublie » gestes et objets ; le mode DOCILE de la page complète.
-// Variables : PASSES (images accumulées par capture, 10), SCENE (indice de la fiche, 8 : 09-champcueil-aube), SANS_OBSTACLE=1, SANS_PC=1.
+// Variables : PASSES (images accumulées par capture, 10), PASSES_PLANCHE (4), PLANCHE (14), SCENE (indice de la fiche, 8 :
+//   09-champcueil-aube), VUE=pc (tout en 960 × 600, 16/10, dans out/demo-pc), GENTIL=1 (le Claude simulé d'avant, qui fait ce
+//   qu'on dit), SANS_OBSTACLE=1, CFGX='{"ombrage":"socle"}' (options de page en plus).
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,21 +23,26 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const [,, px = '9000', pxCapture = '120000', mode = ''] = process.argv;
 const PASSES = +(process.env.PASSES || 10);
 const GESTES = 40000, GRAINS = 300000;                            // budget de grains v3 : petit pendant les gestes (rendu logiciel lent), celui du téléphone pour les captures
-const out = join(root, 'out/demo');
+const PC = process.env.VUE === 'pc', VW = PC ? 960 : 390, VH = PC ? 600 : 780;
+const out = join(root, PC ? 'out/demo-pc' : 'out/demo');
 mkdirSync(out, { recursive: true });
+const SCENE = +(process.env.SCENE ?? 8), GENTIL = !!process.env.GENTIL;
+const ficheF = readdirSync(join(root, 'scenes')).filter(f => f.endsWith('.json')).sort()[SCENE];
+const GRAINE = (JSON.parse(readFileSync(join(root, 'scenes', ficheF), 'utf8')).graine) || 4821;   // la graine de la fiche (le monde), aussi pour le meneur
+console.log('scène', ficheF, 'graine', GRAINE, PC ? 'vue PC 960 × 600' : 'vue téléphone 390 × 780', GENTIL ? 'Claude gentil' : 'Claude méchant');
 
 const browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
-const page = await browser.newPage({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: VW, height: VH }, deviceScaleFactor: 1 });
 const erreurs = [];
 page.on('pageerror', e => { erreurs.push(e.message); console.log('  [erreur]', e.stack); });
 page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_/.test(m.text())) erreurs.push(m.text()); if (m.type() === 'warning' && !/GPU stall|GL Driver/.test(m.text())) console.log('  [page]', m.text()); });
-await page.addInitScript(([c, oublie]) => {
+await page.addInitScript(([c, oublie, gentil]) => {
   window.__CFG = c;
   try { localStorage.setItem('bodycam-docile', oublie ? '1' : '0'); } catch (_) {}
   const voixDe = t => { const m = /La voix dit : (".*")\s*$/m.exec(t); return m ? JSON.parse(m[1]) : null; };
   const sas = { verdict: 'recevable', regle: null, motif: 'geste ordinaire' };
   function repondre(c) {
-    if (/accessoiriste/.test(c)) {                                   // l'accessoiriste écrit mal (trop grand, trois boules) : la bibliothèque sert de base sûre
+    if (/accessoiriste/.test(c)) {                                   // l'accessoiriste écrit mal (trop grand, trois boules, pas d'étapes) : la bibliothèque sert de base sûre
       if (/LA CHOSE, telle qu'elle est/.test(c)) return { retouche: { nom: 'bonhomme', ajoute: [{ f: 'boule', p: [0, 2, 0], taille: [3, 3, 3], couleur: '#ffffff', matiere: 'mat' }] }, suite: null };
       return { objet: { envergure_m: 0.2, nom: 'crotte', formes: [{ f: 'boule', p: [0, 0.4, 0], taille: [1.2, 0.8, 1], couleur: '#4a3220', matiere: 'mat' }] }, suite: null };
     }
@@ -40,15 +50,19 @@ await page.addInitScript(([c, oublie]) => {
     if (oublie) return { sas, pensee: 'Ha. Si tu veux.', attitude: 'suit', actions: [] };
     if (/avance/.test(v)) return { sas, pensee: 'Un peu plus loin, alors.', attitude: 'suit', actions: [{ type: 'marcher', metres: 3 }] };
     const accroupi = [{ type: 'posture', hauteur: 0.45 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }];
+    const ou = gentil ? 'dessous' : 'devant';                        // le vrai Claude : « devant » ; la donnée du modèle l'emporte
     if (/bonhomme/.test(v)) return { sas, pensee: 'Un bonhomme de neige. Avec ça. D\'accord, artiste.', attitude: 'suit',   // il vise la première (la petite), sans aller chercher : la page corrige
       actions: [], modifie: { objet: ids[0], quoi: 'en faire un bonhomme de neige' } };
-    if (/enorme|énorme|géant|grosse|bouse/.test(v)) return { sas, pensee: 'Ah ouais. Là, quand même… Bon.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'bouse énorme', quoi: 'une énorme bouse, colossale', ou: 'dessous' } };
-    if (/crotte|caca/.test(v)) return { sas, pensee: 'Sérieux ? … Bon. Personne regarde.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'petite crotte', quoi: 'une petite crotte', ou: 'dessous' } };
+    if (/enorme|énorme|géant/.test(v)) return gentil ? { sas, pensee: 'Ah ouais. Là, quand même… Bon.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'crotte énorme', quoi: 'une énorme crotte, colossale', ou } }
+      : { sas, pensee: 'Une énorme ? Non… Je vais plutôt la faire avec de la terre.', attitude: 'suit', actions: [] };   // cas réel : texte seul, autre matière
+    if (/kg/.test(v)) return gentil ? { sas, pensee: 'Cinq kilos. Rien que ça.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'crotte de 5 kg', quoi: 'une crotte de 5 kg', ou } }
+      : { sas, pensee: 'Elle est déjà bien, celle-là. Je la grossis un peu.', attitude: 'suit', actions: [], modifie: { objet: ids[0], quoi: 'un peu plus grosse' } };   // il retouche la petite
+    if (/crotte|caca/.test(v)) return { sas, pensee: 'Sérieux ? … Bon. Personne regarde.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'petite crotte', quoi: 'une petite crotte', ou, distance: gentil ? undefined : 1.2 } };
     return { sas, pensee: 'Hm.', attitude: 'suit', actions: [] };
   }
   const sampler = { json: c => new Promise(r => setTimeout(() => r(repondre(c)), 1500)) };
   window.claude = { use: () => Promise.resolve(sampler) };
-}, [{ maxPx: +px, mobile: true, still: true, graine: 7, debug: true, v3: true, grains: GESTES, dtMax: 0.4, scene: +(process.env.SCENE ?? 8), ...JSON.parse(process.env.CFGX || '{}') }, mode === 'docile']);
+}, [{ maxPx: +px, mobile: true, still: true, graine: GRAINE, debug: true, v3: true, grains: GESTES, dtMax: 0.4, scene: SCENE, ...JSON.parse(process.env.CFGX || '{}') }, mode === 'docile', GENTIL]);
 await page.goto('file://' + join(root, 'dist/index.html'), { timeout: 240000 });
 await page.waitForFunction(() => window.balade && window.__state && window.__state.n > 2, null, { timeout: 240000 });
 
@@ -67,73 +81,119 @@ async function auRepos(max = 400000) {                              // file vide
 async function capture(nom, quoi) {                                  // le corps s'arrête net, l'image s'affine, sans les boutons
   await page.evaluate(([p, g]) => { balade.pause(true); balade.grains(g); balade.resolution(p); for (const e of document.querySelectorAll('button, #hint, #debug-meneur')) e.style.visibility = 'hidden'; }, [+pxCapture, GRAINS]);
   await page.waitForFunction(n => window.__state.n >= n, PASSES, { timeout: 400000 }).catch(() => console.log(sec(), '(passes incomplètes)'));
-  const f = join(out, nom + '.png'); await page.screenshot({ path: f, timeout: 300000 });
+  const f = join(out, nom + '.png');
+  await page.screenshot({ path: f, timeout: 300000 }).catch(async () => { console.log(sec(), '(capture d\'écran expirée : lecture du canevas)'); writeFileSync(f, Buffer.from((await lireCanevas()).split(',')[1], 'base64')); });
   const pensee = await page.textContent('#pensee'); captures.push({ f, quoi, pensee }); console.log(sec(), 'capture', nom, '·', quoi, '·', pensee);
   await page.evaluate(([p, g]) => { balade.grains(g); balade.resolution(p); for (const e of document.querySelectorAll('button, #hint, #debug-meneur')) e.style.visibility = ''; balade.pause(false); }, [+px, GESTES]);
 }
+const lireCanevas = () => page.evaluate(() => new Promise(ok => requestAnimationFrame(() => {
+  const cv = document.querySelector('canvas'), c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height;
+  c.getContext('2d').drawImage(cv, 0, 0); ok(c.toDataURL('image/jpeg', 0.9)); })), { timeout: 600000 });
 const objet = id => page.evaluate(i => (balade.percevoir().objets || []).find(o => o.id === i), id);
 
-// Le parcours de la démo (§15.6) : une petite crotte, une énorme bouse, « fais comme un bonhomme de neige avec ».
-const PH = (process.env.PHRASES || 'fais une petite crotte|maintenant fais une énorme bouse|fais comme un bonhomme de neige avec').split('|');
-// 1. une petite crotte, cadrée de près
+// Le parcours de la démo (§15.6, §17) : une petite crotte, une de 5 kg, une énorme, « fais comme un bonhomme de neige avec ».
+const PH0 = ['fais une petite crotte', 'fais une crotte de 5 kg', 'maintenant fais une énorme crotte', 'fais comme un bonhomme de neige avec'];
+const PH = (process.env.PHRASES || '').split('|').map(s => s.trim()).filter(Boolean);
+while (PH.length < PH0.length) PH.push(PH0[PH.length]);           // moins de phrases : celles du scénario par défaut complètent
+const derriere = o => o && Math.abs(o.angle) > 90;                  // perçue derrière le regard du corps
+async function vueLibre(id, quoi) { const v = await page.evaluate(i => balade.vue(i), id); verifier(v, `${quoi} : rien entre la caméra et elle (semis, troncs, rochers, choses)`); }
+// 1. une petite crotte : posée derrière lui (Claude dit « devant, 1,2 m »), puis cadrée de près
 await attendre(1500);
 await dire(PH[0]);
 await quand(() => balade.objets().some(o => o.id === 'fab-1'));
+const o1a = await objet('fab-1');
+verifier(derriere(o1a), `posée derrière lui pendant qu'il est accroupi : ${o1a && o1a.angle}°, ${o1a && o1a.m} m`);
 await auRepos();
 const o1 = await objet('fab-1');
 verifier(o1 && o1.taille >= 0.08 && o1.taille <= 0.16, `petite crotte : ${o1 && o1.taille} m`);
 verifier(o1 && Math.abs(o1.angle) < 10 && o1.m < 1, `cadrée de près : ${o1 && o1.m} m, ${o1 && o1.angle}°, zoom ${(await corps()).zoom.toFixed(1)}`);
+await vueLibre('fab-1', 'petite');
 await capture('1-petite', 'la petite crotte, cadrée de près');
 
-// 2. une énorme bouse, posée devant lui (pas sur lui, pas sur la petite), cadrée entière
+// 2. une crotte de 5 kg (Claude retouche la petite au lieu d'en faire une) : la page la fait, derrière lui ; il se retourne
 await dire(PH[1]);
 await quand(() => balade.objets().some(o => o.id === 'fab-2'));
+const o2a = await objet('fab-2');
+verifier(derriere(o2a), `5 kg posée derrière lui : ${o2a && o2a.angle}°, ${o2a && o2a.m} m`);
+await capture('2a-5kg-pose', 'accroupi : elle tombe derrière lui, on ne la voit pas apparaître');
 await auRepos();
 const o2 = await objet('fab-2'), c2 = await corps();
-verifier(o2 && o2.taille >= 0.45 && o2.taille <= 0.9 && o2.taille >= 3 * o1.taille, `énorme : ${o2 && o2.taille} m (petite : ${o1.taille} m)`);
+verifier(o2 && o2.taille >= 0.5 && o2.taille <= 0.65, `5 kg : ${o2 && o2.taille} m (petite : ${o1.taille} m)`);
 verifier(o2 && o2.m >= o2.taille / 2 + 0.3, `il n'est pas dedans : ${o2 && o2.m} m du centre`);
-const entiere = await page.evaluate(([t, h, m, y, z]) => MENEUR.tientDansImage(t, h, m, y, z, innerWidth / innerHeight), [o2.taille, o2.haut, o2.m, 1.36 * c2.haut, c2.zoom]);
-verifier(entiere, `entière à l'image : ${o2.m} m, accroupi ${c2.haut}, zoom ${c2.zoom.toFixed(1)}`);
-await capture('2-enorme', 'l\'énorme bouse, entière');
+const entiere2 = await page.evaluate(([t, h, m, y, z]) => MENEUR.tientDansImage(t, h, m, y, z, innerWidth / innerHeight), [o2.taille, o2.haut, o2.m, 1.36 * c2.haut, c2.zoom]);
+verifier(entiere2 && Math.abs(o2.angle) < 10, `retourné, elle est entière à l'image : ${o2.m} m, ${o2.angle}°, zoom ${c2.zoom.toFixed(1)}`);
+await vueLibre('fab-2', '5 kg');
+await capture('2b-5kg', 'la crotte de 5 kg, il s\'est retourné, entière');
 
-// 3. « fais comme un bonhomme de neige avec » : il décide d'aller chercher bâtons et cailloux, revient, façonne, cadre en pied
+// 3. une énorme crotte (Claude : texte seul, « avec de la terre ») : la page la fait, énorme
 await dire(PH[2]);
+await quand(() => balade.objets().some(o => /^fab-/.test(o.id) && o.id !== 'fab-1' && o.id !== 'fab-2'));
+const idE = await page.evaluate(() => balade.objets().map(o => o.id).filter(i => /^fab-/.test(i)).sort((a, b) => +b.slice(4) - +a.slice(4))[0]);
+const o3a = await objet(idE);
+verifier(derriere(o3a), `énorme posée derrière lui : ${o3a && o3a.angle}°`);
+await auRepos();
+const o3 = await objet(idE), c3 = await corps();
+verifier(o3 && o3.taille >= 0.72 && o3.taille <= 0.9, `énorme : ${o3 && o3.taille} m`);
+const entiere3 = await page.evaluate(([t, h, m, y, z]) => MENEUR.tientDansImage(t, h, m, y, z, innerWidth / innerHeight), [o3.taille, o3.haut, o3.m, 1.36 * c3.haut, c3.zoom]);
+verifier(entiere3, `entière à l'image : ${o3.m} m, accroupi ${c3.haut}, zoom ${c3.zoom.toFixed(1)}`);
+verifier(!/terre/.test(await page.textContent('#pensee')), 'sa pensée ne parle plus de terre : « ' + (await page.textContent('#pensee')) + ' »');
+await vueLibre(idE, 'énorme');
+await capture('3-enorme', 'l\'énorme crotte, entière');
+
+// 4. « fais comme un bonhomme de neige avec » : il va chercher bâtons et cailloux, ramasse (la main), revient, façonne, cadre en pied
+await dire(PH[3]);
 await quand(() => balade.corps().file.includes('marcher') && balade.lieuCherche());
 await attendre(2500);
 const lieu = await page.evaluate(() => balade.lieuCherche());
 console.log(sec(), 'il va chercher', JSON.stringify(lieu));
-await capture('3-depart', 'il part chercher (' + (lieu && lieu.ou) + ')');
-await quand(() => { const c = balade.corps(), l = balade.lieuCherche(); return l && Math.hypot(c.x - l.x, c.z - l.z) < 0.4 && c.haut < 0.6 && c.pitch < -0.5; });
-const o4 = await objet('fab-2');
+await capture('4-depart', 'il part chercher (' + (lieu && lieu.ou) + ')');
+await quand(() => balade.corps().file[0] === 'ramasser' && balade.faconnage().mains > 0);
+await attendre(1200);
+const o4 = await objet(idE);
 verifier(o4 && o4.m > 2.5, `il s'est éloigné pour chercher : ${o4 && o4.m} m`);
-await capture('4-ramassage', 'il ramasse, accroupi');
-await quand(() => balade.faconnage().file.some(f => f.i >= 0));
+verifier((await page.evaluate(() => balade.faconnage().mains)) === 3, 'une main ramasse');
+await capture('5-ramassage', 'il ramasse : la main au sol');
+await quand(() => balade.faconnage().file.some(f => f.i >= 0 && f.total > 0));
 const ram = await page.evaluate(() => balade.objets().find(o => /ramass/.test(o.nom || '')));
-verifier(ram, 'ce qu\'il a rapporté est posé près de la bouse : ' + (ram && ram.nom));
-await capture('5-retour', 'retour : il pose ce qu\'il a ramassé, accroupi devant elle');
-await quand(() => balade.faconnage().file.some(f => f.i >= 2));
-await capture('6-faconnage-a', 'façonnage, un état intermédiaire');
-await quand(() => balade.faconnage().file.some(f => f.i >= 4) || balade.faconnage().file.length === 0);
-await capture('7-faconnage-b', 'façonnage, un état plus loin');
+verifier(ram, 'ce qu\'il a rapporté est posé près de la crotte : ' + (ram && ram.nom));
+const geste = await page.evaluate(() => balade.faconnage().file[0]);
+verifier(geste.total >= 8 && geste.total <= 12.5 && geste.n >= 8, `geste continu : ${geste.total} s, ${geste.n} transitions`);
+// la planche : PLANCHE images réparties sur le geste, le corps figé à chaque fois (l'image s'affine), les mains dans le champ
+const NP = +(process.env.PLANCHE || 14), PP = +(process.env.PASSES_PLANCHE || 4), planche = [];
+for (let k = 0; k < NP; k++) {
+  const tc = geste.total * (k + 0.5) / NP;
+  await quand(t => { const f = balade.faconnage().file[0]; return !f || f.t >= t; }, tc);
+  const f = await page.evaluate(() => balade.faconnage());
+  if (!f.file.length) break;
+  await page.evaluate(([p, g]) => { balade.pause(true); balade.grains(g); balade.resolution(p); }, [Math.round(+pxCapture / 2), GRAINS]);
+  await page.waitForFunction(n => window.__state.n >= n, PP, { timeout: 400000 }).catch(() => {});
+  const url = await lireCanevas(), nom = `6-faconnage-${String(k + 1).padStart(2, '0')}`;
+  writeFileSync(join(out, nom + '.jpg'), Buffer.from(url.split(',')[1], 'base64'));
+  planche.push({ nom, t: f.file[0].t, geste: f.file[0].geste, mains: f.mains });
+  console.log(sec(), 'planche', nom, `t ${f.file[0].t} s`, f.file[0].geste, 'mains', f.mains);
+  await page.evaluate(([p, g]) => { balade.grains(g); balade.resolution(p); balade.pause(false); }, [+px, GESTES]);
+}
+verifier(planche.length >= 12, `planche du façonnage : ${planche.length} images`);
+verifier(planche.filter(p => p.mains === 6).length >= planche.length - 1, 'les deux mains dans le champ pendant le geste');
+verifier(new Set(planche.map(p => p.geste)).size >= 5, 'gestes vus : ' + [...new Set(planche.map(p => p.geste))].join(', '));
+writeFileSync(join(out, 'planche.html'), `<!doctype html><meta charset=utf-8><style>body{margin:0;background:#111;color:#ddd;font:12px sans-serif;display:grid;grid-template-columns:repeat(${PC ? 4 : 7},1fr);gap:4px;padding:4px}img{width:100%;display:block}</style>`
+  + planche.map(p => `<figure style="margin:0"><img src="${p.nom}.jpg"><figcaption>${p.t.toFixed(1)} s · ${p.geste}</figcaption></figure>`).join(''));
+{ const b2 = await browser.newPage({ viewport: { width: PC ? 1600 : 1400, height: 600 } }); await b2.goto('file://' + join(out, 'planche.html'));
+  await b2.waitForTimeout(500); await b2.screenshot({ path: join(out, 'planche.png'), fullPage: true }); await b2.close(); }
 await auRepos();
-const b = await page.evaluate(() => balade.objets().find(o => o.id === 'fab-2')), ob = await objet('fab-2'), cb = await corps();
-verifier(b && /bonhomme/.test(b.nom) && b.formes === 8, `bonhomme fait avec l'énorme (fab-2) : ${b && b.nom}, ${b && b.formes} formes`);
-verifier(ob && ob.haut >= 0.75 && ob.haut <= 1.2, `environ un mètre de haut : ${ob && ob.haut} m`);
+const b = await page.evaluate(i => balade.objets().find(o => o.id === i), idE), ob = await objet(idE), cb = await corps();
+verifier(b && /bonhomme/.test(b.nom) && b.formes === 8, `bonhomme fait avec l'énorme (${idE}) : ${b && b.nom}, ${b && b.formes} formes`);
+verifier(ob && ob.haut >= 0.75 && ob.haut <= 1.25, `environ un mètre de haut : ${ob && ob.haut} m`);
 verifier(!(await page.evaluate(() => balade.objets().some(o => /ramass/.test(o.nom || '')))), 'ce qu\'il a ramassé a servi (retiré)');
+verifier((await page.evaluate(() => balade.faconnage().mains)) === 0, 'les mains ne sont plus dans le champ');
 const enPied = await page.evaluate(([t, h, m, y, z]) => MENEUR.tientDansImage(t, h, m, y, z, innerWidth / innerHeight), [ob.taille, ob.haut, ob.m, 1.36 * cb.haut, cb.zoom]);
 verifier(ob && Math.abs(ob.angle) < 10 && enPied, `bonhomme cadré en pied, entier : ${ob && ob.m} m, ${ob && ob.angle}°`);
+await vueLibre(idE, 'bonhomme');
 await capture('8-bonhomme', 'le bonhomme fini, cadré en pied');
 
 const ev = (await page.evaluate(() => balade.trace().evenements)).filter(e => /modele|faconnage|objet_|cadrage|docile|consomme/.test(e.type));
 console.log(sec(), 'événements', JSON.stringify(ev.map(e => e.type + (e.id ? ':' + e.id : '') + (e.raison ? ' (' + e.raison + ')' : ''))));
 writeFileSync(join(out, 'trace.json'), JSON.stringify(await page.evaluate(() => balade.trace())));
-
-// 4. la vue PC
-if (!process.env.SANS_PC) {
-  await page.setViewportSize({ width: 960, height: 540 }); await attendre(1500);
-  await capture('9-pc-bonhomme', 'vue PC 960 × 540 : le bonhomme');
-  await page.setViewportSize({ width: 390, height: 780 }); await attendre(1500);
-}
 
 // 5. marche forcée droit sur un bloc de grès (§16)
 if (!process.env.SANS_OBSTACLE) {
