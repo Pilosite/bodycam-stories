@@ -79,7 +79,8 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
   w.executer = o => {
     w.ordres.push(o);
     if (o.type === 'actions' && o.vider) w.zoom = 1;
-    if (o.type === 'pensee') w.pensees.push(o);
+    if (o.type === 'pensee') w.pensees.push(Object.assign({ t: w.t }, o));
+    if (o.type === 'apercu') w.pensees.push({ type: 'apercu', texte: o.texte, t: w.t });
     else if (o.type === 'fin') w.fin = o;
     else if (o.type === 'arret') { w.flaner = false; w.file.length = 0; libererPoses(); }
     else if (o.type === 'stop') { w.file.length = 0; w.immobile = true; libererPoses(); }
@@ -132,6 +133,8 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
         else if (a.type === 'poser') w.file.push({ type: 'poser', ref: a.ref });
         else if (a.type === 'attendreObjet') w.file.push({ type: 'attendreObjet', ref: a.ref, rest: a.secondes || 20 });
         else if (a.type === 'deplacer') w.file.push({ type: 'deplacer', metres: a.metres, rayon: a.rayon });
+        else if (a.type === 'effort') w.file.push({ type: 'effort', rest: a.secondes, force: a.force, duree: a.secondes });
+        else if (a.type === 'penser') w.file.push({ type: 'penser', texte: a.texte, bref: a.bref });
       }
     }
   };
@@ -161,6 +164,8 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
       a.rest -= dt; if (a.rest <= 0) w.file.shift(); return;
     }
     if (a.type === 'bloque') { w.bloques.push(a.devant); w.file.shift(); return; }
+    if (a.type === 'penser') { w.file.shift(); w.pensees.push({ type: 'pensee', texte: a.texte, source: 'file', t: w.t }); noter('penser', { texte: a.texte, bref: !!a.bref }); return; }   // comme main.js : dite quand la file l'atteint
+    if (a.type === 'effort') { if (a.rest === a.duree) noter('effort', { secondes: a.duree, force: a.force, haut: w.haut }); a.rest -= dt; if (a.rest <= 0) w.file.shift(); return; }
     if (a.type === 'poser') {                                    // la place de la chose : ici, maintenant (§19)
       w.file.shift(); const rs = w.reserves[a.ref]; noter('poser', { ref: a.ref });
       if (rs && !rs.pos) { rs.pos = placePose(w.x, w.z, w.yaw, rs.ou, rs.distance); if (rs.attente) { const o = rs.attente; delete rs.attente; w.executer(o); } }
@@ -198,7 +203,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
       if (a.type === 'rejoindre') w.file.unshift(...pre, ...versPoint(ob.x, ob.z, distanceArret(t), ob.formesL ? ob.id : null));
       else if (a.sur_place) w.file.unshift(...pre, { type: 'posture', rest: pl.hauteur }, { type: 'viser', objet: a.objet, cadre: true }, { type: 'zoom', rest: zoomPour(t, Math.hypot(ob.x - w.x, ob.z - w.z), 1.36 * pl.hauteur) });
       else w.file.unshift(...pre, ...versPoint(ob.x, ob.z, pl.m, ob.formesL ? ob.id : null), { type: 'posture', rest: pl.hauteur }, { type: 'viser', objet: a.objet, cadre: true }, { type: 'zoom', rest: pl.zoom });
-      w.cadre = a.type === 'cadrer' ? a.objet : w.cadre;
+      w.cadre = a.type === 'cadrer' ? a.objet : w.cadre; if (a.type === 'cadrer') noter('cadrer', { id: a.objet });
       return;
     }
     if (a.type === 'monter') {
@@ -214,7 +219,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
     if (a.type === 'marcher' && w.elev > 0) { w.elev = 0; w.perche = null; }   // il descend avant de marcher
     if (a.type === 'zoom') { w.zoom = a.rest; w.file.shift(); return; }
     if (a.type === 'marcher') w.zoom = 1;
-    if (a.type === 'posture') { w.haut = a.rest; w.file.shift(); return; }
+    if (a.type === 'posture') { if (Math.abs(w.haut - a.rest) > 0.01) noter('posture', { h: a.rest }); w.haut = a.rest; w.file.shift(); return; }
     if (a.type === 'tourner') { const d = Math.sign(a.rest) * Math.min(Math.abs(a.rest), 1.5 * dt); w.yaw += d; a.rest -= d; if (Math.abs(a.rest) < 1e-3) w.file.shift(); }
     else if (a.type === 'marcher') { const v = Math.sign(a.rest) * 1.35, s = Math.abs(a.rest) < Math.abs(v * dt) ? a.rest : v * dt;
       let nx = w.x + Math.sin(w.yaw) * s, nz = w.z + Math.cos(w.yaw) * s;

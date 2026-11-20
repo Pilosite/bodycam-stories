@@ -558,8 +558,12 @@ const queue=[];                                  // actions en attente : tourner
 let pauseQuand=null;                                            // essais : {type, t} (balade.pauseQuand)
 let frozen=false, hold=false, pauseTest=false, walkDist=0, walking=false;   // pauseTest : balade.pause (captures d'essai), le corps s'arrête net
 function pose(){
-  const bob=walking?.022*Math.sin(walkDist*8.4):0;
-  const yw=cam.yaw+look.yaw, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch));
+  let bob=walking?.022*Math.sin(walkDist*8.4):0, ty=0, tp=0;
+  const ef=queue[0]&&queue[0].type==="effort"&&!frozen?queue[0]:null;
+  if(ef){ const t=performance.now()/1000, k=.35+.65*ef.force;   // §20 : il pousse ; le téléphone sur la poitrine tremble et s'enfonce un peu par à-coups
+    ty=k*(.006*Math.sin(t*31.7)+.004*Math.sin(t*53.1+1.3)); tp=k*(.008*Math.sin(t*27.3+.7)+.005*Math.sin(t*61.9)-.02*(.5+.5*Math.sin(t*2.1)));
+    bob+=k*.012*Math.sin(t*2.1); }
+  const yw=cam.yaw+look.yaw+ty, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch+tp));
   const cy=Math.cos(yw),sy=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
   const f=[sy*cp,sp,cy*cp], r=[cy,0,-sy], u=[f[1]*r[2]-f[2]*r[1],f[2]*r[0]-f[0]*r[2],f[0]*r[1]-f[1]*r[0]];
   return { pos:[cam.x,terrainH(cam.x,cam.z)+S.eye*cam.haut+cam.elev+bob,cam.z], mat:new Float32Array([r[0],r[1],r[2],u[0],u[1],u[2],f[0],f[1],f[2]]) };
@@ -689,6 +693,7 @@ function simulate(dt){
     else if(a.type==="faconner") faconnerPas(a,dt);
     else if(a.type==="ramasser") ramasserPas(a,dt);
     else if(a.type==="finMarche"){ queue.shift(); finMarche(a); }
+    else if(a.type==="penser"){ queue.shift(); say(a.texte,a.bref); voixP.dire(a.texte); notePensee(a.texte,"file"); }
     else if(a.type==="bloque"){ queue.shift(); if(!a.muet) say(a.texte||"Je passe pas, là. C'est bouché.",true); }   // il s'arrête devant, et il le dit
     else if(a.type==="elever"||a.type==="descendre") elever(a,dt);
     else if(a.type==="zoom"){ cam.zoomCible=clampN(a.z,1,8,1); queue.shift(); }
@@ -1741,6 +1746,8 @@ function enqueue(actions){
     else if(a.type==="poser"&&typeof a.ref==="string") queue.push({type:"poser",ref:a.ref.slice(0,12)});   // §19 : la place de la chose se prend ici, au geste
     else if(a.type==="attendreObjet"&&typeof a.ref==="string") queue.push({type:"attendreObjet",ref:a.ref.slice(0,12),rest:clampN(a.secondes,0,30,20)});
     else if(a.type==="deplacer") queue.push({type:"deplacer",metres:clampN(a.metres,1,30,4),rayon:clampN(a.rayon,0,3,.3)});
+    else if(a.type==="effort") queue.push({type:"effort",rest:clampN(a.secondes,0,12,3),force:clampN(a.force,0,1,.3)});   // §20 : accroupi, il pousse ; la caméra force et tremble
+    else if(a.type==="penser"&&typeof a.texte==="string") queue.push({type:"penser",texte:a.texte.slice(0,240),bref:a.bref===true});   // une pensée dite quand la file l'atteint (souffle, réaction après avoir vu)
   }
 }
 function patchScene(sc){                                      // ce qu'il imagine peut changer le monde
@@ -2014,7 +2021,9 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
    Capacité « tts » de l'artefact, sinon la voix du navigateur. Éteinte par défaut (« Voix » dans « Plus »), allumée par CFG.demo. */
 const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal},
   onParle:p=>{ $("taire").hidden=!p; } });
-function penser(t){ say(t); voixP.dire(t); }                  // une pensée du personnage : affichée, et dite si la voix est allumée
+function penser(t){ say(t); voixP.dire(t); notePensee(t,"meneur"); }
+const journalPensees=[]; window.balPensees=journalPensees;   // essais (tools/demo.mjs) : chaque pensée et son instant
+function notePensee(t,source){ journalPensees.push({t:+(performance.now()/1000).toFixed(2),texte:String(t||""),source,file:queue.map(a=>a.type).slice(0,4)}); if(journalPensees.length>80) journalPensees.shift(); }                  // une pensée du personnage : affichée, et dite si la voix est allumée
 function voixInter(on){ voixP.actif(on); $("voix-inter").setAttribute("aria-pressed",String(on)); $("voix-inter").textContent=on?"Voix : oui":"Voix : non"; return on; }
 voixInter(!!CFG.demo||(()=>{ try{ return localStorage.getItem("bodycam-voix")==="1"; }catch(_){ return false; } })());
 $("voix-inter").onclick=()=>{ const on=voixInter(!voixP.actif()); try{ localStorage.setItem("bodycam-voix",on?"1":"0"); }catch(_){} };

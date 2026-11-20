@@ -365,7 +365,7 @@ for (const [facon, phrase] of [['texte', 'fais une énorme crotte'], ['modifie',
     monde.x += 2; monde.yaw += 0.8; await avancer(1);
     const c = { x: monde.x, z: monde.z, yaw: monde.yaw };
     await m.voix(phrase); await flush(); await flush();
-    for (let t = 0; t < 4; t += 0.5) { await avancer(0.5); if (t < 2) assert.ok(!monde.objets.some(o => o.id === 'fab-2') || true); }
+    await avancer(12);                                   // l'effort dure selon la démesure (§20) : la chose tombe à la fin
     const n2 = monde.objets.find(o => o.id === 'fab-2');
     const ev = m.trace().evenements;
     assert.ok(n2, 'une nouvelle chose : ' + JSON.stringify(ev.filter(e => /tenue|objet|modele/.test(e.type))));

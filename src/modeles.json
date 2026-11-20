@@ -11,6 +11,25 @@
    "repos": [0.14, -0.26, 0.34]
   }
  },
+ "exploit": {
+  "_doc": "L'exploit demandé au corps (docs/meneur-de-jeu.md §20). Des DONNÉES, aucun nom de modèle : le monde est élastique, ce que la voix demande au corps est possible, même démesuré. Démesure = facteur d'échelle de la chose par rapport à la référence de son modèle (paliers). Une chose d'« origine » corps (donnée du modèle) se fait accroupi, avec un effort qui dure selon la démesure ; une pensée qui annonce une autre matière ou un autre moyen (substituts, moyens, hors des mots du modèle) est remplacée par une phrase d'« avant ». Après le cadrage, une réaction (« apres ») à la mesure de l'exploit. {masse} : la masse dite, en lettres (« Vingt kilos »).",
+  "paliers": {"gros": 1.6, "demesure": 4},
+  "effort": {"base_s": 3, "par_palier_s": 2.4, "max_s": 10, "souffle_des": "gros"},
+  "substituts": ["terre", "terreau", "boue", "argile", "glaise", "sable", "humus", "limon", "vase", "feuilles", "feuillage", "brindilles", "mousse", "aiguilles", "herbe", "paille", "copeaux", "sciure", "neige", "pate a modeler", "pierres", "cailloux", "gravier", "branches", "foret", "matiere vegetale", "debris"],
+  "moyens": ["modeler", "modele", "moule", "mouler", "moulee", "faconner", "faconne", "sculpter", "sculpte", "petrir", "ramasser", "ramasse", "rassembler", "rassemble", "entasser", "amasser", "fabriquer avec", "faire avec", "fait avec", "en forme de", "ressemble a", "faire semblant", "semblant", "imiter", "imite", "simuler", "factice", "fausse", "faux", "trompe", "a la place", "plutot", "reproduire", "une sorte de"],
+  "refus": ["je ne peux pas", "je peux pas", "impossible", "pas question", "je refuse", "jamais de la vie", "c'est pas possible", "ce n'est pas possible", "je vais pas", "je ne vais pas", "n'importe quoi"],
+  "avant": {
+   "normal": ["Bon. Tourne-toi, toi. … Enfin, regarde ailleurs.", "Ici ? … Bon. Personne ne regarde.", "Sérieux… Bon, je m'accroupis."],
+   "gros": ["Une grosse ? Tu crois que ça se commande ? … Bon. J'essaie.", "Pff. Je vais forcer, là. Regarde pas.", "T'es sérieux ? … Bon. Je m'accroupis, on verra bien."],
+   "demesure": ["{masse} ? T'es malade. … Bon. Je m'accroupis. On verra bien.", "C'est absurde. Ça peut pas sortir de moi. … Bon. J'essaie quand même.", "Énorme… comme ça, d'un coup ? Je vais y laisser ma peau. … Allez.", "N'importe quoi. … Bon. Je pousse. Si je meurs, c'est ta faute."]
+  },
+  "souffle": ["Hhhnn…", "Hhhh… hhhnnn…", "Allez… allez…", "Mmmh… hhhnngh…", "Respire… pousse…"],
+  "apres": {
+   "normal": [],
+   "gros": ["Ah. Quand même. Elle est grosse, celle-là.", "Ouah. C'est moi qui ai fait ça ? … Ça va, je me sens léger.", "Hé ben. Je savais pas que j'avais ça en moi."],
+   "demesure": ["{masse}. C'est sorti de moi, ça. Comment je tiens encore debout ?", "Non mais… regarde la taille. C'est sorti de MOI ? Je devrais être mort.", "J'y crois pas. J'ai fait ça. … Je suis fier, et j'ai peur pour mon ventre.", "Oh. Mon. Dieu. … C'est plus gros que mon sac. Comment c'est possible ?"]
+  }
+ },
  "modeles": {
   "crotte": {
    "nom": "crotte",
@@ -19,6 +38,7 @@
    "envergure_m": 0.138,
    "echelle": {"regle": "masse", "densite": 1.05, "exagere": 2.0, "min_m": 0.03, "max_m": 1.2, "petit": 0.85, "gros": 3.5, "enorme": 5.8},
    "ou": "dessous",
+   "origine": "corps",
    "formes": [
     {"f": "boule", "p": [0.004, 0.001, 0.003], "taille": [0.138, 0.004, 0.132], "couleur": "#2a1e14", "matiere": "mat"},
     {"f": "capsule", "p": [0.045, 0.014, 0.032], "taille": [0.035, 0.039, 0.035], "cap": -127, "penche": [0, -87], "couleur": "#5a3d22", "matiere": "pate-organique"},
