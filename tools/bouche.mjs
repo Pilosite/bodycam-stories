@@ -3,8 +3,9 @@
 // Chaque essai repart d'une page neuve : « fais une petite crotte » (posée derrière lui, puis cadrée de près), puis la phrase
 // essayée ; on note les positions avant/après, la distance faite, ce qu'il dit, et les marches demandées (balade.marches()).
 // Essais : avance de 5 mètres ; recule de 3 mètres ; va vers l'arbre ; reviens ; fais demi-tour et avance de 6 mètres ;
-// après l'énorme crotte : avance de 5 mètres ; puis 30 m le long du sentier.
-// DECALE=0.15 : après le cadrage, il recule d'autant (la distance de cadrage d'un autre écran : 0,4 à 0,7 m).
+// après l'énorme crotte : avance de 5 mètres ; « avance de 30 mètres » sur le sentier ; 30 m de flânerie sans rien dire.
+// V3=0 : le lanceur de rayons (sa sonde garde le corps hors des surfaces pendant la marche), au lieu du moteur v3.
+// DECALE=0.15 : après le cadrage, il recule d'autant, exactement face à elle (la distance de cadrage d'un autre écran : 0,4 à 0,7 m).
 // Usage : node tools/bouche.mjs [dist/index.html] [essais séparés par |]   (sortie : out/bouche/rapport.json et une capture par essai)
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
@@ -17,7 +18,7 @@ const out = join(root, process.env.OUT || 'out/bouche'); mkdirSync(out, { recurs
 const SCENE = +(process.env.SCENE ?? 8);
 const ficheF = readdirSync(join(root, 'scenes')).filter(f => f.endsWith('.json')).sort()[SCENE];
 const GRAINE = JSON.parse(readFileSync(join(root, 'scenes', ficheF), 'utf8')).graine || 4821;
-const ESSAIS = (process.argv[3] || 'avance de 5 mètres|recule de 3 mètres|va vers l\'arbre|reviens|fais demi-tour et avance de 6 mètres|énorme:avance de 5 mètres|sentier:avance de 30 mètres').split('|');
+const ESSAIS = (process.argv[3] || 'avance de 5 mètres|recule de 3 mètres|va vers l\'arbre|reviens|fais demi-tour et avance de 6 mètres|énorme:avance de 5 mètres|sentier:avance de 30 mètres|libre:30 m de flânerie').split('|');
 console.log('page', page0, 'scène', ficheF, 'graine', GRAINE);
 
 const browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
@@ -47,15 +48,16 @@ for (const essai of ESSAIS) {
     }
     const sampler = { json: c => new Promise(r => setTimeout(() => r(repondre(c)), 1500)) };
     window.claude = { use: () => Promise.resolve(sampler) };
-  }, [{ maxPx: 9000, mobile: true, still: true, graine: GRAINE, debug: true, v3: true, grains: 40000, dtMax: 0.4, scene: SCENE }]);
-  await page.goto('file://' + page0, { timeout: 240000 });
-  await page.waitForFunction(() => window.balade && window.__state && window.__state.n > 2, null, { timeout: 240000 });
+  }, [{ maxPx: 9000, mobile: true, still: true, graine: GRAINE, debug: true, v3: process.env.V3 !== '0', grains: 40000, dtMax: 0.4, scene: SCENE }]);
+  await page.goto('file://' + page0, { timeout: 900000 });
+  await page.waitForFunction(() => window.balade && window.__state && window.__state.n > 2, null, { timeout: 900000 });
   const quand = (fn, arg, max = 300000) => page.waitForFunction(fn, arg, { timeout: max, polling: 250 }).then(() => true, () => false);
   const auRepos = async () => { await quand(() => balade.corps().file.length === 0 && !/atelier|appel/.test(document.getElementById('debug-meneur').textContent || '')); await page.waitForTimeout(1200); };
   const corps = () => page.evaluate(() => balade.corps());
   const dire = async t => { await page.evaluate(t => balade.dire(t), t); await page.waitForTimeout(400); await quand(() => balade.corps().file.length > 0, null, 20000); await auRepos(); };
   const R = { essai, avant, phrase };
-  if (avant === 'sentier') {                                       // sur le sentier, tourné le long du trajet
+  if (avant === 'libre') {}                                        // sans rien dire : il flâne le long du sentier (on attend 30 m)
+  else if (avant === 'sentier') {                                       // sur le sentier, tourné le long du trajet
     await page.evaluate(() => { const c = balade.corps(), s = balade.sol(c.x, c.z + 6).trajet, s0 = balade.sol(c.x, c.z).trajet; balade.placer(s0, c.z, Math.atan2(s - s0, 6)); });
     await page.waitForTimeout(800);
   } else {
@@ -65,14 +67,17 @@ for (const essai of ESSAIS) {
     R.chose = o && { id: o.id, m: +o.m.toFixed(2), angle: Math.round(o.angle), taille: o.taille };
     R.cadrage = { haut: +c.haut.toFixed(2), zoom: +c.zoom.toFixed(2) };
     if (+process.env.DECALE) {                                      // une autre distance de cadrage (un autre écran) : il recule d'autant, face à elle
-      await page.evaluate(d => { const c = balade.corps(); balade.placer(c.x - Math.sin(c.yaw) * d, c.z - Math.cos(c.yaw) * d, c.yaw); }, +process.env.DECALE);
+      await page.evaluate(([d, id]) => { const c = balade.corps(), o = balade.objets().find(q => q.id === id), x = c.x - Math.sin(c.yaw) * d, z = c.z - Math.cos(c.yaw) * d;
+        balade.placer(x, z, Math.atan2(o.x - x, o.z - z)); }, [+process.env.DECALE, o.id]);   // face à elle, exactement (comme le cadrage le fait)
       await page.waitForTimeout(800); const o2 = await page.evaluate(i => balade.percevoir().objets.find(o => o.id === i), o.id); R.chose.m = +o2.m.toFixed(2); }
   }
   const c0 = await corps(), n0 = (await page.evaluate(() => balade.marches ? balade.marches() : [])).length;
   const objets0 = await page.evaluate(() => balade.objets());
   let mini = 99; const suivi = setInterval(async () => { try { const k = await corps(); for (const o of objets0) if (/^fab-/.test(o.id)) mini = Math.min(mini, Math.hypot(k.x - o.x, k.z - o.z)); } catch (_) {} }, 150);
-  await dire(phrase);
-  clearInterval(suivi);
+  const dits = new Set(); const ecoute = setInterval(async () => { try { const t = await page.textContent('#pensee'); if (t) dits.add(t); } catch (_) {} }, 400);
+  if (avant === 'libre') await quand(([x, z]) => { const k = balade.corps(); return Math.hypot(k.x - x, k.z - z) >= 30; }, [c0.x, c0.z], +(process.env.LIBRE_MS || 600000));
+  else await dire(phrase);
+  clearInterval(suivi); clearInterval(ecoute); R.dits = [...dits];
   const c1 = await corps();
   R.de = { x: +c0.x.toFixed(2), z: +c0.z.toFixed(2), cap: Math.round(c0.yaw * 57.3) };
   R.a = { x: +c1.x.toFixed(2), z: +c1.z.toFixed(2), cap: Math.round(c1.yaw * 57.3), haut: +c1.haut.toFixed(2), zoom: +c1.zoom.toFixed(2) };

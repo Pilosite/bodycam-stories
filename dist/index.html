@@ -1550,16 +1550,7 @@ function planMarche(corps, metres, obstacles, R = REGLAGES) {
   const N = Math.abs(num(metres, -30, 30, 0)), recul = metres < 0, cap = num(corps.yaw, -1e3, 1e3, 0) + (recul ? Math.PI : 0);
   const de = { x: corps.x, z: corps.z }, base = { points: [], fait: 0, demande: N, angle: 0, bloque: null, bouche: false, enjambe: false, recul };
   if (N < 0.05) return base;
-  // tout droit jusqu'à ce qui est haut devant lui : s'il l'atteint à peu près au bout des N m, il s'arrête devant, c'est fait
   const ux = Math.sin(cap), uz = Math.cos(cap);
-  let stop = N;
-  for (const o of liste(obstacles)) { if (!isObj(o) || !Number.isFinite(o.x) || enjambable(o, R)) continue;
-    const Ro = num(o.r, 0, 99, 0) + R.MARGE_CORPS, fx = de.x - o.x, fz = de.z - o.z, B = fx * ux + fz * uz, C = fx * fx + fz * fz - Ro * Ro, D = B * B - C;
-    if (C < 0 || D < 0) continue; const t = -B - Math.sqrt(D); if (t >= 0) stop = Math.min(stop, t - 0.05); }
-  if (stop >= N - toleranceMarche(N) && stop > 0.05) {
-    const p = planTrajetSouple(de, { x: de.x + ux * stop, z: de.z + uz * stop }, obstacles, {}, R), fin = p.points[p.points.length - 1] || de, fait = Math.hypot(fin.x - de.x, fin.z - de.z);
-    if (!p.bloque && fait >= N - toleranceMarche(N)) return Object.assign(base, { points: p.points, fait: Math.round(fait * 100) / 100, enjambe: !!p.enjambe });
-  }
   const angles = [0, 15, -15, 30, -30, 45, -45, 60, -60];
   const essais = angles.map(a => {
     const c = cap + a * Math.PI / 180, vers = { x: de.x + Math.sin(c) * N, z: de.z + Math.cos(c) * N };
@@ -1570,6 +1561,17 @@ function planMarche(corps, metres, obstacles, R = REGLAGES) {
     const avance = (fin.x - de.x) * ux + (fin.z - de.z) * uz;     // ce qu'il a gagné dans la direction demandée
     return { a, p, fait, avance, complet: fait >= N - toleranceMarche(N) && (!p.bloque || a === 0) };   // tout droit, arrêté juste avant le bout contre ce qu'il vise : c'est fait
   });
+  // tout droit, contourné, jusqu'au bout : c'est fait. Sinon, tout droit jusqu'à ce qui est haut devant lui : s'il l'atteint à
+  // peu près au bout des N m, il s'arrête devant (c'est souvent ce qu'il vise), c'est fait.
+  if (essais[0].complet && !essais[0].p.bloque && essais[0].fait >= N - 0.1) return Object.assign(base, { points: essais[0].p.points, fait: Math.round(essais[0].fait * 100) / 100, enjambe: !!essais[0].p.enjambe });
+  let stop = N;
+  for (const o of liste(obstacles)) { if (!isObj(o) || !Number.isFinite(o.x) || enjambable(o, R)) continue;
+    const Ro = num(o.r, 0, 99, 0) + R.MARGE_CORPS, fx = de.x - o.x, fz = de.z - o.z, B = fx * ux + fz * uz, C = fx * fx + fz * fz - Ro * Ro, D = B * B - C;
+    if (C < 0 || D < 0) continue; const t = -B - Math.sqrt(D); if (t >= 0) stop = Math.min(stop, t - 0.05); }
+  if (stop >= N - toleranceMarche(N) && stop > 0.05) {
+    const p = planTrajetSouple(de, { x: de.x + ux * stop, z: de.z + uz * stop }, obstacles, {}, R), fin = p.points[p.points.length - 1] || de, fait = Math.hypot(fin.x - de.x, fin.z - de.z);
+    if (!p.bloque && fait >= N - toleranceMarche(N)) return Object.assign(base, { points: p.points, fait: Math.round(fait * 100) / 100, enjambe: !!p.enjambe });
+  }
   const mieux = Math.max(...essais.map(e => e.avance));            // incomplet : ce qui avance le plus dans la direction demandée, le plus droit à 30 cm près
   const choix = essais.find(e => e.complet && !e.p.enjambe) || essais.find(e => e.complet) || essais.find(e => e.avance >= mieux - 0.3);
   const bouche = essais.every(e => e.fait < 1);
