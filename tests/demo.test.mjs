@@ -51,10 +51,7 @@ test('échelle : une crotte normale fait 12 à 18 cm ; « de 5 kg » 55 à 60 cm
   assert.ok(v20 > e && v20 <= 1.2, '20 kg : ' + v20);
   assert.equal(formesModele(m, 'une crotte de 200 kg').envergure, 1.2);
   assert.ok(Math.abs(haut(g.formes) / envergure(g.formes) - haut(n.formes) / envergure(n.formes)) < 0.01, 'mêmes proportions');
-  // demi-hauteur d'une forme couchée (penche) : son axe y tourné ; une capsule s'étend aussi de son rayon au bout de l'axe
-  const demiH = f => { const a = (f.penche ? Math.hypot(f.penche[0], f.penche[1]) : 0) * Math.PI / 180, cap = f.f === 'capsule' ? f.taille[0] / 2 : 0;
-    return Math.abs(Math.cos(a)) * (f.taille[1] / 2 + cap) + Math.abs(Math.sin(a)) * f.taille[0] / 2; };
-  const bas = Math.min(...g.formes.map(f => f.p[1] - demiH(f)));
+  const bas = Math.min(...g.formes.map(f => f.p[1] - f.taille[1] / 2));
   assert.ok(bas <= 0.005 && bas > -0.03, 'posée au sol, un peu tassée : ' + bas);
   assert.ok(p.envergure < n.envergure, 'petite : ' + p.envergure);
   assert.ok(formesModele(m, 'une crotte de 500 kg').envergure <= m.echelle.max_m + 1e-9, 'bornée par le modèle');

@@ -233,7 +233,7 @@ vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float Ts, v
   if((ndl>0. || ATMO>0) && dot(gn,sd)>(ATMO>0?-.35:0.)){
     gVis=ombreSoleil(p,gn); float vis=(uProf&4)!=0?1.:gVis*Ts;
     vec3 h=normalize(sd-rd);
-    if(ndl>0. && dot(gn,sd)>0.) col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),gSpecE)*(gSpecE+8.)/36.);
+    if(ndl>0. && dot(gn,sd)>0.) col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),28.));
     /* Rebord (modèle atmosphère) : en contre-jour, le bord d'une surface rugueuse (écorce, mousse, litière) que le soleil
        effleure s'allume d'un liseré ; fibres et duvet diffusent vers l'avant. Rasance vue × soleil derrière × soleil effleuré. */
 #if ATMO

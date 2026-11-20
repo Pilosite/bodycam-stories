@@ -11,11 +11,6 @@ uniform ivec4 uSurf;         // recettes du sol, du trajet, des rochers
 uniform ivec4 uSurfT;        // écorces : arbres (a, b), perches (a, b)
 uniform vec4  uSurfP;        // part de l'écorce a, arbres et perches ; variété des troncs (fiche : foret.variete, 0 à 1)
 vec3 gTon;                   // teinte propre à l'arbre touché (1 hors des troncs)
-/* Motifs à l'échelle de la forme (champ « relatif » d'une recette, en m) : les échelles de la recette sont écrites pour une
-   forme de cette épaisseur ; sur une forme plus épaisse ou plus mince, sillons, craquelures, taches et bosses suivent la forme
-   (le grain, lui, reste à taille réelle). gTaille : épaisseur de la forme touchée (matProp ; 0 hors des formes).
-   gEch : facteur appliqué aux échelles, 1 sans « relatif ». gSpecE : exposant du reflet (champ « reflet », 28 par défaut). */
-float gTaille=0., gEch=1., gSpecE=28.;
 /* Variété des troncs : chaque arbre ou perche décale les motifs de son écorce (sinon tous les troncs d'une même recette
    portent les mêmes fissures aux mêmes hauteurs) et prend sa teinte, plus claire ou plus sombre, plus chaude ou plus froide.
    par : l'aléa de l'arbre (info.w). Sans variété (0, défaut) : rien ne change. */
@@ -63,11 +58,6 @@ bool rSlot(int r, int j, vec3 q, bool sol, int ty, out vec3 s, out vec3 o, out b
   }
   vec4 rel=rT(r,39); s=vec3(rT(r,40).x); o=vec3(j==13?0.:j==14?9.:17.);
   return rel.w>0. && (j<15 || !sol);
-}
-bool rSlotE(int r, int j, vec3 q, bool sol, int ty, out vec3 s, out vec3 o, out bool fb, out bool sl){   // rSlot, échelle de la forme comprise (sauf le grain)
-  bool on=rSlot(r,j,q,sol,ty,s,o,fb,sl);
-  if(j!=9 && j<13) s*=gEch;
-  return on;
 }
 #ifdef SOCLE
 #define NTACHES 3            // ombrage socle : les trois premières taches d'une recette
@@ -145,7 +135,7 @@ float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relie
     if(j<2){ vec4 e=rT(r,j==0?7:11); s=e.xyz; o=vec3(e.w); on=mo.w!=0. && ty==3 && (j==0 || rT(r,10).z>0.); }
     else if(j<6){ int k=j-2; vec4 b=rT(r,18+k*4); s=b.xyz; o=vec3(rT(r,20+k*4).z); fb=b.w>.5; on=mo.w!=0. && rT(r,20+k*4).y!=0. && dot(b.xyz,b.xyz)>0.; }
     else { int k=j-6; vec4 a=rT(r,41+k*2), b=rT(r,42+k*2); s=a.xyz; o=vec3(b.y); fb=b.x>.5; on=a.w!=0.; }
-    N[j]=on?rN(q,s*gEch,o,fb,sol):0.;
+    N[j]=on?rN(q,s,o,fb,sol):0.;
   }
   if(mo.w!=0.){
     float mh=1.; vec2 id;
@@ -157,18 +147,16 @@ float recetteH(int r, vec3 q, vec3 n, float hs, bool sol){   // hauteur du relie
     H+=mo.w*mh;
   }
   for(int k=0;k<2+uZ;k++){ vec4 a=rT(r,41+k*2); if(a.w!=0.) H+=a.w*N[6+k]; }
-  return H/gEch;                                             // à l'échelle de la forme : plus grande, plus profonde (même pente)
+  return H;
 }
 #endif
 void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 tilt, out float spec, out float em){
-  vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39), ex=rT(r,45);
+  vec4 c0=rT(r,0), nup=rT(r,5), mo=rT(r,6), rel=rT(r,39);
   bool sol=mod(c0.w,2.)<.5;
-  gEch=ex.x>0. && gTaille>0. ? clamp(ex.x/gTaille,.04,8.) : 1.; hs*=gEch;
-  gSpecE=ex.y>0.?ex.y:28.;
   alb=c0.w>1.5?gFormCol:c0.rgb; tilt=vec3(0.); spec=nup.w; em=0.;
   int ty=int(mo.x+.5); float cover=1., mm=1.;   // mm : où le motif est posé (pour les taches sur le motif)
   float N[NSLOT];                                            // tous les bruits de la recette, un seul appel à rN
-  for(int j=0;j<NSLOT+uZ;j++){ vec3 s, o; bool fb, sl; N[j]=rSlotE(r,j,q,sol,ty,s,o,fb,sl)?rN(q,s,o,fb,sl):0.; }
+  for(int j=0;j<NSLOT+uZ;j++){ vec3 s, o; bool fb, sl; N[j]=rSlot(r,j,q,sol,ty,s,o,fb,sl)?rN(q,s,o,fb,sl):0.; }
   vec4 nc=rT(r,3);                                           // nuance : une seconde couleur par plages
   if(nc.w>0.) alb=mix(alb,nc.rgb,nc.w*smoothstep(nup.x,nup.y,N[0]));
   for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && pl>.5 && pl<1.5) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)); }
@@ -241,9 +229,7 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
 #endif
   vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*N[8];
   vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*N[9];
-  vec4 tb=rT(r,46);                                          // brillance propre à chaque tache (0 : inchangée, sinon brillance + 1)
-  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w, bk=tb[k];
-    if((t0.w>0. || bk>0.) && (pl<.5 || pl>1.5)){ float tm=tacheM(r,k,N[1+k],hs)*(pl>1.5?mm:1.); alb=mix(alb,t0.rgb,t0.w*tm); if(bk>0.) spec=mix(spec,bk-1.,tm); } }
+  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)*(pl>1.5?mm:1.)); }
   if(rel.w>0.)                                               // grain du relief : petites facettes
     tilt+=sol?vec3(N[13]-.5,0.,N[14]-.5)*rel.w:(vec3(N[13],N[14],N[15])-.5)*rel.w;
 #ifndef SOCLE                                                 // ombrage socle : sans relief de matière (le grain reste)
@@ -288,14 +274,10 @@ int matProp(vec3 p, vec3 n, vec4 info, bool sem, out vec3 alb, out vec3 nn, out 
   float an=abs(nl.y)<.9&&abs(n.y)<.9?atan(n.z,n.x)-atan(nl.z,nl.x):0.;
   rot=mat2(cos(an),-sin(an),sin(an),cos(an));               // repère de la forme -> monde, pour le relief des recettes
   alb=formeCol(row,hv); nn=n; spec=.05; emis=0.;
-  { float ty=mod(a.w,8.); vec3 sb=b.xyz;                     // épaisseur de la forme (recettes « relatif ») : rayon d'une capsule, d'un cylindre, d'un cône ;
-    float s0=min(sb.x,min(sb.y,sb.z)), s2=max(sb.x,max(sb.y,sb.z)), s1=sb.x+sb.y+sb.z-s0-s2;   // sinon moyenne des deux plus petites demi-tailles
-    gTaille=ty>1.5 && ty<4.5 ? sb.x : sqrt(s0*s1); }
   if(sem){                                                   // élément de semis : motifs en mètres, propres à l'élément, teinte variée
     float te=texelFetch(uShapes,ivec2(3,SEM0+((row-SEM0)/SEML)*SEML),0).w;
     alb*=max(vec3(0.),1.+te*(h33(vec3(hv*91.7,hv*37.3,5.1))-.5)*1.6);
     q*=vec3(gInst.y,gInst.y*gInst.z,gInst.y);
-    gTaille*=gInst.y;
     gQo=vec3(hv*61.3,0.,hv*17.9); gYo=info.y*gInst.y*gInst.z-q.y;
   } else { gQo=vec3(0.); gYo=p.y-terrainH(p.xz)-q.y; }
   q+=gQo; gFormCol=alb;

@@ -521,9 +521,6 @@ function packRecette(r,row){
   put(40,[N(rg.echelle,0,300,30),0,0,0]);
   (Array.isArray(re.bosses)?re.bosses:[]).filter(isObj).slice(0,2).forEach((b,k)=>{
     put(41+k*2,[...ech(b.echelle,4),N(b.force,0,.05,0)]); put(42+k*2,[b.fbm?1:0,N(b.decalage,-100,100,0),0,0]); });
-  put(45,[N(r.relatif,0,2,0),N(r.reflet,4,400,0),0,0]);         // motifs à l'échelle de la forme (épaisseur de référence, m) ; exposant du reflet
-  const tb=(Array.isArray(r.taches)?r.taches:[]).filter(isObj).slice(0,4).map(t=>t.brillance!==undefined?N(t.brillance,0,1,0)+1:0);
-  while(tb.length<4) tb.push(0); put(46,tb);                       // brillance propre à une tache (humide par plaques, mat ailleurs)
 }
 /* Chaque surface pointe vers une recette. Les kits fixent les surfaces par défaut ; la fiche peut les remplacer (champ "surfaces"). */
 function buildMats(f){
