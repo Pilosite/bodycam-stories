@@ -22,6 +22,8 @@ Follow-ups noted by the lots: the hide station hides the bank (heading and postu
 
 Done since: the page's model port (home node client, host's model, code), `judge()` in the core, the scene loop with invention, Sam's own endings, adapter and instrument in every `model_call` (`src/model-port.js`, `core/judge.js`, `core/prompt.js`; M3 first part, nothing measured live yet: Toine plays in the artifact, copies the journal, `node tools/model-latency.mjs <journal>`).
 
+Trailer mode, played by the engine (`src/trailer.js`, `stories/louis-round/trailer.json`; « Trailer » on the launch screen, `?trailer=1`, `&lang=fr`, `&clean=1` for recording, `&pace=`): a real session of « Louis's Round » with captions and read-outs fed by the journal. To tune on a GPU: pacing, voices, cuts versus walks.
+
 Next: the home node server (ADR 0008, after Toine's answers) · model tiers live and measured (M3) · background, frontier, a rule written by a model (M4) · creator view (M5).
 
 Creation pipeline (`docs/creation-pipeline.md`): the demo's opening is now the specification of the real path from a prompt to a playable story. Of 17 steps it shows, 3 are real, 7 partly, 4 staged, 3 not designed. Proposed order: W1 to W6 with v1 (one creation-event schema, the agent network drawn only from real model calls, the opening labelled as a replay when it is one, real PDL in the overlays), research and character-from-findings in v2, a full story from a prompt as target.
