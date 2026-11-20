@@ -2592,8 +2592,8 @@ function axesTravail(c){ const {e,r}=corpsAxes(), dx=e[0]-c[0], dz=e[2]-c[2], l=
 /* Pétrir une masse de centre c et de rayon r : les deux paumes de part et d'autre, en coupe, qui pressent en rythme. */
 function mainsPetrir(c,r,t){
   const {v,sx}=axesTravail(c), H=[], appui=[];
-  [-1,1].forEach((s,i)=>{ const pr=.5+.5*Math.sin(t*6.5+(s>0?0:2.4)), n=v3a(v3a([0,0,0],sx,-s),[0,-1,0],.25);
-    const ct=v3a(v3a(c,sx,s*r*.95),v,r*.25), p=v3a(ct,n,-EP()+pr*.014);
+  [-1,1].forEach((s,i)=>{ const pr=.5+.5*Math.sin(t*6.5+(s>0?0:2.4)), n=v3n(v3a(v3a(v3a([0,0,0],sx,-s*.8),v,-.6),[0,-1,0],.2));
+    const ct=v3a(v3a(c,sx,s*r*.8),v,r*.6), p=v3a(ct,n,-EP()*1.6+pr*.014);
     H.push(main(p,n,"coupe",v3a([0,1,0],v,-.4))); if(pr>.55) appui.push({i,p,n,k:(pr-.55)/.45}); });
   return {H,appui,pr:[.5+.5*Math.sin(t*6.5+2.4),.5+.5*Math.sin(t*6.5)]};
 }
@@ -2613,8 +2613,9 @@ function mainsGeste(tr,u,t,F,G){
         const c=v3a(v3a(Xc,v,(r+e)*.72),up,(hX+e)*.62+pr*.01); return main(v3a(c,sx,s*r*.38),n,"plat",v3a(v3a([0,0,0],v,-.6),up,.8)); });
       return {H,tenu:{cle:tr.cle,mains:[0,1]},appui:H.map((h,i)=>({i,p:h.p,n:h.n,k:.5})),vise:Xc}; }
     const dessus=op==="poser"&&u>.62, pr=dessus?Math.sin(Math.PI*Math.min(1,(u-.62)/.38)):0;
-    const H=[-1,1].map(s=>dessus?main(v3a(v3a(Xc,up,hX+e-pr*.015),sx,s*r*.4),[0,-1,0],"plat",v3a(v,[0,0,0],-1))
-      :main(v3a(v3a(Xc,sx,s*(r*.92+e)),v,r*.25),v3a([0,0,0],sx,-s),"coupe",v3a(up,v,-.4)));
+    const H=[-1,1].map(s=>{ if(dessus) return main(v3a(v3a(Xc,up,hX+e-pr*.015),sx,s*r*.4),[0,-1,0],"plat",v3a(v,[0,0,0],-1));
+      const n=v3n(v3a(v3a([0,0,0],sx,-s*.8),v,-.6)), c=v3a(v3a(v3a(Xc,sx,s*r*.8),v,r*.6),up,hX*.15);   // les paumes sur l'avant des flancs, les doigts autour
+      return main(v3a(c,n,-e*1.6),n,"coupe",v3a(up,v,-.2)); });
     if(op==="diviser"&&u<.25){ const M=W(masse.p), rM=rayon(masse); H.forEach((h,i)=>{ const s=i?1:-1, g=v3a(v3a(M,sx,s*rM*.7),v,rM*.5); h.p=v3a(g,v3s(h.p,g),u/.25); }); }
     return {H,tenu:(op==="diviser"&&u>.2)||(op==="poser"&&u<.85)?{cle:tr.cle,mains:[0,1]}:null,appui:H.map((h,i)=>({i,p:h.p,n:h.n,k:dessus?pr:.4})),vise:v3a(Xc,up,-r*.3)}; }
   if(op==="diviser"){ const M=W(masse.p), rM=rayon(masse), rX=rayon(X), w=Math.min(1,u/.25);
@@ -2630,22 +2631,26 @@ function mainsGeste(tr,u,t,F,G){
     const H=[main(v3a(Xc,sx,-(rayon(X)+e)),sx,pose,v3a(v,[0,0,0],-1)), main(v3a(Xc,up,haut(X)+e-pr*.012+tr0(8,0)),[0,-1,0],pose,v3a(v3a([0,0,0],v,-1),sx,-.25))];
     return {H,tenu:u<.85?{cle:tr.cle,mains:[0,1]}:null,appui:pr>.3?[{i:1,p:H[1].p,n:H[1].n,k:pr}]:[],vise:v3a(Xc,up,-r*.3)}; }
   if(op==="planter"||op==="presser"){
-    const corpsF=F.filter(f=>f.matiere===G.dom).sort((p,q)=>q.p[1]-p.p[1]), haute=corpsF[Math.min(1,corpsF.length-1)]||masse;
-    const tient=main(v3a(W(haute.p),up,haut(haute)+e),[0,-1,0],"plat",v3a(v,[0,0,0],-1));   // la main gauche tient l'ouvrage
+    const corpsF=F.filter(f=>f.matiere===G.dom).sort((p,q)=>q.p[1]-p.p[1]), haute=corpsF[Math.min(1,corpsF.length-1)]||masse, cH=W(haute.p);
+    // la main du côté de ce qu'on ajoute le porte ; l'autre tient l'ouvrage par le flanc opposé (aucun bras ne traverse l'ouvrage)
+    const cible=tr.a.find(f=>f._k===tr.cle), cote=v3d(v3s(W(cible?cible.p:X.p),cH),sx)>=0?1:-1, ip=cote>0?1:0, rH=rayon(haute);
+    const nt=v3n(v3a(v3a([0,0,0],sx,cote*.8),v,-.6)), tient=main(v3a(v3a(v3a(v3a(cH,sx,-cote*rH*.8),v,rH*.6),up,-haut(haute)*.2),nt,-e*1.6),nt,"coupe",v3a(up,v,-.2));
+    const paire=P=>ip?[tient,P]:[P,tient];
     if(u<.25&&tr.pile!==null&&tr.pile!==undefined){ const de=tr.de.find(f=>f._k===tr.cle), c=W(de.p), w=u/.25;
       const P=main(v3a(c,up,de.taille[1]/2*ech+e+.01*(1-w)),[0,-1,0],"ouverte",v3a(v,[0,0,0],-1)); P.v=P.v.map((x,j)=>x+(poseVec("poing")[j]-x)*Math.max(0,(w-.6)/.4));
-      return {H:[tient,P],vise:v3a(c,v3s(W(haute.p),c),.5)}; }
+      return {H:paire(P),vise:v3a(c,v3s(cH,c),.5)}; }
     const ax=tr.axe?v3n(versMonde({...R,x:0,y:0,z:0,ech:1},tr.axe)):up, L=X?Math.max(...X.taille)*ech:.1;
     let P;
     if(op==="planter"){ const g=v3a(Xc,ax,L*.32); let n=v3s([0,0,0],v); n=v3n(v3s(n,v3a([0,0,0],ax,v3d(n,ax))));
       P=main(v3a(g,n,-(X.taille[0]/2*ech+e)),n,"poing",v3x(ax,n)); }
-    else { const n=v3s([0,0,0],v); P=main(v3a(v3a(Xc,v,rayon(X)+e+.035),up,.02),n,"pince",v3a(up,sx,-.5)); }
-    return {H:[tient,P],tenu:u<.97?{cle:tr.cle,mains:[1]}:null,appui:[{i:0,p:tient.p,n:tient.n,k:.5}],vise:v3a(Xc,v3s(W(haute.p),Xc),.3)}; }
+    else { const n=v3n(v3a(v3s([0,0,0],v),sx,-cote*.5)); P=main(v3a(v3a(v3a(Xc,v,rayon(X)+e+.03),sx,cote*.05),up,-.02),n,"pince",v3a(up,sx,-cote*.6)); }
+    return {H:paire(P),tenu:u<.97?{cle:tr.cle,mains:[ip]}:null,appui:[{i:1-ip,p:tient.p,n:tient.n,k:.5}],vise:v3a(Xc,v3s(cH,Xc),.3)}; }
   // lisser : les deux paumes à plat sur l'ouvrage, en arcs
   const corpsF=F.filter(f=>f.matiere===G.dom).sort((p,q)=>q.p[1]-p.p[1]), hautF=corpsF[0]||masse, mil=corpsF[1]||hautF;
   const a1=Math.sin(t*4.8), a2=Math.sin(t*4.8+2);
   const n0=v3n(v3a(sx,[0,-1,0],.3)), c1=W(mil.p);
-  const H=[main(v3a(v3a(c1,sx,-(rayon(mil)+e)),up,a2*rayon(mil)*.4),n0,"plat",v3a(up,v,-.3)), main(v3a(v3a(W(hautF.p),up,haut(hautF)+e),sx,a1*rayon(hautF)*.35),[0,-1,0],"plat",v3a(v,[0,0,0],-1))];
+  const H=[-1,1].map((s,i)=>{ const f=i?hautF:mil, c=W(f.p), r=rayon(f), n=v3n(v3a(v3a([0,0,0],sx,-s*.7),v,-.7));
+    return main(v3a(v3a(v3a(v3a(c,sx,s*r*.7),v,r*.7),up,(i?a1:a2)*r*.35),n,-e*1.4),n,"plat",v3a(up,sx,s*.2)); });
   if(u>.7){ const w=(u-.7)/.3; H.forEach((h,i)=>{ h.p=v3a(h.p,v3s(repos[i].p,h.p),w*w); }); }
   return {H,appui:u<.7?[{i:1,p:H[1].p,n:H[1].n,k:.4+.3*Math.abs(a1)}]:[],vise:W(mil.p)};
 }

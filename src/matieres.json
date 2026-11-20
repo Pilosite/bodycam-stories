@@ -2069,12 +2069,12 @@
      "force": 0.3,
      "echelle": 9,
      "seuils": [
-      0.56,
-      0.7
+      0.6,
+      0.72
      ],
      "fbm": true,
      "decalage": 13,
-     "brillance": 0.62
+     "brillance": 0.38
     }
    ],
    "relief": {
