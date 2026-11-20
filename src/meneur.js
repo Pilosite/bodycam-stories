@@ -2242,7 +2242,7 @@ export function creerMeneur(o) {
       v.actions = [...gesteExploit(fm.facteur, EXG(), tirer).map(a => a.type === 'effort' ? Object.assign(a, { exploit: Object.assign(a.exploit, { masse: kg }) }) : a), ...garde];
     }
     let apres = null, source = null;
-    if (pal !== 'normal') {
+    if (pal !== 'normal' || (isObj(EX.apres) && liste(EX.apres.normal).length)) {   // une chose ordinaire a aussi sa petite phrase, si la banque en donne
       const a = v.apres && penseeSure(v.apres, h, partie);
       if (a && !sub(a) && !refusDit(a, EX)) { apres = a; source = 'ia'; }
       else { const L = phrasesExploit(isObj(EX.apres) ? EX.apres[pal] : [], { masse }); if (L.length) { apres = tirer(L); source = 'banque'; } }

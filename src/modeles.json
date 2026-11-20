@@ -47,7 +47,7 @@
   ],
   "souffle": ["Hhhnn…", "Hhhh… hhhnnn…", "Allez… allez…", "Mmmh… hhhnngh…", "Respire… pousse…"],
   "apres": {
-   "normal": [],
+   "normal": ["Bon, ben voilà. Bizarre, mais c'est fait.", "Voilà. C'est fait. On n'en parle plus.", "Ah, l'odeur… Bon. Voilà, t'es content ?", "Voilà. Ça sent la forêt, maintenant. Enfin, presque.", "C'est fait. Je sais pas pourquoi, mais c'est fait.", "Bon. Voilà. Modeste, mais honnête."],
    "gros": ["Ah. Quand même. Elle est grosse, celle-là.", "Ouah. C'est moi qui ai fait ça ? … Ça va, je me sens léger.", "Hé ben. Je savais pas que j'avais ça en moi."],
    "demesure": ["{masse}. C'est sorti de moi, ça. Comment je tiens encore debout ?", "Non mais… regarde la taille. C'est sorti de MOI ? Je devrais être mort.", "J'y crois pas. J'ai fait ça. … Je suis fier, et j'ai peur pour mon ventre.", "Oh. Mon. Dieu. … C'est plus gros que mon sac. Comment c'est possible ?"]
   },

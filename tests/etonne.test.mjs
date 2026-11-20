@@ -92,7 +92,7 @@ for (const facon of ['terre', 'boue', 'juste', 'vide']) for (const [phrase, pali
     const effort = J.filter(e => e.quoi === 'effort').reduce((s, e) => s + e.secondes, 0);
     const reac = J.filter(e => e.quoi === 'penser' && !e.bref);
     if (palier === 'normal') {
-      assert.equal(reac.length, 0, 'rien pour la petite : ' + JSON.stringify(reac));
+      assert.ok(reac.length <= 1, 'une petite phrase au plus pour la petite : ' + JSON.stringify(reac));
       assert.ok(effort <= 3.5, 'effort court : ' + effort);
       assert.ok(!J.some(e => e.quoi === 'penser' && e.bref), 'pas de souffle pour la petite');
     } else {
