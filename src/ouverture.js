@@ -131,10 +131,10 @@ export function creerOuverture(deps) {
   <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>
   <form id="ouv-form" class="ouv-form" autocomplete="off">
     <label class="ouv-vh" for="ouv-txt">Décris le monde</label>
-    <textarea id="ouv-txt" rows="2" maxlength="600" enterkeyhint="send" placeholder="Un lieu, une saison, une heure…"></textarea>
+    <textarea id="ouv-txt" rows="2" maxlength="900" enterkeyhint="send" placeholder="Un lieu, une saison, une heure…"></textarea>
     <div class="ouv-actions"><button type="button" id="ouv-dicter" class="ghost" hidden aria-pressed="false">Micro</button><button type="submit" id="ouv-go">Filmer</button></div>
   </form>
-  <div class="ouv-sugg"><span>Essaie :</span> <button type="button" id="ouv-sugg" class="ouv-chip"></button></div>
+  <div class="ouv-sugg"><button type="button" id="ouv-sugg" class="ouv-chip">Prompt démo</button></div>
   <div id="ouv-demande" class="ouv-demande" hidden></div>
   <div id="ouv-pense" class="ouv-pense" hidden></div>
   <ol id="ouv-log" class="ouv-log" aria-live="polite"></ol>
@@ -142,9 +142,34 @@ export function creerOuverture(deps) {
 </div>
 <button type="button" id="ouv-passer" class="ghost ouv-passer">Passer</button>`;
   d.body.appendChild(racine);
+  // L'intro : un faux cadre vidéo (REC, minutage, viseur, neige) et un bouton « Launch » ; noir, blanc, rouge. Le clic sert aussi
+  // de premier geste (son), puis une coupure de signal amène l'accueil.
+  const intro = d.createElement('div'); intro.className = 'ouv-intro'; intro.id = 'ouv-intro';
+  intro.innerHTML = `<div class="ouv-ecran">
+    <div class="ouv-neige" aria-hidden="true"></div><div class="ouv-lignes" aria-hidden="true"></div>
+    <div class="ouv-hud ouv-hg"><span class="ouv-pt"></span>REC <span id="ouv-tc">00:00:00:00</span></div>
+    <div class="ouv-hud ouv-hd">CAM 07 · 1080p · 30 i/s</div>
+    <div class="ouv-hud ouv-bg">SIGNAL · EN ATTENTE</div>
+    <div class="ouv-hud ouv-bd"><span class="ouv-bat"><i></i></span> 82 %</div>
+    <div class="ouv-mire" aria-hidden="true"></div>
+    <div class="ouv-centre">
+      <p class="ouv-i-nom">BODYCAM<br><span>STORIES</span></p>
+      <p class="ouv-i-sous">From prompt to multimodal procedural generation</p>
+      <button type="button" id="ouv-launch" class="ouv-launch"><span class="ouv-pt"></span>Launch</button>
+    </div>
+  </div><div class="ouv-coupe" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>`;
+  racine.appendChild(intro);
+  { const t0 = Date.now(), tc = $('ouv-tc'), z = n => String(n).padStart(2, '0');
+    const iv = setInterval(() => { if (!intro.isConnected) { clearInterval(iv); return; } const ms = Date.now() - t0, s = Math.floor(ms / 1000);
+      tc.textContent = z(Math.floor(s / 3600)) + ':' + z(Math.floor(s / 60) % 60) + ':' + z(s % 60) + ':' + z(Math.floor(ms % 1000 / 33.4)); }, 67);
+    const lancer = () => { if (intro.classList.contains('ouv-part')) return; intro.classList.add('ouv-part'); racine.classList.add('ouv-arrive');
+      try { deps.surLancement && deps.surLancement(); } catch (_) {}
+      setTimeout(() => { intro.remove(); racine.classList.remove('ouv-arrive'); try { $('ouv-txt').focus({ preventScroll: true }); } catch (_) {} }, 1150); };
+    $('ouv-launch').onclick = lancer;
+    intro.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); lancer(); } }); }
   const txt = $('ouv-txt'), log = $('ouv-log'), rejeux = deps.rejeux || [];
   const sugg = (rejeux.find(r => r.suggestion) || {}).suggestion || '';
-  $('ouv-sugg').textContent = sugg; $('ouv-sugg').parentNode.hidden = !sugg;
+  $('ouv-sugg').parentNode.hidden = !sugg;                 // le bouton « Prompt démo » écrit la demande dans le champ ; elle n'est pas affichée d'avance
   let mention = !!deps.mention, timers = [], enCours = false, fini = false;
 
   function afficherMention(r) {
@@ -155,7 +180,8 @@ export function creerOuverture(deps) {
   $('ouv-sugg').onclick = () => {                       // la suggestion s'écrit dans le champ, comme tapée ; on garde la main pour envoyer
     if (enCours) return;
     txt.value = ''; let i = 0; const s = sugg;
-    const tape = () => { txt.value = s.slice(0, ++i); if (i < s.length) timers.push(setTimeout(tape, 14 + 30 * Math.random())); else txt.focus(); };
+    const grandir = () => { txt.style.height = 'auto'; txt.style.height = Math.min(txt.scrollHeight + 2, 260) + 'px'; };
+    const tape = () => { i = Math.min(s.length, i + 1 + (Math.random() < 0.35 ? 1 : 0)); txt.value = s.slice(0, i); grandir(); if (i < s.length) timers.push(setTimeout(tape, 6 + 16 * Math.random())); else txt.focus(); };
     tape();
   };
   txt.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ouv-form').requestSubmit(); } });
@@ -306,7 +332,7 @@ export function creerOuverture(deps) {
   }
 
   return {
-    ouvrir() { racine.hidden = false; d.body.classList.add('ouverture-on'); setTimeout(() => { try { txt.focus({ preventScroll: true }); } catch (_) {} }, 60); },
+    ouvrir() { racine.hidden = false; d.body.classList.add('ouverture-on'); setTimeout(() => { try { ($('ouv-launch') || txt).focus({ preventScroll: true }); } catch (_) {} }, 60); },
     mention(on) { mention = !!on; const m = $('ouv-mention'); if (m && m.textContent) m.hidden = !mention; return mention; },
     dictee(on) { const b = $('ouv-dicter'); if (b) { b.setAttribute('aria-pressed', String(!!on)); b.textContent = on ? 'J\'écoute' : 'Micro'; } },
     envoyer: t => { txt.value = t; envoyer(t); },
