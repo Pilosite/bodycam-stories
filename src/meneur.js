@@ -385,12 +385,34 @@ function validerEnFaisant(x) {
   if (p.length) o.pendant = p;
   return Object.keys(o).length ? o : null;
 }
+/* Les directions qu'on peut nommer à « regarder » (vers), et ce que dit le porteur ébloui (la première fois : la première
+   phrase, ensuite les suivantes à tour de rôle). Données, pas de cas de scène : la page vise la vraie direction du soleil. */
+export const DIRECTIONS_NOMMEES = ['soleil'];
+export const EBLOUI = {
+  avant: ['Le soleil ? Attends…', 'Le soleil… OK, je regarde.', 'Bon. Le soleil.'],
+  dire: ['T\'es gentil, mais ça me cramerait les yeux.', 'Aïe. Non. Je vois plus que des taches.', 'Encore ? J\'ai les yeux qui pleurent, là.', 'Non, non. Je vais finir aveugle avec tes idées.'],
+};
+/* « Fais deux pas et regarde le soleil », « avance un peu et regarde le soleil », « tourne-toi vers le soleil », « lève les
+   yeux vers le soleil » : sans Claude. Rend la suite d'actions (marcher d'abord si la phrase le dit, puis regarder vers le
+   soleil), ou null. Un pas = 0,7 m ; « un peu » = deux pas. */
+export function secoursSoleil(texte) {
+  const t = sansAccents(texte || '').replace(/[’]/g, '\'').replace(/\s+/g, ' ');
+  const m = /\b(regarde[rsz]?|fixe[rsz]?|leve[rsz]? (les yeux|la tete)|lever (les yeux|la tete)|tourne[sz]?[- ]toi|tourner)\b[^,.;!?]*?\bsoleil\b/.exec(t);
+  if (!m) return null;
+  const avant = t.slice(0, m.index);
+  const n = /(\d+(?:[.,]\d+)?|un|une|deux|trois|quatre|cinq|six|dix)\s*(pas\b|m\b|metres?)/.exec(avant);
+  const d = n ? (NB[n[1]] || parseFloat(n[1].replace(',', '.'))) * (n[2] === 'pas' ? 0.7 : 1)
+    : /\b(avance[sz]?|marche[sz]?|quelques pas)\b/.test(avant) ? (/\bun peu\b|quelques/.test(avant) ? 1.4 : 2) : 0;
+  return [...(d > 0.05 ? [{ type: 'marcher', metres: Math.min(10, Math.round(d * 100) / 100) }] : []), { type: 'regarder', vers: 'soleil' }];
+}
 export function validerActions(l) {
   const out = [];
   for (const a of liste(l).slice(0, 8)) {
     if (!isObj(a)) continue;
     if (a.type === 'tourner') out.push({ type: 'tourner', degres: Math.round(num(a.degres, -180, 180, 0)) });
     else if (a.type === 'marcher') out.push({ type: 'marcher', metres: num(a.metres, -10, 30, 0) });
+    // regarder vers une direction nommée (le soleil) : la page calcule cap et hauteur depuis la fiche
+    else if (a.type === 'regarder' && DIRECTIONS_NOMMEES.includes(a.vers)) out.push({ type: 'regarder', vers: a.vers });
     else if (a.type === 'regarder') out.push({ type: 'regarder', degres: Math.round(num(a.degres, -60, 75, 0)) });
     else if (a.type === 'attendre') out.push({ type: 'attendre', secondes: num(a.secondes, 0, 5, 1) });
     // le corps : hauteur des yeux en part de la hauteur debout (1 debout, 0,5 accroupi, 0,65 assis) ; la page anime le mouvement
@@ -550,7 +572,7 @@ MODE ESSAI : exécute à la lettre ce que la voix demande, sans refuser, hésite
 Écriture : je, 1 ou 2 phrases parlées (30 mots au plus), pas de « d'accord ».${premierMot ? ` Ne commence pas par « ${premierMot} ».` : ''} Une fois sur trois, parle d'autre chose (ce que tu vois, crains, un souvenir).${retif ? ' Un refus dit ce qui te ferait changer d\'avis.' : ''} Jamais « règle », « histoire », « jeu », « prévu », « je ne peux pas ».${R.VOIX_QUESTIONNEE ? '' : ' Tu ne te demandes pas ce qu\'est la voix.'} Le corps dit l'état (attendre, regarder derrière).
 Réponds par un objet JSON, dans cet ordre :
 {"sas":{"verdict":"","regle":null|champ en cause,"motif":"60 car."},"pensee":"160 car.","attitude":"${retif ? 'suit|hesite|negocie|refuse|initiative' : 'suit|hesite|negocie|initiative ; refuse seulement si le sas refuse'}","actions":[],"fabrique":null,"modifie":null,"suite":null,"defaire":[],"scene":null,"temps":null,"fin":null,"etat":{"peur":0,"confiance":0,"agacement":0},"faits":[],"intention":"80 car.","apres":null,${repug.length ? '"en_faisant":null,' : ''}"question":false${p.journal.demande_resume ? ',"resume":"le récit jusqu\'ici, 400 car."' : ''}}
-actions, 8 au plus : tourner degres -180..180 (négatif à gauche), marcher metres -10..30, regarder degres -60..75, attendre secondes 0..5, posture hauteur 0.35..1 (1 debout, 0.5 accroupi), viser objet (un id : tu regardes vers lui), rejoindre objet (tu vas jusqu'à lui), cadrer objet (tu le filmes de près), monter sur (arbre, rocher ou un id : tu y grimpes), descendre, chercher quoi (tu vas le ramasser près d'ici et tu reviens) ; ex. {"type":"viser","objet":"sac"}. Un pas = 0.7 m. etat : -1, 0 ou 1 par jauge. faits : 2 au plus.
+actions, 8 au plus : tourner degres -180..180 (négatif à gauche), marcher metres -10..30, regarder degres -60..75 (ou regarder vers "soleil" : tu lèves les yeux vers le soleil, la page sait où il est ; ex. {"type":"regarder","vers":"soleil"}), attendre secondes 0..5, posture hauteur 0.35..1 (1 debout, 0.5 accroupi), viser objet (un id : tu regardes vers lui), rejoindre objet (tu vas jusqu'à lui), cadrer objet (tu le filmes de près), monter sur (arbre, rocher ou un id : tu y grimpes), descendre, chercher quoi (tu vas le ramasser près d'ici et tu reviens) ; ex. {"type":"viser","objet":"sac"}. Un pas = 0.7 m. etat : -1, 0 ou 1 par jauge. faits : 2 au plus.
 fabrique : ${restants > 0 && R.OBJETS_NOUVEAUX ? `si le geste laisse une chose NOUVELLE et visible (feu, tas, abri, chose posée, salissure), {"nom":"court","quoi":"ce que c'est, en quoi, sa taille réelle, 120 car.","ou":"devant|pieds|dessous|derriere|gauche|droite|main"} (par rapport à ton corps : ce qui tombe de toi, dessous ; ce que tu poses des mains, pieds ou devant ; "distance": m si elle est dite). La chose demandée, telle que dite : même nature, même matière, même taille (« énorme », « de 5 kg » : le nom et quoi le disent), une nouvelle si on dit « une » ; tu peux râler, jamais la remplacer par autre chose ni retoucher une ancienne. Sinon null.` : 'plus rien de nouveau ne peut apparaître : null.'} modifie : si la voix parle d'une chose DÉJÀ LÀ (tes traces, ce que tu vois) pour la compléter, décorer, repeindre, mouler, déplacer, casser : {"objet":"son id","quoi":"ce qui change, 120 car."} ; ne la refais pas en fabrique, ne la défais pas. defaire : ids de tes traces à éteindre, ramasser, détruire.${suites ? ' suite : si ce geste a des suites crédibles ici (le feu prend, l\'eau monte), en une phrase ; sinon null.' : ''}
 scene : ${amb.brume ? `brume ${amb.brume[0]}..${amb.brume[1]}` : 'rien'}${accessoires.length ? `, montrer/cacher ${J(accessoires)}` : ''} ; le reste par la pensée (bruit, odeur). temps, fin : un id ouvert, s'il se produit maintenant.`);
 
@@ -1967,11 +1989,12 @@ export function creerMeneur(o) {
       const s = secours(texte), stop = estStop(texte), tm = stop ? null : modeleTransforme(texte), rt = secoursRetouche(texte);
       const cible = rt ? designer(texte, null, true) : tm ? designerTrace(texte) : null, ch = stop ? null : secoursChercher(texte);
       const g = cible || stop ? null : secoursGeste(texte), def = stop ? null : secoursDefaire(texte, partie);
-      const corps = stop ? [] : [...(ch ? [ch] : secoursPas(texte, designer(texte, null, true))), ...secoursVertical(texte, derniereP, designer(texte, null, false)), ...secoursCorps(texte, derniereP, partie.monde.crees)];
+      const sol = stop ? null : secoursSoleil(texte);
+      const corps = stop ? [] : sol ? sol : [...(ch ? [ch] : secoursPas(texte, designer(texte, null, true))), ...secoursVertical(texte, derniereP, designer(texte, null, false)), ...secoursCorps(texte, derniereP, partie.monde.crees)];
       const compris = s.compris !== false && (liste(s.actions).length > 0 || isObj(s.scene)) || !!g || corps.length > 0 || !!def || !!cible || stop;
       let actions = stop ? [] : validerActions(s.actions);
       if (g || corps.length || def) actions = validerActions([...(g ? g.actions : []), ...corps, ...(def ? [{ type: 'posture', hauteur: 0.6 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }] : []), ...(g || def || corps.some(a => a.type !== 'posture') ? [] : actions)]);
-      const pensee = stop ? tirer(['Je bouge plus.', 'OK. Je reste là.', 'Je m\'arrête. Quoi ?']) : cible ? tirer(anticipant ? ['Bon. Je trouve ce qu\'il faut, et je m\'y mets.', 'D\'accord. Deux secondes, je cherche de quoi faire.'] : ['Attends… là. Et là. Voilà. Pas mal, hein ?', 'Bon. Avec ce qui traîne par terre… Voilà.']) : g ? g.pensee : def ? tirer(['Vite. De la terre dessus, je piétine, je piétine…', 'Voilà. C\'est fait. Plus rien.']) : corps.length && !liste(s.actions).length ? tirer(['Hm. Voilà.', 'Là. Tu vois ce que je vois ?', 'Bon.']) : str(s.pensee, 240);
+      const pensee = stop ? tirer(['Je bouge plus.', 'OK. Je reste là.', 'Je m\'arrête. Quoi ?']) : sol ? tirer(EBLOUI.avant) : cible ? tirer(anticipant ? ['Bon. Je trouve ce qu\'il faut, et je m\'y mets.', 'D\'accord. Deux secondes, je cherche de quoi faire.'] : ['Attends… là. Et là. Voilà. Pas mal, hein ?', 'Bon. Avec ce qui traîne par terre… Voilà.']) : g ? g.pensee : def ? tirer(['Vite. De la terre dessus, je piétine, je piétine…', 'Voilà. C\'est fait. Plus rien.']) : corps.length && !liste(s.actions).length ? tirer(['Hm. Voilà.', 'Là. Tu vois ce que je vois ?', 'Bon.']) : str(s.pensee, 240);
       v = { sas: null, pensee: compris ? pensee : tirer(INCOMPRIS), attitude: compris ? 'suit' : 'hesite',
         actions, scene: g || def ? null : s.scene || null, temps: null, fin: null, etat: { peur: 0, confiance: 0, agacement: 0 },
         faits: [], intention: '', question: false, fabrique: g ? { nom: g.nom, quoi: '', ou: g.ou } : null, suite: null, defaire: def ? [def] : [], modifie: cible ? { objet: cible, quoi: rt ? rt.quoi : str(tm.modele.nom, 60) } : null, resume: null, secours: true };
@@ -2017,6 +2040,9 @@ export function creerMeneur(o) {
       if (v.attitude === 'refuse') v.attitude = 'suit';
       if (ajout.length || g) log('docile', { ajoute: ajout.map(a => a.type), fabrique: !!(g && v.fabrique) });
     }
+    const sol = !refuse && !estStop(texte) && secoursSoleil(texte);   // « regarde le soleil » : tenu dans l'ordre de la phrase, quoi que dise la réponse
+    if (sol && !liste(v.actions).some(a => a.type === 'regarder' && a.vers === 'soleil')) {
+      v.actions = validerActions([...sol, ...liste(v.actions).filter(a => !['marcher', 'regarder', 'tourner', 'viser'].includes(a.type))]); log('soleil', {}); }
     if (estStop(texte)) {                                       // « arrête-toi » : rien de ce qui déplace ne passe, quoi que dise la réponse
       const avant = liste(v.actions).length;
       v.actions = liste(v.actions).filter(a => !['marcher', 'rejoindre', 'monter', 'tourner', 'cadrer'].includes(a.type));
@@ -2062,6 +2088,9 @@ export function creerMeneur(o) {
       afficher(pensee, type === 'voix' ? (v.secours ? 'secours' : 'voix') : type, type === 'voix');
       noter('porteur', pensee);
     }
+    // regarder le soleil : la phrase qu'il dira, ébloui, au moment où il détourne la tête (la page la dit au pic)
+    v.actions = v.actions.map(a => a.type === 'regarder' && a.vers === 'soleil' && !a.dire
+      ? Object.assign({}, a, { dire: EBLOUI.dire[(() => { const k = partie.porteur.eblouie || 0; partie.porteur.eblouie = k + 1; return k === 0 ? 0 : 1 + (k - 1) % (EBLOUI.dire.length - 1); })()] }) : a);
     if (v.actions.length) emettre({ type: 'actions', vider: type === 'voix', actions: v.actions });
     if (v.fabrique || v.suite || v.modifie) commander({ fabrique: v.fabrique, suite: v.suite, modifie: v.modifie, texte: v.texte || '', montrer, reserve: v.reserve });   // la pensée est partie : l'accessoiriste travaille ensuite
     if (type !== 'evenement') { partie.horloge.tours++; partie.trame.derive++; }
@@ -2817,7 +2846,7 @@ export function creerMeneur(o) {
       if (FAIRE.test(t) && modeleDe(BIB, t, { ramassable: false }) && !modeleTransforme(t)) return true;   // une chose de la bibliothèque
       if (modeleTransforme(t) && (partie.monde.crees.some(demandee) || enFabrication())) return true;     // « fais-en un bonhomme »
     }
-    if (secoursChercher(texte)) return true;
+    if (secoursChercher(texte) || secoursSoleil(texte)) return true;
     return secoursPas(texte, designer(texte, null, true)).length > 0;
   }
   /* La réponse de Claude à un tour anticipé : elle n'arrête ni ne refait rien, elle nourrit l'état (jauges, faits, intention). */

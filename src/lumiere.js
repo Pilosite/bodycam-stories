@@ -56,6 +56,19 @@ export function soleilDir(so) {
   const nuit = so.hauteur < -1, el = nuit ? 38 : Math.max(2, so.hauteur), az = so.azimut * Math.PI / 180, e = el * Math.PI / 180;
   return [Math.sin(az) * Math.cos(e), Math.sin(e), Math.cos(az) * Math.cos(e)];
 }
+/* Regarder le soleil : cap (rad, même convention que le corps : avant = (sin cap, cos cap)) et hauteur (rad) du disque, et
+   s'il se voit (au-dessus de l'horizon, pas la nuit). */
+export function regardSoleil(sunDir, nuit) {
+  const [x, y, z] = sunDir;
+  return { cap: Math.atan2(x, z), hauteur: Math.asin(Math.max(-1, Math.min(1, y))), visible: !nuit && y > 0.005 };
+}
+/* Éblouissement de base (0..1) : le regard (vecteur unitaire) près du soleil visible. Léger (0,3 au plus) : c'est la page
+   qui le pousse à 1 quand le porteur fixe le soleil. Rien la nuit ni sous l'horizon. */
+export function eblouissement(regard, sunDir, nuit) {
+  if (nuit || sunDir[1] <= 0.005) return 0;
+  const c = regard[0] * sunDir[0] + regard[1] * sunDir[1] + regard[2] * sunDir[2];
+  return 0.3 * sstep(Math.cos(14 * Math.PI / 180), Math.cos(2 * Math.PI / 180), c) * sstep(0.005, 0.05, sunDir[1]);
+}
 /* Relief et trajet : la fiche règle les formules de terrainH et pathX. Sans réglage, la forêt d'origine à l'identique. */
 export function reglerRelief(S, f, seedN) {
   S.rel = [1, 1, 0, 0]; S.traj = [1, .85, .3, .5]; S.creux = [.10, 1.8, .4, 0]; S.terK = [.88, 0]; S.pente = .22;
