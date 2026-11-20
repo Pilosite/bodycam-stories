@@ -19,7 +19,7 @@ uniform vec2 uJitPx;
 /* Objets mous (variante PATE, voir v3_proches.vert). Vocabulaire des formes, des données (docs/fiche-de-lieu.md) :
    - lisse > 0 : la forme est MOLLE et se fond dans les formes molles de l'objet (union adoucie de ce rayon, m) : deux boules
      posées l'une sur l'autre se soudent en bourrelet, une masse qu'on sépare s'étire en étranglement avant de rompre ;
-   - lisse = 0 : la forme est DURE (bâton, caillou, manche) : pas de fondu, mais là où elle entre dans la matière molle, la
+   - lisse = 0 : la forme est DURE (bois, pierre, tissu) : pas de fondu, mais là où elle entre dans la matière molle, la
      matière remonte autour d'elle en petit bourrelet ;
    - creux (lisse < 0 dans uShapes) : la forme creuse la matière molle (empreinte d'une paume, d'un pouce), bord adouci ;
    - bosse (partie fractionnaire de la matière, 0 à 0,4) : bosses molles à l'échelle de la forme, dans son repère (elles

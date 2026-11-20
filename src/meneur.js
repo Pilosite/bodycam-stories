@@ -593,6 +593,8 @@ function validerForme(x) {
   if (Array.isArray(x.penche)) o.penche = [Math.round(num(x.penche[0], -90, 90, 0)), Math.round(num(x.penche[1], -90, 90, 0))];
   if (x.arrondi !== undefined) o.arrondi = num(x.arrondi, 0, 0.3, 0);
   if (x.lisse !== undefined) o.lisse = num(x.lisse, 0, 0.5, 0);
+  if (x.creux !== undefined) o.creux = num(x.creux, 0, 0.5, 0);   // la forme creuse la matière molle de l'objet (empreinte)
+  if (x.bosse !== undefined) o.bosse = num(x.bosse, 0, 0.4, 0);   // bosses molles à l'échelle de la forme
   if (x.vacille !== undefined) o.vacille = num(x.vacille, 0, 1, 0);
   return o;
 }
@@ -1128,7 +1130,7 @@ export function formesTransformees(m, source) {
   const c = volumeFormes(masse), V = volumeFormes(src);
   if (!(c > 0) || !(V > 0)) return null;
   const D = Math.cbrt(V / c), r3 = v => Math.round(v * 1000) / 1000;
-  const formes = parts.map(f => validerForme(Object.assign({}, f, { p: liste(f.p).map(v => r3(v * D)), taille: liste(f.taille).map(v => r3(Math.max(0.006, v * D))),
+  const formes = parts.map(f => validerForme(Object.assign({}, f, { p: liste(f.p).map(v => r3(v * D)), taille: liste(f.taille).map(v => r3(Math.max(0.006, v * D))), ...(f.lisse !== undefined ? { lisse: r3(num(f.lisse, 0, 0.5, 0) * D) } : {}),
     matiere: f.matiere === '@' ? dom.matiere : f.matiere, couleur: f.couleur === '@' ? dom.couleur : f.couleur }))).filter(Boolean);
   return formes.length ? { formes: formes.slice(0, REGLAGES.FORMES_PAR_OBJET), unite: r3(D) } : null;
 }
@@ -1155,71 +1157,104 @@ export function etapesFaconnage(avant, apres, n = 5) {
   etats.push(B);
   return etats.slice(Math.max(0, etats.length - Math.max(2, n))).map(L => L.slice(0, REGLAGES.FORMES_PAR_OBJET));
 }
-/* Le geste du façonnage, en continu (§17) : non plus cinq états qui se remplacent, mais une suite de transitions qu'on voit se
-   faire, à la main, image par image. Générique : la matière dominante de la chose (sa « masse ») est pétrie en une boule,
-   divisée en autant de masses que le résultat en compte, roulées au sol, puis empilées une à une à leur place ; chaque
-   ajout (une autre matière) est pris dans le tas rapporté (même matière, sinon il vient de la main) et posé. Puis il tapote.
-   avant, apres : formes dans le repère de la chose ; tas : les formes du tas rapporté, dans ce même repère.
-   Rend [{geste, de, a, duree, cle, pile}] : de et a sont des listes de formes portant une clé (_k) ; une forme de « de » sans
-   pareille dans « a » se résorbe vers « vers », une forme de « a » sans pareille naît de « depuis ». geste : petrir, diviser,
-   rouler, poser, prendre, tapoter (ce que font les mains). Le dernier « a » est « apres ». */
-export function gesteFaconnage(avant, apres, tas = [], { duree = 11 } = {}) {
+/* Le geste du façonnage, en continu (§17), à la main (§22) : une suite de transitions qu'on voit se faire, image par image.
+   Générique : seules comptent la matière dominante de la chose (sa « masse »), les formes du résultat et le tas rapporté.
+   - petrir : toute la matière est pétrie en une boule, ramassée sur le côté (la place du résultat reste libre) ;
+   - pour chaque masse du résultat, de la plus grosse à la plus petite : diviser (une poignée est tirée de la boule : elle s'en
+     sépare en s'étirant), rouler (entre les paumes, en l'air : elle tourne, s'arrondit, ses bosses tournent avec elle), poser
+     (portée à sa place, appuyée : elle s'écrase un peu, puis se tient) ; la dernière prend tout ce qui reste ;
+   - prendre, pour chaque ajout d'une autre matière, pris dans le tas (même matière, le plus gros d'abord) ou venu de la main :
+     une forme allongée est PLANTÉE (approchée dans son axe, enfoncée par à-coups : la matière résiste), une autre est PRESSÉE
+     (du pouce, vers l'intérieur) ;
+   - tapoter : il lisse (les bosses s'adoucissent), puis recule.
+   avant, apres : formes dans le repère de la chose (sa face +z tournée vers le porteur) ; tas : les formes du tas rapporté, dans
+   ce même repère. Rend [{geste, op, de, a, duree, cle, pile, vers, depuis, tenu, masse, axe, lisse}] : de et a sont des listes
+   de formes portant une clé (_k) ; une forme de « de » sans pareille dans « a » se résorbe vers « vers », une forme de « a »
+   sans pareille naît de « depuis ». geste : petrir, diviser, rouler, poser, prendre, tapoter (les noms d'avant) ; op : ce que
+   font les mains (petrir, diviser, rouler, poser, planter, presser, lisser) ; tenu : la clé de ce que les mains portent ; masse :
+   la clé de la boule de matière d'où l'on tire. La matière façonnée est molle pendant tout le geste (lisse : rayon de fondu,
+   celui du résultat, sinon 12 % de la taille d'une masse). Le dernier « a » est « apres ». 12 à 16 s. */
+export function gesteFaconnage(avant, apres, tas = [], { duree = 15 } = {}) {
   const A = liste(avant).filter(f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille)), B = liste(apres).filter(f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille));
   if (!B.length) return [];
   const r3 = v => Math.round(v * 10000) / 10000, cle = (f, k) => Object.assign({}, f, { _k: k });
   const dom = dominante(A.length ? A : B), corps = A.filter(f => !plate(f));
   const platB = B.filter(plate), plates = (platB.length ? platB : A.filter(plate)).map((f, i) => cle(f, 'p' + i));
   const BP = B.filter(f => !plate(f));
-  const masse = BP.filter(f => f.matiere === dom.matiere).sort((a, b) => a.p[1] - b.p[1]).map((f, i) => cle(f, 'm' + i));
+  const masse = BP.filter(f => f.matiere === dom.matiere).map((f, i) => cle(f, 'm' + i));
+  const ordre = masse.slice().sort((a, b) => volForme(b) - volForme(a));   // de la plus grosse à la plus petite
   const ajouts = BP.filter(f => f.matiere !== dom.matiere).map((f, i) => cle(f, 'j' + i));
-  // l'ordre des ajouts : une matière après l'autre, dans l'ordre où elles viennent ; de bas en haut dans une matière
   const mats = [...new Set(ajouts.map(f => f.matiere))];
   ajouts.sort((a, b) => mats.indexOf(a.matiere) - mats.indexOf(b.matiere) || a.p[1] - b.p[1] || a.p[0] - b.p[0]);
-  const T = [], ajoute = (geste, de, a, d, extra = {}) => T.push(Object.assign({ geste, de, a, duree: d }, extra));
+  const T = [], ajoute = (geste, op, de, a, d, extra = {}) => T.push(Object.assign({ geste, op, de, a, duree: d }, extra));
+  const taille0 = masse.length ? Math.max(...masse.map(f => Math.max(...f.taille))) : corps.length ? Math.max(...corps.map(f => Math.max(...f.taille))) : 0.1;
+  const kS = r3(Math.max(0.004, ...masse.map(f => num(f.lisse, 0, 0.5, 0)), masse.length && !masse.some(f => f.lisse > 0) ? 0.12 * taille0 : 0));
+  const mol = f => f.matiere === dom.matiere && !plate(f) ? Object.assign({}, f, { lisse: Math.max(num(f.lisse, 0, 0.5, 0), kS) }) : f;
   let cur = A.map((f, i) => cle(f, plate(f) ? 'p' + i : 'a' + i));
   if (platB.length) cur = cur.filter(f => !plate(f)).concat(plates);
   const cx = corps.length ? corps.reduce((s, f) => s + f.p[0], 0) / corps.length : 0, cz = corps.length ? corps.reduce((s, f) => s + f.p[2], 0) / corps.length : 0;
+  // le côté où la boule attend : à l'opposé du tas
+  const tx = liste(tas).filter(f => isObj(f) && Array.isArray(f.p)).reduce((s, f) => s + f.p[0], 0), cote = tx > 0 ? -1 : 1;
+  const largeur = BP.length ? Math.max(...BP.map(f => Math.abs(f.p[0]) + f.taille[0] / 2)) : 0.1;
   if (masse.length) {
-    // pétrie : toute la matière en une boule, à son volume
-    const V = Math.max(1e-6, volumeFormes(corps.length ? corps : masse)), D = Math.cbrt(V * 8 / Math.PI);
-    const boule = { f: 'boule', p: [r3(cx), r3(0.36 * D), r3(cz)], taille: [r3(D), r3(0.75 * D), r3(D)], couleur: dom.couleur, matiere: dom.matiere, _k: 'm0' };
-    const K1 = [...plates, boule];
-    ajoute('petrir', cur, K1, 1.8, { vers: boule.p });
-    cur = K1;
-    if (masse.length > 1) {
-      // divisée : autant de boules que de masses, posées en rang au sol, plus petites ; puis roulées, elles grossissent
-      const w = masse.map(f => Math.max(f.taille[0], f.taille[2])), large = w.reduce((s, v) => s + v, 0) + 0.04 * masse.length;
-      let x = cx - large / 2;
-      const rang = masse.map((f, i) => { const xi = x + w[i] / 2 + 0.02; x += w[i] + 0.04; return [xi, cz]; });
-      const K2 = [...plates, ...masse.map((f, i) => Object.assign({}, f, { f: 'boule', p: [r3(rang[i][0] * 0.8 + cx * 0.2), r3(f.taille[1] * 0.3), r3(rang[i][1])], taille: f.taille.map(v => r3(v * 0.6)), penche: [0, 0] }))];
-      ajoute('diviser', cur, K2, 1.0, { depuis: boule.p });
-      const K3 = [...plates, ...masse.map((f, i) => Object.assign({}, f, { f: 'boule', p: i === 0 ? [f.p[0], r3(f.taille[1] / 2), f.p[2]] : [r3(rang[i][0]), r3(f.taille[1] / 2), r3(rang[i][1] + 0.6 * w[0])], penche: [70, 0] }))];
-      ajoute('rouler', K2, K3, 1.5);
-      cur = K3;
-      for (let i = 0; i < masse.length; i++) {               // empilées une à une, de bas en haut
-        const K = cur.map(f => f._k === masse[i]._k ? masse[i] : f);
-        ajoute('poser', cur, K, i ? 1.0 : 0.6, { cle: masse[i]._k });
-        cur = K;
-      }
-    } else { ajoute('petrir', cur, [...plates, masse[0]], 1.2, { cle: 'm0' }); cur = [...plates, masse[0]]; }
+    const V = Math.max(1e-6, volumeFormes(corps.length ? corps : masse)), vol = f => Math.PI / 6 * f.taille[0] * f.taille[1] * f.taille[2];
+    const boule = (v, p) => { const D = Math.cbrt(v * 6 / Math.PI / 0.85); return { f: 'boule', p: [r3(p[0]), r3(0.42 * D), r3(p[2])], taille: [r3(D), r3(0.85 * D), r3(D)], couleur: dom.couleur, matiere: dom.matiere, lisse: kS, bosse: 0.22, _k: 'mm' }; };
+    const D0 = Math.cbrt(V * 6 / Math.PI / 0.85), cote0 = [r3(cx + cote * (largeur + 0.55 * D0 + 0.03)), 0, r3(cz - 0.1 * D0)];
+    let M = boule(V, cote0), reste = V;
+    ajoute('petrir', 'petrir', cur, [...plates, M], 1.6, { vers: M.p, masse: 'mm', lisse: kS });
+    cur = [...plates, M];
+    const Vm = ordre.reduce((s, f) => s + vol(f), 0) || 1;
+    ordre.forEach((f, n) => {
+      const der = n === ordre.length - 1, part = der ? reste : V * vol(f) / Vm;
+      reste = Math.max(0, reste - part);
+      const D = Math.cbrt(part * 6 / Math.PI), h = r3(Math.max(0.03, 0.9 * D)), main = [r3(M.p[0] - cote * 0.6 * M.taille[0]), h + r3(0.5 * D), r3(M.p[2] + 0.6 * M.taille[2])];
+      // diviser : une poignée tirée de la boule (la dernière : toute la boule)
+      const poig = { f: 'boule', p: main, taille: [r3(D * 1.08), r3(D * 0.82), r3(D * 1.1)], couleur: f.couleur, matiere: f.matiere, lisse: kS, bosse: 0.3, cap: 0, penche: [0, 0], _k: f._k };
+      const M2 = der ? null : Object.assign(boule(reste, cote0), { cap: (M.cap || 0) + 40 });
+      ajoute('diviser', 'diviser', cur, [...cur.filter(g => g._k !== 'mm'), ...(M2 ? [M2] : []), poig], 0.9, { cle: f._k, tenu: f._k, depuis: M.p.slice(), vers: main, masse: 'mm', lisse: kS });
+      cur = [...cur.filter(g => g._k !== 'mm'), ...(M2 ? [M2] : []), poig];
+      if (M2) M = M2;
+      // rouler : entre les paumes, en l'air ; elle s'arrondit (le volume reste), ses bosses tournent avec elle
+      const roulee = Object.assign({}, poig, { taille: f.taille.map(r3), cap: 720, penche: [0, 0], bosse: 0.18 });
+      ajoute('rouler', 'rouler', cur, cur.map(g => g._k === f._k ? roulee : g), 1.2, { cle: f._k, tenu: f._k, lisse: kS });
+      cur = cur.map(g => g._k === f._k ? roulee : g);
+      // poser : portée à sa place, appuyée
+      const posee = Object.assign({}, mol(f), { bosse: num(f.bosse, 0, 0.4, 0) > 0 ? Math.min(0.4, f.bosse * 1.6) : 0.14, cap: f.cap || 0 });
+      ajoute('poser', 'poser', cur, cur.map(g => g._k === f._k ? posee : g), 1.0, { cle: f._k, tenu: f._k, lisse: kS });
+      cur = cur.map(g => g._k === f._k ? posee : g);
+    });
   } else if (corps.length) {                                   // rien de la matière d'avant ne reste : elle se résorbe
-    ajoute('petrir', cur, [...plates], 1.2, { vers: [cx, 0, cz] }); cur = [...plates];
+    ajoute('petrir', 'petrir', cur, [...plates], 1.2, { vers: [cx, 0, cz] }); cur = [...plates];
   }
-  // les ajouts, pris dans le tas (même matière, le plus gros d'abord) ou venus de la main
+  // les ajouts, pris dans le tas (même matière, le plus gros d'abord) ou venus de la main ; plantés ou pressés
   const libres = liste(tas).map((f, i) => ({ f, i })).filter(x => isObj(x.f) && Array.isArray(x.f.p) && Array.isArray(x.f.taille));
+  const centre = masse.length ? [0, 1, 2].map(i => masse.reduce((s, f) => s + f.p[i], 0) / masse.length) : [0, 0, 0];
   for (const j of ajouts) {
     const pris = libres.filter(x => x.f.matiere === j.matiere).sort((a, b) => Math.max(...b.f.taille) - Math.max(...a.f.taille))[0];
     if (pris) libres.splice(libres.indexOf(pris), 1);
+    const long = Math.max(...j.taille) > 2.5 * Math.min(...j.taille), op = long ? 'planter' : 'presser';
+    let axe = long ? axeForme(j) : [0, 0, 1];
+    const ext = [j.p[0] - centre[0], j.p[1] - centre[1], j.p[2] - centre[2]];
+    if (long && axe[0] * ext[0] + axe[1] * ext[1] + axe[2] * ext[2] < 0) axe = axe.map(v => -v);   // vers le dehors
     const de = pris ? [...cur, Object.assign({}, pris.f, { _k: j._k })] : cur, K = [...cur, j];
-    ajoute('prendre', de, K, 1.2, { cle: j._k, pile: pris ? pris.i : null, depuis: pris ? null : [j.p[0], j.p[1] + 0.1, j.p[2]] });
+    ajoute('prendre', op, de, K, long ? 1.5 : 1.1, { cle: j._k, tenu: j._k, pile: pris ? pris.i : null, depuis: pris ? null : [j.p[0], j.p[1] + 0.1, j.p[2]], axe: axe.map(r3), recul: r3(long ? 0.45 * Math.max(...j.taille) : 0.6 * Math.max(...j.taille)) });
     cur = K;
   }
-  const fin = [...plates, ...masse, ...ajouts];
-  ajoute('tapoter', cur, fin, 1.0, { cle: masse.length ? masse[masse.length - 1]._k : null });
-  // la durée totale : 8 à 12 s (le geste se voit, sans traîner)
-  const tot = T.reduce((s, t) => s + t.duree, 0), k = Math.min(Math.max(1, 8 / tot), duree / tot);
+  const fin = [...plates, ...masse.map(mol), ...ajouts];
+  ajoute('tapoter', 'lisser', cur, fin, 1.1, { cle: masse.length ? ordre[0]._k : null, lisse: kS });
+  // la durée totale : 12 à 16 s (le geste se voit, sans traîner)
+  const tot = T.reduce((s, t) => s + t.duree, 0), k = Math.min(Math.max(1, 12 / tot), Math.min(16, duree) / tot);
   for (const t of T) t.duree = Math.round(t.duree * k * 100) / 100;
   return T;
+}
+/* L'axe propre (y local) d'une forme dans le repère de la chose : l'inverse de dansForme (même repère que primLocal). */
+function axeForme(f) {
+  let x = 0, y = 1, z = 0, c, s;
+  const pe = Array.isArray(f.penche) ? f.penche : [0, 0];
+  if (pe[0]) { const w = pe[0] * Math.PI / 180; c = Math.cos(w); s = Math.sin(w); [y, z] = [c * y - s * z, s * y + c * z]; }
+  if (pe[1]) { const w = pe[1] * Math.PI / 180; c = Math.cos(w); s = Math.sin(w); [x, y] = [c * x - s * y, s * x + c * y]; }
+  const a = (f.cap || 0) * Math.PI / 180; c = Math.cos(a); s = Math.sin(a);
+  return [c * x + s * z, y, -s * x + c * z];
 }
 const lerp = (a, b, u) => a + (b - a) * u;
 const lerpAng = (a, b, u) => { const d = ((b - a) % 360 + 540) % 360 - 180; return a + d * u; };
@@ -1228,34 +1263,68 @@ function hexMix(a, b, u) {
   if (!x || !y) return u < 0.5 ? a : b;
   return '#' + x.map((v, i) => Math.round(lerp(v, y[i], u)).toString(16).padStart(2, '0')).join('');
 }
-/* L'état d'une transition du geste à u (0..1, déjà adouci) : les formes interpolées (positions, tailles, angles, couleurs), la
-   forme qu'on déplace (cle) passe en arc ; ce qui naît grossit, ce qui se résorbe rapetisse. Les formes plus petites que 6 mm
-   ne sont pas rendues. Rend une liste de formes (avec _k). */
+const doux = u => u * u * (3 - 2 * u);
+/* L'état d'une transition du geste à u (0..1, déjà adouci) : les formes interpolées (positions, tailles, angles, couleurs, fondu
+   et bosses) ; ce qui naît grossit, ce qui se résorbe rapetisse (et se fond dans la masse). Selon l'opération : la poignée qu'on
+   divise reste liée à la boule par un pont de matière qui s'étire et rompt ; celle qu'on roule tourne vite ; celle qu'on pose
+   s'écrase en touchant et se tient ; ce qu'on plante arrive dans son axe et s'enfonce par à-coups ; ce qu'on presse arrive de
+   face et s'enfonce. Les formes plus petites que 6 mm ne sont pas rendues. Rend une liste de formes (avec _k). */
 export function etatGeste(tr, u) {
   u = Math.min(1, Math.max(0, u));
   const A = new Map(liste(tr.de).map(f => [f._k, f])), B = new Map(liste(tr.a).map(f => [f._k, f])), out = [];
-  const porte = tr.geste === 'prendre' ? Math.min(1, Math.max(0, (u - 0.4) / 0.6)) : u, pu = porte * porte * (3 - 2 * porte);
+  const porte = tr.geste === 'prendre' ? Math.min(1, Math.max(0, (u - 0.25) / 0.75)) : u, pu = doux(porte);
+  const op = tr.op || tr.geste;
   for (const [k, b] of B) {
     const a = A.get(k);
     if (a) {
       const v = k === tr.cle ? pu : u, f = Object.assign({}, v < 0.5 ? a : b);
       f.p = a.p.map((x, i) => lerp(x, b.p[i], v)); f.taille = a.taille.map((x, i) => lerp(x, b.taille[i], v));
-      if (k === tr.cle && (tr.geste === 'poser' || tr.geste === 'prendre')) f.p[1] += Math.sin(Math.PI * v) * (0.06 + 0.5 * Math.max(...b.taille));   // en arc
-      f.cap = lerpAng(a.cap || 0, b.cap || 0, v);
+      if (k === tr.cle && (op === 'poser' || tr.geste === 'prendre') && op !== 'planter' && op !== 'presser') f.p[1] += Math.sin(Math.PI * v) * (0.06 + 0.5 * Math.max(...b.taille));   // en arc
+      f.cap = op === 'rouler' && k === tr.cle ? lerp(a.cap || 0, b.cap || 0, v) : lerpAng(a.cap || 0, b.cap || 0, v);
       const pa = Array.isArray(a.penche) ? a.penche : [0, 0], pb = Array.isArray(b.penche) ? b.penche : [0, 0];
       f.penche = [lerp(pa[0], pb[0], v), lerp(pa[1], pb[1], v)];
       f.couleur = hexMix(a.couleur, b.couleur, v);
+      if (a.lisse !== undefined || b.lisse !== undefined) f.lisse = lerp(num(a.lisse, 0, 0.5, 0), num(b.lisse, 0, 0.5, 0), v);
+      if (a.bosse !== undefined || b.bosse !== undefined) f.bosse = lerp(num(a.bosse, 0, 0.4, 0), num(b.bosse, 0, 0.4, 0), v);
+      if (k === tr.cle && op === 'rouler') {                     // roulée : elle tourne, et vacille dans les paumes
+        f.penche = [f.penche[0] + 22 * Math.sin(u * Math.PI * 3), f.penche[1] + 18 * Math.sin(u * Math.PI * 4 + 1)];
+        const e = 0.1 * (1 - u) * Math.sin(u * Math.PI * 5); f.taille = [f.taille[0] * (1 + e), f.taille[1] * (1 - e), f.taille[2]];
+      }
+      if (k === tr.cle && op === 'poser' && v > 0.6) {          // appuyée : elle s'écrase en touchant, puis se tient (volume gardé)
+        const w = Math.sin(Math.PI * Math.min(1, (v - 0.6) / 0.4)) * 0.16;
+        f.taille = [f.taille[0] * (1 + w / 2), f.taille[1] * (1 - w), f.taille[2] * (1 + w / 2)]; f.p[1] -= f.taille[1] * w / 2;
+      }
+      if (k === tr.cle && (op === 'planter' || op === 'presser') && Array.isArray(tr.axe)) {   // approchée dans son axe, puis enfoncée par à-coups
+        const g = Math.min(1, Math.max(0, (porte - 0.6) / 0.4)), enf = op === 'planter' ? g - Math.sin(6 * Math.PI * g) / (6 * Math.PI) * 0.85 : doux(g);
+        const loin = (tr.recul || 0.05) * (1 - enf), app = Math.min(1, porte / 0.6);
+        const pre = b.p.map((x, i) => x + tr.axe[i] * (tr.recul || 0.05));
+        for (let i = 0; i < 3; i++) f.p[i] = porte < 0.6 ? lerp(a.p[i], pre[i], doux(app)) + (i === 1 ? Math.sin(Math.PI * app) * 0.4 * (tr.recul || 0.05) : 0) : b.p[i] + tr.axe[i] * loin;
+        if (porte >= 0.6) { f.cap = b.cap || 0; f.penche = pb.slice(); f.taille = b.taille.slice(); }
+      }
+      if (op === 'lisser' && f.bosse !== undefined) f.bosse = lerp(num(a.bosse, 0, 0.4, 0), num(b.bosse, 0, 0.4, 0), doux(u));
       out.push(f);
     } else {                                                   // naît (d'un point, ou de la main)
       const d = tr.depuis || b.p, f = Object.assign({}, b);
-      f.p = b.p.map((x, i) => lerp(d[i], x, u)); f.taille = b.taille.map(x => x * u);
+      const w = op === 'diviser' ? Math.min(1, u * 1.6) : u;  // la poignée a tout son volume avant de quitter la boule
+      f.p = b.p.map((x, i) => lerp(d[i], x, op === 'diviser' ? doux(Math.min(1, Math.max(0, (u - 0.15) / 0.85))) : u)); f.taille = b.taille.map(x => x * (op === 'diviser' ? Math.cbrt(w) : w));
       out.push(f);
     }
   }
-  for (const [k, a] of A) if (!B.has(k)) {                     // se résorbe dans la masse
-    const d = tr.vers || a.p, f = Object.assign({}, a), w = 1 - u;
-    f.p = a.p.map((x, i) => lerp(x, d[i], u)); f.taille = a.taille.map(x => x * w);
+  for (const [k, a] of A) if (!B.has(k)) {                     // se résorbe dans la masse (molle : elle s'y fond)
+    const d = tr.vers || a.p, f = Object.assign({}, a), w = op === 'diviser' ? 1 - doux(u) : 1 - u;
+    f.p = a.p.map((x, i) => lerp(x, d[i], op === 'diviser' ? doux(u) : u)); f.taille = a.taille.map(x => x * (op === 'diviser' ? Math.cbrt(w) : w));
+    if (tr.lisse && !plate(a)) f.lisse = Math.max(num(a.lisse, 0, 0.5, 0), tr.lisse * Math.min(1, u * 3));
     out.push(f);
+  }
+  if (op === 'diviser' && tr.cle && u < 0.85) {                // le pont de matière entre la boule et la poignée : il s'étire et rompt
+    const m = out.find(f => f._k === tr.masse) || { p: tr.depuis, taille: [0, 0, 0] }, h = out.find(f => f._k === tr.cle);
+    if (h && m.p) {
+      const d = h.p.map((x, i) => x - m.p[i]), L = Math.hypot(...d), r = Math.max(...h.taille) * 0.32 * Math.pow(1 - u / 0.85, 1.4);
+      if (L > 1e-3 && r > 0.004) {
+        const dn = d.map(x => x / L), w = Math.acos(Math.min(1, Math.abs(dn[1]))) * 180 / Math.PI, sg = dn[1] < 0 ? -1 : 1;
+        out.push({ f: 'capsule', p: m.p.map((x, i) => x + d[i] / 2), taille: [2 * r, Math.max(0.006, L - 2 * r), 2 * r], cap: Math.atan2(-sg * dn[2], sg * dn[0]) * 180 / Math.PI, penche: [0, -w], couleur: h.couleur, matiere: h.matiere, lisse: Math.max(num(h.lisse, 0, 0.5, 0), 0.004), _k: 'pont' });
+      }
+    }
   }
   return out.filter(f => Math.min(...f.taille) >= 0.006 || plate(f) && Math.max(...f.taille) >= 0.006).map(f => Object.assign(f, { p: f.p.map(v => Math.round(v * 10000) / 10000), taille: f.taille.map(v => Math.round(Math.max(0.006, v) * 10000) / 10000) }));
 }

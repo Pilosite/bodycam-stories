@@ -400,13 +400,18 @@ test('horsDuCorps : « dessous » derrière les talons, à une distance faite po
   assert.ok(Math.hypot(p.x, p.z + 0.4) >= 0.3 && Math.hypot(p.x, p.z) >= 0.35, JSON.stringify(p));
 });
 
-test('façonnage continu : pétrir, diviser, rouler, empiler une à une, prendre dans le tas, tapoter ; 8 à 12 s ; budget tenu', async () => {
+test('façonnage continu, à la main : pétrir, puis pour chaque boule (la plus grosse d\'abord) diviser, rouler, poser ; planter et presser ce qu\'on prend dans le tas ; lisser ; 12 à 16 s ; budget tenu', async () => {
   const { gesteFaconnage, etatGeste } = await import('../src/meneur.js');
   const av = formesModele(MODELE('crotte'), 'une énorme crotte').formes, ap = formesTransformees(MODELE('bonhomme'), av).formes;
   const tas = ramassage(MODELES, 'des bâtons et des cailloux').formes.map(f => Object.assign({}, f, { p: [f.p[0] + 0.5, f.p[1], f.p[2] + 0.3] }));
   const T = gesteFaconnage(av, ap, tas), tot = T.reduce((s, t) => s + t.duree, 0);
-  assert.ok(tot >= 8 && tot <= 12, 'durée : ' + tot);
-  assert.deepEqual(T.map(t => t.geste), ['petrir', 'diviser', 'rouler', 'poser', 'poser', 'poser', 'prendre', 'prendre', 'prendre', 'prendre', 'tapoter']);
+  assert.ok(tot >= 12 && tot <= 16, 'durée : ' + tot);
+  assert.deepEqual(T.map(t => t.geste), ['petrir', 'diviser', 'rouler', 'poser', 'diviser', 'rouler', 'poser', 'diviser', 'rouler', 'poser', 'prendre', 'prendre', 'prendre', 'prendre', 'tapoter']);
+  assert.deepEqual(T.filter(t => t.geste === 'prendre').map(t => t.op), ['planter', 'planter', 'presser', 'presser'], 'bâtons plantés, cailloux pressés');
+  const vols = T.filter(t => t.geste === 'poser').map(t => { const f = t.a.find(g => g._k === t.cle); return f.taille[0] * f.taille[1] * f.taille[2]; });
+  assert.ok(vols.every((v, i) => !i || v <= vols[i - 1]), 'de la plus grosse à la plus petite');
+  // pendant tout le geste, la matière façonnée est molle (fondu), le reste est dur
+  for (const t of T) for (const f of etatGeste(t, 0.5)) if (f.matiere !== 'pate-organique' || f.taille[1] < 0.1 * f.taille[0]) assert.ok(!(f.lisse > 0), 'dur : ' + f.matiere);
   // chaque ajout vient du tas, d'une forme de même matière, et chaque forme du tas ne sert qu'une fois
   const pris = T.filter(t => t.geste === 'prendre');
   for (const t of pris) { const de = t.de.find(f => f._k === t.cle), a = t.a.find(f => f._k === t.cle);
@@ -425,12 +430,14 @@ test('façonnage continu : pétrir, diviser, rouler, empiler une à une, prendre
   assert.equal(etatGeste(T[0], 0).length, av.length);
   // les masses montent une à une : après le 1er « poser », une seule est à sa place
   const surPlace = (F, k) => { const m = F.find(f => f._k === k), b = T[T.length - 1].a.find(f => f._k === k); return Math.hypot(...m.p.map((v, i) => v - b.p[i])) < 1e-3; };
-  const p1 = etatGeste(T[3], 1); assert.ok(surPlace(p1, 'm0') && !surPlace(p1, 'm1') && !surPlace(p1, 'm2'));
+  const p1 = etatGeste(T[3], 1), k1 = T[3].cle; assert.ok(surPlace(p1, k1) && p1.filter(f => /^m\d/.test(f._k)).length === 1, 'une seule boule posée');
+  // diviser : un pont de matière entre la boule et la poignée, qui rompt avant la fin
+  assert.ok(etatGeste(T[1], 0.4).some(f => f._k === 'pont') && !etatGeste(T[1], 0.95).some(f => f._k === 'pont'), 'pont qui rompt');
   // les mains, des données : six formes au plus, des matières qui existent
   const M = MODELES.corps.mains;
   for (const k of ['manche', 'paume', 'pouce']) assert.ok(['tissu', 'mat'].includes(M[k].matiere) || MATIERES.recettes[M[k].matiere], k);
   // sans tas ni masse multiple : un geste quand même (pétrir, ajouts venus de la main, tapoter)
   const T2 = gesteFaconnage(av, [...av.slice(0, 1), { f: 'boule', p: [0, 0.1, 0], taille: [0.3, 0.2, 0.3], couleur: '#5a3d22', matiere: 'pate-organique' }, { f: 'cylindre', p: [0, 0.3, 0], taille: [0.02, 0.3, 0.02], couleur: '#4e3a27', matiere: 'bois' }]);
-  assert.deepEqual(T2.map(t => t.geste), ['petrir', 'petrir', 'prendre', 'tapoter']);
+  assert.deepEqual(T2.map(t => t.geste), ['petrir', 'diviser', 'rouler', 'poser', 'prendre', 'tapoter']);
   assert.ok(T2.find(t => t.geste === 'prendre').depuis, 'vient de la main');
 });
