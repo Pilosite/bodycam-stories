@@ -81,7 +81,7 @@ function compVol(){ COMP.envol=COMP.envol.filter(x=>{ if(x.note) return false; i
 /* Premier dessin de chaque programme. Sous Direct3D, ANGLE et le pilote peuvent finir le travail au premier dessin (variante du
    nuanceur de pixels selon les cibles, nuanceur de géométrie des points, compilation du pilote) : un gel qui ne se voit pas dans
    la durée de compilation. Chaque programme est marqué à sa première utilisation (useProgram) ; à la fin d'une image qui en
-   contient, une attente de la puce (gl.finish, seulement ces images-là) chronomètre le tout (diagnostic, COMP.premiers). */
+   contient, une attente de la puce (syncPuce, seulement ces images-là) chronomètre le tout (diagnostic, COMP.premiers). */
 COMP.froids=[]; COMP.premiers=[]; COMP.gels=[];
 /* Gels : tout intervalle de plus de 250 ms entre deux images (page visible), ouverture comprise, avec ce qui compilait ou
    faisait son premier dessin à ce moment-là. Dit, sur la vraie machine, si une compilation « en parallèle » fige quand même
@@ -95,9 +95,13 @@ function gelNote(now,d){
 const gelsTexte=()=>COMP.gels.length?COMP.gels.map(g=>g.t.toFixed(0)+" s : "+(g.ms/1000).toFixed(1)+" s"+(g.quoi?" ("+g.quoi+")":"")).join(" · "):"aucun (> 250 ms)";
 const BANC={ on:false, v:null, vi:-1, rec:null, tFin:0 };       // banc d'essai (balade.banc, « Plus » → « Banc d'essai ») : variante en cours, mesures
 { const use=gl.useProgram.bind(gl); gl.useProgram=p=>{ if(p&&p.__nom&&!p.__chaud){ p.__chaud=true; COMP.froids.push(p.__nom); } use(p); }; }
+/* Attente vraie du processus graphique : lecture d'un pixel d'une petite cible (Chrome traite d'abord tous les ordres en file,
+   compilations paresseuses du premier dessin comprises). gl.finish ne suffit pas partout. */
+let SYNC=null; const SYNC_B=new Uint8Array(4);
+function syncPuce(){ if(!SYNC) SYNC=target(1,1,gl.RGBA8,gl.NEAREST); gl.bindFramebuffer(gl.FRAMEBUFFER,SYNC.f); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,SYNC_B); gl.bindFramebuffer(gl.FRAMEBUFFER,null); }
 function premiersDessins(){
   if(!COMP.froids.length) return;
-  const t=performance.now(); gl.finish(); const ms=performance.now()-t;
+  const t=performance.now(); syncPuce(); const ms=performance.now()-t;
   COMP.premiers.push({noms:COMP.froids.join(", "),ms,ouv:!!ouvRepos}); COMP.dernPrem={t:performance.now(),noms:COMP.froids.join(", ")}; if(COMP.premiers.length>12) COMP.premiers.shift();
   etapeGL("premier dessin ("+(ms/1000).toFixed(1)+" s"+(ouvRepos?", ouverture":"")+") : "+COMP.froids.join(", ")); COMP.froids=[];
 }
@@ -1675,7 +1679,7 @@ function frame(now){
   gpuFin(); gpuImage();
   if(chauffe) v3ChaufferFroids();
   premiersDessins();
-  if(BANC.on&&BANC.vi>=0&&!GT.ext){ gl.finish(); const t=performance.now(); if(BANC.tFin) BANC.rec.push({v:BANC.vi,nom:"image",ms:t-BANC.tFin,img:V3.nImg}); BANC.tFin=t; }   // sans chronomètre de la puce : intervalle entre deux fins d'image (gl.finish, ici seulement)
+  if(BANC.on&&BANC.vi>=0&&!GT.ext){ syncPuce(); const t=performance.now(); if(BANC.tFin) BANC.rec.push({v:BANC.vi,nom:"image",ms:t-BANC.tFin,img:V3.nImg}); BANC.tFin=t; }   // sans chronomètre de la puce : intervalle entre deux fins d'image (syncPuce, ici seulement)
   if(now-t00<10000&&lastT0>0) LONGUE.max=Math.max(LONGUE.max,dtBrut);   // plus longue image des dix premières secondes (diagnostic)
   lastT0=1;
   etape("aff",null); hud(now);
@@ -2290,7 +2294,7 @@ $("mesure-fermer").onclick=()=>{ $("mesure").hidden=true; $("mesure").classList.
 /* Banc d'essai (docs/moteur-v3.md, « Banc d'essai ») : environ 15 s, caméra figée sur deux poses de la fiche courante (de face,
    regard levé dans les houppiers), régulateur coupé, chaque image recalculée (comme en marche) et la carte d'ombres refaite à
    chaque image. Pour chaque variante, temps de la puce (EXT_disjoint_timer_query_webgl2, médiane de 8 images) des passes grains,
-   proches, ombre, ombrage, et la somme ; sans le chronomètre, l'intervalle entre deux fins d'image (gl.finish, dans le banc
+   proches, ombre, ombrage, et la somme ; sans le chronomètre, l'intervalle entre deux fins d'image (attente de la puce, dans le banc
    seulement). Les variantes passent par des uniformes et des drapeaux (uBanc du semeur, BANC.v), aucun programme nouveau. */
 const BANC_VAR=[
   {nom:"référence (100 % des grains)"},
@@ -2338,7 +2342,7 @@ async function banc(){
   L.push("Navigateur : "+navigator.userAgent.replace(/^Mozilla\/5\.0 /,""));
   L.push("Fiche : "+(fiche.id||fiche.titre||"?")+" · qualité "+(QUAL.full?"complète":"mobile")+" · interne "+W+" × "+H+" · écran "+canvas.width+" × "+canvas.height+" · ×"+(devicePixelRatio||1));
   L.push("Grains : "+V3.grains.toLocaleString("fr")+" (budget, niveau 0) · ombre ×0,6 · régulateur avant le banc : niveau "+av.niv+", "+av.regMs+" ms");
-  L.push("Chrono de la puce (EXT_disjoint_timer_query_webgl2) : "+(GT.ext?"oui, médiane de 8 images, ms":"NON : intervalle entre deux fins d'image avec gl.finish, ms (la passe seule est inconnue)"));
+  L.push("Chrono de la puce (EXT_disjoint_timer_query_webgl2) : "+(GT.ext?"oui, médiane de 8 images, ms":"NON : intervalle entre deux fins d'image avec attente de la puce (lecture d'un pixel), ms (la passe seule est inconnue)"));
   L.push("Ombrage : "+(V3.omb===OMB.e.socle?"socle":"complet "+V3.omb.sig)+" · KHR_parallel_shader_compile : "+(parallele?"oui":"non"));
   for(let pi=0;pi<poses.length;pi++){
     L.push(""); L.push("— "+poses[pi][0].toUpperCase()+" —"); L.push("variante".padEnd(36)+passes.map(k=>k.padStart(8)).join(""));
