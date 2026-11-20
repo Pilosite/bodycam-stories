@@ -2066,17 +2066,53 @@ function ecouter(){                                           // appelé directe
   dictBase=(dictEl||$("msg")).value.trim();
   dict.start().catch(e=>{ if(e&&e.code==="not_granted"){ dict=null; $("mic").hidden=true; } });
 }
-$("mic").onclick=()=>{ if(listening) dict.stop().catch(()=>{}); else ecouter(); };
-function setFrozen(v,m){
+$("mic").onclick=()=>{ if(appui.avaleMic){ appui.avaleMic=false; return; } if(listening) dict.stop().catch(()=>{}); else ecouter(); };
+function setFrozen(v,m,sansClavier){
   if(!v && listening && dict) dict.stop().catch(()=>{});
   frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v;
   $("parler").textContent=v&&mode==="parler"?"Reprendre":"Lui parler";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
-  if(v){ $("msg").value=""; $("hint").classList.add("off"); setTimeout(()=>$("msg").focus(),50); }
+  if(v){ $("msg").value=""; $("hint").classList.add("off"); if(!sansClavier) setTimeout(()=>$("msg").focus(),50); }
 }
 // Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
-$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+$("parler").onclick=()=>{ if(appui.avale){ appui.avale=false; return; } const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+/* Appuyer pour parler : tant qu'on garde le doigt (ou la souris) sur « Lui parler » ou sur « Micro », il écoute ; au relâcher, la phrase
+   part aussitôt. Un appui bref garde l'ancien comportement (ouvrir la barre, ou basculer le micro). La dictée démarre dès l'appui, dans
+   le geste même, pour que le navigateur l'accepte ; un appui bref la referme sans rien garder. */
+const appui={bouton:null,t0:0,tenu:false,minuterie:0,avale:false,ecoute:false};
+const APPUI_MS=280;
+function appuiDebut(b,e){
+  if(e.button!==undefined&&e.button!==0) return;
+  if(!dict||mode==="monde"&&frozen) return;                     // sans dictée, ou pendant « Décrire un monde » : le bouton reste un bouton
+  appui.bouton=b; appui.t0=performance.now(); appui.tenu=false;
+  try{ b.setPointerCapture(e.pointerId); }catch(_){}
+  appui.entendu=false;
+  clearTimeout(appui.minuterie);
+  appui.minuterie=setTimeout(()=>{ if(appui.bouton!==b) return; appui.tenu=true;
+    if(!frozen) setFrozen(true,"parler",true);
+    if(!listening&&dict) ecouter();                               // la souris garde son geste pendant ce court délai ; au doigt, voir appuiFin
+    b.classList.add("tenu"); $("parler").textContent="Relâche pour envoyer"; $("msg").placeholder="Je t'écoute…"; },APPUI_MS);
+}
+async function appuiFin(b,annule){
+  if(appui.bouton!==b) return; clearTimeout(appui.minuterie); appui.bouton=null; b.classList.remove("tenu");
+  if(!appui.tenu) return;                                         // appui bref : le clic qui suit fait son travail habituel
+  appui.tenu=false; appui.avale=b.id==="parler"; appui.avaleMic=b.id==="mic"; setTimeout(()=>{ appui.avale=false; appui.avaleMic=false; },400);
+  if(!annule&&dict&&!listening&&!$("msg").value.trim()){          // la dictée n'a pas pu partir pendant l'appui (au doigt, certains navigateurs
+    $("parler").textContent="Reprendre"; $("msg").placeholder="Dis-lui quoi faire…"; ecouter(); return; }   // n'acceptent le micro qu'au relâcher) : elle part ici, on touche « Dire » ou « Micro » pour finir
+  if(dict){ try{ await dict.stop(); }catch(_){} }                 // même si l'état « écoute » n'est pas remonté : on veut la phrase entière
+  for(let i=0;i<12&&listening;i++) await new Promise(r=>setTimeout(r,60));   // la fin de phrase arrive juste après l'arrêt
+  await new Promise(r=>setTimeout(r,120));
+  $("parler").textContent=frozen&&mode==="parler"?"Reprendre":"Lui parler"; $("msg").placeholder="Dis-lui quoi faire…";
+  if(annule) return;
+  if($("msg").value.trim()) $("dire").requestSubmit();            // relâché : la phrase part
+  else setTimeout(()=>$("msg").focus(),50);                       // rien entendu : la barre reste ouverte, on peut taper
+}
+for(const id of ["parler","mic"]){ const b=$(id);
+  b.addEventListener("pointerdown",e=>appuiDebut(b,e));
+  b.addEventListener("pointerup",()=>appuiFin(b,false));
+  b.addEventListener("pointercancel",()=>appuiFin(b,true));
+  b.addEventListener("contextmenu",e=>{ if(appui.bouton===b||appui.tenu) e.preventDefault(); }); }
 $("monde").onclick=()=>{ fermerOutils(); if(frozen) setFrozen(false); atelier.ouvrir({nouvelle:true}); };   // la description se tape dans la banque de scènes
 $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
