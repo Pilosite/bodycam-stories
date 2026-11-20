@@ -1,0 +1,229 @@
+<a class="skip" href="#s1" data-t="skip">Skip to the guide</a>
+<header class="bar">
+  <div class="bar-in">
+    <span class="rec" aria-hidden="true"><i></i>REC</span>
+    <span class="bar-title">Bodycam Stories <span class="dim" data-t="hero.kicker">Field guide</span></span>
+    <span class="tc" id="timecode" aria-hidden="true">00:00:00:00</span>
+    <span class="bar-ctl">
+      <label class="sr" for="lang" data-t="lang.label">Language</label>
+      <select id="lang"><option value="en">EN</option><option value="fr">FR</option></select>
+      <label class="sr" for="theme" data-t="theme.label">Theme</label>
+      <select id="theme"><option value="auto" data-t="theme.auto">Auto</option><option value="dark" data-t="theme.dark">Dark</option><option value="light" data-t="theme.light">Light</option></select>
+    </span>
+  </div>
+</header>
+
+<main class="wrap" id="top">
+<section class="hero" aria-labelledby="hero-title">
+  <p class="kicker"><span class="rec-dot" aria-hidden="true"></span><span data-t="hero.kicker">Field guide</span> · <span>Louis’s Round</span></p>
+  <h1 id="hero-title">Bodycam Stories</h1>
+  <ol class="teaser">
+    <li data-t="hero.t1"></li>
+    <li data-t="hero.t2"></li>
+    <li><span data-t="hero.t3"></span> <small data-t="hero.t3src"></small></li>
+  </ol>
+  <p class="lede" data-t="hero.lede"></p>
+  <p class="honest" data-t="hero.honest"></p>
+  <p class="check" id="replay-check"><span data-t="loading"></span></p>
+  <nav class="toc" aria-labelledby="toc-h"><h2 id="toc-h" class="sr" data-t="toc.label">Contents</h2><ol id="toc"></ol></nav>
+</section>
+
+<section id="s1" class="sec" aria-labelledby="s1-h">
+  <h2 id="s1-h"><span class="n">01</span><span data-t="s1.title"></span></h2>
+  <p data-t="s1.p1"></p><p data-t="s1.p2"></p>
+  <div class="bench">
+    <p class="act" data-t="s1.act"></p>
+    <div class="row">
+      <label class="fld"><span data-t="s1.station"></span><select id="s1-station"></select></label>
+      <label class="fld grow"><span data-t="s1.request"></span><select id="s1-request"></select></label>
+      <fieldset class="seg" id="s1-side"><legend data-t="s1.side"></legend>
+        <label><input type="radio" name="s1-side" id="s1-side-live" value="live" checked><span data-t="s1.live"></span></label>
+        <label><input type="radio" name="s1-side" id="s1-side-write" value="write"><span data-t="s1.write"></span></label>
+      </fieldset>
+    </div>
+    <div id="s1-out" class="out" aria-live="polite"></div>
+    <p class="note" data-t="s1.benchnote"></p>
+  </div>
+</section>
+
+<section id="s2" class="sec" aria-labelledby="s2-h">
+  <h2 id="s2-h"><span class="n">02</span><span data-t="s2.title"></span></h2>
+  <p data-t="s2.p1"></p><p data-t="s2.p2"></p>
+  <div class="bench">
+    <label class="fld"><span data-t="s2.preset"></span><select id="s2-preset"></select></label>
+    <div class="fld"><span data-t="s2.header"></span><pre class="code dim" id="s2-header"></pre></div>
+    <label class="fld"><span data-t="s2.line"></span><textarea id="s2-line" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></label>
+    <div id="s2-out" class="out" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="s3" class="sec" aria-labelledby="s3-h">
+  <h2 id="s3-h"><span class="n">03</span><span data-t="s3.title"></span></h2>
+  <p data-t="s3.p1"></p><p data-t="s3.p2"></p>
+  <div class="bench">
+    <div class="row">
+      <label class="fld grow"><span data-t="s3.preset"></span><select id="s3-preset"></select></label>
+      <label class="fld"><span data-t="s3.station"></span><select id="s3-station"></select></label>
+    </div>
+    <label class="fld"><span data-t="s3.tokens"></span><textarea id="s3-tokens" rows="4" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></label>
+    <h3 class="sub" data-t="s3.result"></h3>
+    <div id="s3-out" class="out" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="s4" class="sec" aria-labelledby="s4-h">
+  <h2 id="s4-h"><span class="n">04</span><span data-t="s4.title"></span></h2>
+  <p data-t="s4.p1"></p><p data-t="s4.p2"></p>
+  <div class="bench">
+    <div class="row">
+      <label class="fld grow"><span data-t="s4.sentence"></span><select id="s4-sentence"></select></label>
+      <button type="button" class="btn rec-btn" id="s4-say"><span class="rec-dot" aria-hidden="true"></span><span data-t="s4.say"></span></button>
+    </div>
+    <div class="sliders">
+      <label class="sl"><span><span data-t="s4.delay"></span> · <b>now</b> <output id="s4-now-v"></output></span><input type="range" id="s4-now" min="0" max="1500" step="10" value="140"></label>
+      <label class="sl"><span><span data-t="s4.delay"></span> · <b>scene</b> <output id="s4-scene-v"></output></span><input type="range" id="s4-scene" min="0" max="12000" step="100" value="2600"></label>
+      <label class="sl"><span><span data-t="s4.delay"></span> · <b>story</b> <output id="s4-story-v"></output></span><input type="range" id="s4-story" min="0" max="30000" step="500" value="9000"></label>
+    </div>
+    <div class="lanes" id="s4-lanes"></div>
+    <p class="note" data-t="s4.storynote"></p>
+  </div>
+</section>
+
+<section id="s5" class="sec" aria-labelledby="s5-h">
+  <h2 id="s5-h"><span class="n">05</span><span data-t="s5.title"></span></h2>
+  <p data-t="s5.p1"></p><p data-t="s5.p2"></p>
+  <div class="bench">
+    <label class="fld"><span data-t="s5.q"></span><select id="s5-q"></select></label>
+    <div id="s5-qinfo" class="qinfo"></div>
+    <div class="sliders">
+      <label class="sl"><span><span data-t="s5.p"></span> <output id="s5-p-v"></output></span><input type="range" id="s5-p" min="0" max="1" step="0.01" value="0.66"></label>
+      <label class="chk"><input type="checkbox" id="s5-abs"><span data-t="s5.abs"></span></label>
+      <label class="sl" id="s5-p2-wrap"><span><span data-t="s5.p2l"></span> <output id="s5-p2-v"></output></span><input type="range" id="s5-p2" min="0" max="1" step="0.01" value="0.35"></label>
+      <div class="row tight">
+        <label class="fld num"><span data-t="s5.hi"></span><input type="number" id="s5-hi" min="0" max="1" step="0.05" value="0.8"></label>
+        <label class="fld num"><span data-t="s5.lo"></span><input type="number" id="s5-lo" min="0" max="1" step="0.05" value="0.5"></label>
+      </div>
+      <fieldset class="chks"><legend data-t="s5.chain"></legend>
+        <label class="chk"><input type="checkbox" id="s5-dm"><span data-t="s5.dm"></span></label>
+        <label class="chk"><input type="checkbox" id="s5-fg"><span data-t="s5.fg"></span></label>
+      </fieldset>
+    </div>
+    <div id="s5-out" class="out" aria-live="polite"></div>
+    <p class="note" data-t="s5.note"></p>
+  </div>
+</section>
+
+<section id="s6" class="sec" aria-labelledby="s6-h">
+  <h2 id="s6-h"><span class="n">06</span><span data-t="s6.title"></span></h2>
+  <p data-t="s6.p1"></p><p data-t="s6.p2"></p>
+  <div class="bench">
+    <p class="said" id="s6-said"></p>
+    <div class="row">
+      <fieldset class="seg"><legend data-t="s6.answer"></legend>
+        <label><input type="radio" name="s6-ans" id="s6-ans-accepted" value="accepted"><span data-t="ans.accepted"></span></label>
+        <label><input type="radio" name="s6-ans" id="s6-ans-amended" value="amended" checked><span data-t="ans.amended"></span></label>
+        <label><input type="radio" name="s6-ans" id="s6-ans-refused" value="refused"><span data-t="ans.refused"></span></label>
+      </fieldset>
+      <fieldset class="seg"><legend data-t="s6.strength"></legend>
+        <label><input type="radio" name="s6-str" id="s6-str-hard" value="hard" checked><span data-t="str.hard"></span></label>
+        <label><input type="radio" name="s6-str" id="s6-str-tendency" value="tendency"><span data-t="str.tendency"></span></label>
+      </fieldset>
+      <fieldset class="seg" id="s6-ver-wrap"><legend data-t="s6.verdict"></legend>
+        <label><input type="radio" name="s6-ver" id="s6-ver-kept" value="kept" checked><span data-t="ver.kept"></span></label>
+        <label><input type="radio" name="s6-ver" id="s6-ver-broken" value="broken"><span data-t="ver.broken"></span></label>
+      </fieldset>
+    </div>
+    <label class="sl wide"><span><span data-t="s6.step"></span>: <output id="s6-step-v"></output></span><input type="range" id="s6-step" min="0" max="4" step="1" value="4"></label>
+    <ol class="steps" id="s6-steps" aria-hidden="true"></ol>
+    <div id="s6-out" class="out" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="s7" class="sec" aria-labelledby="s7-h">
+  <h2 id="s7-h"><span class="n">07</span><span data-t="s7.title"></span></h2>
+  <p data-t="s7.p1"></p><p data-t="s7.p2"></p>
+  <div class="bench">
+    <label class="fld"><span data-t="s7.src"></span><textarea id="s7-src" rows="5" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></label>
+    <div class="row tight" role="group" aria-labelledby="s7-add-l">
+      <span class="lbl" id="s7-add-l" data-t="s7.add"></span>
+      <button type="button" class="btn" id="s7-loud" data-t="s7.loud"></button>
+      <button type="button" class="btn" id="s7-rustle" data-t="s7.rustle"></button>
+      <button type="button" class="btn" id="s7-wait" data-t="s7.wait"></button>
+      <button type="button" class="btn ghost" id="s7-reset" data-t="s7.reset"></button>
+    </div>
+    <div id="s7-chart" class="chart"></div>
+    <div id="s7-out" class="out" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="s8" class="sec" aria-labelledby="s8-h">
+  <h2 id="s8-h"><span class="n">08</span><span data-t="s8.title"></span></h2>
+  <p data-t="s8.p1"></p><p data-t="s8.p2"></p>
+  <div class="bench">
+    <div class="row">
+      <label class="fld"><span data-t="s8.filter"></span><select id="s8-filter"><option value="all" data-t="f.all"></option><option value="tx" data-t="f.tx"></option><option value="rule" data-t="f.rule"></option><option value="model_call" data-t="f.model"></option><option value="input" data-t="f.input"></option></select></label>
+      <label class="sl grow"><span><span data-t="s8.entry"></span> <output id="s8-seq-v"></output></span><input type="range" id="s8-seq" min="0" max="0" step="1" value="0"></label>
+    </div>
+    <div class="journal" id="s8-list" aria-label="Journal"></div>
+    <div id="s8-entry" class="out entry" aria-live="polite"></div>
+    <h3 class="sub" data-t="s8.whatif"></h3>
+    <label class="fld"><span data-t="s8.rule"></span><select id="s8-rule"></select></label>
+    <textarea id="s8-text" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Rule source"></textarea>
+    <div class="row tight">
+      <button type="button" class="btn rec-btn" id="s8-replay" data-t="s8.replay"></button>
+      <button type="button" class="btn ghost" id="s8-reset" data-t="s8.reset"></button>
+    </div>
+    <div id="s8-out" class="out" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="s9" class="sec" aria-labelledby="s9-h">
+  <h2 id="s9-h"><span class="n">09</span><span data-t="s9.title"></span></h2>
+  <p data-t="s9.p1"></p><p data-t="s9.p2"></p>
+  <div class="bench split">
+    <div class="tree" id="s9-tree" aria-label="stories/louis-round"></div>
+    <div class="file" id="s9-file" aria-live="polite"></div>
+  </div>
+  <h3 class="sub" data-t="s9.kit"></h3>
+  <div class="tbl" id="s9-kit"></div>
+  <p class="note"><a id="s9-link" href="https://github.com/Pilosite/bodycam-stories/blob/main/docs/creator-kit.md" target="_blank" rel="noopener" data-t="s9.kitlink"></a></p>
+</section>
+
+<section id="s10" class="sec" aria-labelledby="s10-h">
+  <h2 id="s10-h"><span class="n">10</span><span data-t="s10.title"></span></h2>
+  <p data-t="s10.p1"></p><p data-t="s10.p2"></p>
+  <div class="bench">
+    <fieldset class="chks"><legend data-t="s10.where"></legend>
+      <label class="chk"><input type="checkbox" id="s10-node"><span data-t="s10.node"></span></label>
+      <label class="chk"><input type="checkbox" id="s10-host"><span data-t="s10.host"></span></label>
+    </fieldset>
+    <h3 class="sub" data-t="s10.serves"></h3>
+    <div class="tbl" id="s10-out" aria-live="polite"></div>
+    <div class="two">
+      <div><h3 class="sub" data-t="s10.can"></h3><ul class="plain"><li data-t="s10.can1"></li><li data-t="s10.can2"></li></ul></div>
+      <div><h3 class="sub" data-t="s10.cannot"></h3><ul class="plain"><li data-t="s10.no1"></li><li data-t="s10.no2"></li><li data-t="s10.no3"></li></ul></div>
+    </div>
+    <p class="note" id="s10-adr"></p>
+  </div>
+</section>
+
+<section id="s11" class="sec" aria-labelledby="s11-h">
+  <h2 id="s11-h"><span class="n">11</span><span data-t="s11.title"></span></h2>
+  <p data-t="s11.p1"></p>
+  <h3 class="sub" data-t="s11.feel"></h3>
+  <ol class="feel" id="s11-feel"></ol>
+  <div class="row tight">
+    <h3 class="sub" data-t="s11.ledger"></h3>
+    <fieldset class="seg small" id="s11-col"><legend class="sr" data-t="s11.col"></legend>
+      <label><input type="radio" name="s11-col" id="s11-col-all" value="all" checked><span>all</span></label>
+      <label><input type="radio" name="s11-col" id="s11-col-v1" value="1"><span>v1</span></label>
+      <label><input type="radio" name="s11-col" id="s11-col-v2" value="2"><span>v2</span></label>
+      <label><input type="radio" name="s11-col" id="s11-col-t" value="3"><span>target</span></label>
+    </fieldset>
+  </div>
+  <div class="tbl" id="s11-ledger"></div>
+  <h3 class="sub" data-t="s11.ms"></h3>
+  <div class="tbl" id="s11-ms"></div>
+</section>
+<footer class="foot"><p data-t="foot"></p></footer>
+</main>
