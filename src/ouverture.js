@@ -55,7 +55,7 @@ export function traduction(f) {
 /* PDL, « Procedural Diaphasic Language » : la fiche réelle et les réglages réels du personnage, transcrits en notation serrée
    (une ligne par idée). C'est un affichage : le moteur lit la fiche JSON, pas cette notation (docs/ouverture.md).
    Rend { lignes, donnees (le même contenu, en objet), tokens, json, gain } ; tokens ≈ caractères / 4, sur les deux textes. */
-export function pdl(f, perso, lieu) {
+export function pdl(f, perso, lieu, enc) {
   const n = x => typeof x === 'number' ? String(+x.toFixed(3)).replace(/^(-?)0\./, '$1.') : String(x);
   const mot = x => String(x).split(',')[0].trim().replace(/\s+/g, '.');
   const L = [], D = {}, ajoute = (cle, val, ligne) => { D[cle] = val; L.push(ligne); };
@@ -98,7 +98,12 @@ export function pdl(f, perso, lieu) {
     if (P.tenue || P.poches) L.push(`#${id}.porte ${[].concat(P.tenue || []).join('+')}${P.poches ? ' · poches:' + j(P.poches) : ''}`);
     if (P.camera) L.push(`#${id}.cam ${P.camera}`);
   }
-  const tokens = Math.ceil(L.join('\n').length / 4), json = Math.ceil(JSON.stringify(D).length / 4);
+  const json = Math.ceil(JSON.stringify(D).length / 4);
+  if (enc && enc.trames) {                                 // le flux de jetons (src/pdl.js) : un token par jeton, en-tête et somme
+    const E = enc.trames(D);
+    return { lignes: E.trames.map(t => t.texte), trames: E.trames, donnees: D, tokens: E.tokens, json, gain: Math.round(100 * (1 - E.tokens / json)) };
+  }
+  const tokens = Math.ceil(L.join('\n').length / 4);
   return { lignes: L, donnees: D, tokens, json, gain: Math.round(100 * (1 - tokens / json)) };
 }
 
@@ -106,7 +111,7 @@ export function pdl(f, perso, lieu) {
    Les durées de chaque étape viennent du journal ; chaque élément reçoit sa part, tirée au hasard (±40 %).
    Les requêtes partent en rafale (petite part chacune) ; sources et constats défilent tous (compteurs), mais seuls quelques-uns
    s'affichent (« montre ») : 3 sources, les constats marqués « vitrine ». */
-export function programme(r, f, hasard = Math.random, controle = null) {
+export function programme(r, f, hasard = Math.random, controle = null, enc = null) {
   const ev = [], jit = (d, k = .4) => d * (1 - k + 2 * k * hasard());
   let t = 0;
   const POIDS = { requete: .22, source: 1, constat: 1, pdl: 1, valeur: 1, controle: 1, bilan: .6 };
@@ -122,8 +127,8 @@ export function programme(r, f, hasard = Math.random, controle = null) {
   t = jit(r.comprendre.duree, .2);
   const recherche = (rq, sources) => [...rq.map(q => ['q', q]), ...sources.map((s, i) => ['s', s, i])];
   const rendreRech = ([k, x, i]) => k === 'q' ? { genre: 'requete', texte: x }
-    : { genre: 'source', texte: x.titre, domaine: x.domaine, etat: x.etat, pourquoi: x.pourquoi || '', montre: i < 3 };
-  etape('recherche', 'Le lieu · recherche', r.recherche.duree + r.lecture.duree, recherche(r.recherche.requetes, r.lecture.sources), rendreRech, { apport: r.recherche.apport, replie: true });
+    : { genre: 'source', texte: x.titre, domaine: x.domaine, etat: x.etat, pourquoi: x.pourquoi || '', montre: i < 6 };
+  etape('recherche', 'Le lieu · recherche', r.recherche.duree + r.lecture.duree, recherche(r.recherche.requetes, r.lecture.sources), rendreRech, { apport: r.recherche.apport });
   const V = r.vignettes && Array.isArray(r.vignettes.photos) && r.vignettes.photos.length ? r.vignettes : null;
   if (V) {
     // Photos du lieu (Wikimedia Commons) : les vignettes arrivent par rafales, 80 à 200 ms d'écart, chacune « en lecture » un
@@ -149,16 +154,17 @@ export function programme(r, f, hasard = Math.random, controle = null) {
   etape('constats', 'Le lieu · ce que j\'en retiens', r.constats.duree, r.constats.liste, (c, i) => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage, photo: c.photo || null, montre: vl(c, i) }), { apport: r.constats.apport });
   const P = r.personnage;
   if (P) {
-    etape('personnage', 'Le personnage · recherche', P.duree, recherche(P.requetes, P.sources), rendreRech, { apport: P.apport, replie: true });
+    etape('personnage', 'Le personnage · recherche', P.duree, recherche(P.requetes, P.sources), rendreRech, { apport: P.apport });
     const vp = vitrine(P.constats);
     etape('p-constats', 'Le personnage · ce que j\'en retiens', P.constats_duree, P.constats, (c, i) => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage, montre: vp(c, i) }), { apport: P.constats_apport });
   }
-  const X = pdl(f, P && P.reglages, r.comprendre);
+  const X = pdl(f, P && P.reglages, r.comprendre, enc);
   let cumul = 0;
-  const lignesPdl = X.lignes.map(l => { cumul += Math.ceil((l.length + 1) / 4); return { genre: 'pdl', texte: l, tok: Math.min(cumul, X.tokens) }; });
+  const lignesPdl = X.trames ? X.trames.map(tr => { cumul += tr.n + 1; return { genre: 'pdl', texte: tr.texte, trame: tr, tok: Math.min(cumul, X.tokens) }; })
+    : X.lignes.map(l => { cumul += Math.ceil((l.length + 1) / 4); return { genre: 'pdl', texte: l, tok: Math.min(cumul, X.tokens) }; });
   lignesPdl.push({ genre: 'bilan', texte: `${X.tokens} tokens · même contenu en JSON : ${X.json} · −${X.gain} %`, tok: X.tokens, json: X.json, gain: X.gain });
   const pd = r.pdl || {};
-  etape('pdl', 'Écriture en PDL', pd.duree ?? r.traduction.duree, lignesPdl, x => x, { apport: pd.apport || 'PDL, « Procedural Diaphasic Language » : la fiche et le personnage, transcrits en notation serrée.' });
+  etape('pdl', 'Écriture en PDL', pd.duree ?? r.traduction.duree, lignesPdl, x => x, { apport: pd.apport || 'PDL, « Procedural Diaphasic Language » : le langage intermédiaire des modèles. La fiche et le personnage deviennent un flux de jetons que des traducteurs temps réel convertissent pour le moteur.' });
   const lignes = controle ? (controle.lignes.length ? controle.lignes.filter(l => l.niveau !== 'info').slice(0, 3).map(l => (l.niveau === 'erreur' ? 'erreur : ' : 'à noter : ') + l.texte) : []) : [];
   etape('controle', 'Contrôle', r.controle.duree, [r.controle.texte, ...lignes, controle ? (controle.ok ? 'passage libre, rien de bloquant' : 'des erreurs : voir le constat') : 'contrôle indisponible'], x => ({ genre: 'controle', texte: x }), { apport: r.controle.apport });
   if (V) ev.push({ t, type: 'credits' });                  // le détail des crédits des photos, en fin de rejeu
@@ -172,6 +178,7 @@ export function programme(r, f, hasard = Math.random, controle = null) {
    deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
             construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
             surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard } */
+const MOTEUR = ['image', 'son', 'histoire'];
 const LARGE = '(min-width: 1000px) and (min-aspect-ratio: 5/4)';   // démo sur PC : planche de photos à côté du journal
 export function creerOuverture(deps) {
   const d = document, $ = id => d.getElementById(id);
@@ -284,7 +291,7 @@ export function creerOuverture(deps) {
     deps.appliquer(f);                                  // le moteur compile et rend derrière, pendant le rejeu
     let controle = null;
     try { controle = deps.C ? deps.C.controler(f, null, { recettes: deps.recettes }) : null; } catch (_) { controle = null; }
-    const ev = programme(r, f, deps.hasard || Math.random, controle);
+    const ev = programme(r, f, deps.hasard || Math.random, controle, deps.PDL || null);
     const blocs = {};
     // Les vignettes sont décodées tout de suite (img.decode), bien avant leur passage : rien ne se décode pendant la rafale.
     const V = r.vignettes && Array.isArray(r.vignettes.photos) ? r.vignettes : null;
@@ -315,7 +322,7 @@ export function creerOuverture(deps) {
     if (e.type === 'etape') {
       const x = li('ouv-etape en-cours' + (e.replie ? ' replie' : ''), `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">${esc(e.titre)}</span><span class="ouv-compte"></span></div>${e.apport ? `<p class="ouv-apport">${esc(e.apport)}</p>` : ''}<span class="ouv-barre" aria-hidden="true"><i></i></span><ul class="ouv-items"></ul>`);
       blocs[e.id] = { x, ul: x.querySelector('.ouv-items'), n: 0, cpt: {}, lus: 0, queue: {} };
-      if (blocs.res) reseauEtape(blocs.res, e.id);
+      if (blocs.res) reseauEtape(blocs.res, e.id, blocs);
       return;
     }
     const b = blocs[e.etape || e.id];
@@ -339,10 +346,21 @@ export function creerOuverture(deps) {
         if (!b.grille) { b.grille = d.createElement('li'); b.grille.className = 'ouv-it ouv-grille'; b.ul.insertBefore(b.grille, b.ul.firstChild); }
         const q = d.createElement('span'); q.className = 'ouv-q-puce'; q.textContent = e.texte; b.grille.appendChild(q); b.n++; return;
       }
-      if (e.genre === 'pdl') { it.innerHTML = ''; b.ul.appendChild(it); taper(it, e.texte); b.x.querySelector('.ouv-compte').textContent = e.tok + ' tokens'; b.n++; return; }
+      if (e.genre === 'pdl') {
+        b.x.querySelector('.ouv-compte').textContent = e.tok + ' tokens'; b.n++;
+        if (!e.trame) { it.innerHTML = ''; b.ul.appendChild(it); taper(it, e.texte); return; }
+        // à gauche, la trame en ligne serrée ; à droite (PC), le panneau d'aperçu où elle s'écrit jeton par jeton
+        it.classList.add('ouv-pdl-j'); b.ul.appendChild(it);
+        const ap = blocs.apercu;
+        ecrireTrame(ap ? ap.flux : it, e.trame, ap, blocs.res, ap ? it : null);
+        it.scrollIntoView({ block: 'end', behavior: 'smooth' });
+        return;
+      }
       if (e.genre === 'bilan') {
         it.innerHTML = `<span class="ouv-k">PDL</span><b>${e.tok}</b> tokens <span class="ouv-k">· JSON</span>${e.json} <span class="ouv-gain">−${e.gain} %</span><span class="ouv-jauge"><i style="transform:scaleX(${(e.tok / e.json).toFixed(3)})"></i></span>`;
-        b.ul.appendChild(it); b.x.querySelector('.ouv-compte').textContent = `${e.tok} tokens · −${e.gain} %`; it.scrollIntoView({ block: 'end', behavior: 'smooth' }); return;
+        b.ul.appendChild(it); b.x.querySelector('.ouv-compte').textContent = `${e.tok} tokens · −${e.gain} %`; it.scrollIntoView({ block: 'end', behavior: 'smooth' });
+        if (blocs.apercu) blocs.apercu.fin = true, blocs.apercu.cpt.innerHTML = `<b>${e.tok}</b> tokens PDL · JSON ${e.json} · <span class="ouv-gain">−${e.gain} %</span>`;
+        return;
       }
       if (e.genre === 'requete') it.innerHTML = `<span class="ouv-k">cherche${e.ou ? ' · ' + esc(e.ou) : ''}</span> ${esc(e.texte)}`;
       else if (e.genre === 'source') it.innerHTML = `<span class="ouv-dom">${esc(e.domaine)}</span> <span class="ouv-src">${esc(e.texte)}</span> <span class="ouv-etat ouv-${esc(e.etat)}">${esc(ETAT[e.etat] || e.etat)}${e.pourquoi ? ' · ' + esc(e.pourquoi) : ''}</span>`;
@@ -377,45 +395,157 @@ export function creerOuverture(deps) {
      « en lecture » (cadre et balayage) puis son observation, ou grisée « hors sujet ». Animations en transform et opacity. */
   function taper(el, texte) { let i = 0; const pas = () => { if (fini) return; i = Math.min(texte.length, i + 4); el.textContent = texte.slice(0, i); if (i < texte.length) timers.push(setTimeout(pas, 14)); }; pas(); }
 
-  /* Réseau d'agents (colonne de droite, PC) : une mise en scène de la répartition du travail entre modèles — Haiku cherchent,
-     Sonnet analysent, Opus écrivent le PDL. Il ne mesure rien de ce qui tourne : chaque nœud s'allume sur un événement du rejeu. */
+  /* Réseau d'agents (colonne de droite, PC) : une mise en scène de la répartition du travail entre modèles — Haiku tirent les
+     requêtes une à une, Sonnet récupèrent les sources et en tirent les constats, Opus écrivent le PDL, des traducteurs temps
+     réel (petits modèles très rapides) le convertissent pour le moteur (image, son, histoire). Il ne mesure rien de ce qui
+     tourne : une seule horloge, celle du rejeu ; chaque impulsion suit une ligne écrite à gauche (ou un jeton de PDL). */
   const NS = 'http://www.w3.org/2000/svg';
+  const motCle = t => (String(t).split(/\s+/).find(w => w.length > 3) || String(t)).slice(0, 14);
+  const trad = j => j.s + ' = ' + j.cle + ' : ' + j.val;
   function creerReseau(hote) {
-    const W = 520, H = 230, rang = (n, y, m) => Array.from({ length: n }, (_, i) => ({ x: m + (W - 2 * m) * (n > 1 ? i / (n - 1) : .5), y }));
-    const R = { h: rang(15, 34, 18), s: rang(5, 118, 70), o: rang(2, 198, 190), n: { q: 0, s: 0, t: 0 }, k: 0 };
+    const W = 520, H = 336, rang = (n, y, m) => Array.from({ length: n }, (_, i) => ({ x: m + (W - 2 * m) * (n > 1 ? i / (n - 1) : .5), y }));
+    const R = { h: rang(15, 42, 78), s: rang(5, 112, 120), o: rang(2, 180, 210), t: rang(6, 246, 120), m: rang(3, 308, 170),
+      n: { q: 0, s: 0, t: 0 }, kq: 0, ks: 0, kc: 0, kt: 0, flux: [], ar: {} };
     const el = d.createElement('div'); el.className = 'ouv-reseau';
+    const lignes = [], ligne = (a, b, cle) => { lignes.push([a, b, cle]); };
+    R.h.forEach((p, i) => ligne(p, R.s[i % 5], 'h' + i + 's' + (i % 5)));
+    R.s.forEach((p, i) => R.o.forEach((q, j) => ligne(p, q, 's' + i + 'o' + j)));
+    R.o.forEach((p, j) => R.t.forEach((q, k) => ligne(p, q, 'o' + j + 't' + k)));
+    R.t.forEach((p, k) => ligne(p, R.m[k % 3], 't' + k + 'm' + (k % 3)));
     let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><g class="ouv-ar">`;
-    R.h.forEach((p, i) => { const q = R.s[i % 5]; svg += `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>`; });
-    R.s.forEach(p => R.o.forEach(q => { svg += `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>`; }));
+    R.h.forEach(p => { svg += `<line class="web" x1="${p.x}" y1="${p.y - 8}" x2="${p.x}" y2="6"/>`; });
+    lignes.forEach(([a, b]) => { svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`; });
+    svg += '</g><g class="ouv-chaud">';
+    lignes.forEach(([a, b, k]) => { svg += `<line data-k="${k}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`; });
     svg += '</g>';
-    const noeud = (p, r, cls) => `<circle class="ouv-nd ${cls}" cx="${p.x}" cy="${p.y}" r="${r}" style="transform-origin:${p.x}px ${p.y}px"/>`;
-    R.h.forEach(p => svg += noeud(p, 6, 'h')); R.s.forEach(p => svg += noeud(p, 10, 's')); R.o.forEach(p => svg += noeud(p, 14, 'o'));
-    svg += `<text x="4" y="${34 + 22}">haiku × 15</text><text x="4" y="${118 + 26}">sonnet × 5</text><text x="4" y="${198 + 26}">opus × 2</text><g class="ouv-imp"></g></svg>`;
-    el.innerHTML = `<p class="ouv-planche-t">Réseau d'agents</p>${svg}<p class="ouv-leg"><span><i class="h"></i>recherche</span> · <span><i class="s"></i>analyse</span> · <span><i class="o"></i>écriture PDL</span><b class="ouv-rc"></b></p>`;
+    const noeud = (p, r, cls, i) => `<circle class="ouv-nd ${cls}" cx="${p.x}" cy="${p.y}" r="${r}" style="transform-origin:${p.x}px ${p.y}px"/>`;
+    const mc = (p, r, cls) => `<text class="ouv-mc ${cls}" x="${p.x}" y="${p.y + r + 11}" text-anchor="middle"></text>`;
+    R.h.forEach(p => svg += noeud(p, 6, 'h')); R.s.forEach(p => svg += noeud(p, 10, 's') + mc(p, 10, 's'));
+    R.o.forEach(p => svg += noeud(p, 14, 'o') + mc(p, 14, 'o')); R.t.forEach(p => svg += noeud(p, 7, 't') + mc(p, 7, 't'));
+    R.m.forEach((p, i) => svg += `<rect class="ouv-nd m" x="${p.x - 9}" y="${p.y - 9}" width="18" height="18" rx="2" style="transform-origin:${p.x}px ${p.y}px"/><text class="ouv-mn" x="${p.x + 15}" y="${p.y + 4}">${MOTEUR[i]}</text>`);
+    svg += `<text x="4" y="10">web</text><text x="4" y="46">haiku × 15</text><text x="4" y="116">sonnet × 5</text><text x="4" y="184">opus × 2</text>`
+      + `<text x="4" y="242" class="ouv-tr">traducteurs</text><text x="4" y="254" class="ouv-tr">temps réel × 6</text><text x="4" y="266" class="ouv-tr2">dLLM · diffusion</text>`
+      + `<text x="4" y="312">moteur</text><g class="ouv-imp"></g><g class="ouv-eti"></g></svg>`;
+    el.innerHTML = `<p class="ouv-planche-t">Réseau d'agents</p>${svg}<p class="ouv-leg"><span><i class="h"></i>recherche</span> · <span><i class="s"></i>analyse</span> · <span><i class="o"></i>écriture PDL</span> · <span><i class="t"></i>traduction → moteur</span></p><p class="ouv-etat-r"></p>`;
     hote.appendChild(el);
-    R.el = el; R.svg = el.querySelector('svg'); R.imp = el.querySelector('.ouv-imp'); R.rc = el.querySelector('.ouv-rc');
-    R.nd = { h: [...el.querySelectorAll('.ouv-nd.h')], s: [...el.querySelectorAll('.ouv-nd.s')], o: [...el.querySelectorAll('.ouv-nd.o')] };
-    R.cpt = () => { R.rc.textContent = `${R.n.q} requêtes · ${R.n.s} sources · ${R.n.t} tokens`; };
+    R.el = el; R.svg = el.querySelector('svg'); R.imp = el.querySelector('.ouv-imp'); R.eti = el.querySelector('.ouv-eti'); R.rc = el.querySelector('.ouv-etat-r');
+    R.nd = { h: [...el.querySelectorAll('.ouv-nd.h')], s: [...el.querySelectorAll('.ouv-nd.s')], o: [...el.querySelectorAll('.ouv-nd.o')], t: [...el.querySelectorAll('.ouv-nd.t')], m: [...el.querySelectorAll('.ouv-nd.m')] };
+    R.mc = { s: [...el.querySelectorAll('.ouv-mc.s')], o: [...el.querySelectorAll('.ouv-mc.o')], t: [...el.querySelectorAll('.ouv-mc.t')] };
+    R.cn = { s: [0, 0, 0, 0, 0], o: [0, 0], t: [0, 0, 0, 0, 0, 0] };
+    for (const x of el.querySelectorAll('.ouv-chaud line')) R.ar[x.dataset.k] = { el: x, n: 0 };
+    R.cpt = () => {
+      const now = performance.now(); R.flux = R.flux.filter(f => now - f[0] < 1500);
+      const debit = Math.round(R.flux.reduce((a, f) => a + f[1], 0) / 1.5), actifs = R.svg.querySelectorAll('.ouv-nd.actif').length;
+      R.rc.innerHTML = `<b>${debit}</b> tok/s · <b>${actifs}</b> agents actifs · ${R.n.q} requêtes · ${R.n.s} sources · ${R.n.t} tokens PDL`;
+    };
     R.cpt();
     return R;
   }
-  function allumer(c) { c.classList.remove('on'); requestAnimationFrame(() => c.classList.add('on')); timers.push(setTimeout(() => c.classList.remove('on'), 700)); }
-  function impulsion(R, a, b) {                             // un point qui file le long d'une arête, en transform
-    const c = d.createElementNS(NS, 'circle'); c.setAttribute('r', '2.6'); c.setAttribute('cx', a.x); c.setAttribute('cy', a.y);
-    c.style.transform = 'translate(0,0)'; R.imp.appendChild(c);
-    requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transform = `translate(${b.x - a.x}px,${b.y - a.y}px)`; c.style.opacity = '.15'; }));
-    timers.push(setTimeout(() => c.remove(), 650));
+  function etat(c, st, ms) {                                // attente (rien), actif, fait ; « actif » revient à « fait » après ms
+    if (!c) return; clearTimeout(c._t); c.classList.remove('actif', 'fait'); if (st) c.classList.add(st);
+    if (st === 'actif' && ms) { c._t = setTimeout(() => etat(c, 'fait'), ms); timers.push(c._t); }
   }
-  function reseauEtape(R, id) {
+  function allumer(c) { c.classList.remove('on'); requestAnimationFrame(() => c.classList.add('on')); timers.push(setTimeout(() => c.classList.remove('on'), 500)); }
+  function impulsion(R, a, b, ms = 550, cls = '') {          // un point qui file le long d'une arête, en transform
+    const c = d.createElementNS(NS, 'circle'); c.setAttribute('r', cls === 'g' ? '3.4' : '2.6'); c.setAttribute('cx', a.x); c.setAttribute('cy', a.y);
+    if (cls) c.setAttribute('class', cls);
+    c.style.transform = 'translate(0,0)'; c.style.transitionDuration = ms + 'ms'; R.imp.appendChild(c);
+    requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transform = `translate(${b.x - a.x}px,${b.y - a.y}px)`; c.style.opacity = '.2'; }));
+    timers.push(setTimeout(() => c.remove(), ms + 100));
+  }
+  function trafic(R, k) { const a = R.ar[k]; if (!a) return; a.n++; a.el.style.opacity = Math.min(.85, .1 + a.n * .07).toFixed(2); }
+  function etiquette(R, p, txt, dx = 9) {                   // une étiquette fugace : monte et s'efface (transform, opacity)
+    const t = d.createElementNS(NS, 'text'); t.setAttribute('x', p.x + dx); t.setAttribute('y', p.y - 9); t.textContent = txt; R.eti.appendChild(t);
+    timers.push(setTimeout(() => t.remove(), 1200));
+  }
+  function compte(R, rang, i, v) { R.cn[rang][i] += v; R.mc[rang][i].textContent = R.cn[rang][i]; }
+  function debit(R, tok) { R.flux.push([performance.now(), tok]); }
+  function reseauEtape(R, id, blocs) {
     if (id === 'photos') R.el.classList.add('bandeau');      // les photos arrivent : le réseau se réduit en bandeau au-dessus
-    R.el.classList.toggle('pdl', id === 'pdl');
+    if (id === 'pdl') {
+      R.el.classList.remove('bandeau'); R.el.classList.add('pdl');
+      // transmission groupée : tout ce que les Sonnet ont retenu part vers les Opus
+      R.s.forEach((p, i) => { R.o.forEach((q, j) => { impulsion(R, p, q, 520 + 90 * i + 60 * j, 'g'); trafic(R, 's' + i + 'o' + j); }); etat(R.nd.s[i], 'fait'); });
+      R.nd.o.forEach(c => etat(c, 'actif')); R.nd.t.forEach(c => etat(c, null));
+      etiquette(R, R.o[0], 'contexte → opus', 18);
+      if (blocs && blocs.planche) blocs.planche.classList.add('ouv-replie');   // les photos ont servi : place à l'aperçu du PDL
+      if (blocs && blocs.droite && !blocs.apercu) blocs.apercu = creerApercu(blocs.droite);
+    } else R.el.classList.remove('pdl');
+    if (id === 'controle') {
+      R.nd.o.forEach(c => etat(c, 'fait'));
+      R.t.forEach((p, k) => { impulsion(R, p, R.m[k % 3], 450 + 70 * k); trafic(R, 't' + k + 'm' + (k % 3)); etat(R.nd.t[k], 'actif', 900); });
+      R.nd.m.forEach(c => etat(c, 'actif', 1600));
+    }
+    R.cpt();
   }
   function reseauLigne(R, e) {
-    if (e.genre === 'requete') { const i = R.k++ % 15; allumer(R.nd.h[i]); impulsion(R, R.h[i], R.s[i % 5]); if (e.etape !== 'photos') R.n.q++; }
-    else if (e.genre === 'photo') { const i = R.k++ % 15; allumer(R.nd.h[i]); impulsion(R, R.h[i], R.s[i % 5]); }
-    else if (e.genre === 'source' || e.genre === 'constat') { const i = R.k++ % 5; allumer(R.nd.s[i]); impulsion(R, R.s[i], R.o[i % 2]); if (e.genre === 'source') R.n.s++; }
-    else if (e.genre === 'pdl' || e.genre === 'bilan') { const i = R.k++ % 2; allumer(R.nd.o[i]); impulsion(R, R.s[R.k % 5], R.o[i]); if (e.tok) R.n.t = e.tok; }
+    if (e.genre === 'requete' || e.genre === 'photo') {     // un Haiku tire la requête : aller vers le web, retour
+      const i = R.kq++ % 15, p = R.h[i], haut = { x: p.x, y: 6 };
+      etat(R.nd.h[i], 'actif', 1000); impulsion(R, p, haut, 360);
+      timers.push(setTimeout(() => impulsion(R, haut, p, 360), 380));
+      if (e.genre === 'requete') etiquette(R, p, motCle(e.texte));
+      if (e.genre === 'requete' && e.etape !== 'photos') R.n.q++;
+      debit(R, Math.ceil(String(e.texte || '').length / 4) + 6);
+    } else if (e.genre === 'source') {                       // le résultat converge vers un Sonnet
+      const i = R.ks++, h = i % 15, s = h % 5;
+      impulsion(R, R.h[h], R.s[s], 480); trafic(R, 'h' + h + 's' + s);
+      etat(R.nd.s[s], 'actif', 1500); compte(R, 's', s, 1); etiquette(R, R.s[s], '+1 source', 13);
+      R.n.s++; debit(R, Math.ceil(String(e.texte || '').length / 4) + 40);
+    } else if (e.genre === 'constat') {                      // un constat écrit à gauche = un Sonnet qui émet
+      const s = R.kc++ % 5, o = s % 2;
+      etat(R.nd.s[s], 'actif', 1100); allumer(R.nd.s[s]); impulsion(R, R.s[s], R.o[o], 700); trafic(R, 's' + s + 'o' + o);
+      debit(R, Math.ceil(String(e.texte || '').length / 4));
+    } else if (e.genre === 'pdl' && !e.trame) { const i = R.kt++ % 2; allumer(R.nd.o[i]); if (e.tok) R.n.t = e.tok; }
+    else if (e.genre === 'bilan') { etiquette(R, R.o[1], e.tok + ' tok', 18); R.n.t = e.tok; }
     R.cpt();
+  }
+  function reseauJeton(R, k, n) {                           // un paquet de jetons : un Opus l'écrit, un traducteur le passe au moteur
+    const o = k % 2, t = R.kt++ % 6, m = t % 3;
+    allumer(R.nd.o[o]); compte(R, 'o', o, n);
+    impulsion(R, R.o[o], R.t[t], 300); trafic(R, 'o' + o + 't' + t);
+    etat(R.nd.t[t], 'actif', 700); compte(R, 't', t, n);
+    timers.push(setTimeout(() => { impulsion(R, R.t[t], R.m[m], 300); trafic(R, 't' + t + 'm' + m); etat(R.nd.m[m], 'actif', 600); }, 300));
+    if (k % 4 === 3) etiquette(R, R.t[t], n * 4 + ' tok', 10);
+    R.n.t += n; debit(R, n * 4); R.cpt();
+  }
+
+  /* Aperçu du PDL (colonne de droite) : les trames s'écrivent jeton par jeton pendant que les Opus travaillent. */
+  function creerApercu(hote) {
+    const el = d.createElement('div'); el.className = 'ouv-apercu';
+    el.innerHTML = '<p class="ouv-planche-t">PDL · langage intermédiaire</p><div class="ouv-flux"></div><p class="ouv-pdl-leg"></p><p class="ouv-pdl-cpt"></p>';
+    hote.appendChild(el);
+    return { el, flux: el.querySelector('.ouv-flux'), leg: el.querySelector('.ouv-pdl-leg'), cpt: el.querySelector('.ouv-pdl-cpt'), n: 0 };
+  }
+  /* Une trame qui s'écrit : paquets de 1 à 3 jetons (réglés par la trame, pas de hasard), quelques jetons qui se corrigent,
+     un curseur ; la ligne de légende traduit en clair les derniers jetons. gauche : la ligne serrée du journal, s'il y en a une. */
+  function ecrireTrame(hote, tr, ap, R, gauche) {
+    const bloc = d.createElement(ap ? 'div' : 'span'); bloc.className = 'ouv-trame'; hote.appendChild(bloc);
+    const sp = (cls, t) => { const x = d.createElement('span'); x.className = cls; x.textContent = t; return x; };
+    bloc.appendChild(sp('ouv-tj ent', tr.entete));
+    const cur = sp('ouv-cur', ''); bloc.appendChild(cur);
+    let leg = ap && ap.leg, cpt = ap && ap.cpt;
+    if (!ap) { leg = sp('ouv-pdl-leg', ''); hote.appendChild(leg); }
+    if (gauche) gauche.textContent = tr.entete;
+    let i = 0, k = 0;
+    const pas = () => {
+      if (fini) return;
+      const lot = tr.jetons.slice(i, i + 1 + (tr.jetons.length + i) % 3);
+      for (const j of lot) {
+        const x = sp('ouv-tj p' + j.poids, j.s); x.title = trad(j); bloc.insertBefore(x, cur);
+        if ((i * 7 + tr.n) % 6 === 0 && j.s.length > 3) {    // le jeton « se corrige » : une valeur fausse, puis la bonne
+          x.textContent = j.s.slice(0, -2) + '▖▝'; x.classList.add('faux');
+          timers.push(setTimeout(() => { x.textContent = j.s; x.classList.remove('faux'); x.classList.add('corr'); }, 160));
+        }
+        if (gauche) gauche.textContent += ' ' + j.s;
+        i++;
+      }
+      if (leg) leg.textContent = lot.slice(-2).map(trad).join('   ');
+      if (ap && !ap.fin) { ap.n += lot.length; cpt.textContent = ap.n + ' tokens'; }
+      if (R) reseauJeton(R, k++, lot.length);
+      if (i < tr.jetons.length) timers.push(setTimeout(pas, 45));
+      else { bloc.insertBefore(sp('ouv-tj som', tr.somme), cur); cur.remove(); if (gauche) gauche.textContent += ' ' + tr.somme; if (ap) ap.flux.appendChild(sp('ouv-lien', '⇢')); }
+    };
+    pas();
   }
 
   const creditDe = p => `${p.titre} · ${p.auteur} · ${p.licence} · Wikimedia Commons · recadrée et réduite`;

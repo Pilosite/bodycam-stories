@@ -426,6 +426,6 @@
   "photos": "champcueil",
   "pdl": {
     "duree": 3.0,
-    "apport": "PDL, « Procedural Diaphasic Language » : une notation pensée pour qu'un LLM décrive un monde, un son et une histoire en très peu de tokens. Ici, la vraie fiche et les vrais réglages de Sam, transcrits."
+    "apport": "PDL, « Procedural Diaphasic Language » : un langage de jetons que les modèles se passent entre eux et passent au moteur, en très peu de tokens. Ici, la vraie fiche et les vrais réglages de Sam, transcrits ; des traducteurs temps réel le convertissent en image, son et histoire."
   }
 }
