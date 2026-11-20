@@ -21,7 +21,6 @@ const shaders = {
   VS_V3GRAINS: 'v3_grains.vert',   // moteur v3 (essai) : le semeur
   VS_V3SOL: 'v3_sol.vert',
   FS_V3GBUF: 'v3_gbuf.frag',
-  FS_V3OMBRE: 'v3_ombre.frag',
   FS_V3OMBRAGE: 'v3_ombrage.frag',
   FS_V3TAPIS: 'v3_tapis.frag',     // moteur v3 : le tapis du sol (matière cuite)
   FS_V3SONDE: 'v3_sonde.frag',     // sonde de collision (distance au décor), sans le lanceur de rayons

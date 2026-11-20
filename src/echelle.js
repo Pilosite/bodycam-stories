@@ -4,12 +4,16 @@
 //
 // Automate d'une variante complète, par signature (variante + empreinte du source) :
 //   (rien) --debut--> « en cours » --ok--> « ok » (avec la durée)
-//                                  --delai / erreur--> « echec »
-//   « en cours » trouvé au chargement de la page (plantage du navigateur, page rechargée pendant la compilation) --> « echec »
-// Une variante en échec n'est plus tentée sur cette machine : la page reste au socle, jusqu'à la remise à zéro.
+//                                  --delai--> « echec (délai) » : on reste au socle pour cette page, la compilation continue
+//                                             en fond et sert si elle finit ; au chargement suivant, la variante se retente
+//                                  --erreur--> « echec (erreur) »
+//   « en cours » trouvé au chargement de la page (plantage du navigateur ou du processus graphique) --> « echec (interrompu) »
+//   « en cours » à la fermeture normale de la page (rechargement, onglet fermé : pagehide) --> oublié (aux) : pas un plantage
+// Seuls un plantage (« interrompu ») et une erreur de compilation interdisent durablement la variante sur cette machine
+// (jusqu'à la remise à zéro). Un délai dépassé, y compris mémorisé par une ancienne version de la page, ne l'interdit pas.
 
 export const CLE_OMBRAGE = 'bodycam-ombrage';
-export const DELAI_OMBRAGE = 25000;          // ms : au-delà, la variante complète est abandonnée, on reste au socle
+export const DELAI_OMBRAGE = 40000;          // ms de compilation RÉELLE (file d'attente et écran d'ouverture exclus) : au-delà, on reste au socle
 const MAX_ENTREES = 24;
 
 // Empreinte courte d'un texte (FNV-1a 32 bits, base 36) : un shader corrigé change de signature et se retente.
@@ -35,7 +39,16 @@ export function auDemarrage(mem, now = 0) {
   return { mem: m, echecs };
 }
 
-export const peutTenter = (mem, sig) => !(mem[sig] && mem[sig].etat === 'echec');
+export const peutTenter = (mem, sig) => !(mem[sig] && mem[sig].etat === 'echec' && mem[sig].cause !== 'délai');
+
+// Fermeture normale de la page (pagehide) : une compilation encore « en cours » n'a pas planté, on l'oublie.
+export function aLaFermeture(mem) {
+  const m = { ...mem };
+  for (const [k, v] of Object.entries(m)) if (v && v.etat === 'en cours') delete m[k];
+  return m;
+}
+// Contexte WebGL perdu : ce qui compilait est noté « interrompu » tout de suite (la fermeture qui suivra ne l'effacera pas).
+export function auPlantage(mem, now = 0) { return auDemarrage(mem, now).mem; }
 
 // Un événement sur une variante : 'debut', 'ok' (ms : durée), 'delai' (ms), 'erreur'. Rend une nouvelle mémoire.
 export function noter(mem, sig, evt, { now = 0, ms } = {}) {
@@ -50,7 +63,7 @@ export function noter(mem, sig, evt, { now = 0, ms } = {}) {
   return m;
 }
 
-export const echecs = mem => Object.keys(mem).filter(k => mem[k] && mem[k].etat === 'echec');
+export const echecs = mem => Object.keys(mem).filter(k => mem[k] && mem[k].etat === 'echec' && mem[k].cause !== 'délai');   // ceux qui interdisent
 export function remettreAZero() { return {}; }
 
 /* Quel ombrage dessine cette image, et faut-il lancer la variante complète ?

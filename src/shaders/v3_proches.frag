@@ -4,6 +4,12 @@
 // l'élément, blocForme pour un bloc de grès, sdTreeA et sdTreeB pour un tronc ou une perche) : 20 pas au plus, puis la normale par quatre évaluations, dans la même
 // boucle (un seul appel déplié). Sortie au format du tampon G des grains : l'ombrage ne fait pas de différence.
 precision highp float; precision highp int; precision highp sampler2D;
+/* PF : une famille d'éléments par programme (1 formes : objets et semis ; 2 blocs de grès ; 3 troncs et perches ; 0 toutes,
+   comme avant). La page dessine chaque tranche d'emplacements avec le programme de sa famille (v3_proches.vert, même ordre) :
+   sur Direct3D, trois petits programmes se compilent bien plus vite qu'un gros. */
+#ifndef PF
+#define PF 0
+#endif
 #include "monde.glsl"
 uniform vec2 uJitPx;         // même décalage sous-pixel que l'ombrage
 flat in ivec4 vK; flat in vec2 vId; flat in vec2 vPrx; in vec3 vW;
@@ -16,8 +22,12 @@ void main(){
   vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
   int row=vK.y; ElemS e; Bloc B; float sc=1.;
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), ee=texelFetch(uShapes,ivec2(3,row),0);
+#if PF==0 || PF==1
   if(vK.x==1){ semisTete(vK.z,float(vK.w),e); if(!semisElem(vK.z,vId,e)) discard; sc=.85*e.s*min(1.,e.sy)*e.sh; }
-  else if(vK.x==2){ if(!blocGres(vId,B)) discard; }
+#endif
+#if PF==0 || PF==2
+  if(vK.x==2){ if(!blocGres(vId,B)) discard; }
+#endif
   float t0=length(vW-uCamPos), t=vPrx.x>.5?.02:max(.02,t0-.05), tmax=t0+vPrx.y, d=1.;
   bool touche=false; vec4 gv=vec4(0.); const vec2 k=vec2(1.,-1.);
   int nn=0;
@@ -25,11 +35,16 @@ void main(){
     if(nn>=4) break;
     vec3 o=touche?(nn==0?k.xyy:nn==1?k.yyx:nn==2?k.yxy:k.xxx)*(.0005*t+.0005):vec3(0.);
     vec3 p=uCamPos+rd*t+o;
-    float dd;
-    if(vK.x==0) dd=(sdPrim(primLocal(p,row),a.w,b.xyz)-ee.y)*.8;
-    else if(vK.x==1) dd=(sdPrim(primLocal(semisLocal(p,e),row),a.w,b.xyz)-ee.y)*sc;
-    else if(vK.x==2) dd=blocForme(blocLocal(p,terrainH(p.xz),vId,B),B)*.72;
-    else { vec4 inf; dd=vK.x==3?sdTreeA(p,terrainH(p.xz),inf):sdTreeB(p,terrainH(p.xz),inf); }
+    float dd=1.;
+#if PF==0 || PF==1
+    if(vK.x<=1) dd=(sdPrim(primLocal(vK.x==0?p:semisLocal(p,e),row),a.w,b.xyz)-ee.y)*(vK.x==0?.8:sc);   // un seul appel de sdPrim
+#endif
+#if PF==0 || PF==2
+    if(vK.x==2) dd=blocForme(blocLocal(p,terrainH(p.xz),vId,B),B)*.72;
+#endif
+#if PF==0 || PF==3
+    if(vK.x>=3){ vec4 inf; dd=vK.x==3?sdTreeA(p,terrainH(p.xz),inf):sdTreeB(p,terrainH(p.xz),inf); }
+#endif
     if(touche){ gv[nn]=dd; nn++; }
     else if(dd<.0006*t+.0004 || (i>=19 && dd<.01*t+.004)) touche=true;   // au dernier pas, tout près de la surface (rayon rasant) : touché, pas de trou
     else { t+=dd; if(t>tmax || i>=19) break; }
@@ -37,12 +52,18 @@ void main(){
   if(!touche || nn<4) discard;
   vec3 p=uCamPos+rd*t;
   vec3 n=normalize(k.xyy*gv.x+k.yyx*gv.y+k.yxy*gv.z+k.xxx*gv.w);
-  vec3 q=p; float code;
+  vec3 q=p; float code=0.;
+#if PF==0 || PF==1
   if(vK.x==0) code=4.+.5*(float(row)/128.);
   else if(vK.x==1){ q=semisLocal(p,e); code=6.+(float(vK.z*6+row-SEM0-vK.z*SEML-4)+.5)/48.; }   // comme semeS : repère de l'élément, couche et forme
-  else if(vK.x==2){ q=blocLocal(p,terrainH(p.xz),vId,B); code=3.; }
-  else { vec4 inf; if(vK.x==3){ sdTreeA(p,terrainH(p.xz),inf); code=1.+.5*(fract(inf.w)*.999+(inf.w>1.5?1.:0.)); }   // mêmes codes que les grains (v3_grains.vert)
+#endif
+#if PF==0 || PF==2
+  if(vK.x==2){ q=blocLocal(p,terrainH(p.xz),vId,B); code=3.; }
+#endif
+#if PF==0 || PF==3
+  if(vK.x>=3){ vec4 inf; if(vK.x==3){ sdTreeA(p,terrainH(p.xz),inf); code=1.+.5*(fract(inf.w)*.999+(inf.w>1.5?1.:0.)); }   // mêmes codes que les grains (v3_grains.vert)
     else { sdTreeB(p,terrainH(p.xz),inf); code=2.+.5*inf.w; } q=inf.xyz; }
+#endif
   gl_FragDepth=clamp(t/400.,0.,1.);
   g0=vec4(q,code); g1=vec4(n,t);
 }

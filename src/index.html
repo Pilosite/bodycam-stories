@@ -66,6 +66,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #mesure{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
   padding:calc(24px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:rgba(12,15,11,.86)}
 #mesure{z-index:30}
+#mesure.banc pre{font-size:clamp(11px,1.6vw,17px);line-height:1.45;max-height:82%;white-space:pre;overflow:auto}
 #mesure pre{margin:0;max-width:100%;max-height:72%;overflow:auto;font:400 12.5px/1.6 var(--f-mono);white-space:pre-wrap;-webkit-user-select:text;user-select:text;font-variant-numeric:tabular-nums}
 #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:left;
   background:var(--bg);font-family:var(--f-mono);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow:auto}
@@ -81,6 +82,7 @@ button.pulse{animation:pulse 1.4s ease-in-out infinite;border-color:var(--ink)}
 #fin p#fin-texte{margin:0 0 10px;max-width:26em;font-size:15px;line-height:1.4;font-style:italic;color:var(--ink-dim);text-wrap:balance}
 #debug-meneur{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));top:calc(84px + env(safe-area-inset-top,0px));
   font:400 10.5px/1.4 var(--f-mono);color:var(--ink-dim);text-shadow:0 1px 2px rgba(0,0,0,.9);pointer-events:none;z-index:3}
+#debug-meneur.sur-ouv{z-index:25;color:var(--ink);background:rgba(7,9,6,.72);padding:8px 10px;border-radius:10px;white-space:pre-wrap;max-height:70vh;overflow:hidden}
 /* constructeur de monde : banque de scènes, en tiroir sur téléphone (bas de l'écran), en panneau à droite sur ordinateur */
 .banque[hidden],.chantier[hidden],.chantier-puce[hidden],.banque-alerte[hidden]{display:none}
 .banque{position:fixed;left:0;right:0;bottom:0;z-index:8;max-height:min(84vh,84dvh);overflow:auto;overscroll-behavior:contain;
@@ -215,6 +217,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   <div id="outils" class="outils" role="group" aria-label="Autres commandes" hidden>
     <button id="monde" type="button" class="ghost">Décrire un monde</button>
     <button id="mesurer" type="button" class="ghost">Mesurer</button>
+    <button id="banc" type="button" class="ghost" title="Environ 15 s, caméra figée : ce que coûte chaque partie de l'image sur cet appareil">Banc d'essai</button>
     <button id="voix-inter" type="button" class="ghost" aria-pressed="false" title="Ses pensées lues à voix haute">Voix : non</button>
     <button id="suivi" type="button" class="ghost" aria-pressed="true" hidden>Suivi du téléphone : oui</button>
     <button id="qualite" type="button" class="ghost" aria-pressed="false" title="Mobile : téléphone moyen. Complète : ordinateur, pleine résolution.">Qualité : mobile</button>

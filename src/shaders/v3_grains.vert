@@ -41,6 +41,8 @@ uniform mat3  uSoleilM;
 uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
 uniform vec3  uSd;           // direction du soleil de cette image
 uniform int   uTrait;        // vue du soleil : 1 = les perches sont semées en traits (deux sommets par grain, gl.LINES)
+uniform ivec2 uBanc;         // banc d'essai (src/main.js, banc) : x 1 = grains d'un pixel (le coût des sommets seuls) ; y : 1 sans les
+                             // feuilles, 2 les feuilles seules, 3 sans troncs ni branches (grains calculés, puis rejetés : sans fragments)
 uniform sampler2D uSemis;    // objets de la fiche : lignes 0-7 (poids cumulé, grains), lignes 8+ (aire cumulée dans l'objet, aire) ;
                              // couches de semis : ligne de tête (aire de l'élément), lignes des formes (aire cumulée dans l'élément, aire)
 
@@ -75,6 +77,9 @@ float parM2R(vec2 c, float N, float R){
 }
 vec3 versVue(vec3 P){ return uVue==0?uCamPos-P:uSd; }       // direction du spectateur (caméra ou soleil)
 
+#ifndef FAM
+#define FAM 0
+#endif
 #if !FORMES && HOUPPIER
 /* ---- houppiers (monde.glsl : charpente, rameau, masse) : bois des charpentières et des rameaux, masses de feuillage.
    Une masse est semée sur deux coques (extérieure, et intérieure plus sombre), sur la face vue. La feuille est fixée au monde :
@@ -489,7 +494,7 @@ void main(){
   gl_Position=vec4(0.,0.,2.,1.); gl_PointSize=1.;
   sansGrain();
   int i=gl_VertexID;
-#if !FORMES
+#if !FORMES && (FAM==0 || FAM==2)
   if(uTrait==1){                                             // perches vues du soleil, en traits
     rs=hu(uint(i>>1)^hu(uFrame)); rnd();
     vec3 P; if(!semeBTrait(i&1,P)) return;
@@ -504,24 +509,42 @@ void main(){
   if(i<uPartO) ok=semeP(g);
   else ok=semeS(i<uPartS.x?0:i<uPartS.y?1:i<uPartS.z?2:3,g);
 #else
+  /* FAM : une famille par programme (1 arbres, 2 perches, 3 blocs, 4 feuilles ; 0 toutes, comme avant). Sur Direct3D, un
+     programme deux fois plus gros se compile bien plus de deux fois plus lentement : quatre petits valent mieux qu'un gros.
+     La page dessine chaque tranche de grains avec le programme de sa famille ; gl_VertexID (first compris) et donc le
+     tirage sont les mêmes. */
+#if FAM==0 || FAM==4
   if(i>=uPart.z && i<uPart.w){
     vec4 pos; float t;
     if(uVue!=0) return;
     if(uAncre.z>.5){ rs=hu(uint(gl_VertexID)*2654435761u+97u); rnd(); }   // graine fixe : le tirage ne dépend plus de l'image
     if(!semeF(pos,t)) return;
     if(t<1.){ if(rnd()>t*t) return; t=1.; }
-    gl_Position=pos; gl_PointSize=min(t,uMaxPt); vSz=gl_PointSize;
+    if(uBanc.y==1) return;
+    gl_Position=pos; gl_PointSize=uBanc.x==1?1.:min(t,uMaxPt); vSz=gl_PointSize;
     return;
   }
+#endif
+#if FAM==0
   if(i<uPart.x) ok=semeA(g);
   else if(i<uPart.y) ok=semeB(g);
   else ok=semeR(g);
-#if HOUPPIER
+#elif FAM==1
+  ok=semeA(g);
+#elif FAM==2
+  ok=semeB(g);
+#elif FAM==3
+  ok=semeR(g);
+#else
+  ok=false; return;
+#endif
+#if HOUPPIER && FAM<3
   if(ok && hpDemande){ ok=semeHoup(hpT,hpU,hpAH,hpS,g); g.code=hpCode; g.rot=hpRot; }
 #endif
 #endif
   float s=g.s;
   bool forme=FORMES==1;
+  if(uBanc.y!=0 && (uBanc.y==1?g.feuille:uBanc.y==2?!g.feuille:(!g.feuille && g.code<3.))) return;
   vec3 dv, ex, ey; float t, m, dist=0.;
   if(uVue==1){                                               // carte d'ombres : projection orthographique
     vec3 l=(g.P-uSoleilC)*uSoleilM;
@@ -548,6 +571,7 @@ void main(){
   // Sur une forme, le plan tangent est exact jusqu'au bord (où le fragment est découpé) : on le suit même en incidence rasante.
   float den=dot(dv,g.N); den=sign(den)*max(abs(den),forme?.02:.25); if(den==0.) den=-.25;
   ex-=dv*dot(ex,g.N)/den; ey-=dv*dot(ey,g.N)/den;
+  if(uBanc.x==1) gl_PointSize=1.;
   vSz=gl_PointSize;
 #if FORMES
   {

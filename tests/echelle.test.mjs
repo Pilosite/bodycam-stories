@@ -1,7 +1,7 @@
 // Échelle de l'ombrage v3 (src/echelle.js) : choix du programme et mémoire des échecs de compilation.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { choisir, noter, auDemarrage, lireMemoire, peutTenter, echecs, signature, empreinte, resumer } from '../src/echelle.js';
+import { choisir, noter, auDemarrage, aLaFermeture, auPlantage, lireMemoire, peutTenter, echecs, signature, empreinte, resumer, DELAI_OMBRAGE } from '../src/echelle.js';
 
 const SIG = signature({ tapis: false, semis: true, atmo: true, rais: 10 }, empreinte('void main(){}'));
 
@@ -56,4 +56,25 @@ test('mémoire : délai dépassé et erreur sont des échecs ; mémoire illisibl
   assert.equal(Object.keys(m).length, 24);
   assert.ok(m.v39 && !m.v0);
   assert.match(resumer(noter({}, SIG, 'delai', { ms: 25000 }))[0], /échec \(délai, 25 s\)/);
+});
+
+test('délai : n’interdit pas un nouvel essai (anciennes versions comprises) ; seuls plantage et erreur interdisent', () => {
+  assert.ok(DELAI_OMBRAGE >= 40000);
+  const d = noter({}, SIG, 'delai', { ms: 25000 });
+  assert.equal(peutTenter(d, SIG), true);
+  assert.deepEqual(echecs(d), []);
+  assert.equal(choisir({ soclePret: true, imageFaite: true, mem: d, sig: SIG }).tenter, true);
+  const vieux = lireMemoire(JSON.stringify({ [SIG]: { etat: 'echec', cause: 'délai', ms: 45000, t: 1 } }));   // mémoire d’une ancienne page
+  assert.equal(peutTenter(vieux, SIG), true);
+  assert.equal(peutTenter(noter({}, SIG, 'erreur'), SIG), false);
+});
+
+test('fermeture normale : « en cours » oublié ; contexte perdu : « interrompu » tout de suite', () => {
+  const m = noter({}, SIG, 'debut', { now: 1 });
+  assert.deepEqual(aLaFermeture(m), {});
+  assert.deepEqual(auDemarrage(aLaFermeture(m)).echecs, []);
+  const p = auPlantage(m, 3);
+  assert.equal(p[SIG].cause, 'interrompu');
+  assert.equal(aLaFermeture(p)[SIG].cause, 'interrompu');
+  assert.equal(peutTenter(p, SIG), false);
 });
