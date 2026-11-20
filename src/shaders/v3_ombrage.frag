@@ -108,7 +108,7 @@ float ombreSoleil(vec3 p, vec3 gn){                          // 1 = éclairé ; 
   if(bord>=1.) return stat;
   float z=(clamp(-l.z/uSoleilE.z,-1.,1.))*.5+.5-.075/uSoleilE.z;  // marge de 15 cm vers le soleil (un grain est plat)
   float v=0.; vec2 tx=uSoleilE.w/(2.*uSoleilE.xy);
-  for(int k=0;k<4;k++){
+  for(int k=0;k<4+uZ;k++){
     vec2 o=(vec2(rnd(),rnd())-.5)*tx*uPcf;
     v+=z<=textureLod(uOmbre,uv+o,0.).r?1.:0.;
   }
@@ -139,8 +139,10 @@ float raisVis(vec3 rd, float t){
 #if RAIS==0
   return st;
 #else
-  float tm=min(t,60.), ds=tm/float(RAIS), j=rnd(), S=0., W=0.;
-  for(int i=0;i<RAIS;i++){
+  int nr=min(RAIS,int(uAtmo2.z+.5));                         // pas voulus par la page (le régulateur du budget peut en ôter)
+  if(nr<1) return st;
+  float tm=min(t,60.), ds=tm/float(nr), j=rnd(), S=0., W=0.;
+  for(int i=0;i<nr;i++){
     float s=(float(i)+j)*ds; vec3 p=uCamPos+rd*s;
     float w=brumeDens(p)*exp(-brumeTau(uCamPos,rd,s));
     S+=w*ombreBrume(p); W+=w;
@@ -169,12 +171,11 @@ float pres(vec3 p){
    Un échantillon cosinus par pixel et par image : vers le haut, le ciel atténué par la canopée (canopyT, statistique)
    et par la futaie (troncs, statistique) ; vers le bas, le sol éclairé ; près du pied des objets, moins de ciel.
    C'est ici que se branchera la lumière d'ambiance rangée dans le monde (grille le long du trajet, calculée en fond). */
-vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts){
-  vec3 wi=cosDir(n); if(dot(wi,gn)<0.) wi=reflect(wi,gn);
+vec3 ambiance(vec3 po, vec3 gn, vec3 n, float Ts, vec3 wi, float Tw){   // wi : direction tirée (cosDir) ; Tw : canopée dans cette direction
   vec3 L;
   vec3 solE=vec3(.24,.15,.07)*(vec3(.20,.21,.20)*uSky+SUN*max(uSunDir.y,0.)*Ts*.8);   // sol éclairé, vu d'en haut
   if(wi.y>.02){
-    float T=canopyT(po,wi);
+    float T=Tw;
     vec3 ciel=min(skyBase(wi),vec3(6.))*T+CANOPY_GLOW*(1.-T);
     float trajet=max(YC0-po.y,0.)/wi.y*length(wi.xz);       // distance horizontale parcourue sous la canopée
     float Tt=exp(-uOccT*trajet);
@@ -200,7 +201,7 @@ float lampeOmbre(vec3 p, vec3 Lp){
 #endif
   vec3 L=Lp-p; float dl=length(L); L/=dl;
   float v=1.;
-  for(int i=0;i<6;i++){
+  for(int i=0;i<6+uZ;i++){
     float s=min(.03*pow(2.2,float(i))*(.8+.4*rnd()),dl*.85);
     vec3 P=p+L*s, d=P-uCamPos; float dist=length(d);
     vec3 dlc=(d/dist)*uCam;
@@ -221,10 +222,9 @@ vec3 lampe(vec3 p, vec3 gn, vec3 n, vec3 alb){             // même cône et mê
   return alb*vec3(1.,.97,.90)*uTorch*cone*nl*lampeOmbre(p+gn*(.004+.0015*dl),Lp)/(d2+.3);
 }
 float gTs=1.;                                                // transmittance de la canopée vers le soleil au dernier point ombré (reprise par la brume)
-vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float TsCuit){   // TsCuit < 0 : à calculer
+vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float Ts, vec3 wi, float Tw){   // Ts, Tw : canopée vers le soleil et vers wi (main)
   vec3 sd=uSd;
   vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
-  float Ts=(uProf&4)!=0?1.:TsCuit>=0.?TsCuit:canopyT(po,uSunDir);                              // transmittance de la canopée vers le soleil (statistique)
   gTs=Ts;
   vec3 col=vec3(0.);
   float ndl=max(dot(n,sd),0.);
@@ -239,7 +239,7 @@ vec3 lumiere(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd, float TsCui
       col+=SUN*vis*uAtmo2.y*fr*smoothstep(-.1,.7,dot(rd,sd))*smoothstep(-.35,.25,dot(n,sd))*(alb*1.6+.025); }
 #endif
   }
-  col+=(uProf&2)!=0?alb*.3:alb*ambiance(po,gn,n,Ts);
+  col+=(uProf&2)!=0?alb*.3:alb*ambiance(po,gn,n,Ts,wi,Tw);
   if(uTorch>0.) col+=lampe(p,gn,n,alb);
   return col;
 }
@@ -276,15 +276,19 @@ void main(){
     vec3 p=uCamPos+rd*t;
     vec3 gn=normalize(g1.xyz);
     int id=int(floor(g0.w)); float par=(g0.w-float(id))*2.;
+    // Canopée (canopyT, lourd) : un seul appel, dans une boucle, pour la feuille (vers le soleil tiré) comme pour une surface
+    // (vers le soleil, et vers la direction tirée de l'ambiance) : FXC recopiait les trois appels.
+    vec3 sdL=vec3(0.,1.,0.), wi=vec3(0.,1.,0.), cn=gn; float Tc[2]; Tc[0]=1.; Tc[1]=1.;
+    vec3 alb=vec3(.3), n=gn; float spec=.05, emis=0., TsC=-1.;
     if(id==5){
-      col=shadeLeaf(p,gn,g0.xyz,rd);                         // feuille : couleur portée par le grain
+      sdL=sunSample();
     } else {
       // (le cœur de feuillage d'un conifère, id 1 et paramètre ≥ 1, et les éléments de semis, id 6, suivent render())
       if(dot(gn,rd)>0.) gn=-gn;
       // Quelle recette pour cette surface ? Même choix que render() dans pathtrace.frag ; un seul appel à recette().
-      vec3 alb=vec3(.3); vec3 n=gn; float spec=.05; float emis=0.;
+      n=gn;
       int r0=-1, r1=-1, nr=1; float w=0.; vec3 q=g0.xyz; float hs=p.y-terrainH(p.xz); mat2 rot=mat2(1.); vec3 nr0=gn;
-      vec4 ta, tb; float TsC=-1.; gTon=vec3(1.);
+      vec4 ta, tb; gTon=vec3(1.);
 #if TAPIS
       if(id==0 && uTapL>0 && (uProf&1)==0 && tapis(q.xz,log2(t*uFish/uRes.y/sqrt(max(abs(dot(rd,gn)),.05))/uTapS0)+uTapBias,ta,tb)){
         alb=ta.rgb*ta.rgb; spec=ta.w; emis=tb.z;             // sol cuit : deux lectures (quatre au fondu) au lieu de recette()
@@ -315,15 +319,26 @@ void main(){
       else { r0=id==1?(fract(par*3.7)<uSurfP.x?uSurfT.x:uSurfT.y):(fract(par*9.1)<uSurfP.y?uSurfT.z:uSurfT.w); hs=q.y; q+=troncVar(par); rot=id==1?RA:RB; }
       if(r0>=0 && (uProf&1)==0 && !((uProf&64)!=0 && id==0) && !((uProf&128)!=0 && id!=0)){
         vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
-        for(int k=0;k<2;k++){
-          if(k>=nr) break;
+        for(int k=0;k<nr;k++){                               // borne inconnue du compilateur : un seul appel de recette() déplié
           vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,nr0,hs,rot,a,tt,sp,em);
           float wk=nr==1?1.:(k==0?1.-w:w);
           A+=a*wk; T+=tt*wk; SP+=sp*wk; EM+=em*wk;
         }
         alb=A*gTon; n=normalize(gn+T); spec=SP; emis=max(emis,EM);
       }
-      col=lumiere(p,gn,n,alb,spec,rd,TsC)+alb*emis*8.;
+      cn=n;
+    }
+    vec3 po=p+gn*(.004+.0015*length(p-uCamPos));
+    if(id!=5){ wi=cosDir(cn); if(dot(wi,gn)<0.) wi=reflect(wi,gn); }
+    for(int k=0;k<2+uZ;k++){
+      bool on=id==5?k==0:(k==0?(uProf&4)==0 && TsC<0.:(uProf&2)==0 && wi.y>.02);
+      vec3 o=id==5?p+sdL*.3:po, d=id==5?sdL:k==0?uSunDir:wi;
+      if(on) Tc[k]=canopyT(o,d);
+    }
+    if(id!=5 && TsC>=0. && (uProf&4)==0) Tc[0]=TsC;          // sol cuit (tapis) : sa transmittance
+    if(id==5) col=shadeLeafT(p,gn,g0.xyz,rd,sdL,Tc[0]);       // feuille : couleur portée par le grain
+    else {
+      col=lumiere(p,gn,cn,alb,spec,rd,Tc[0],wi,Tc[1])+alb*emis*8.;
       if(uVoir==1) col=vec3(ombreSoleil(p,gn));
       else if(uVoir==7) col=vec3(gTs);                        // transmittance de la canopée vers le soleil
       else if(uVoir==2) col=alb*3.;

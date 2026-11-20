@@ -41,6 +41,10 @@ const float SIG=0.16;               // extinction de la canopée
 const float LEAFP=0.62;
 #define SUN uSun
 
+/* uZ : uniforme jamais écrite par la page, donc 0 (règle de WebGL), mais inconnue du compilateur. Une boucle « i<N+uZ » ne
+   peut pas être déroulée : FXC (Direct3D) recopie sinon son corps N fois, avec chaque fonction appelée dedans (docs/moteur-v3.md,
+   « Lancement sans gel »). Même calcul, même image ; à mettre sur les boucles dont le corps appelle du lourd. */
+uniform int uZ;
 /* ---- aléa */
 uint rs;
 float rnd(){ rs=rs*747796405u+2891336453u; uint w=((rs>>((rs>>28u)+4u))^rs)*277803737u; w=(w>>22u)^w; return float(w>>8u)*(1.0/16777216.0); }
@@ -56,10 +60,14 @@ float vnoise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
 float vnoise3(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
              mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
-float fbm3(vec3 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+/* bruit2, bruit3 : n octaves ; n = 1 rend exactement vnoise, vnoise3 ; n = 5 (4 en volume) exactement fbm, fbm3. La borne n
+   est connue à l'exécution seulement : un appel = une copie du bruit, quel que soit le nombre d'octaves. */
+float bruit2(vec2 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise(p); p=p*2.03+vec2(17.3,9.1); a*=.5; } return s; }
+float bruit3(vec3 p, int n){ float a=n>1?.5:1.,s=0.; for(int i=0;i<n;i++){ s+=a*vnoise3(p); p=p*2.03+vec3(17.3,9.1,5.7); a*=.5; } return s; }
+float fbm(vec2 p){ return bruit2(p,5+uZ); }
+float fbm3(vec3 p){ return bruit3(p,4+uZ); }
 vec3 voro(vec2 x){ vec2 n=floor(x),f=fract(x); float d1=8.,d2=8.,hid=0.;
-  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
+  for(int j=-1;j<=1+uZ;j++) for(int i=-1;i<=1+uZ;i++){ vec2 g=vec2(float(i),float(j)); vec2 o=h22(n+g); vec2 r=g+o-f; float d=dot(r,r);
     if(d<d1){ d2=d1; d1=d; hid=h21(n+g+.5); } else if(d<d2){ d2=d; } }
   return vec3(sqrt(d1),hid,sqrt(d2)-sqrt(d1)); }
 
@@ -85,10 +93,11 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
-  vec2 q=p*uRelB.y;
-  float b=(bruitR(q)-.5)*1.4+(bruitR(vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.))-.5)*.6;
-  vec2 r=p*uRelB.w;
-  float t=smoothstep(uRelC.x,uRelC.y,bruitR(vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.)));
+  vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
+  for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
+    v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));
+  float b=(v[0]-.5)*1.4+(v[1]-.5)*.6;
+  float t=smoothstep(uRelC.x,uRelC.y,v[2]);
   return uRelB.x*b*mix(uRelC.z,1.,smoothstep(uTraj.y,uTraj.y+2.5,ax))+uRelB.z*t*mix(uRelC.w,1.,smoothstep(uTraj.y+1.,uTraj.y+14.,ax));
 }
 #endif
@@ -118,7 +127,7 @@ const mat2 RB=mat2(.6216,-.7833,.7833,.6216);
 uniform sampler2D uShapes;
 uniform int uObjN;
 bool cleared(vec2 w){                                        // ni arbre ni rocher à l'emplacement d'un objet qui le demande
-  for(int i=0;i<8;i++){ if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.z>0. && o1.w>.5 && distance(w,texelFetch(uShapes,ivec2(0,i),0).xz)<o1.z) return true; }
   return false;
@@ -231,7 +240,7 @@ float sdTreeA(vec3 p, float th, out vec4 info){
   float d=(dv>0.)?length(vec2(max(dh,0.),dv)):dh;
   if(y>.38*H-1.5 && dh<3.4){
     vec3 lp=vec3(f.x,y,f.y);
-    for(int k=0;k<3;k++){
+    for(int k=0;k<3+uZ;k++){
       vec3 a0, a1; float rb; brancheA(A,k,a0,a1,rb);
       d=min(d,sdCapT(lp,a0,a1,rb,rb*.35));
     }
@@ -362,16 +371,14 @@ vec3 primMonde(vec3 q, int row, bool dir){                    // inverse de prim
 }
 float sdProps(vec3 p, out vec4 info){
   float d=1e5; info=vec4(0.);
-  for(int i=0;i<8;i++){
-    if(i>=uObjN) break;
+  for(int i=0;i<min(uObjN,8);i++){
     vec4 o0=texelFetch(uShapes,ivec2(0,i),0), o1=texelFetch(uShapes,ivec2(1,i),0);
     if(o1.w<.5) continue;
     float bound=length(p-o0.xyz)-o0.w;
     if(bound>.8){ d=min(d,bound); continue; }
     float od=1e5; float best=1e5; float brow=0.;
     int st=int(o1.x), cn=int(o1.y);
-    for(int j=0;j<24;j++){
-      if(j>=cn) break;
+    for(int j=0;j<min(cn,24);j++){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
@@ -452,7 +459,7 @@ bool semisElem(int k, vec2 id, inout ElemS e){
   }
   e.yaw=yaw+(e.h2.w-.5)*e.D.y;
   vec3 th=vec3(0.);
-  for(int i=0;i<3;i++){                                      // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
+  for(int i=0;i<3+uZ;i++){                                   // sol sous l'élément ; s'il suit la pente, deux points de plus (un seul terrainH déplié)
     th[i]=terrainH(i==0?w:semMonde(e.gc+(i==1?vec2(1.,0.):vec2(0.,1.)),e.side,e.T.x,e.A,e.rg));
     if(e.E.w<.5) break;
   }
@@ -576,7 +583,7 @@ float canopyT(vec3 ro, vec3 rd){
   if(t1<=t0) return 1.;
   t1=min(t1,t0+60.);
   float ds=(t1-t0)/6.; float od=0.; float j=rnd();
-  for(int i=0;i<6;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
+  for(int i=0;i<6+uZ;i++) od+=canopyDens(ro+rd*(t0+(float(i)+j)*ds));
   return exp(-od*ds*SIG);
 }
 vec3 leafCol(vec3 c, float h){
@@ -631,7 +638,7 @@ uniform vec3 uLoinCol;       // roche
 uniform vec3 uLoinBas;       // contreforts
 float loinCrete(float az, float k){                         // profil des crêtes autour de l'horizon, sans couture
   vec2 c=vec2(cos(az),sin(az))*uLoin.y; float s=0., a=.55, f=1.;
-  for(int i=0;i<5;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
+  for(int i=0;i<5+uZ;i++){ float n=vnoise(c*f+uSeed.xy*3.+k*17.+float(i)*5.3); s+=a*(i<1?n:1.-abs(2.*n-1.)); a*=.42; f*=2.; }
   return s;
 }
 vec3 lointain(vec3 rd, vec3 c){
@@ -639,7 +646,7 @@ vec3 lointain(vec3 rd, vec3 c){
   if(el>uLoin.x*1.25) return c;
   vec3 air=skyBase(normalize(vec3(rd.x,.02,rd.z)));
   float sa=atan(uSunDir.x,uSunDir.z);
-  for(int k=0;k<2;k++){
+  for(int k=0;k<2+uZ;k++){
     float fk=float(k), H=uLoin.x*(k==0?1.:.34);
     float cr=H*(.42+1.15*loinCrete(az,fk));
     float d=(loinCrete(az+.03,fk)-loinCrete(az-.03,fk))*14.;                       // pente de la crête : versant au soleil ou à l'ombre
@@ -695,10 +702,13 @@ vec3 cosDir(vec3 n){ float a=6.2832*rnd(), u=rnd()*2.-1.; float s=sqrt(max(1.-u*
 
 #define CANOPY_GLOW (vec3(.50,.36,.12)*(dot(uSun,vec3(.06))+.2*uSky.g))
 
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T);
 vec3 shadeLeaf(vec3 p, vec3 n, vec3 alb, vec3 rd){
-  if(dot(n,rd)>0.) n=-n;
   vec3 sd=sunSample();
-  float T=canopyT(p+sd*.3,sd);
+  return shadeLeafT(p,n,alb,rd,sd,canopyT(p+sd*.3,sd));
+}
+vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : direction tirée vers le soleil ; T : canopée vers lui (v3_ombrage.frag les calcule à part)
+  if(dot(n,rd)>0.) n=-n;
   float ndl=dot(n,sd);
   vec3 col=SUN*T*(ndl>0.?alb*ndl:alb*vec3(1.25,1.15,.6)*(-ndl)*.55);
   vec3 h=normalize(sd-rd);

@@ -1,6 +1,6 @@
 # Ouverture de démo
 
-Pour présenter le concept sans attendre cinq minutes de génération : la page s'ouvre sur « Quel monde veux-tu filmer ? ». Une demande qui correspond à une préparation enregistrée est **rejouée en accéléré** (15 à 25 s) pendant que le moteur compile et rend le lieu derrière ; on fond ensuite sur le monde. Une autre demande part dans la vraie chaîne du constructeur (`atelier.js`), en temps réel.
+Pour présenter le concept sans attendre cinq minutes de génération : la page s'ouvre sur « Quel monde veux-tu filmer ? ». Une demande qui correspond à une préparation enregistrée est **rejouée en accéléré** (15 à 25 s) pendant que le moteur compile le lieu derrière, un programme à la fois, sans rien rendre ; on fond ensuite sur le monde. Une autre demande part dans la vraie chaîne du constructeur (`atelier.js`), en temps réel.
 
 ## Ce qui est rejoué, et ce qui ne l'est pas
 
@@ -8,7 +8,8 @@ Pour présenter le concept sans attendre cinq minutes de génération : la page 
 - Sources : titre et domaine seulement. Aucun texte recopié, aucune image importée (règle 4).
 - La traduction en vocabulaire et le contrôle sont **calculés dans la page** sur la fiche embarquée (`traduction()` de `src/ouverture.js`, `controler()` du constructeur) : les valeurs affichées sont celles qui sont rendues.
 - Seules les durées sont raccourcies. Elles sont un peu irrégulières (±40 % autour des durées du journal), les lignes arrivent au fil de l'eau, sans barre de progression.
-- Le fondu attend une vraie image du moteur (`attendreImage`) : si le GPU est lent, la ligne « Le monde se construit » reste le temps qu'il faut.
+- Dès l'ouverture, la fiche de la suggestion est appliquée en coulisse et tout ce que demande la première image se compile pendant la question et le rejeu, un programme à la fois (capteur et halo, semeur, socle de l'ombrage, formes, puis la variante complète : `prechauffer` et la file `COMP` de `src/main.js`, `docs/moteur-v3.md`, « Lancement sans gel »). Le moteur ne rend rien derrière l'ouverture : le rejeu ne saccade pas.
+- À la fin du rejeu, le moteur se réveille ; le fondu part dès la première image (`pretOuverture`). L'attente est bornée à 5 s (`CFG.ouvAttente`) : au-delà, on fond sur ce qui est prêt. Pendant l'attente, la ligne « Le monde se construit » affiche l'étape en cours (compilation de tel programme, première image). `balade.ouvertureMesure()` rend l'attente mesurée.
 
 ## Réglages
 

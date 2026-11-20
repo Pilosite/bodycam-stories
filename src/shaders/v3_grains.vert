@@ -35,6 +35,7 @@ uniform float uK;            // recouvrement visé (côté du grain = uK × l'é
 uniform float uMaxPt;
 uniform vec4  uAncre;        // feuilles en marche : ancre du tirage dans le monde (x, z), 1 = actif, cap du secteur
 uniform vec2  uFeuil;        // feuilles : profondeur de tranche au plus, pixels de l'écran
+uniform vec3  uFeuilG;       // feuilles des houppiers : part des grains gardés sur une feuille de plus de y pixels, longueur maximale à l'écran (pixels)
 uniform vec3  uSoleilC;      // carte d'ombres : centre, base (droite, haut, vers le soleil), demi-largeur et profondeur
 uniform mat3  uSoleilM;
 uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
@@ -90,6 +91,8 @@ vec2 aireHoup(Tige T){                                       // aires du bois et
   vec4 P0=uHp[T.e*4], P1=uHp[T.e*4+1], P2=uHp[T.e*4+2];
   return vec2(P1.x*3.1416*T.r0*.45*P0.z*.85*(1.+.16*P1.w), P1.x*(P1.w+1.)*8.9*P2.x*P2.x);
 }
+/* Houppier demandé par semeA ou semeB : main() fait l'unique appel à semeHoup (FXC recopie chaque appel). */
+bool hpDemande=false; Tige hpT; float hpU, hpS, hpCode; vec2 hpAH; mat2 hpRot;
 bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
   vec4 P1=uHp[T.e*4+1], P2=uHp[T.e*4+2], P3=uHp[T.e*4+3];
   int nb=int(P1.x), nr=int(P1.w);
@@ -145,8 +148,13 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
   if(hc.x>pres && hc.x>.03*min(tm*4.,1.)) return false;      // paquets denses, vides francs ; quelques feuilles isolées tiennent encore
   float Ls=L*(.6+.9*h2.x);                                   // tailles variées
   g.s=1.35*Ls;
-  if(uVue==0 && rnd()>s*s/(g.s*g.s)) return false;           // de près, plusieurs grains par feuille : six en moyenne suffisent
   float px=uVue==0?g.s/distance(Pf,uCamPos)*uRes.y/uFish:9.; // longueur de la feuille à l'écran (pixels)
+  /* De près, plusieurs grains par feuille : six en moyenne suffisent. Tous dessinent la même feuille au même endroit : au-delà
+     de quelques pixels, chaque grain de plus ne fait que repeindre (remplissage). Une grande feuille en garde une part
+     (uFeuilG.x, réglée par le régulateur du budget), et ne dépasse pas uFeuilG.z pixels : le nez dans un houppier, une feuille
+     plein écran coûtait des dizaines de milliers de pixels par grain. */
+  if(uVue==0 && rnd()>s*s/(g.s*g.s)*(px>uFeuilG.y?uFeuilG.x:1.)) return false;
+  if(uVue==0 && px>uFeuilG.z){ g.s*=uFeuilG.z/px; px=uFeuilG.z; }
   float gr=1.-smoothstep(2.5,9.,px);                         // au loin, la feuille ne se lit plus : on l'agrandit et l'arrondit, la masse reste pleine
   g.s*=1.+.7*gr;
   g.P=Pf;
@@ -182,7 +190,7 @@ bool semeA(out Grain g){
   vec2 vc=RA*vv.xz; vec3 vl=vec3(vc.x,vv.y,vc.y);            // direction du spectateur, repère de la cellule
   float aT=2.*A.r0*.85*(A.H+.3);
   vec4 aB=vec4(0.);
-  for(int k=0;k<3;k++){ vec3 a0,a1; float rb; brancheA(A,k,a0,a1,rb); aB[k]=2.*rb*.67*length(a1-a0); }
+  for(int k=0;k<3+uZ;k++){ vec3 a0,a1; float rb; brancheA(A,k,a0,a1,rb); aB[k]=2.*rb*.67*length(a1-a0); }
   float Rm=0., y0=uHoup.y, Hc=A.H+1.2-uHoup.y;               // cœur de feuillage (conifères) : rayon au pied, hauteur
   if(uHoup.x>.5){ Rm=min(uHoup.z*(.8+.4*A.h.w),3.3-max(abs(A.o.x),abs(A.o.y)))*.74; aB.w=2.*.36*Rm*Hc; }
   vec2 aH=vec2(0.);
@@ -196,7 +204,7 @@ bool semeA(out Grain g){
   bool pres=uVue==0 && procheA(id);                         // tronc et cœur dessinés en boîte (v3_proches) : seules les branches restent en grains
 #if HOUPPIER
   if(hp){ if(u<aT){ if(pres) return false; }
-    else { if(!semeHoup(T,u-aT,aH,s,g)) return false; g.code=1.+.5*(A.h.w*.999); g.rot=RA; return true; } }
+    else { hpDemande=true; hpT=T; hpU=u-aT; hpAH=aH; hpS=s; hpCode=1.+.5*(A.h.w*.999); hpRot=RA; return true; } }
   else
 #endif
   if(pres && (u<aT || u>=aT+aB.x+aB.y+aB.z)) return false;
@@ -249,7 +257,7 @@ bool semeB(out Grain g){
   if(uVue==1 && !hp) return false;
   if(hp){ T.th=terrainH(pied); vec2 aH=aireHoup(T); float aTv=uVue==1?0.:aT; aTot=aTv+aH.x+aH.y;
     float u=rnd()*aTot;
-    if(u>=aTv){ if(!semeHoup(T,u-aTv,aH,cote(aTot,parM2(pied,uNb.y)*CB*CB),g)) return false; g.code=2.+.5*B.h.w; g.rot=RB; return true; } }
+    if(u>=aTv){ hpDemande=true; hpT=T; hpU=u-aTv; hpAH=aH; hpS=cote(aTot,parM2(pied,uNb.y)*CB*CB); hpCode=2.+.5*B.h.w; hpRot=RB; return true; } }
 #endif
   if(pres) return false;
   vec3 vv=versVue(vec3(pied.x,terrainH(pied)+1.5,pied.y));
@@ -286,10 +294,6 @@ bool semeBTrait(int bout, out vec3 P){
 
 /* ---- blocs de grès (sdRock) : grain posé sur l'ellipsoïde, puis ramené sur la forme bosselée (deux pas de Newton) */
 float formeBloc(vec3 P, vec2 id, Bloc B){ return blocForme(blocLocal(P,terrainH(P.xz),id,B),B); }
-vec3 gradBloc(vec3 P, vec2 id, Bloc B){
-  const float e=.01; const vec2 k=vec2(1.,-1.);
-  return (k.xyy*formeBloc(P+k.xyy*e,id,B)+k.yyx*formeBloc(P+k.yyx*e,id,B)+k.yxy*formeBloc(P+k.yxy*e,id,B)+k.xxx*formeBloc(P+k.xxx*e,id,B))/(4.*e);
-}
 bool semeR(out Grain g){
   float dh; vec2 xz=tireSol(dh);
   vec2 id=floor(xz/CC);
@@ -305,7 +309,10 @@ bool semeR(out Grain g){
   vec2 w=cw+lp.xz*M;
   vec3 P=vec3(w.x,terrainH(w)+B.R*.22+lp.y,w.y);
   vec3 gr=vec3(0.,1.,0.);
-  for(int i=0;i<2;i++){ gr=gradBloc(P,id,B); P-=gr*formeBloc(P,id,B)/max(dot(gr,gr),1e-4); }
+  { const float e=.01; const vec2 k=vec2(1.,-1.); vec3 ga=vec3(0.);   // deux pas de Newton (gradBloc puis formeBloc), un seul appel de formeBloc déplié
+    for(int j=0;j<10+uZ;j++){ int m=j-5*(j/5); vec3 kk=m==0?k.xyy:m==1?k.yyx:m==2?k.yxy:m==3?k.xxx:vec3(0.);
+      float f=formeBloc(P+kk*e,id,B);
+      if(m<4) ga+=kk*f; else { gr=ga/(4.*e); ga=vec3(0.); P-=gr*f/max(dot(gr,gr),1e-4); } } }
   g.P=P; g.N=normalize(gr);
   g.q=blocLocal(P,terrainH(P.xz),id,B); g.code=3.; g.rot=M;
   g.s=cote(3.1416*max(B.rad.x,B.rad.z)*B.rad.y,parM2(cw,uNb.z)*CC*CC);
@@ -386,7 +393,7 @@ bool semeP(out Grain g){
   vec4 o1=texelFetch(uShapes,ivec2(1,oi),0);
   int st=int(o1.x), cn=int(o1.y), row=st; float v=rnd(), aire=1.;
   bool pris=false;
-  for(int j=0;j<24;j++){ if(j>=cn) break; vec4 s=texelFetch(uSemis,ivec2(0,st+j),0); if(!pris){ row=st+j; aire=s.y; pris=v<=s.x; } }
+  for(int j=0;j<min(cn,24);j++){ vec4 s=texelFetch(uSemis,ivec2(0,st+j),0); if(!pris){ row=st+j; aire=s.y; pris=v<=s.x; } }
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 V=uVue==0?primLocal(uCamPos,row):primLocal(a.xyz+uSd,row);
   vec3 lq, ln;
@@ -454,7 +461,7 @@ bool semeF(out vec4 pos, out float taille){
   if(t1<=t0) return false;
   float lr=log(t1/t0), t;                                    // distance en progression géométrique : les feuilles proches d'abord
   vec3 cell, hc; bool ok=false;
-  for(int k=0;k<3;k++){                                      // trois essais : la plupart des cellules sont vides
+  for(int k=0;k<3+uZ;k++){                                   // trois essais : la plupart des cellules sont vides
     t=t0*exp(rnd()*lr);
     cell=floor((O+rd*t)/CS);
     hc=h33(cell+uSeed);
@@ -509,6 +516,9 @@ void main(){
   if(i<uPart.x) ok=semeA(g);
   else if(i<uPart.y) ok=semeB(g);
   else ok=semeR(g);
+#if HOUPPIER
+  if(ok && hpDemande){ ok=semeHoup(hpT,hpU,hpAH,hpS,g); g.code=hpCode; g.rot=hpRot; }
+#endif
 #endif
   float s=g.s;
   bool forme=FORMES==1;

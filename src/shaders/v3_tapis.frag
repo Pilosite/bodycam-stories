@@ -26,7 +26,7 @@ void main(){
   if(uSurf.y!=uSurf.x){ w=smoothstep(uTraj.y+uTraj.z,uTraj.y-uTraj.z,abs(q.x-pathX(q.z))+(uTraj.w>0.?uTraj.w*(fbm(q.xz*.8+3.)-.5):0.)); r1=uSurf.y;
     if(w>=1.) r0=r1; else if(w>0.) nr=2; }
   vec3 A=vec3(0.), T=vec3(0.); float SP=0., EM=0.;
-  for(int k=0;k<2;k++){                                      // un seul appel à recette()
+  for(int k=0;k<2+uZ;k++){                                     // un seul appel à recette()
     if(k>=nr) break;
     vec3 a, tt; float sp, em; recette(k==0?r0:r1,q,gn,0.,mat2(1.),a,tt,sp,em);
     float wk=nr==1?1.:(k==0?1.-w:w);
@@ -35,6 +35,6 @@ void main(){
   t0=vec4(sqrt(clamp(A,0.,1.)),clamp(SP,0.,1.));
   rs=uint(I.x*7919+I.y*104729)^0x9e3779b9u; rnd();
   vec3 po=q+gn*.01; float Ts=0.;
-  for(int i=0;i<4;i++) Ts+=canopyT(po,uSunDir);              // même transmittance que lumiere() (v3_ombrage.frag), sans son bruit
+  for(int i=0;i<4+uZ;i++) Ts+=canopyT(po,uSunDir);              // même transmittance que lumiere() (v3_ombrage.frag), sans son bruit
   t1=vec4(clamp(T.xz*.25+.5,0.,1.),clamp(EM,0.,1.),Ts*.25);
 }
