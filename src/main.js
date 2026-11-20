@@ -3370,7 +3370,7 @@ const activite=(()=>{
   document.head.appendChild(st);
   const el=document.body.appendChild(document.createElement("div")); el.id="activite"; el.setAttribute("aria-hidden","true");
   const classe={"⇢":"k-pe",">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
-  let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false, tTrad=-1e9;
+  let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false, tTrad=-1e9, trAct=0;
   // une trame PDL (src/pdl.js) : ses jetons s'écrivent comme une ligne ; dessous, la traduction en clair de 2 jetons défile
   // le profil du personnage : les vrais réglages issus de la recherche de l'ouverture (ouvertures/*.json, section personnage)
   const PERSO=(()=>{ try{ const r=(typeof OUVERTURES!=="undefined"?OUVERTURES:[]).find(r=>r.personnage&&r.personnage.reglages); return r?r.personnage.reglages:null; }catch(_){ return null; } })();
@@ -3409,7 +3409,7 @@ const activite=(()=>{
       if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interprète",0))};
         appel.l.t=ACTIVITE.ligneAppel("interprète",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
       else if(appel){ appel.l.k="✓"; appel.l.t="interprète  répondu en "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true;
-        if(typeof PDL!=="undefined"&&queue.length) try{ ajouterTrame(PDL.trameActions(queue)); }catch(_){} }
+        if(typeof PDL!=="undefined"&&queue.length&&!trAct) try{ trAct=1; ajouterTrame(PDL.trameActions(queue)); }catch(_){} }
       if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("accessoiriste",0))};
         fab.l.t=ACTIVITE.ligneAppel("accessoiriste",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
       else if(fab){ fab.l.k="✓"; fab.l.t="accessoiriste  rendu en "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
@@ -3418,6 +3418,7 @@ const activite=(()=>{
     if(q!==(act&&act.a)){
       if(act){ act.l.k="✓"; act.l.t=act.l.t.replace(/ [█░]+$/,""); act.l.n=act.l.t.length; }
       act=null;
+      if(q&&!trAct&&!appel&&typeof PDL!=="undefined"){ trAct=1; try{ ajouterTrame(PDL.trameActions(queue)); }catch(_){} }   // réponse sans appel (secours) : la trame des actions au premier geste
       if(q){ const t=ACTIVITE.ligneAction(q), p=L[L.length-1];
         // pas d'un même trajet (tourner, marcher, tourner…) : une seule ligne qui compte
         if(p&&p.k==="✓"&&p.type===q.type&&/^(marcher|tourner)$/.test(q.type)){ p.k="▶"; p.x=(p.x||1)+1; p.t=t+" ×"+p.x; p.n=p.t.length; act={a:q,l:p,r0:q.rest}; }
@@ -3434,7 +3435,7 @@ const activite=(()=>{
   }
   return {
     entendre(texte){ if(!on||typeof ACTIVITE==="undefined") return; t0=performance.now(); L=[]; appel=fab=act=null; finQ=tFin=0; repondu=false;
-      el.classList.remove("tr"); persona=null;
+      el.classList.remove("tr"); persona=null; trAct=0;
       try{ const A=ACTIVITE.analyser(texte,MENEUR,MODELES); A.forEach(ajouter); if(typeof PDL!=="undefined") ajouterTrame(PDL.trameDemande(texte,A)); ajouterPersona(texte); }catch(e){ console.warn("activité",e); }
       el.classList.add("on"); if(!timer) timer=setInterval(pas,100); pas(); },
     evt(e){ if(!on||!timer) return; const x=ACTIVITE.ligneEvenement(e); if(!x) return; const l=ajouter(x);
