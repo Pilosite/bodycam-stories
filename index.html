@@ -5559,6 +5559,8 @@ function creerOuverture(deps) {
   $('ouv-dicter').onclick = () => { if ($('ouv-dicter').getAttribute('aria-pressed') === 'true') deps.arreterDictee && deps.arreterDictee(); else deps.dicter && deps.dicter(txt); };
   $('ouv-form').addEventListener('submit', e => { e.preventDefault(); const t = txt.value.trim(); if (!t) { txt.focus(); return; } envoyer(t); });
   $('ouv-passer').onclick = () => terminer(null, true);
+  $('ouv-passer').hidden = true;                          // pas de bouton visible (il trahirait le rejeu) : Échap passe l'ouverture
+  d.addEventListener('keydown', function echap(e) { if (!racine.isConnected) { d.removeEventListener('keydown', echap); return; } if (e.key === 'Escape') terminer(null, true); });
 
   function li(cls, html) { const x = d.createElement('li'); x.className = cls; x.innerHTML = html; log.appendChild(x); x.scrollIntoView({ block: 'end', behavior: 'smooth' }); return x; }
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
