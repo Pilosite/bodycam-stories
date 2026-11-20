@@ -7,6 +7,9 @@
 // Coût fixe : une fenêtre de cellules autour de la caméra par couche de semis (uPrxN), 5 × 5 cellules de blocs, toutes
 // les formes des objets (64 au plus). Aucun tampon : gl_VertexID donne l'emplacement (genre, cellule, forme) et le coin.
 precision highp float; precision highp int; precision highp sampler2D;
+#ifndef PF
+#define PF 0
+#endif
 #include "monde.glsl"
 #include "v3_commun.glsl"
 uniform int   uPrxO;         // emplacements des formes d'objets (lignes 8 et suivantes)
@@ -44,7 +47,9 @@ void main(){
   int ax=f>>1; float sg=(f&1)==0?1.:-1.;
   vec3 u=ax==0?vec3(sg,uw.x,uw.y):ax==1?vec3(uw.y,sg,uw.x):vec3(uw.x,uw.y,sg);
   vec3 W, cl; vec3 hb; float diam;
-  if(slot<uPrxO){                                            // forme d'un objet de la fiche
+  if(false){}
+#if PF==0 || PF==1
+  else if(slot<uPrxO){                                            // forme d'un objet de la fiche
     int row=8+slot;
     for(int i=0;i<8;i++){ if(i>=uObjN) break; vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
       if(row>=int(o1.x) && row<int(o1.x+o1.y) && o1.w<.5) return; }   // objet caché
@@ -52,7 +57,10 @@ void main(){
     hb=boite(a.w,b.xyz,e.y)*1.04+.03;
     cl=primLocal(uCamPos,row); W=primMonde(coin(u,hb,cl),row,false); diam=2.*length(hb);
     vK=ivec4(0,row,0,0);
-  } else if(slot<uPrxO+uPrxB){                               // bloc de grès d'une des 5 × 5 cellules autour de la caméra
+  }
+#endif
+#if PF==0 || PF==2
+  else if(slot>=uPrxO && slot<uPrxO+uPrxB){                               // bloc de grès d'une des 5 × 5 cellules autour de la caméra
     int s=slot-uPrxO; vec2 id=floor(uCamPos.xz/CC)+vec2(float(s-(s/5)*5)-2.,float(s/5)-2.);
     Bloc B; if(!blocGres(id,B)) return;
     hb=B.rad*1.12+.15*B.R+vec3(.05,.4,.05);                   // bosses, et le sol qui varie sous le bloc
@@ -63,7 +71,10 @@ void main(){
     W=vec3(cw.x+xz.x,th+B.R*.22+lp.y,cw.y+xz.y);
     diam=2.*length(hb);
     vK=ivec4(2,0,0,0); vId=id;
-  } else if(slot<uPrxO+uPrxB+uPrxA+uPrxP){                  // tronc d'arbre (3 × 3 cellules) ou perche (5 × 5)
+  }
+#endif
+#if PF==0 || PF==3
+  else if(slot>=uPrxO+uPrxB && slot<uPrxO+uPrxB+uPrxA+uPrxP){                  // tronc d'arbre (3 × 3 cellules) ou perche (5 × 5)
     int s=slot-uPrxO-uPrxB; bool arbre=s<uPrxA; if(!arbre) s-=uPrxA;
     int w=arbre?3:5; vec2 dc=vec2(float(s-(s/w)*w),float(s/w))-float(w/2);
     vec2 c0, ax0, lean; float H, r, R=0., y0=-1.3, y1;
@@ -83,7 +94,10 @@ void main(){
     vec2 xz=(c0+lp.xz)*M; W=vec3(xz.x,lp.y,xz.y);
     diam=2.*length(hb);
     vK=ivec4(arbre?3:4,0,0,0); vId=id;
-  } else {                                                   // élément d'une couche de semis, cellules voisines de la caméra
+  }
+#endif
+#if PF==0 || PF==1
+  else if(slot>=uPrxO+uPrxB+uPrxA+uPrxP){                                                   // élément d'une couche de semis, cellules voisines de la caméra
     int k=slot<uPrxS.x?0:slot<uPrxS.y?1:slot<uPrxS.z?2:3;
     int s=slot-(k==0?uPrxO+uPrxB+uPrxA+uPrxP:k==1?uPrxS.x:k==2?uPrxS.y:uPrxS.z);
     int n=k==0?uPrxN.x:k==1?uPrxN.y:k==2?uPrxN.z:uPrxN.w, w=2*n+1;
@@ -105,6 +119,8 @@ void main(){
     diam=2.*length(hb)*e.s*max(1.,e.sy);
     vK=ivec4(1,row,k,int(e.side)); vId=id;
   }
+#endif
+  else return;
   vec4 pos; float dist, ang;
   projette(W,3.13,pos,dist,ang);
   gl_Position=pos; vW=W;

@@ -12,7 +12,7 @@ const FS_EXPO = __SHADER_FS_EXPO__;
 const FS_BLUR = __SHADER_FS_BLUR__;
 const FS_CAM = __SHADER_FS_CAM__;
 const VS_V2PTS = __SHADER_VS_V2PTS__, FS_V2PTS = __SHADER_FS_V2PTS__, FS_V2CIEL = __SHADER_FS_V2CIEL__, FS_V2TROUS = __SHADER_FS_V2TROUS__;
-const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRE = __SHADER_FS_V3OMBRE__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__, FS_V3TAPIS = __SHADER_FS_V3TAPIS__, FS_V3SONDE = __SHADER_FS_V3SONDE__, VS_V3PROCHES = __SHADER_VS_V3PROCHES__, FS_V3PROCHES = __SHADER_FS_V3PROCHES__;
+const VS_V3GRAINS = __SHADER_VS_V3GRAINS__, VS_V3SOL = __SHADER_VS_V3SOL__, FS_V3GBUF = __SHADER_FS_V3GBUF__, FS_V3OMBRAGE = __SHADER_FS_V3OMBRAGE__, FS_V3TAPIS = __SHADER_FS_V3TAPIS__, FS_V3SONDE = __SHADER_FS_V3SONDE__, VS_V3PROCHES = __SHADER_VS_V3PROCHES__, FS_V3PROCHES = __SHADER_FS_V3PROCHES__;
 const FICHES = __SCENES__;                      // fiches de lieu embarquées (scenes/*.json)
 
 const $ = id => document.getElementById(id);
@@ -1073,7 +1073,7 @@ function v3Init(){                                             // rend vrai quan
   if(!V3.lance){ V3.avecRel=!!S.relOn; V3.avecHp=!!S.hpOn; V3.lance={}; etapeGL("compilation : moteur v3, un programme à la fois"); }
   // Les quatre programmes de la première image, un à un ; les deux variantes FORMES (objets, semis) viennent après le socle
   // (v3Formes), sauf en mode plein (captures de référence : tout avant la première image).
-  const base=OMB.mode==="plein"?V3_PROGS:V3_PROGS.slice(0,4);
+  const base=OMB.mode==="plein"?V3_PROGS:V3_PROGS.slice(0,8);
   for(const k of base){
     const x=V3.lance[k];
     if(!x){ if(compLibre(false)) V3.lance[k]=v3Lancer(k); V3.attendSocle=true; return false; }
@@ -1091,17 +1091,28 @@ function v3Init(){                                             // rend vrai quan
   if(OMB.e.socle&&OMB.e.socle.p) v3Formes();                   // après le socle : les variantes FORMES, puis (v3Ombrage) la complète
   return r;
 }
-const V3_PROGS=["sol","grains","ombre","proches","grainsF","ombreF"];
+/* Le tampon G et la carte d'ombres partagent un seul programme par variante du semeur (uVue dans v3_gbuf.frag) : sur Direct3D,
+   le source de sommets du semeur était compilé deux fois (v3 grains 14,5 s et v3 ombre 11 s sur le PC de Toine). Et le semeur
+   est coupé en un programme par famille (FAM dans v3_grains.vert : arbres, perches, blocs, feuilles), chacun dessinant sa
+   tranche de grains : FXC compile bien plus vite quatre petits programmes qu'un gros. */
+const V3_FAM={grainsA:1,grainsB:2,grainsR:3,grainsL:4};
+const V3_PROGS=["sol","grainsA","grainsB","grainsR","grainsL","prochesO","prochesB","prochesT","grainsF"];
+const V3_PF={prochesO:1,prochesB:2,prochesT:3};               // éléments proches, une famille par programme (PF dans v3_proches) : formes (objets, semis), blocs, troncs
+function v3Tranches(G,ps,vue){                                 // [programme, premier grain, fin] de chaque famille ; vue du soleil : pas de feuilles de canopée
+  const t=[[G.grainsA,0,ps.part[0]],[G.grainsB,ps.part[0],ps.part[1]],[G.grainsR,ps.part[1],ps.part[2]]];
+  if(!vue) t.push([G.grainsL,ps.part[2],ps.part[3]]);
+  t.push([G.grainsF,ps.part[3],ps.total]); return t; }
 function v3Lancer(k){                                          // un programme du semeur, dans la variante voulue par la fiche
   const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
   const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
-  const SP={ sol:[FS_V3GBUF,R(VS_V3SOL)], grains:[FS_V3GBUF,Hp(VS_V3GRAINS)], ombre:[FS_V3OMBRE,Hp(VS_V3GRAINS)], proches:[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)],
-    grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))], ombreF:[F(FS_V3OMBRE),F(R(VS_V3GRAINS))] }[k];
+  const SP=V3_FAM[k]?[FS_V3GBUF,Hp(VS_V3GRAINS).replace("\n","\n#define FAM "+V3_FAM[k]+"\n")]:
+    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+"\n")):
+    { sol:[FS_V3GBUF,R(VS_V3SOL)], grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))] }[k];
   return lancer(SP[0],SP[1],"v3 "+k);
 }
 function v3Formes(){                                           // rend vrai quand les deux variantes FORMES sont en service
-  if(!V3.gp) return false; if(V3.gp.grainsF&&V3.gp.ombreF) return true;
-  for(const k of ["grainsF","ombreF"]){
+  if(!V3.gp) return false; if(V3.gp.grainsF) return true;
+  for(const k of ["grainsF"]){
     if(V3.gp[k]) continue;
     const x=V3.lance[k];
     if(!x){ if(compLibre(false)) V3.lance[k]=v3Lancer(k); return false; }
@@ -1454,9 +1465,9 @@ function v3Image(p){
   const ps=v3Partage(Ns,1,p);
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.sm.f); gl.viewport(0,0,V3.sm.w,V3.sm.h);
   gl.clearBufferfv(gl.DEPTH,0,[1]); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
-  for(const P of [G.ombre,G.ombreF]){                          // deux variantes du semeur : arbres, perches, blocs ; puis formes (objets, semis)
+  for(const [P,de,a] of v3Tranches(G,ps,1)){                   // une famille par programme : arbres, perches, blocs ; puis formes (objets, semis)
     if(!P) continue;                                           // variante FORMES pas encore compilée (v3Formes) : les formes viendront
-    const de=P===G.ombre?0:ps.part[3], a=P===G.ombre?ps.part[3]:ps.total; if(a<=de&&!(P===G.ombre&&ps.traits>0)) continue;
+    if(a<=de&&!(P===G.grainsB&&ps.traits>0)) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
     gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); v3Grains(u,ps); gl.uniform1i(u.uPrx,0);
     gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
@@ -1464,9 +1475,10 @@ function v3Image(p){
     gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
     gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
     gl.uniform1i(u.uTrait,0);
+    gl.uniform1f(u.uAzPres,0); gl.uniform4i(u.uPrxN,0,0,0,0); gl.uniform4f(u.uAncre||null,0,0,0,0); gl.uniform1i(u.uPts,0); gl.uniform1i(u.uCompte||null,0);   // programme partagé avec le tampon G : les valeurs d'un programme à part
     if(u.uOmbreG){ bindTex(9,dummy.t,u.uOmbreG); gl.uniform1i(u.uOmbreOk,0); }   // la carte se dessine : les feuilles ne la lisent pas
     if(a>de) gl.drawArrays(gl.POINTS,de,a-de);
-    if(P===G.ombre&&ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
+    if(P===G.grainsB&&ps.traits>0){ gl.uniform1i(u.uTrait,1); gl.uniform4f(u.uNb,ps.nA,ps.traits,ps.nR,ps.nF); gl.drawArrays(gl.LINES,0,2*ps.traits); }
   }
   }
   const SP=V3.smP; const note=V3.nImg<3?etapeGL:()=>{};
@@ -1490,14 +1502,16 @@ function v3Image(p){
   }
   // les éléments proches, en boîtes (v3_proches) : avant les grains, ils couvrent les grandes surfaces proches sans trou
   const px=v3Proches();
-  if(px.total>0){ gpuDebut("proches"); u=G.proches.u; gl.useProgram(G.proches.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
+  if(px.total>0){ gpuDebut("proches");                         // dans l'ordre des emplacements : objets, blocs, troncs et perches, semis
+    const e1=px.o, e2=e1+px.b, e3=e2+px.a+px.p;
+    for(const [P,de,a] of [[G.prochesO,0,e1],[G.prochesB,e1,e2],[G.prochesT,e2,e3],[G.prochesO,e3,px.total]]){ if(a<=de) continue;
+    u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
     gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
-    gl.drawArrays(gl.TRIANGLES,0,px.total*PRX_VPS); }
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); } }
   const pc=v3Partage(v3Budget(),0,p); V3.parts=pc; gpuDebut("grains");
   const semer=compte=>{
-  for(const P of [G.grains,G.grainsF]){
-    if(!P) continue;
-    const de=P===G.grains?0:pc.part[3], a=P===G.grains?pc.part[3]:pc.total; if(a<=de) continue;
+  for(const [P,de,a] of v3Tranches(G,pc,0)){
+    if(!P||a<=de) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
     gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); v3Grains(u,pc);
     gl.uniform1i(u.uPrx,px.on?1:0); gl.uniform4iv(u.uPrxN,px.n);

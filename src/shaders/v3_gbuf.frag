@@ -16,15 +16,23 @@ in vec3 vQ; in vec3 vN; flat in float vCode; in float vDist; in vec3 vDx; in vec
 in vec3 vL; in vec3 vLx; in vec3 vLy; in vec4 vB; in vec2 vT; in float vOk;
 uniform int uPts;            // 1 = grains (points), 0 = maillage du sol
 uniform int uCompte;         // mesure du remplissage (src/main.js, v3Compter) : 1 compte chaque fragment tramé, 2 chaque fragment gardé
+uniform int uVue;            // 1 = carte d'ombres : le même programme que le tampon G (un seul source de sommets à compiler, pas deux),
+                             // il n'écrit alors que sa profondeur (ce que faisait v3_ombre.frag)
 layout(location=0) out vec4 g0;   // coordonnées de recette (ou couleur d'une feuille), élément
 layout(location=1) out vec4 g1;   // normale, distance
 void main(){
+#if FORMES
+  vec2 o=(gl_PointCoord-.5)*vSz; o.y=-o.y;                   // découpe du grain par la forme : un seul appel de sdPrim (vue du soleil comme de la caméra)
+  if(uCompte!=1 && sdPrim(vL+vLx*o.x+vLy*o.y,vT.x,vB.xyz)-vB.w>vT.y) discard;
+  if(uVue==1){ gl_FragDepth=clamp(vDist+dot(vDd,o),0.,1.); return; }   // vu du soleil : la profondeur seule (l'ancien v3_ombre.frag)
+#else
+  if(uVue==1) return;                                        // vu du soleil : la profondeur seule (l'ancien v3_ombre.frag)
+#endif
   vec4 cpt=vec4(1.,vCode==5.?1.:0.,vCode>=1.&&vCode<3.?1.:0.,vCode==3.?1.:0.);   // comptage : tout, feuilles, bois, blocs
   if(uCompte==1){ g0=cpt; g1=vec4(0.); return; }
   vec3 q=vQ; float d=vDist;
 #if FORMES
-  vec2 o=(gl_PointCoord-.5)*vSz; o.y=-o.y; q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o);
-  if(sdPrim(vL+vLx*o.x+vLy*o.y,vT.x,vB.xyz)-vB.w>vT.y) discard;
+  q+=vDx*o.x+vDy*o.y; d+=dot(vDd,o);
   gl_FragDepth=clamp(d/400.,0.,1.);                          // même profondeur linéaire que projette() (DMAX)
 #else
   if(uPts==1){ vec2 pc=gl_PointCoord-.5;

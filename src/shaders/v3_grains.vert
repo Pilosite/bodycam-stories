@@ -75,6 +75,9 @@ float parM2R(vec2 c, float N, float R){
 }
 vec3 versVue(vec3 P){ return uVue==0?uCamPos-P:uSd; }       // direction du spectateur (caméra ou soleil)
 
+#ifndef FAM
+#define FAM 0
+#endif
 #if !FORMES && HOUPPIER
 /* ---- houppiers (monde.glsl : charpente, rameau, masse) : bois des charpentières et des rameaux, masses de feuillage.
    Une masse est semée sur deux coques (extérieure, et intérieure plus sombre), sur la face vue. La feuille est fixée au monde :
@@ -489,7 +492,7 @@ void main(){
   gl_Position=vec4(0.,0.,2.,1.); gl_PointSize=1.;
   sansGrain();
   int i=gl_VertexID;
-#if !FORMES
+#if !FORMES && (FAM==0 || FAM==2)
   if(uTrait==1){                                             // perches vues du soleil, en traits
     rs=hu(uint(i>>1)^hu(uFrame)); rnd();
     vec3 P; if(!semeBTrait(i&1,P)) return;
@@ -504,6 +507,11 @@ void main(){
   if(i<uPartO) ok=semeP(g);
   else ok=semeS(i<uPartS.x?0:i<uPartS.y?1:i<uPartS.z?2:3,g);
 #else
+  /* FAM : une famille par programme (1 arbres, 2 perches, 3 blocs, 4 feuilles ; 0 toutes, comme avant). Sur Direct3D, un
+     programme deux fois plus gros se compile bien plus de deux fois plus lentement : quatre petits valent mieux qu'un gros.
+     La page dessine chaque tranche de grains avec le programme de sa famille ; gl_VertexID (first compris) et donc le
+     tirage sont les mêmes. */
+#if FAM==0 || FAM==4
   if(i>=uPart.z && i<uPart.w){
     vec4 pos; float t;
     if(uVue!=0) return;
@@ -513,10 +521,21 @@ void main(){
     gl_Position=pos; gl_PointSize=min(t,uMaxPt); vSz=gl_PointSize;
     return;
   }
+#endif
+#if FAM==0
   if(i<uPart.x) ok=semeA(g);
   else if(i<uPart.y) ok=semeB(g);
   else ok=semeR(g);
-#if HOUPPIER
+#elif FAM==1
+  ok=semeA(g);
+#elif FAM==2
+  ok=semeB(g);
+#elif FAM==3
+  ok=semeR(g);
+#else
+  ok=false; return;
+#endif
+#if HOUPPIER && FAM<3
   if(ok && hpDemande){ ok=semeHoup(hpT,hpU,hpAH,hpS,g); g.code=hpCode; g.rot=hpRot; }
 #endif
 #endif
