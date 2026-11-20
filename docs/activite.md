@@ -15,4 +15,4 @@ Pendant que Claude réfléchit (5 à 8 s, l'objet vers 12 s), une colonne à dro
 9.8 ▶ effort 9.5 s ████░░░░
 ```
 
-Vrai : tout le contenu (analyse locale, état des appels, journal du meneur via `surEvenement`, file d'actions lue sur `queue[0]`). Habillage : la frappe rapide, le curseur, l'estompage des anciennes lignes. Pas de flux de la réponse affiché : seul l'aperçu de la pensée (`onPensee`, s'il arrive) devient une ligne `<`.
+Vrai : tout le contenu (analyse locale, état des appels, journal du meneur via `surEvenement`, file d'actions lue sur `queue[0]`). Habillage : la frappe rapide, le curseur, l'estompage des anciennes lignes. Pas de flux de la réponse affiché : la pensée devient une ligne `<` quand elle s’affiche (y compris l’aperçu `onPensee` du meneur s’il arrive, puisqu’il passe par la même pensée).

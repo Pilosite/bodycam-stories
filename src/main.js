@@ -3352,7 +3352,7 @@ const activite=(()=>{
     if(tFin&&now-tFin>1200||now-t0>90000){ clearInterval(timer); timer=0; el.classList.remove("on"); }
   }
   return {
-    entendre(texte){ if(!on||!window.ACTIVITE) return; t0=performance.now(); L=[]; appel=fab=act=null; finQ=tFin=0; repondu=false;
+    entendre(texte){ if(!on||typeof ACTIVITE==="undefined") return; t0=performance.now(); L=[]; appel=fab=act=null; finQ=tFin=0; repondu=false;
       try{ ACTIVITE.analyser(texte,MENEUR,MODELES).forEach(ajouter); }catch(e){ console.warn("activité",e); }
       el.classList.add("on"); if(!timer) timer=setInterval(pas,100); pas(); },
     evt(e){ if(!on||!timer) return; const x=ACTIVITE.ligneEvenement(e); if(x) ajouter(x); },

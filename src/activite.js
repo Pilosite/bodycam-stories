@@ -61,11 +61,11 @@ export function ligneEvenement(e) {
     case 'geste_immediat': return L('▶', 'tout de suite : ' + (x.actions || []).join(', '));
     case 'sequence': return L('·', 'séquence   ' + (x.remis_en_ordre ? 'remise dans l\'ordre de la phrase' : (x.de || []).join(' → ')));
     case 'demande_tenue': return L('!', 'garde-fou  demande tenue : modele(' + x.modele + ')');
-    case 'exploit': return L('·', 'exploit    ×' + r1(x.facteur) + ' ' + (x.palier || '') + (x.corps ? ' · effort ' + r1(x.effort_s) + ' s' : ''));
+    case 'exploit': return L('·', 'exploit    ×' + r1(x.facteur) + ' ' + (x.palier === 'demesure' ? 'démesuré' : x.palier || '') + (x.corps ? ' · effort ' + r1(x.effort_s) + ' s' : ''));
     case 'exploit_corrige': return L('!', 'garde-fou  autre matière refusée → corps');
     case 'apercu_jete': return L('!', 'garde-fou  aperçu jeté');
     case 'pensee_jetee': return L('!', 'garde-fou  pensée jetée');
-    case 'modele': return L('·', 'modèle     ' + x.id + (x.envergure ? ' → ' + r2(x.envergure) + ' m' : '') + (x.raison ? ' (' + court(x.raison, 26) + ')' : ''));
+    case 'modele': return L('·', 'modèle     ' + x.id + (x.envergure ? ' → ' + r2(x.envergure) + ' m' : '') + (x.raison ? ' (' + court(String(x.raison).split(' (')[0], 22) + ')' : ''));
     case 'echelle': return L('·', 'échelle    ×' + r1(x.facteur) + ' · ' + court(x.raison, 34));
     case 'pose_corrigee': return L('!', 'garde-fou  pose ' + (x.de || '?') + ' → ' + x.vers);
     case 'objet_cree': return L('<', 'fabrique   ' + x.id + ' "' + court(x.nom, 28) + '" ' + x.formes + ' formes · ' + r2(x.envergure) + ' m');
