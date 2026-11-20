@@ -30,6 +30,57 @@
    "demesure": ["{masse}. C'est sorti de moi, ça. Comment je tiens encore debout ?", "Non mais… regarde la taille. C'est sorti de MOI ? Je devrais être mort.", "J'y crois pas. J'ai fait ça. … Je suis fier, et j'ai peur pour mon ventre.", "Oh. Mon. Dieu. … C'est plus gros que mon sac. Comment c'est possible ?"]
   }
  },
+ "degout": {
+  "_doc": "Le dégoût du corps (docs/meneur-de-jeu.md §22). Des DONNÉES, aucun nom de modèle : la « repugnance » (0..1) est une donnée du modèle d'une chose, gardée par ce qu'on en façonne. Manipuler à mains nues une chose répugnante le dégoûte : intensité = repugnance × taille (facteur d'échelle par rapport à la référence du modèle) × fraîcheur (âge de la chose) × « soi » (1 si elle vient de lui, sinon pas_de_soi). Paliers : rien < leger ≤ … < fort. Il obéit (monde élastique : ni refus, ni gants, ni outil, ni autre matière), mais il le dit : courtes pensées sur les phases du geste (avant, contact, pendant, autre = ce qu'il touche d'autre, fin), au plus une toutes les espacement_s ; hésitation avant, essuyage après ; l'humeur en garde la trace (humeur, memoire). {nom} : le nom de la chose.",
+  "paliers": {"leger": 0.15, "fort": 0.5},
+  "taille": {"base": 0.45, "par_doublement": 0.2, "min": 0.35, "max": 1},
+  "fraicheur": {"pleine_min": 2, "tiede_min": 12, "tiede": 0.6},
+  "pas_de_soi": 0.85,
+  "espacement_s": 3,
+  "hesiter_s": {"leger": 1.8, "fort": 2.8},
+  "essuyer_s": {"leger": 1.8, "fort": 2.8},
+  "pendant_n": {"leger": 1, "fort": 2},
+  "detourne_n": {"leger": 2, "fort": 4},
+  "humeur": {"leger": {"agacement": 1}, "fort": {"agacement": 2, "confiance": -1}},
+  "evitements": ["gant", "gants", "sans toucher", "sans les mains", "sans y toucher", "du bout d'un", "avec un baton", "avec une branche", "avec une feuille", "avec un sac", "sac plastique", "mouchoir", "pelle", "outil", "a la place", "plutot", "faire semblant", "terre", "boue", "argile", "glaise", "pate a modeler"],
+  "avant": {
+   "leger": ["Avec les mains. Les miennes. D'accord.", "À mains nues. Bon. On respire un bon coup, et on y va.", "Attends. … Bon. Je pense à autre chose, et j'y vais."],
+   "fort": ["Avec les mains. Les miennes. … D'accord. Une seconde.", "Tout ça ? À mains nues ? … Laisse-moi juste respirer. Voilà.", "Si quelqu'un passe, je dis que c'est pas à moi. … Bon. J'y vais."]
+  },
+  "contact": {
+   "leger": ["C'est tiède. Pourquoi c'est tiède.", "Oh non. Oh non non non. … Ça va.", "Ne pas sentir. Ne pas penser. Pétrir."],
+   "fort": ["C'est tiède. Pourquoi c'est tiède.", "Hrk… Ça va. Ça va. C'est rien.", "Oh, la texture. Je vais m'en souvenir toute ma vie."]
+  },
+  "pendant": {
+   "leger": ["Je respire par la bouche. Voilà. Par la bouche.", "On ne pense à rien. On roule.", "J'en ai jusqu'aux poignets, évidemment."],
+   "fort": ["Je respire par la bouche. … Non, c'est pire.", "Ne regarde pas tes mains. Regarde les arbres.", "Il en reste. Il en reste toujours.", "J'en ai jusqu'aux coudes. Formidable."]
+  },
+  "autre": {
+   "leger": ["Enfin quelque chose de propre.", "Du sec. Du propre. Merci."],
+   "fort": ["Enfin quelque chose de propre. Je pourrais pleurer.", "Ah, du sec. Je le garde un peu en main, juste pour le plaisir."]
+  },
+  "fin": {
+   "leger": ["C'est immonde. Il est plutôt réussi.", "Bon. C'est dégoûtant. Et pas mal du tout."],
+   "fort": ["C'est immonde. … Il est plutôt réussi.", "J'ai honte. Et il a une bonne tête, en plus.", "Je vais me laver les mains pendant une semaine. Mais regarde-le."]
+  },
+  "nausee": {
+   "_doc": "Une réaction du corps à un dégoût fort (§22.2) : au-delà d'un seuil, le geste s'interrompt UNE fois, après un contact prolongé (phases « contact » : pétrir, diviser, rouler ; jamais en plantant). Seuil sur l'intensité × le contact (contact_s / contact_ref_s, borné à 1) : au-dessus de « toujours », toujours ; en dessous de « jamais », jamais ; entre les deux, selon la graine. Le déroulé (secondes, 6 à 9 en tout) : lâcher, se détourner (60 à 110°, côté dégagé), se pencher, vomir (la chose « modele » de la bibliothèque, posée devant lui, hors de l'ouvrage, comptée comme ambiance), souffler, s'essuyer la bouche, revenir. Un événement « nausee » est exposé pour le bruitage.",
+   "toujours": 0.8, "jamais": 0.62, "contact_ref_s": 3,
+   "phases_contact": ["petrir", "diviser", "rouler"],
+   "modele": "vomi",
+   "deroule": {"lacher": 0.5, "detourner": 1.2, "pencher": 0.9, "vomir": 1.6, "souffler": 1.3, "essuyer": 1.2, "revenir": 1.1},
+   "angle_deg": [60, 110],
+   "humeur": {"agacement": 1, "peur": 1},
+   "signes": ["Non. Non non non.", "Oh non. Ça monte.", "Attends… attends…"],
+   "pardon": ["Pardon.", "… Pardon. Ça va.", "Hhh… Pardon."],
+   "reprise": ["On finit. Vite.", "Bon. On finit, et on n'en parle plus.", "On finit. Sans respirer."],
+   "memoire": ["A vomi en façonnant {nom} : il est pâle, le ventre retourné."]
+  },
+  "memoire": {
+   "leger": ["{nom} fait à mains nues : il veut se laver les mains."],
+   "fort": ["{nom} pétri à mains nues : il veut se laver, ne serre la main à personne."]
+  }
+ },
  "modeles": {
   "crotte": {
    "nom": "crotte",
@@ -39,6 +90,7 @@
    "echelle": {"regle": "masse", "densite": 1.05, "exagere": 2.0, "min_m": 0.03, "max_m": 1.2, "petit": 0.85, "gros": 3.5, "enorme": 5.8},
    "ou": "dessous",
    "origine": "corps",
+   "repugnance": 0.9,
    "formes": [
     {"f": "boule", "p": [0.004, 0.001, 0.003], "taille": [0.138, 0.004, 0.132], "couleur": "#2a1e14", "matiere": "mat"},
     {"f": "capsule", "p": [0.045, 0.014, 0.032], "taille": [0.035, 0.039, 0.035], "cap": -127, "penche": [0, -87], "couleur": "#5a3d22", "matiere": "pate-organique"},
@@ -63,6 +115,25 @@
     {"f": "capsule", "p": [0.004, 0.075, 0.01], "taille": [0.021, 0.005, 0.021], "cap": -172, "penche": [0, -71], "couleur": "#52381f", "matiere": "pate-organique"},
     {"f": "capsule", "p": [0, 0.076, 0.007], "taille": [0.018, 0.006, 0.018], "cap": 119, "penche": [0, -85], "couleur": "#5a3d22", "matiere": "pate-organique"},
     {"f": "capsule", "p": [-0.002, 0.077, 0.003], "taille": [0.011, 0.004, 0.011], "cap": 100, "penche": [0, -74], "couleur": "#4b331c", "matiere": "pate-organique"}
+   ]
+  },
+  "vomi": {
+   "nom": "flaque de vomi",
+   "mots": ["vomi", "vomis", "degueulis", "gerbe", "rendu"],
+   "quoi": "flaque plate et irrégulière, beige jaunâtre, luisante, avec des grumeaux ; quelques éclaboussures autour",
+   "envergure_m": 0.42,
+   "echelle": {"regle": "taille"},
+   "origine": "corps",
+   "repugnance": 0.8,
+   "ambiance": true,
+   "formes": [
+    {"f": "boule", "p": [0, 0.004, 0], "taille": [0.3, 0.008, 0.22], "couleur": "#a08a4a", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [0.1, 0.004, 0.07], "taille": [0.17, 0.007, 0.13], "cap": 35, "couleur": "#8f7a3c", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [-0.11, 0.004, -0.05], "taille": [0.15, 0.006, 0.1], "cap": -20, "couleur": "#a8924f", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [0.03, 0.009, -0.02], "taille": [0.05, 0.012, 0.04], "couleur": "#cdb67a", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [-0.04, 0.008, 0.05], "taille": [0.035, 0.01, 0.03], "couleur": "#c7ae6c", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [0.2, 0.002, -0.08], "taille": [0.04, 0.004, 0.03], "couleur": "#9a8445", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [-0.19, 0.002, 0.09], "taille": [0.03, 0.004, 0.025], "couleur": "#9a8445", "matiere": "flaque-organique"}
    ]
   },
   "baton": {

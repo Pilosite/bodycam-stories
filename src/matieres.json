@@ -2082,6 +2082,7 @@
    },
    "brillance": 0.45
   },
+  "flaque-organique": {"nom": "flaque organique (liquide épais renvoyé, avec des grumeaux) : beige jaunâtre, plus sombre au bord, grumeaux clairs, très luisant", "espace": "volume", "couleur": "forme", "variation": {"echelle": 30, "force": 0.35}, "nuance": {"couleur": "#6b5a2a", "force": 0.4, "echelle": 40, "seuils": [0.4, 0.8], "fbm": true, "decalage": 11}, "grain": {"echelle": 380, "force": 0.18}, "taches": [{"couleur": "#d9c48a", "force": 0.45, "echelle": 90, "seuils": [0.66, 0.8], "decalage": 4}], "relief": {"bosses": [{"echelle": 60, "fbm": true, "decalage": 9, "force": 0.0015}]}, "brillance": 0.8},
   "peau": {
    "nom": "peau de main, rosée aux jointures, pores fins, un peu luisante",
    "espace": "volume",

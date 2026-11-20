@@ -151,6 +151,7 @@ await vueLibre(idE, 'énorme');
 await capture('3-enorme', 'l\'énorme crotte, entière');
 
 // 4. « fais comme un bonhomme de neige avec » : il va chercher bâtons et cailloux, ramasse (la main), revient, façonne, cadre en pied
+const tVoix4 = await page.evaluate(() => performance.now() / 1000);
 await dire(PH[3]);
 await quand(() => balade.corps().file.includes('marcher') && balade.lieuCherche());
 await attendre(2500);
@@ -202,6 +203,16 @@ verifier(ob && Math.abs(ob.angle) < 10 && enPied, `bonhomme cadré en pied, enti
 await vueLibre(idE, 'bonhomme');
 await capture('8-bonhomme', 'le bonhomme fini, cadré en pied');
 
+{ // §22 : le dégoût (et la nausée) du bonhomme fait avec l'énorme : le journal des pensées et leurs instants, depuis la phrase
+  const P = (await page.evaluate(() => window.balPensees)).filter(p => p.t >= tVoix4).map(p => ({ t: +(p.t - tVoix4).toFixed(1), source: p.source, phase: p.phase, texte: p.texte }));
+  writeFileSync(join(out, 'pensees-bonhomme.json'), JSON.stringify(P, null, 1));
+  for (const p of P) console.log('   ', String(p.t).padStart(6), p.source + (p.phase ? '/' + p.phase : ''), '«', p.texte, '»');
+  const sons = await page.evaluate(() => window.balSons || []), ev2 = await page.evaluate(() => balade.trace().evenements.filter(e => /degout/.test(e.type)));
+  console.log(sec(), 'dégoût', JSON.stringify(ev2), 'sons', JSON.stringify(sons.map(x => x.evenement)));
+  verifier(P.some(p => p.source === 'degout' && p.phase === 'contact'), 'une pensée de dégoût au premier contact');
+  verifier(P.some(p => p.source === 'nausee'), 'l\'énorme : la nausée');
+  verifier(ev2.some(e => e.type === 'degout_fin'), 'la réaction finale, dégoût et fierté');
+}
 const ev = (await page.evaluate(() => balade.trace().evenements)).filter(e => /modele|faconnage|objet_|cadrage|docile|consomme/.test(e.type));
 console.log(sec(), 'événements', JSON.stringify(ev.map(e => e.type + (e.id ? ':' + e.id : '') + (e.raison ? ' (' + e.raison + ')' : ''))));
 writeFileSync(join(out, 'trace.json'), JSON.stringify(await page.evaluate(() => balade.trace())));
