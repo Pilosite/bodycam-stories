@@ -178,7 +178,7 @@ export function programme(r, f, hasard = Math.random, controle = null, enc = nul
    deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
             construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
             surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard } */
-const MOTEUR = ['image', 'son', 'histoire'];
+const MOTEUR = ['image', 'audio', 'story'];
 const LARGE = '(min-width: 1000px) and (min-aspect-ratio: 5/4)';   // démo sur PC : planche de photos à côté du journal
 export function creerOuverture(deps) {
   const d = document, $ = id => d.getElementById(id);
@@ -359,7 +359,7 @@ export function creerOuverture(deps) {
       if (e.genre === 'bilan') {
         it.innerHTML = `<span class="ouv-k">PDL</span><b>${e.tok}</b> tokens <span class="ouv-k">· JSON</span>${e.json} <span class="ouv-gain">−${e.gain} %</span><span class="ouv-jauge"><i style="transform:scaleX(${(e.tok / e.json).toFixed(3)})"></i></span>`;
         b.ul.appendChild(it); b.x.querySelector('.ouv-compte').textContent = `${e.tok} tokens · −${e.gain} %`; it.scrollIntoView({ block: 'end', behavior: 'smooth' });
-        if (blocs.apercu) blocs.apercu.fin = true, blocs.apercu.cpt.innerHTML = `<b>${e.tok}</b> tokens PDL · JSON ${e.json} · <span class="ouv-gain">−${e.gain} %</span>`;
+        if (blocs.apercu) blocs.apercu.fin = true, blocs.apercu.cpt.innerHTML = `<b>${e.tok}</b> PDL tokens · JSON ${e.json} · <span class="ouv-gain">−${e.gain} %</span>`;
         return;
       }
       if (e.genre === 'requete') it.innerHTML = `<span class="ouv-k">cherche${e.ou ? ' · ' + esc(e.ou) : ''}</span> ${esc(e.texte)}`;
@@ -427,9 +427,9 @@ export function creerOuverture(deps) {
     R.t.forEach(p => svg += noeud(p, 5, 't') + mc(p, 5, 't')); R.o.forEach(p => svg += noeud(p, 14, 'o') + mc(p, 14, 'o'));
     R.m.forEach((p, i) => svg += `<rect class="ouv-nd m" x="${p.x - 9}" y="${p.y - 9}" width="18" height="18" rx="2" style="transform-origin:${p.x}px ${p.y}px"/><text class="ouv-mn" x="${p.x + 15}" y="${p.y + 4}">${MOTEUR[i]}</text>`);
     svg += `<text x="4" y="10">web</text><text x="4" y="46">haiku × 15</text><text x="4" y="110">sonnet × 5</text>`
-      + `<text x="4" y="156" class="ouv-tr">JEV × 4</text><text x="4" y="168" class="ouv-tr2">dLLM · instantané</text><text x="4" y="218">opus × 2</text>`
-      + `<text x="4" y="296">moteur</text><g class="ouv-imp"></g><g class="ouv-eti"></g></svg>`;
-    el.innerHTML = `<p class="ouv-planche-t">Réseau d'agents</p>${svg}<p class="ouv-leg"><span><i class="h"></i>recherche</span> · <span><i class="s"></i>analyse</span> · <span><i class="t"></i>traduction instantanée</span> · <span><i class="o"></i>écriture PDL</span> · <span><i class="em"></i>émet</span> <span><i class="re"></i>reçoit</span> <span><i class="fa"></i>terminé</span></p><p class="ouv-etat-r"></p>`;
+      + `<text x="4" y="156" class="ouv-tr">JEV × 4</text><text x="4" y="168" class="ouv-tr2">dLLM · instant</text><text x="4" y="218">opus × 2</text>`
+      + `<text x="4" y="296">engine</text><g class="ouv-imp"></g><g class="ouv-eti"></g></svg>`;
+    el.innerHTML = `<p class="ouv-planche-t">Agent network</p>${svg}<p class="ouv-leg"><span><i class="h"></i>research</span> · <span><i class="s"></i>analysis</span> · <span><i class="t"></i>instant translation</span> · <span><i class="o"></i>PDL writing</span> · <span><i class="em"></i>sends</span> <span><i class="re"></i>receives</span> <span><i class="fa"></i>done</span></p><p class="ouv-etat-r"></p>`;
     hote.appendChild(el);
     R.el = el; R.svg = el.querySelector('svg'); R.imp = el.querySelector('.ouv-imp'); R.eti = el.querySelector('.ouv-eti'); R.rc = el.querySelector('.ouv-etat-r');
     R.nd = { h: [...el.querySelectorAll('.ouv-nd.h')], s: [...el.querySelectorAll('.ouv-nd.s')], t: [...el.querySelectorAll('.ouv-nd.t')], o: [...el.querySelectorAll('.ouv-nd.o')], m: [...el.querySelectorAll('.ouv-nd.m')] };
@@ -439,7 +439,7 @@ export function creerOuverture(deps) {
     R.cpt = () => {
       const now = performance.now(); R.flux = R.flux.filter(f => now - f[0] < 1500);
       const debit = Math.round(R.flux.reduce((a, f) => a + f[1], 0) / 1.5), actifs = R.svg.querySelectorAll('.ouv-nd.emet,.ouv-nd.recoit').length;
-      R.rc.innerHTML = `<b>${debit}</b> tok/s · <b>${actifs}</b> agents actifs · ${R.n.q} requêtes · ${R.n.s} sources · ${R.n.t} tokens PDL`;
+      R.rc.innerHTML = `<b>${debit}</b> tok/s · <b>${actifs}</b> active agents · ${R.n.q} queries · ${R.n.s} sources · ${R.n.t} PDL tokens`;
     };
     R.cpt();
     return R;
@@ -492,7 +492,7 @@ export function creerOuverture(deps) {
       // transmission groupée : tout ce que les Sonnet ont retenu part vers les Opus, par les traducteurs
       R.s.forEach((p, i) => R.o.forEach((q, j) => timers.push(setTimeout(() => parJev(R, i, j, 360, 'g', 2000), 70 * i + 40 * j))));
       timers.push(setTimeout(() => R.nd.o.forEach(c => poser(c, 'recoit')), 900));   // les Opus écrivent jusqu'au contrôle
-      etiquette(R, R.o[0], 'contexte → opus', 18);
+      etiquette(R, R.o[0], 'context → opus', 18);
       if (blocs && blocs.planche) blocs.planche.classList.add('ouv-replie');   // les photos ont servi : place à l'aperçu du PDL
       if (blocs && blocs.droite && !blocs.apercu) blocs.apercu = creerApercu(blocs.droite);
     } else R.el.classList.remove('pdl');
@@ -530,7 +530,7 @@ export function creerOuverture(deps) {
   /* Aperçu du PDL (colonne de droite) : les trames s'écrivent jeton par jeton pendant que les Opus travaillent. */
   function creerApercu(hote) {
     const el = d.createElement('div'); el.className = 'ouv-apercu';
-    el.innerHTML = '<p class="ouv-planche-t">PDL · langage intermédiaire</p><div class="ouv-flux"></div><p class="ouv-pdl-leg"></p><p class="ouv-pdl-cpt"></p>';
+    el.innerHTML = '<p class="ouv-planche-t">PDL · intermediate language</p><div class="ouv-flux"></div><p class="ouv-pdl-leg"></p><p class="ouv-pdl-cpt"></p>';
     hote.appendChild(el);
     return { el, flux: el.querySelector('.ouv-flux'), leg: el.querySelector('.ouv-pdl-leg'), cpt: el.querySelector('.ouv-pdl-cpt'), n: 0 };
   }

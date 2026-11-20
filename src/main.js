@@ -3413,7 +3413,7 @@ const activite=(()=>{
   const el=document.body.appendChild(document.createElement("div")); el.id="activite"; el.setAttribute("aria-hidden","true");
   const classe={"⇢":"k-pe",">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
   let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false, tTrad=-1e9, trAct=0;
-  // une trame PDL (src/pdl.js) : ses jetons s'écrivent comme une ligne ; dessous, la traduction en clair de 2 jetons défile
+  // une trame PDL (src/pdl.js) : ses jetons s'écrivent comme une ligne ; dessous, la traduction en clair (anglais) de 2 jetons défile
   // le profil du personnage : les vrais réglages issus de la recherche de l'ouverture (ouvertures/*.json, section personnage)
   const PERSO=(()=>{ try{ const r=(typeof OUVERTURES!=="undefined"?OUVERTURES:[]).find(r=>r.personnage&&r.personnage.reglages); return r?r.personnage.reglages:null; }catch(_){ return null; } })();
   let persona=null;
@@ -3424,7 +3424,7 @@ const activite=(()=>{
       chercher:/cherch|ramass|rapport|trouve/i.test(t), faconner:!!tm };
     const r=PDL.reactionAttendue(PERSO,nature); if(!r) return;
     const l=ajouter({k:"◈",t:r.trame.texte}); l.tr=r.trame; l.pe=1;
-    ajouter({k:"⇢",t:"réaction attendue · traducteur : "+r.texte}).pe=1; persona={lie:false}; tTrad=performance.now(); }
+    ajouter({k:"⇢",t:"expected reaction · translated by JEV : "+r.texte}).pe=1; persona={lie:false}; tTrad=performance.now(); }
   function ajouterTrame(tr){ if(!tr||!tr.jetons.length) return; const l=ajouter({k:"◈",t:tr.texte}); l.tr=tr; el.classList.add("tr"); tTrad=performance.now(); }
   function rendreTrame(l,curseur){ const tr=l.tr, J=[{s:tr.entete,poids:3,sg:1},...tr.jetons,{s:tr.somme,poids:1,sg:1}]; let c=0, h="";
     for(const j of J){ if(c>=l.n) break; c+=j.s.length+1; h+='<span class="tj p'+j.poids+(j.sg?' sg':'')+'">'+esc(j.s)+'</span>'; }
@@ -3448,13 +3448,13 @@ const activite=(()=>{
     const now=performance.now();
     if(meneur){
       const v=meneur.enVol(), a=meneur.atelier&&meneur.atelier();
-      if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interprète",0))};
-        appel.l.t=ACTIVITE.ligneAppel("interprète",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
-      else if(appel){ appel.l.k="✓"; appel.l.t="interprète  répondu en "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true;
+      if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interpreter",0))};
+        appel.l.t=ACTIVITE.ligneAppel("interpreter",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
+      else if(appel){ appel.l.k="✓"; appel.l.t="interpreter  answered in "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true;
         if(typeof PDL!=="undefined"&&queue.length&&!trAct) try{ trAct=1; ajouterTrame(PDL.trameActions(queue)); }catch(_){} }
-      if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("accessoiriste",0))};
-        fab.l.t=ACTIVITE.ligneAppel("accessoiriste",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
-      else if(fab){ fab.l.k="✓"; fab.l.t="accessoiriste  rendu en "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
+      if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("prop master",0))};
+        fab.l.t=ACTIVITE.ligneAppel("prop master",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
+      else if(fab){ fab.l.k="✓"; fab.l.t="prop master  done in "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
     }
     const q=queue[0];
     if(q!==(act&&act.a)){
@@ -3497,11 +3497,11 @@ window.balActivite=activite;   // essais : balActivite.lignes()
 const regie=(()=>{
   if(window.__CFG&&!CFG.regie) return null;
   const el=document.createElement("div"); el.id="regie"; el.setAttribute("aria-hidden","true");
-  const L=[["ciel","Ciel · lumière"],["monde","Monde · terrain"],["histoire","Histoire"],["evenements","Événements"],["corps","Comportement"],["son","Son · voix"],["traduction","Traduction · PDL"]];
+  const L=[["ciel","Ciel · lumière"],["monde","Monde · terrain"],["histoire","Histoire"],["evenements","Événements"],["corps","Comportement"],["son","Son · voix"],["traduction","Translation · PDL"]];
   el.innerHTML='<p class="rg-t">Agents · régie</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
   document.body.appendChild(el);
   const N={}; for(const p of el.querySelectorAll(".rg-l")) N[p.dataset.k]={p,b:p.querySelector("b"),n:0,t:0};
-  const etats={ciel:["veille","exposition","brume"],monde:["veille","sème","relief"],histoire:["écoute","écrit","décide"],evenements:["veille","prépare","déclenche"],corps:["repos","planifie","agit"],son:["silence","mixe","joue"],traduction:["veille","écoute","traduit"]};
+  const etats={ciel:["veille","exposition","brume"],monde:["veille","sème","relief"],histoire:["écoute","écrit","décide"],evenements:["veille","prépare","déclenche"],corps:["repos","planifie","agit"],son:["silence","mixe","joue"],traduction:["idle","listening","translating"]};
   let i=0;
   setInterval(()=>{ i++;
     const jeu=!(ouverture&&ouverture.ouvert())&&!document.hidden&&innerWidth>=760&&activite.on()&&!CFG.nohud;

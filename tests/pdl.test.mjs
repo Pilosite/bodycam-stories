@@ -38,6 +38,6 @@ test('demande, actions, réaction attendue', () => {
   const P = R.personnage.reglages;
   assert.equal(PDL.reactionAttendue(P, {}), null);
   const r = PDL.reactionAttendue(P, { repugnance: .9, facteur: 6, chercher: true });
-  assert.ok(r.texte.includes('F30') && r.reaction.includes('obéit') && r.reaction.some(x => /dégoût/.test(x)) && r.reaction.includes('humour à froid'), r.texte);
+  assert.ok(r.texte.includes('F30') && r.reaction.includes('complies') && r.reaction.some(x => /disgust/.test(x)) && r.reaction.includes('deadpan'), r.texte);
   assert.ok(PROPRE(r.trame.texte));
 });

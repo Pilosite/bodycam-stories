@@ -20,6 +20,7 @@ export const CLASSES = {
 const RUBRIQUE = { lieu: 'lieu', relief: 'relief', trajet: 'trajet', arbres: 'flore', perches: 'flore', gres: 'matiere', surfaces: 'matiere', air: 'air', camera: 'camera', personnage: 'personnage' };
 export const classeDe = cle => RUBRIQUE[cle] || (/^semis/.test(cle) ? 'flore' : 'histoire');
 
+const EN = { lieu: 'place', relief: 'relief', trajet: 'path', flore: 'flora', lumiere: 'light', matiere: 'material', air: 'air', camera: 'camera', personnage: 'persona', demande: 'request', analyse: 'analysis', action: 'action', son: 'audio', histoire: 'story', garde: 'guard' };
 const cleCode = k => { const h = empreinte(k) % 3844; return B62[Math.floor(h / 62)] + B62[h % 62]; };
 const lisible = v => typeof v === 'number' ? String(+v.toFixed(2)).replace('.', ',') : typeof v === 'boolean' ? (v ? 'oui' : 'non') : String(v);
 
@@ -45,7 +46,7 @@ export function trame(classe, objet, rang = 0) {
   const jetons = F.map(([k, v], i) => {
     const court = k.split('.').filter(x => !/^\d+$/.test(x)).slice(-2).join('.') || classe;
     const p = i === 0 ? 3 : typeof v === 'number' ? (Math.abs(v) >= 10 ? 3 : 2) : 1;
-    return { s: sg + cleCode(k) + valeur(v), cle: (classe + (court ? ' · ' + court : '')).replace(/_/g, ' '), val: lisible(v), poids: p };
+    return { s: sg + cleCode(k) + valeur(v), cle: ((EN[classe] || classe) + (court ? ' · ' + court : '')).replace(/_/g, ' '), val: lisible(v), poids: p };
   });
   const entete = '▣' + sg + B36[rang % 36];
   const corps = jetons.map(j => j.s).join(' ');
@@ -88,25 +89,26 @@ export const traduire = j => j.s + ' = ' + j.cle + ' : ' + j.val;
    réglages (ceux de la recherche de l'ouverture) et de la nature de la demande, jamais d'un objet en dur.
    perso : { id, genre, age, pays, annee, metier, ton[], peur (0..3), humour, sait[] } ;
    nature : { repugnance 0..1, facteur (échelle), effort (s), chercher, faconner }. Rend null si ses réglages ne jouent pas. */
+const TON = { sec: 'dry', 'drôle': 'funny', doux: 'gentle', anxieux: 'anxious', bavard: 'chatty' };
 export function reactionAttendue(perso, nature = {}) {
   if (!perso || typeof perso !== 'object') return null;
   const n = nature || {}, rp = +n.repugnance || 0, fa = +n.facteur || 1, ef = +n.effort || 0;
   if (!(rp > 0 || fa >= 3 || ef >= 4 || n.chercher || n.faconner)) return null;
-  const F = perso.genre === 'F', e = s => F ? s + 'e' : s, ton = [].concat(perso.ton || []);
+  const F = perso.genre === 'F', ton = [].concat(perso.ton || []);
   const R = [];
-  if (ton.includes('sec')) R.push('râle');
-  R.push('obéit');
-  if (rp >= .5) R.push(fa >= 3 || rp >= .85 ? 'dégoût marqué, se retient' : 'dégoût marqué');
-  else if (rp > 0) R.push('grimace');
-  if (fa >= 5) R.push('incrédule devant la taille');
-  if (ef >= 4) R.push('souffle, effort long');
-  if (n.chercher) R.push((perso.sait || []).length ? 'cherche en ' + (F ? 'connaisseuse' : 'connaisseur') : 'cherche sans discuter');
-  if ((+perso.peur || 0) <= 1) R.push('pas ' + e('impressionné'));
-  else R.push(e('inquiet'));
+  if (ton.includes('sec')) R.push('grumbles');
+  R.push('complies');
+  if (rp >= .5) R.push(fa >= 3 || rp >= .85 ? 'strong disgust, holds it in' : 'strong disgust');
+  else if (rp > 0) R.push('winces');
+  if (fa >= 5) R.push('disbelief at the size');
+  if (ef >= 4) R.push('long effort, heavy breathing');
+  if (n.chercher) R.push((perso.sait || []).length ? 'searches like she knows the woods'.replace('she', F ? 'she' : 'he') : 'searches without arguing');
+  if ((+perso.peur || 0) <= 1) R.push('unfazed');
+  else R.push('uneasy');
   const H = ton.includes('drôle') || perso.humour;
   R.splice(H ? 4 : 5);                                     // court : trois lignes au plus dans le panneau
-  if (H) R.push('humour à froid');
-  const profil = [perso.id ? perso.id[0].toUpperCase() + perso.id.slice(1) : 'perso', (perso.genre || '') + (perso.age || ''), (perso.pays || '') + (perso.annee || ''), perso.metier, ton.length ? 'ton ' + ton.join(', ') : ''].filter(Boolean).join(' · ');
+  if (H) R.push('deadpan');
+  const profil = [perso.id ? perso.id[0].toUpperCase() + perso.id.slice(1) : 'perso', (perso.genre || '') + (perso.age || ''), (perso.pays || '') + (perso.annee || ''), ton.map(x => TON[x] || x).join(', ')].filter(Boolean).join(' · ');
   const tr = trame('personnage', { id: perso.id, genre: perso.genre, age: perso.age, pays: perso.pays, annee: perso.annee, ton, peur: perso.peur, demande: { repugnance: rp || undefined, facteur: fa !== 1 ? fa : undefined, effort: ef || undefined } }, 2);
   return { profil, reaction: R, texte: profil + ' → ' + R.join(', '), trame: tr };
 }
