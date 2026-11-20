@@ -4,6 +4,7 @@
 // essayée ; on note les positions avant/après, la distance faite, ce qu'il dit, et les marches demandées (balade.marches()).
 // Essais : avance de 5 mètres ; recule de 3 mètres ; va vers l'arbre ; reviens ; fais demi-tour et avance de 6 mètres ;
 // après l'énorme crotte : avance de 5 mètres ; puis 30 m le long du sentier.
+// DECALE=0.15 : après le cadrage, il recule d'autant (la distance de cadrage d'un autre écran : 0,4 à 0,7 m).
 // Usage : node tools/bouche.mjs [dist/index.html] [essais séparés par |]   (sortie : out/bouche/rapport.json et une capture par essai)
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
@@ -63,6 +64,9 @@ for (const essai of ESSAIS) {
     const c = await corps();
     R.chose = o && { id: o.id, m: +o.m.toFixed(2), angle: Math.round(o.angle), taille: o.taille };
     R.cadrage = { haut: +c.haut.toFixed(2), zoom: +c.zoom.toFixed(2) };
+    if (+process.env.DECALE) {                                      // une autre distance de cadrage (un autre écran) : il recule d'autant, face à elle
+      await page.evaluate(d => { const c = balade.corps(); balade.placer(c.x - Math.sin(c.yaw) * d, c.z - Math.cos(c.yaw) * d, c.yaw); }, +process.env.DECALE);
+      await page.waitForTimeout(800); const o2 = await page.evaluate(i => balade.percevoir().objets.find(o => o.id === i), o.id); R.chose.m = +o2.m.toFixed(2); }
   }
   const c0 = await corps(), n0 = (await page.evaluate(() => balade.marches ? balade.marches() : [])).length;
   const objets0 = await page.evaluate(() => balade.objets());
