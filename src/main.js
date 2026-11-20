@@ -2081,9 +2081,14 @@ function objetMeneur(o){
     if(base){ const b=posObjet(base); pos=versFiche(b.x+(+d[0]||0),b.z+(+d[1]||0)); }
     else if(o.reserve&&reserves.has(o.reserve)){ pos=reserves.get(o.reserve); reserves.delete(o.reserve); }
     else pos=placeGeste(o);
-    if(!base){ const w=posObjet(pos), F=(o.objet.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));   // jamais dans le corps du porteur
+    { const w=posObjet(pos), F=(o.objet.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));   // jamais dans le corps du porteur
       const r=Math.max(0,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2)), corps={x:cam.x,z:cam.z,yaw:cam.yaw};
-      const q=MENEUR.placeLibre(MENEUR.horsDuCorps(w,corps,r),r,obstaclesConnus(),corps);   // ni sur lui, ni sur une autre chose, un tronc, un rocher
+      const haut=Math.max(.02,...F.map(f=>f.p[1]+f.taille[1]/2));
+      // ni sur lui (derrière les talons si elle sort du corps), ni sur une autre chose, un tronc, un rocher, ni DANS ou SOUS un
+      // élément de semis (cailloux, branches mortes, tombes : cas réel, une crotte cadrée à travers un éclat de grès)
+      const occupe=p=>semisSous(p.x,p.z,r,haut);
+      const q=base?(occupe(w)?MENEUR.placeLibre(w,r,[],{x:posObjet(base).x,z:posObjet(base).z},MENEUR.REGLAGES.MARGE_CORPS,occupe):w)
+        :MENEUR.placeLibre(MENEUR.horsDuCorps(w,corps,r,MENEUR.REGLAGES.MARGE_CORPS,o.ou),r,obstaclesConnus(),corps,MENEUR.REGLAGES.MARGE_CORPS,occupe);
       if(q.x!==w.x||q.z!==w.z) pos=versFiche(q.x,q.z); }
     const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
     if(!v||!v[0]) return;
@@ -2363,7 +2368,21 @@ function planCorps(a){
   const pl=MENEUR.planCadrage(q.taille,S.eye,q.haut), m=Math.hypot(q.x-cam.x,q.z-cam.z);
   if(m>12) return [{type:"viser",objet:a.objet}];                    // trop loin pour y aller : il la montre d'où il est
   if(a.sur_place) return [...pre,{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:MENEUR.zoomPour(q.taille,m,S.eye*pl.hauteur)}];   // d'où il est
+  const P=q.sorte==="objet"?pointDeVue(q,pl):null;
+  if(P&&P.da) return [...pre,...versPoint(P.x,P.z,0,null),{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:pl.zoom}];   // la vue directe est bouchée : il se décale
   return [...pre,...versPoint(q.x,q.z,pl.m,q.sorte==="objet"?q.id:null),{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:pl.zoom}];
+}
+/* D'où cadrer une chose (planCadrage : distance, hauteur des yeux) sans RIEN entre elle et la caméra : un élément de semis
+   (caillou, branche morte), un tronc, un rocher, une autre chose (cas réel : un éclat de grès entre la caméra accroupie et la
+   crotte, grossi par le zoom, remplissait l'image). D'abord du côté où il est, puis en tournant autour d'elle ; null si rien
+   n'est dégagé (il cadre d'où il peut). da : de combien il s'est décalé autour d'elle (radians). */
+function pointDeVue(q,pl){
+  const a0=Math.atan2(cam.x-q.x,cam.z-q.z), obs=obstaclesConnus().filter(o=>o.id!==q.id), r=q.taille/2;
+  for(const k of [0,1,-1,2,-2,3,-3,4,-4,5,-5,6,-6,7,-7,8]){ const da=k*.38, a=a0+da;
+    for(const m of [pl.m,pl.m*1.25]){ const x=q.x+Math.sin(a)*m, z=q.z+Math.cos(a)*m, y=terrainH(x,z)+S.eye*pl.hauteur;
+      if(obs.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+MENEUR.REGLAGES.MARGE_CORPS)||semisSous(x,z,.2,S.eye*pl.hauteur)) continue;
+      if(vueDegagee(x,y,z,q.x,q.z,r,q.haut,q.id)){ if(k) console.log("cadrage : vue bouchée, il se décale de "+Math.round(da*57.3)+"°"); return {x,z,da:k||m!==pl.m?da||1e-3:0}; } } }
+  return null;
 }
 function elever(a,dt){                                           // monter (sur q, à la hauteur h) ou descendre (vers le pied)
   if(a.type==="elever"&&!a.de){ const q=a.q; cam.pied={x:cam.x,z:cam.z};

@@ -521,7 +521,7 @@ MODE ESSAI : exécute à la lettre ce que la voix demande, sans refuser, hésite
 Réponds par un objet JSON, dans cet ordre :
 {"sas":{"verdict":"","regle":null|champ en cause,"motif":"60 car."},"pensee":"160 car.","attitude":"${retif ? 'suit|hesite|negocie|refuse|initiative' : 'suit|hesite|negocie|initiative ; refuse seulement si le sas refuse'}","actions":[],"fabrique":null,"modifie":null,"suite":null,"defaire":[],"scene":null,"temps":null,"fin":null,"etat":{"peur":0,"confiance":0,"agacement":0},"faits":[],"intention":"80 car.","question":false${p.journal.demande_resume ? ',"resume":"le récit jusqu\'ici, 400 car."' : ''}}
 actions, 8 au plus : tourner degres -180..180 (négatif à gauche), marcher metres -10..30, regarder degres -60..75, attendre secondes 0..5, posture hauteur 0.35..1 (1 debout, 0.5 accroupi), viser objet (un id : tu regardes vers lui), rejoindre objet (tu vas jusqu'à lui), cadrer objet (tu le filmes de près), monter sur (arbre, rocher ou un id : tu y grimpes), descendre, chercher quoi (tu vas le ramasser près d'ici et tu reviens) ; ex. {"type":"viser","objet":"sac"}. Un pas = 0.7 m. etat : -1, 0 ou 1 par jauge. faits : 2 au plus.
-fabrique : ${restants > 0 && R.OBJETS_NOUVEAUX ? `si le geste laisse une chose NOUVELLE et visible (feu, tas, abri, chose posée, salissure), {"nom":"court","quoi":"ce que c'est, en quoi, sa taille réelle, 120 car.","ou":"devant|pieds|dessous|derriere|gauche|droite|main"} (par rapport à ton corps : ce qui tombe de toi, dessous ; ce que tu poses des mains, pieds ou devant ; "distance": m si elle est dite). Sinon null.` : 'plus rien de nouveau ne peut apparaître : null.'} modifie : si la voix parle d'une chose DÉJÀ LÀ (tes traces, ce que tu vois) pour la compléter, décorer, repeindre, mouler, déplacer, casser : {"objet":"son id","quoi":"ce qui change, 120 car."} ; ne la refais pas en fabrique, ne la défais pas. defaire : ids de tes traces à éteindre, ramasser, détruire.${suites ? ' suite : si ce geste a des suites crédibles ici (le feu prend, l\'eau monte), en une phrase ; sinon null.' : ''}
+fabrique : ${restants > 0 && R.OBJETS_NOUVEAUX ? `si le geste laisse une chose NOUVELLE et visible (feu, tas, abri, chose posée, salissure), {"nom":"court","quoi":"ce que c'est, en quoi, sa taille réelle, 120 car.","ou":"devant|pieds|dessous|derriere|gauche|droite|main"} (par rapport à ton corps : ce qui tombe de toi, dessous ; ce que tu poses des mains, pieds ou devant ; "distance": m si elle est dite). La chose demandée, telle que dite : même nature, même matière, même taille (« énorme », « de 5 kg » : le nom et quoi le disent), une nouvelle si on dit « une » ; tu peux râler, jamais la remplacer par autre chose ni retoucher une ancienne. Sinon null.` : 'plus rien de nouveau ne peut apparaître : null.'} modifie : si la voix parle d'une chose DÉJÀ LÀ (tes traces, ce que tu vois) pour la compléter, décorer, repeindre, mouler, déplacer, casser : {"objet":"son id","quoi":"ce qui change, 120 car."} ; ne la refais pas en fabrique, ne la défais pas. defaire : ids de tes traces à éteindre, ramasser, détruire.${suites ? ' suite : si ce geste a des suites crédibles ici (le feu prend, l\'eau monte), en une phrase ; sinon null.' : ''}
 scene : ${amb.brume ? `brume ${amb.brume[0]}..${amb.brume[1]}` : 'rien'}${accessoires.length ? `, montrer/cacher ${J(accessoires)}` : ''} ; le reste par la pensée (bruit, odeur). temps, fin : un id ouvert, s'il se produit maintenant.`);
 
   parties.push(`== CE QUE TU ES ET CE QUE TU SAIS ==
@@ -757,8 +757,16 @@ export function secoursChercher(texte) {
 /* Une chose n'est jamais posée là où se tient le porteur. Plus large que 25 cm (rayon > 12,5 cm), elle est posée DEVANT lui, à
    une distance faite pour son envergure (son rayon, la marge du corps, 25 cm) ; une petite chose peut tomber à ses talons :
    elle passe sous la caméra, il s'en écarte en repartant. */
-export function horsDuCorps(pos, corps, rayon, marge = REGLAGES.MARGE_CORPS) {
+export function horsDuCorps(pos, corps, rayon, marge = REGLAGES.MARGE_CORPS, ou = null) {
   const r = num(rayon, 0, 30, 0), dx = pos.x - corps.x, dz = pos.z - corps.z, m = Math.hypot(dx, dz), grand = r > 0.125, d = r + (grand ? marge + 0.25 : 0.05);
+  // ce qui sort du corps (« dessous ») tombe DERRIÈRE les talons, quelle que soit sa taille : il ne le voit pas apparaître,
+  // il se relève, fait un pas, se retourne. Assez loin pour que rien n'entre dans le corps accroupi (son rayon, plus 20 cm,
+  // plus la marge du corps pour une grosse chose). Une place déjà assez loin du corps (il a bougé depuis le geste) est gardée.
+  if (ou === 'dessous' || ou === 'derriere') {
+    const db = r + 0.2 + (grand ? marge - 0.1 : 0), y = corps.yaw || 0;
+    if (m >= db) return { x: pos.x, z: pos.z };                   // il est parti depuis le geste : la chose reste où il l'a faite
+    return { x: corps.x - Math.sin(y) * db, z: corps.z - Math.cos(y) * db };
+  }
   if (m >= d) return { x: pos.x, z: pos.z };
   if (grand) return { x: corps.x + Math.sin(corps.yaw || 0) * d, z: corps.z + Math.cos(corps.yaw || 0) * d };
   const ux = m > 1e-3 ? dx / m : -Math.sin(corps.yaw || 0), uz = m > 1e-3 ? dz / m : -Math.cos(corps.yaw || 0);
@@ -767,12 +775,13 @@ export function horsDuCorps(pos, corps, rayon, marge = REGLAGES.MARGE_CORPS) {
 
 /* Une chose nouvelle ne se pose pas sur une autre : si la place est prise (cercles {x, z, r} des choses déjà là), elle glisse
    autour du porteur, à la même distance ou un peu plus loin, jusqu'à une place libre. */
-export function placeLibre(pos, rayon, autres, corps, marge = REGLAGES.MARGE_CORPS) {
+export function placeLibre(pos, rayon, autres, corps, marge = REGLAGES.MARGE_CORPS, occupe = null) {
+  // occupe(p) : ce que la page sait en plus (les éléments de semis du décor : cailloux, branches, tombes) ; vrai si p est pris
   const r = num(rayon, 0, 30, 0), A = liste(autres).filter(o => isObj(o) && Number.isFinite(o.x));
-  const libre = p => A.every(o => Math.hypot(p.x - o.x, p.z - o.z) >= o.r + r + 0.1);
+  const libre = p => A.every(o => Math.hypot(p.x - o.x, p.z - o.z) >= o.r + r + 0.1) && !(typeof occupe === 'function' && occupe(p));
   if (libre(pos)) return { x: pos.x, z: pos.z };
   const d0 = Math.max(Math.hypot(pos.x - corps.x, pos.z - corps.z), r + (r > 0.125 ? marge + 0.25 : 0.3)), a0 = Math.atan2(pos.x - corps.x, pos.z - corps.z);
-  for (const d of [d0, d0 + r + 0.3, d0 + 2 * r + 0.6]) for (let k = 1; k <= 8; k++) for (const sg of [1, -1]) {
+  for (const d of [d0, d0 + 0.15, d0 + r + 0.3, d0 + 2 * r + 0.6, d0 + 3 * r + 1]) for (let k = d === d0 ? 1 : 0; k <= 10; k++) for (const sg of [1, -1]) {
     const a = a0 + sg * k * 0.3, p = { x: corps.x + Math.sin(a) * d, z: corps.z + Math.cos(a) * d };
     if (libre(p)) return p;
   }
@@ -1015,7 +1024,10 @@ export function formesModele(m, texte) {
   const [mn, mx, pq] = bornesTaille(texte);
   if (masse && ech.regle === 'masse') {
     const V = volumeFormes(formes);
-    if (V > 0) { k = Math.cbrt(masse / num(ech.densite, 0.1, 20, 1) / 1000 / V); raison = `${masse} kg (densité ${num(ech.densite, 0.1, 20, 1)})`; }
+    // « exagere » : à l'image, une masse dite doit se voir (5 kg : le volume réel ne fait que 31 cm, on attend un tas) ; le
+    // modèle dit de combien on grossit l'envergure réelle, proportions gardées
+    const ex = num(ech.exagere, 1, 4, 1);
+    if (V > 0) { k = Math.cbrt(masse / num(ech.densite, 0.1, 20, 1) / 1000 / V) * ex; raison = `${masse} kg (densité ${num(ech.densite, 0.1, 20, 1)}${ex !== 1 ? ', ×' + ex + ' à l\'image' : ''})`; }
   } else if (/(cm|m|metres?|comme)\b/.test(pq) || /^comme /.test(pq)) { k = (mn + mx) / 2 / e0; raison = pq; }
   // sans taille chiffrée, les mots donnent un contraste franc (la petite, puis l'énorme : comique, mais lisible entière)
   else if (ENORME.test(t)) { k = num(ech.enorme, 1, 20, 5); raison = 'énorme'; }
@@ -1436,7 +1448,8 @@ export function creerMeneur(o) {
       if (v.actions.length < avant) log('stop_filtre', { retire: avant - v.actions.length });
     }
     v.texte = texte;
-    if (!refuse) preparerModif(v, texte);
+    const tenue = !estStop(texte) && tenirDemande(v, texte);
+    if (!refuse || tenue) preparerModif(v, texte);
     appliquer(v, 'voix');
   }
   function appliquer(v, type) {
@@ -1531,6 +1544,35 @@ export function creerMeneur(o) {
   }
   /* Un modèle « transforme » de la bibliothèque nommé par la phrase (« fais-en un bonhomme de neige »), et la trace qu'il vise
      (nommée, désignée, ou la plus récente : « fais-EN »). */
+  /* La page tient la demande (cas réel, vrai Claude : « fais une énorme crotte » ; il en a fait une petite, puis a dit qu'il la
+     ferait « avec de la terre »). Une chose NOUVELLE d'une nature connue de la bibliothèque, demandée par le joueur (« fais une
+     énorme X », « un X de 5 kg ») : quelle que soit la réponse (texte seul, refus poli, autre matière, retouche d'une ancienne),
+     elle est fabriquée, à la taille que dit la phrase (formesModele). Il peut râler : sa pensée le dit, et il s'exécute. */
+  const FAIRE = /\b(fais|fait|faire|refais|fabrique|chie|chier|ponds|pondre|lache|lacher|depose|poser?|cree|creer|produis)\b/;
+  const RALE = ['Pff… T\'es sérieux ? … Bon. Tu l\'auras voulu.', 'Ça va être immonde. Bon. Je le fais.', 'Non mais… Bon. Puisque t\'insistes. Regarde pas.', 'T\'es malade, toi. … Allez. Voilà.'];
+  function tenirDemande(v, texte) {
+    if (R.MODELES === 'non' || !BIB) return false;
+    const t = sansAccents(texte || '');
+    if (!FAIRE.test(t) || !/\b(une?|des|du|\d+(?:[.,]\d+)?)\b/.test(t) || /\b(fais-la|fais-le|rends-la|rends-le|la meme|cette|cet)\b/.test(t)) return false;
+    const m = modeleDe(BIB, t, { ramassable: false });
+    if (!m || modeleTransforme(t)) return false;                   // « fais-en un … » : un façonnage, pas une chose nouvelle
+    const f = v.fabrique, fm = f ? modeleNomme(f.nom, f.quoi, '') : null;
+    if (f && fm && fm.id === m.id) return false;                   // il la fait : la taille vient de la phrase (traiterAtelier)
+    const de = f ? 'autre_chose' : v.modifie ? 'modifie' : 'texte_seul';
+    if (v.modifie && !v.modifie.faconner) v.modifie = null;        // il retouchait une ancienne : non, une nouvelle
+    const kg = /(\d+(?:[.,]\d+)?)\s*(kg|kilos?)/.exec(t);
+    const nom = str(m.modele.nom, 40) + (kg ? ' de ' + kg[1] + ' kg' : ENORME.test(t) ? ' énorme' : '');
+    v.fabrique = { nom, quoi: str(texte, 120), ou: OU.includes(m.modele.ou) ? m.modele.ou : 'devant' };
+    v.defaire = [];
+    const garde = liste(v.actions).filter(a => !['chercher', 'faconner'].includes(a.type));
+    v.actions = validerActions(v.fabrique.ou === 'dessous' && !garde.some(a => a.type === 'posture')
+      ? [{ type: 'posture', hauteur: 0.45 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }, ...garde] : garde);
+    if (v.attitude === 'refuse') v.attitude = 'hesite';
+    if (v.sas && v.sas.verdict === 'refuse') v.sas.verdict = 'recevable';
+    v.pensee = tirer(RALE);                                       // sa réponse parlait d'autre chose (« avec de la terre ») : il râle, et le fait
+    log('demande_tenue', { modele: m.id, de, nom });
+    return true;
+  }
   function modeleTransforme(texte) { return R.MODELES === 'non' ? null : modeleDe(BIB, texte, { transforme: true }); }
   function designerTrace(texte) {
     const L = partie.monde.crees.filter(c => !c.retire), t = sansAccents(texte || '');
@@ -1595,8 +1637,13 @@ export function creerMeneur(o) {
     const id = ++numero;
     recompter();
     if (dem.modifie) { const i = dem.modifie.objet; dem.modifie.cible = { id: i, nom: nomDe(i), formes: clone(formesDe(i)), echelle: echelleDe(i) }; }
-    // ce qui sort du corps tombe à l'aplomb, pas devant : la page corrige une pose « pieds » ou « devant » sans distance dite
-    if (dem.fabrique && (dem.fabrique.ou === 'pieds' || dem.fabrique.ou === 'devant') && dem.fabrique.distance === undefined
+    // où se pose la chose : la donnée du modèle (« ou » de la bibliothèque) l'emporte sur ce que propose Claude (cas réel : la
+    // crotte « devant », elle apparaissait sous ses yeux) ; sans modèle, ce qui sort du corps tombe à l'aplomb, pas devant
+    const mou = dem.fabrique && R.MODELES !== 'non' ? modeleNomme(dem.fabrique.nom, dem.fabrique.quoi, dem.texte) : null;
+    if (mou && OU.includes(mou.modele.ou)) {
+      if (dem.fabrique.ou !== mou.modele.ou || dem.fabrique.distance !== undefined) log('pose_corrigee', { de: dem.fabrique.ou, vers: mou.modele.ou, modele: mou.id });
+      dem.fabrique.ou = mou.modele.ou; delete dem.fabrique.distance;
+    } else if (dem.fabrique && (dem.fabrique.ou === 'pieds' || dem.fabrique.ou === 'devant') && dem.fabrique.distance === undefined
       && PETIT_CORPS.test(sansAccents(dem.fabrique.nom + ' ' + dem.fabrique.quoi))) { log('pose_corrigee', { de: dem.fabrique.ou, vers: 'dessous' }); dem.fabrique.ou = 'dessous'; }
     if (dem.fabrique) {                                          // la place se prend MAINTENANT, là où le geste a lieu
       const g = secoursGeste(dem.fabrique.nom) || secoursGeste(dem.texte);
@@ -1666,7 +1713,7 @@ export function creerMeneur(o) {
     let objet = null;
     // la bibliothèque : si la chose demandée est un modèle de référence, il sert de base sûre, à l'échelle demandée (§15)
     const mf = dem.fabrique && R.MODELES === 'base' ? modeleNomme(dem.fabrique.nom, dem.fabrique.quoi, dem.texte) : null;
-    if (mf) { const x = formesModele(mf.modele, demande);
+    if (mf) { const x = formesModele(mf.modele, (dem.texte || '') + ' ' + demande);   // la taille que dit le joueur passe avant celle que dit Claude
       if (x) { objet = { nom: str(isObj(r) && isObj(r.objet) && r.objet.nom, 60) || dem.fabrique.nom || str(mf.modele.nom, 60), formes: x.formes, degage: 0 }; source = 'modele';
         log('modele', { id: mf.id, envergure: x.envergure, facteur: x.facteur, raison: x.raison }); } }
     if (!objet && dem.fabrique && isObj(r)) objet = validerObjet(r.objet, R.OBJET_FORMES_MAX);

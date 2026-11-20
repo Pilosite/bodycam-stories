@@ -93,7 +93,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
         if (objets.filter(x => !caches.has(x.id)).length >= 8) return;
         let x, z; const base = o.pres_de && objets.find(b => b.id === o.pres_de);
         if (base) { x = base.x + (o.decale ? o.decale[0] : 0); z = base.z + (o.decale ? o.decale[1] : 0); }
-        else ({ x, z } = placeLibre(horsDuCorps((o.reserve && w.reserves[o.reserve]) || place(), w, envergure(o.objet.formes) / 2), envergure(o.objet.formes) / 2, obstacles(), w));   // ni dans le corps du porteur, ni sur une autre chose
+        else ({ x, z } = placeLibre(horsDuCorps((o.reserve && w.reserves[o.reserve]) || place(), w, envergure(o.objet.formes) / 2, undefined, o.ou), envergure(o.objet.formes) / 2, obstacles(), w));   // ni dans le corps du porteur, ni sur une autre chose
         const ob = { id: o.objet.id, nom: o.objet.nom, x, z, formes: o.objet.formes.length, formesL: o.objet.formes, echelle: 1, lumineux: o.objet.formes.some(f => f.matiere === 'lumineux') };
         if (o.differe) (w.differes[o.differe] = w.differes[o.differe] || []).push(ob); else objets.push(ob);
       } else if (o.op === 'faconner') { w.faconnages[o.id] = o; if (!w.file.some(a => a.type === 'faconner' && a.objet === o.id)) faconner(o);

@@ -6,7 +6,7 @@
    "mots": ["crotte", "crottes", "caca", "chie", "chier", "etron", "etrons", "excrement", "excrements", "besoins", "fiente", "merde", "merdes", "bouse", "bouses", "colombin", "colombins", "selles", "dejection", "dejections", "popo", "crottin", "matiere fecale", "fecal", "fecale"],
    "quoi": "boudin brun enroulé sur lui-même en deux tours, segments, bout effilé, luisant ; ombre de contact dessous",
    "envergure_m": 0.138,
-   "echelle": {"regle": "masse", "densite": 1.05, "min_m": 0.03, "max_m": 0.9, "petit": 0.85, "gros": 3.5, "enorme": 5.6},
+   "echelle": {"regle": "masse", "densite": 1.05, "exagere": 2.0, "min_m": 0.03, "max_m": 1.2, "petit": 0.85, "gros": 3.5, "enorme": 5.8},
    "ou": "dessous",
    "formes": [
     {"f": "boule", "p": [0.004, 0.001, 0.003], "taille": [0.138, 0.004, 0.132], "couleur": "#2a1e14", "matiere": "mat"},

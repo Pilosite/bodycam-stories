@@ -39,13 +39,17 @@ test('bibliothèque : des données valides, des matières qui existent, aucun no
   assert.equal(modeleDe(MODELES, 'allume un feu'), null);
 });
 
-test('échelle : une crotte normale fait 12 à 18 cm ; « de 5 kg » 30 à 35 cm (densité ≈ 1), proportions gardées, posée au sol', () => {
+test('échelle : une crotte normale fait 12 à 18 cm ; « de 5 kg » 55 à 60 cm (volume réel × exagere du modèle), « énorme » 80 cm, 20 kg plus, au plus 1,2 m', () => {
   const m = MODELE('crotte');
   const n = formesModele(m, 'fais une crotte'), g = formesModele(m, 'fais une crotte de 5 kg'), p = formesModele(m, 'une petite crotte');
   assert.ok(n.envergure >= 0.12 && n.envergure <= 0.18, 'normale : ' + n.envergure);
-  assert.ok(g.envergure >= 0.28 && g.envergure <= 0.35, '5 kg : ' + g.envergure + ' (' + g.raison + ')');
-  const V = volumeFormes(g.formes) * 1000;
-  assert.ok(V > 4.3 && V < 5.2, 'volume de 5 kg : ' + V.toFixed(2) + ' L');
+  assert.ok(g.envergure >= 0.55 && g.envergure <= 0.6, '5 kg : ' + g.envergure + ' (' + g.raison + ')');
+  const V = volumeFormes(g.formes) * 1000, ex = m.echelle.exagere;
+  assert.ok(V / ex ** 3 > 4.3 && V / ex ** 3 < 5.2, 'volume réel de 5 kg avant exagération : ' + (V / ex ** 3).toFixed(2) + ' L');
+  const e = formesModele(m, 'une énorme crotte').envergure, v20 = formesModele(m, 'une crotte de 20 kg').envergure;
+  assert.ok(e >= 0.75 && e <= 0.85, 'énorme : ' + e);
+  assert.ok(v20 > e && v20 <= 1.2, '20 kg : ' + v20);
+  assert.equal(formesModele(m, 'une crotte de 200 kg').envergure, 1.2);
   assert.ok(Math.abs(haut(g.formes) / envergure(g.formes) - haut(n.formes) / envergure(n.formes)) < 0.01, 'mêmes proportions');
   const bas = Math.min(...g.formes.map(f => f.p[1] - f.taille[1] / 2));
   assert.ok(bas <= 0.005 && bas > -0.03, 'posée au sol, un peu tassée : ' + bas);
@@ -127,18 +131,18 @@ async function demo(opts = {}) {
   monde.x += 0.2; monde.yaw += 1.2;                                 // il s'est un peu tourné
   await avancer(1);
   await m.voix('fais une crotte de 5 kg'); await flush(); await flush(); await avancer(14);
-  const n2 = monde.objets.find(o => o.id === 'fab-2');
+  const n2 = monde.objets.find(o => o.id === 'fab-2'), e2 = n2 ? envergure(n2.formesL) : 0, d2 = n2 ? Math.hypot(n2.x - monde.x, n2.z - monde.z) : 0;
   const avant = { x: monde.x, z: monde.z };
   await m.voix('va chercher des bâtons et des cailloux et fais-en un bonhomme de neige'); await flush(); await flush();
   let loin = 0, vuRamasse = false;
   for (let t = 0; t < 70; t += 0.5) { await avancer(0.5); loin = Math.max(loin, Math.hypot(monde.x - n2.x, monde.z - n2.z));
     vuRamasse = vuRamasse || monde.objets.some(o => /ramass/.test(o.nom || '')); }
-  return Object.assign(P, { n1, n2, avant, loin, vuRamasse });
+  return Object.assign(P, { n1, n2, e2, d2, avant, loin, vuRamasse });
 }
-function verifierDemo({ m, monde, ordres, n1, n2, loin }, source = 'modele') {
+function verifierDemo({ m, monde, ordres, n1, e2, loin }, source = 'modele') {
   const ev = m.trace().evenements;
   assert.ok(envergure(n1.formesL) >= 0.12 && envergure(n1.formesL) <= 0.18, 'crotte normale : ' + envergure(n1.formesL));
-  assert.ok(envergure(n2.formesL) >= 0.28 && envergure(n2.formesL) <= 0.35, 'crotte de 5 kg : ' + envergure(n2.formesL));
+  assert.ok(e2 >= 0.54 && e2 <= 0.62, 'crotte de 5 kg, grossie à l\'image (modèle : exagere) : ' + e2);
   assert.ok(n1.formesL.length > 10, 'le modèle de référence, pas trois boules');
   assert.ok(ev.filter(e => e.type === 'modele').length >= 3, 'la bibliothèque a servi trois fois');
   // il est parti chercher (au pied de l'arbre), revenu, a façonné en plusieurs états, puis cadré le résultat
@@ -328,4 +332,70 @@ test('une grande chose n\'est jamais posée sur le porteur, ni sur une autre cho
   const p = planTrajet({ x: 0, z: 0 }, { x: 0, z: 0.1 }, [{ id: 'g', x: 0, z: 0.1, r: 0.4 }], { arret: 1.5, cible: 'g' });
   assert.ok(p.sortie, 'il sort d\'abord');
   const f = p.points[p.points.length - 1]; assert.ok(Math.abs(Math.hypot(f.x, f.z - 0.1) - 1.5) < 0.05, 'puis se place pour la cadrer');
+});
+
+/* ------------------------------------------------------------------ retours du vrai Claude (PC de Toine, graine 4821) */
+/* Un Claude « méchant » : à « fais une énorme crotte », il répond par du texte seul, ou retouche la petite, ou fabrique autre
+   chose (de la terre), ou refuse poliment ; la crotte, il la pose « devant ». La page tient la demande et la pose derrière. */
+function claudeMechant(facon) {
+  const sas = { verdict: 'recevable', regle: null, motif: 'geste ordinaire' };
+  return c => {
+    if (/accessoiriste/.test(c)) return Promise.resolve({ objet: { envergure_m: 0.3, nom: 'tas de terre', formes: [{ f: 'boule', p: [0, 0.1, 0], taille: [0.3, 0.2, 0.3], couleur: '#5a4a3a', matiere: 'mat' }] }, suite: null });
+    const v = voixDe(c) || '', ids = [...c.matchAll(/\((fab-\d+)\)/g)].map(m => m[1]);
+    const accroupi = [{ type: 'posture', hauteur: 0.45 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }];
+    if (/enorme|énorme|5 kg/.test(v)) {
+      if (facon === 'texte') return Promise.resolve({ sas, pensee: 'Une énorme ? Non. Je vais plutôt la faire avec de la terre.', attitude: 'suit', actions: [] });
+      if (facon === 'modifie') return Promise.resolve({ sas, pensee: 'Elle est déjà bien, celle-là.', attitude: 'suit', actions: [], modifie: { objet: ids[0], quoi: 'un peu plus grosse' } });
+      if (facon === 'terre') return Promise.resolve({ sas, pensee: 'Avec de la terre, alors.', attitude: 'suit', actions: [{ type: 'chercher', quoi: 'de la terre' }], fabrique: { nom: 'tas de terre', quoi: 'un tas de terre', ou: 'devant' } });
+      if (facon === 'refus') return Promise.resolve({ sas, pensee: 'Non. Ça, non.', attitude: 'refuse', actions: [] });
+      return Promise.resolve({ sas, pensee: 'Bon.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'crotte énorme', quoi: 'une énorme crotte', ou: 'devant' } });
+    }
+    if (/crotte/.test(v)) return Promise.resolve({ sas, pensee: 'Sérieux ? Bon.', attitude: 'suit', actions: accroupi, fabrique: { nom: 'petite crotte', quoi: 'une petite crotte', ou: 'devant', distance: 1.5 } });
+    return Promise.resolve({ sas, pensee: 'Hm.', attitude: 'suit', actions: [] });
+  };
+}
+for (const [facon, phrase] of [['texte', 'fais une énorme crotte'], ['modifie', 'maintenant fais une énorme crotte'], ['terre', 'fais une énorme crotte'], ['refus', 'fais une énorme crotte'], ['devant', 'fais une énorme crotte'], ['texte', 'fais une crotte de 5 kg']]) {
+  test(`la page tient la demande (« ${phrase} », Claude : ${facon}) et la pose DERRIÈRE lui, hors du corps`, async () => {
+    const P = promenade({ demander: claudeMechant(facon) }), { m, monde, avancer } = P;
+    await avancer(1);
+    await m.voix('fais une petite crotte'); await flush(); await flush(); await avancer(14);
+    const n1 = monde.objets.find(o => o.id === 'fab-1');
+    assert.ok(n1, 'la petite');
+    const e1 = envergure(n1.formesL), d1 = { x: n1.x - monde.x, z: n1.z - monde.z };
+    monde.x += 2; monde.yaw += 0.8; await avancer(1);
+    const c = { x: monde.x, z: monde.z, yaw: monde.yaw };
+    await m.voix(phrase); await flush(); await flush();
+    for (let t = 0; t < 4; t += 0.5) { await avancer(0.5); if (t < 2) assert.ok(!monde.objets.some(o => o.id === 'fab-2') || true); }
+    const n2 = monde.objets.find(o => o.id === 'fab-2');
+    const ev = m.trace().evenements;
+    assert.ok(n2, 'une nouvelle chose : ' + JSON.stringify(ev.filter(e => /tenue|objet|modele/.test(e.type))));
+    const e2 = envergure(n2.formesL);
+    assert.ok(n2.formesL.length > 10, 'le modèle, pas de la terre');
+    if (/5 kg/.test(phrase)) assert.ok(e2 >= 0.54 && e2 <= 0.62, '5 kg : ' + e2); else assert.ok(e2 >= 0.75 && e2 <= 0.85, 'énorme : ' + e2);
+    assert.ok(Math.abs(envergure(monde.objets.find(o => o.id === 'fab-1').formesL) - e1) < 1e-6, 'la petite n\'a pas changé');
+    // posée derrière lui (par rapport au regard au moment du geste), hors du corps
+    const dx = n2.x - c.x, dz = n2.z - c.z, av = dx * Math.sin(c.yaw) + dz * Math.cos(c.yaw), r = e2 / 2;
+    assert.ok(av < -r, 'derrière les talons : ' + av.toFixed(2));
+    assert.ok(Math.hypot(dx, dz) >= r + 0.2, 'jamais dans le corps : ' + Math.hypot(dx, dz).toFixed(2));
+    assert.ok(Math.hypot(d1.x, d1.z) >= 0.2 && d1.x * 0 + d1.z < 0, 'la petite aussi, derrière (malgré « devant » et 1,5 m) : ' + JSON.stringify(d1));
+    if (facon !== 'devant') assert.ok(ev.some(e => e.type === 'demande_tenue' || e.type === 'cede'), 'demande tenue (ou il cède)');
+    assert.ok(ev.some(e => e.type === 'pose_corrigee'), 'pose corrigée par la donnée du modèle');
+    assert.ok(monde.pensees.length >= 2 && !/terre|déjà bien/.test(JSON.stringify(monde.pensees.slice(-2))), 'sa pensée ne dit pas autre chose que ce qu\'il fait : ' + JSON.stringify(monde.pensees.slice(-2)));
+    // puis il se retourne et la cadre entière
+    await avancer(16);
+    const q = monde.perception().objets.find(x => x.id === 'fab-2');
+    assert.ok(q && Math.abs(q.angle) < 10, 'il s\'est retourné vers elle : ' + (q && q.angle));
+  });
+}
+
+test('horsDuCorps : « dessous » derrière les talons, à une distance faite pour la taille', () => {
+  const corps = { x: 0, z: 0, yaw: 0 };
+  for (const r of [0.05, 0.15, 0.3, 0.45]) {
+    const q = horsDuCorps({ x: 0, z: -0.12 }, corps, r, REGLAGES.MARGE_CORPS, 'dessous');
+    assert.ok(q.z <= -(r + 0.2) + 1e-9 && Math.abs(q.x) < 1e-9, r + ' : ' + JSON.stringify(q));
+  }
+  assert.ok(horsDuCorps({ x: 0, z: -2 }, corps, 0.1, REGLAGES.MARGE_CORPS, 'derriere').z === -2, 'derrière, assez loin : gardé');
+  // un élément du décor sous la place (occupe) : elle glisse ailleurs, toujours hors du corps
+  const p = placeLibre({ x: 0, z: -0.4 }, 0.2, [], corps, REGLAGES.MARGE_CORPS, q => Math.hypot(q.x, q.z + 0.4) < 0.3);
+  assert.ok(Math.hypot(p.x, p.z + 0.4) >= 0.3 && Math.hypot(p.x, p.z) >= 0.35, JSON.stringify(p));
 });
