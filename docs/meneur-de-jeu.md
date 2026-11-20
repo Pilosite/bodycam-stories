@@ -650,7 +650,7 @@ Deux actions de plus, toujours calculées par la page :
 - **Ordres au moteur** : `{op: "creer", differe: id}` (ce qu'il rapporte, gardé par la page jusqu'à son retour) et `{op: "faconner", id, etapes, nom, echelle, consomme}`. Le meneur compte l'objet ramassé comme consommé dès la réponse (`objet_consomme`). Trace : `faconnage`, `modele`, `objet_modifie` (avec `etapes`), `objet_consomme`.
 - **Mode DOCILE** : « va chercher… » sans `chercher` dans la réponse, « fais-en un bonhomme » sans `modifie` : la page les ajoute. **Sans Claude** : `secoursChercher` et la bibliothèque jouent toute la séquence.
 
-### 15.4 Les mains dans le champ : pas fait
+### 15.4 Les mains dans le champ : pas fait (fait depuis : §17)
 
 Un vocabulaire de « mains du porteur » (deux avant-bras et mains en formes attachés à la caméra) n'a pas été fait. Avec le vocabulaire actuel, une main est une boîte et quatre capsules : de 30 à 50 cm, plein cadre, sans peau, sans déformation ni sous-surface, elle ferait mannequin, et c'est exactement ce que la règle n° 1 interdit (une image sale et crédible plutôt qu'une image propre et synthétique). Il faudrait au moins une recette de peau, des formes fondues (le v3 ne suit pas `lisse`), et des poses animées : un chantier à part. Le geste se lit déjà par la caméra (accroupi, regard vers le bas, petits mouvements) et par la chose qui change.
 
@@ -688,3 +688,54 @@ Demande de Toine : le personnage ne doit jamais passer à travers un rocher, un 
 - **Pendant la marche** (`moveBy`) : la sonde du moteur (lue en octets, jamais en flottants), comme avant, puis les obstacles connus : le corps est repoussé à la marge s'il allait y entrer. Une marche dirigée bloquée plus de 0,6 s s'arrête et il le dit (avant : il tournait au hasard, ce que fait encore la flânerie). En marche arrière et accroupi, mêmes règles. Monter à un arbre : contre le tronc, à la marge.
 - **Moteur v3** : la sonde `v3_sonde.frag` est désormais compilée dès que le v3 tourne (avant : seulement avec l'option `v3sonde`) ; sans elle et sans lanceur de rayons, il n'y avait aucune collision en v3.
 - Tests : trajet droit vers un rocher (contourné), cible dans un rocher (arrêt devant, à la marge), rejoindre une chose derrière un rocher et marche forcée droit dessus dans le monde de papier. Dans la page : `tools/demo.mjs`, dernières captures (`10-obstacle-avant`, `11-obstacle-pendant`, `12-obstacle-apres`).
+
+## 17. Retours du vrai Claude sur PC (20 novembre 2026) : la boule blanche, la demande tenue, derrière lui, les mains à l'ouvrage
+
+Toine a joué la démo sur son PC (Chrome, RTX, moteur v3, 2 500 000 grains, scène 09, graine du monde 4821) avec le vrai Claude. Cinq retours ; tout ce qui suit est générique (aucun objet ni aucune phrase en dur).
+
+Vérification : `npm test` (`tests/demo.test.mjs`, fin du fichier : un Claude « méchant » qui répond par du texte seul, retouche la petite, fabrique de la terre ou refuse, et pose « devant ») ; `node tools/demo.mjs` (Claude simulé méchant par défaut, `GENTIL=1` pour l'ancien ; graine de la fiche ; planche du façonnage dans `out/demo/planche.png`) et `VUE=pc node tools/demo.mjs` (tout en 960 × 600, 16/10, dans `out/demo-pc/`). Remarque : `tools/demo.mjs` passait `graine: 7`, mais c'était la graine du meneur (ses tirages), pas celle du monde : le monde avait déjà la graine de la fiche (4821). L'outil passe désormais la graine de la fiche aux deux.
+
+### 17.1 « Une grosse boule blanche quand on regarde la crotte »
+
+Cause : la scène 09 sème des « éclats et cailloux de grès » (jusqu'à 30 cm, recette claire mouchetée) et des « branches mortes » (capsules de 2,2 m). Rien n'empêchait une chose posée par le porteur de tomber dans, sous ou juste derrière un de ces éléments, ni le cadrage de viser à travers ; accroupi, avec le zoom de cadrage, un éclat entre la caméra et la crotte remplit l'image (l'« œuf blanc-gris moucheté, liseré brun » : l'éclat, et la crotte derrière ; le « bâton gris » : une branche).
+
+- **Les semis en JS** (`semisDist`, `src/main.js`) : `semisGrille`, `semisElem`, `semisLocal`, `sdSemis` de `monde.glsl` recopiés en flottants 32 bits, lus dans la même texture de formes. MÊMES FORMULES, à modifier des deux côtés. Comparés à la sonde du moteur (`balade.semis`, `balade.sonde`).
+- **Poser** : `semisSous(x, z, rayon, haut)` (17 points × 3 hauteurs) est passé à `placeLibre` (argument `occupe`) : la chose glisse autour du porteur jusqu'à une place libre de tout élément de semis, comme elle le faisait déjà pour les troncs, les rochers et les autres choses. Le tas rapporté (§15.3) aussi.
+- **Cadrer** : `pointDeVue` vérifie qu'il n'y a RIEN entre l'œil et la chose (`vueDegagee` : quatre visées, semis, troncs, rochers, autres choses) ; sinon il se décale autour d'elle (pas de 22°, puis un peu plus loin), en évitant de se tenir dans un élément. `balade.vue(id)` le vérifie dans la page.
+
+### 17.2 « Elle veut pas faire une énorme crotte, elle reste petite et me dit qu'elle va faire avec de la terre »
+
+Cause : le vrai Claude a répondu à côté (texte seul, puis une autre matière). La page suivait sa réponse.
+
+- **La page tient la demande** (`tenirDemande`, `src/meneur.js`) : une phrase qui demande de FAIRE une chose NOUVELLE (« fais », « une ») d'une nature connue de la bibliothèque (ni ramassable, ni « transforme ») : si la réponse ne la fabrique pas (texte seul, refus poli, autre chose, retouche d'une ancienne), la page la fabrique quand même, avec le `ou` du modèle et les gestes qui vont avec (s'accroupir) ; la retouche d'une ancienne est annulée ; sa pensée devient une phrase où il râle et le fait (`demande_tenue` dans la trace).
+- **La taille vient de la phrase du joueur** : `formesModele` lit d'abord ses mots, puis ceux de Claude (« énorme » du joueur l'emporte sur « petite » de Claude).
+- **Consigne resserrée** : « la chose demandée, telle que dite : même nature, même matière, même taille ; une nouvelle si on dit « une » ; tu peux râler, jamais la remplacer par autre chose ni retoucher une ancienne ».
+
+### 17.3 « Un caca de 5 kg, faut qu'il soit BEAUCOUP plus gros »
+
+Une donnée de plus dans la règle d'échelle du modèle : `exagere` (2 pour la crotte) multiplie l'envergure réelle tirée de la masse. 5 kg : 58 cm (31 cm au volume réel) ; 20 kg : 92 cm ; « énorme » (facteur 5,8) : 81 cm ; `max_m` relevé à 1,2 m. Le cadrage entier (`planCadrage`) suit.
+
+### 17.4 « Quand elle fait ses besoins, il apparaît DEVANT elle »
+
+Cause : `horsDuCorps` posait DEVANT lui toute chose de plus de 25 cm (§15.6), et le `ou` de Claude (« devant ») passait.
+
+- **La donnée du modèle l'emporte** : le `ou` du modèle (`"dessous"` pour la crotte) remplace celui de Claude, et sa distance (`pose_corrigee`).
+- **Dessous = derrière les talons** (`horsDuCorps(…, ou)`) : à rayon + 20 cm derrière la caméra (plus la marge du corps pour une grosse chose), quelle que soit sa taille ; jamais dans le corps. Il ne la voit pas apparaître ; quand il la montre (`cadrer`), il se relève, fait un pas, se retourne et la cadre entière. Une place déjà loin du corps (il a bougé depuis le geste) est gardée.
+
+### 17.5 « On voit pas les bâtons bouger et le bonhomme se faire » : le façonnage continu, les mains à l'ouvrage
+
+Avant : cinq états qui se remplaçaient toutes les 1,1 s. Maintenant :
+
+- **Le geste** (`gesteFaconnage`, `etatGeste`, `src/meneur.js`, purs, testés) : une suite de transitions interpolées image par image (positions, tailles, angles, couleurs) entre la chose telle qu'elle est et le résultat : la matière dominante est **pétrie** en une boule (à son volume), **divisée** en autant de masses que le résultat en compte, **roulées** au sol (elles grossissent, leur matière tourne avec elles), **empilées** une à une (en arc) ; chaque ajout d'une autre matière est **pris** dans le tas rapporté (même matière, le plus gros d'abord : il quitte le tas, la main le porte, il se plante), sinon il vient de la main ; puis il **tapote**. 8 à 12 s (11 s pour le bonhomme). Générique : seules les matières et les formes de la chose et du résultat comptent. Les états intermédiaires que donne Claude (`etapes`) ne servent plus à la page (ils restent dans la trace et le monde de papier).
+- **Les mains** (`objetMains`, `geste1`, `src/main.js`) : deux avant-bras (une capsule de manche) et deux mains (une paume en boule aplatie, un pouce en capsule), 6 formes, attachés au corps sous la caméra ; leur description est une donnée (`src/modeles.json`, `corps.mains` : épaule, manche, paume, pouce, repos) et la peau une recette (`peau`, `src/matieres.json`). Elles pressent des deux côtés en rythme (pétrir), roulent sur le dessus (diviser, rouler), portent ce qu'on pose, vont saisir dans le tas puis portent, tapotent ; elles glissent d'une cible à l'autre, avec un léger tremblé, jamais figées. L'objet des mains n'est pas dans la fiche : ni obstacle, ni perçu par le meneur ; `buildShapes` le range en dernier.
+- **La caméra** suit l'ouvrage (se penche vers ce qui bouge, un peu de bougé) ; à la fin il se relève, recule et cadre en pied (§14.2).
+- **Chercher** : accroupi, la main droite va au sol, ramasse, revient (`ramasser`, deux fois).
+- **Budget fixe** : la chose en cours de geste prend au plus ce qui reste des 64 formes (autres objets visibles, mains : 6) ; au-delà, les plus petites formes qui se résorbent ne sont pas rendues. `buildShapes` ne déborde plus dans les lignes des semis (il bornait à `SH_ROWS` au lieu de `SEM0`). Rien n'a été ajouté aux shaders.
+
+### 17.6 Pas vérifié, peu convaincant
+
+- Rien n'a tourné avec le vrai Claude ni sur un GPU : rendu logiciel (SwiftShader), Claude simulé.
+- Les mains restent des formes simples (pas de doigts, pas de fondu entre paume et poignet : le v3 ne suit pas `lisse`) ; de près, elles peuvent faire mannequin. Le grain et le flou du capteur aident.
+- La caméra est celle d'un téléphone sur la poitrine : les avant-bras partent d'un point fixe sous elle ; un vrai corps bouge les épaules.
+- Pendant le geste, si les 8 places d'objets sont prises, la dernière cède sa place aux mains le temps du geste.
+
