@@ -1152,7 +1152,7 @@ export function planConsequences(bib, { palier, facteur = 1, modele } = {}, rnd 
           impact_kg: num(S.impact_kg, 0.005, 5, 0.08) } : null,
         pensee: i === ia ? texte : null });
     }
-    return { modele: c.modele, chutes };
+    return { modele: c.modele, chutes: chutes.map(x => Object.assign(x, { molles: str(c.molles, 30) || null })) };   // molles : la part des formes qui battent en tombant
   }
   return null;
 }

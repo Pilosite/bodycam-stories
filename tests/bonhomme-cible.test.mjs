@@ -117,7 +117,7 @@ for (const [k, ordre] of ORDRES.entries()) for (const phrase of FORMULATIONS) fo
   test(`ordre ${k + 1}, « ${phrase} », Claude : ${facon} → la dernière demandée, volume gardé, les autres intactes`, async () => {
     const { m, monde, dire, avancer } = partie(claudeMatrice(facon));
     for (const p of ordre) await dire(p, 30);
-    const crees = m.partie().monde.crees.filter(c => !c.retire);
+    const crees = m.partie().monde.crees.filter(c => !c.retire && c.source !== 'ambiance');
     assert.equal(crees.length, 3, JSON.stringify(crees.map(c => c.nom)));
     const der = crees[crees.length - 1], avant = { formes: der.liste.map(f => f) }, e0 = etat(monde);
     if (k === 0) { monde.x += 4; monde.z += 3; await avancer(0.5); }   // il s'est éloigné : il doit la rejoindre d'abord
@@ -133,7 +133,7 @@ test('désignation explicite : « avec la petite », « avec la première » l\'
   for (const [phrase, quelle] of [['fais un bonhomme avec la petite', 'petite'], ['fais un bonhomme de neige avec la première', 0]]) {
     const { m, monde, dire } = partie(claudeMatrice('bon'));
     for (const p of ORDRES[1]) await dire(p, 30);
-    const crees = m.partie().monde.crees.filter(c => !c.retire);
+    const crees = m.partie().monde.crees.filter(c => !c.retire && c.source !== 'ambiance');
     const cible = quelle === 0 ? crees[0] : crees.find(c => /petite/.test(c.nom));
     await dire(phrase, 70);
     verifierFaconnage(monde, m, cible.id, { formes: cible.liste.slice() });

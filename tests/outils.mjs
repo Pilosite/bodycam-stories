@@ -98,6 +98,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
       const marque = ref => w.file.some(a => a.type === 'poser' && a.ref === ref);
       if (o.op === 'reserver') { w.reserves[o.ref] = o.au_geste && marque(o.ref) ? { ou: o.ou, distance: o.distance, pos: null } : { pos: place() }; return; }
       if (o.op === 'abandon') { delete w.reserves[o.ref]; return; }
+      if (o.op === 'creer' && o.chute) { (w.chutes = w.chutes || []).push(o); noter('chute', { id: o.objet.id, pres_de: o.pres_de, t: o.chute.t }); return; }   // §24 : la page les fait tomber après la pose ; décor, hors des choses
       if (o.op === 'creer' && o.retenu) { (w.retenus = w.retenus || {})[o.retenu] = Object.assign({}, o, { retenu: undefined }); noter('retenu', { id: o.objet.id, pour: o.retenu }); return; }   // §22.2 : posé quand il vomit
       if (o.op === 'creer') {
         if (objets.filter(x => !caches.has(x.id)).length >= 8) return;

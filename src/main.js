@@ -677,6 +677,7 @@ function simulate(dt){
     cam.zoom*=Math.pow(cam.zoomCible/cam.zoom,Math.min(1,dt*3)); if(Math.abs(cam.zoom/cam.zoomCible-1)<.01) cam.zoom=cam.zoomCible; sceneDirty=true; }
   walking=false; if(frozen||hold||pauseTest) return;
   depuisPensee+=dt;
+  chutesPas(dt);                                                 // §24 : ce qui tombe du ciel (le monde figé les fige aussi)
   if(pauseQuand&&queue[0]&&queue[0].type===pauseQuand.type){        // essais : figer le corps à un instant précis d'un geste (planche du façonnage)
     const a=queue[0], t=a.type==="ramasser"?1-a.rest/a.duree:a.type==="faconner"&&a.G&&a.t0!==undefined&&!a.nau?a.t-a.t0-.4-(a.pause||0):-1;   // temps du geste (la nausée le suspend, §22.2)
     if(t>=pauseQuand.t){ pauseQuand=null; pauseTest=true; return; } }
@@ -2532,6 +2533,8 @@ function objetMeneur(o){
   const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], id=o.id||(o.objet&&o.objet.id), i=L.findIndex(x=>x&&x.id===id);
   if(o.op==="reserver"){ reserves.set(o.ref,o.au_geste&&marquePose(o.ref)?{ou:o.ou,distance:o.distance,pos:null}:{pos:placeGeste(o)}); if(reserves.size>8) reserves.delete(reserves.keys().next().value); return; }
   if(o.op==="abandon"){ reserves.delete(o.ref); return; }          // l'accessoiriste n'a rien donné : il n'attend plus
+  if(o.op==="retirer"){ const k=chutesAttente.findIndex(w=>w.o.objet&&w.o.objet.id===o.id); if(k>=0){ chutesAttente.splice(k,1); return; } }   // §24 : recyclée avant d'être tombée
+  if(o.op==="creer"&&o.chute&&o.objet&&o.pres_de){ chutesAttente.push({o,age:0,depuis:0}); return; }   // §24 : elle tombera du ciel près de la chose, à son instant après la pose
   if(o.op==="creer"&&o.retenu){ retenus.set(o.retenu,Object.assign({},o,{retenu:undefined})); return; }   // §22.2 : ce qu'il laisse en vomissant, posé à ce moment-là
   if(o.op==="creer"&&o.differe){ differes.set(o.differe,[...(differes.get(o.differe)||[]),o]); return; }   // ramassé : posé près de la chose quand il revient
   if(o.op==="faconner"){ faconnages.set(id,o); if(!queue.some(a=>a.type==="faconner"&&a.objet===id)) faconnerTout(id); return; }
@@ -2900,6 +2903,55 @@ function viserObjet(id,cadre){                                 // cap (relatif a
   return {yaw,pitch:Math.max(-1.05,Math.min(1.3,Math.atan2(dy,m))),raide:Math.atan2(dy,m)<-1.05};
 }
 /* Taille d'un objet de la fiche : envergure (m) et hauteur du dessus, échelle comprise. */
+/* §24 : les conséquences d'ambiance d'un exploit (MENEUR.planConsequences). Chaque chose attend que la chose de référence soit
+   posée, puis son instant ; elle apparaît en l'air au-dessus de sa place (MENEUR.placesChute : du côté de la caméra, hors de
+   la chose, des obstacles et du corps), tombe en tournant, les formes « molles » qui battent, rebondit à peine et reste.
+   Animée par ses formes, image par image (comme ce que tiennent les mains) ; un cri pendant la chute, un choc à l'impact. */
+const chutesAttente=[], chutesEnCours=[],  journalChutes=[]; window.balChutes=journalChutes;   // essais : chaque chute, sa place, ses instants
+function chutesPas(dt){
+  const L=Array.isArray(fiche.objets)?fiche.objets:[];
+  for(let k=chutesAttente.length-1;k>=0;k--){ const w=chutesAttente[k], base=L.find(x=>x&&x.id===w.o.pres_de);
+    w.age+=dt; if(!base){ if(w.age>120) chutesAttente.splice(k,1); continue; }
+    w.depuis+=dt; if(w.depuis<clampN(w.o.chute.t,0,30,1)) continue;
+    chutesAttente.splice(k,1); try{ chuteDebut(w.o,base); }catch(e){ console.warn("chute :",e&&e.message); } }
+  for(let k=chutesEnCours.length-1;k>=0;k--) if(chutePas(chutesEnCours[k],dt)) chutesEnCours.splice(k,1);
+}
+function chuteDebut(o,base){
+  const L=fiche.objets.slice(), C=o.chute, bw=posObjet(base), F=(o.objet.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));
+  if(L.filter(x=>x&&!(x.visible===false||cacheObj.has(x.id))).length>=8) return;
+  const r=Math.max(.05,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2));
+  const q=MENEUR.placesChute({x:bw.x,z:bw.z,r:mesureObjet(base).taille/2},{x:cam.x,z:cam.z},[C],obstaclesConnus().filter(x=>x.id!==base.id),r,p=>semisSous(p.x,p.z,r,.1))[0];
+  if(!q) return;
+  const pos=versFiche(q.x,q.z), v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos,{cap:Math.round(((+C.angle||0)*7919)%360)})]}).objets;
+  if(!v||!v[0]) return;
+  v[0].id=String(o.objet.id).slice(0,30); v[0].devant=pos.devant; v[0].cote=pos.cote; L.push(v[0]); fiche=Object.assign({},fiche,{objets:L});
+  const molles=(o.objet.formes||[]).map((f,i)=>f&&C.molles&&f.part===C.molles?i:-1).filter(i=>i>=0);
+  const A={id:v[0].id,f0:JSON.parse(JSON.stringify(v[0].formes)),cap0:+v[0].cap||0,t:0,T:clampN(C.chute_s,.3,3,1),h:clampN(C.hauteur,.5,20,8),tours:clampN(C.tours,-6,6,2),
+    son:C.son,pensee:C.pensee,molles,dist:Math.hypot(q.x-cam.x,q.z-cam.z)};
+  chutesEnCours.push(A); chuteForme(A); buildShapes(fiche);
+  journalChutes.push({id:A.id,x:+q.x.toFixed(2),z:+q.z.toFixed(2),t:+(performance.now()/1000).toFixed(2),haut:A.h,chute_s:A.T}); if(journalChutes.length>20) journalChutes.shift();
+  const S=C.son; if(S&&BRUITAGES.recettes&&BRUITAGES.recettes[S.recette]) jouerBruit({recette:S.recette,rang:0,principal:false,duree:clampN(S.duree,.1,2,.6),f0:clampN(S.f0,200,4000,2800),
+    force:clampN(S.force,0,1,.45),gain:Math.min(.9,clampN(S.force,0,1,.45)*.9/Math.max(1,A.dist/3)),rates:clampN(S.rates,0,4,1),fin:"cale",vibrato:clampN(S.vibrato,0,2,1),graine:seedN,cle:"cri:"+(++compteurSons)});
+}
+function chuteForme(A){                                          // les formes à l'instant t : en l'air, en tournant, ailes molles ; puis au sol
+  const ob=(fiche.objets||[]).find(x=>x&&x.id===A.id); if(!ob) return false;
+  let y=0, bat=0;
+  if(A.t<A.T){ const u=A.t/A.T; y=A.h*(1-u*u); bat=1; ob.cap=(A.cap0+A.tours*360*u)%360; }
+  else if(A.t<A.T+.2){ const u=(A.t-A.T)/.2; y=.04*Math.sin(Math.PI*u); bat=.3*(1-u); ob.cap=(A.cap0+A.tours*360)%360; }
+  ob.formes=A.f0.map((f,i)=>{ const g=Object.assign({},f,{p:[f.p[0],f.p[1]+y,f.p[2]]});
+    if(bat&&A.molles.includes(i)){ const pe=Array.isArray(f.penche)?f.penche:[0,0]; g.penche=[clampN(pe[0]+50*bat*Math.sin(A.t*19+i),-90,90,0),clampN(pe[1]+30*bat*Math.sin(A.t*13+2*i),-90,90,0)]; }
+    return g; });
+  return true;
+}
+function chutePas(A,dt){
+  A.t+=dt;
+  if(A.t>=A.T&&!A.poc){ A.poc=true;                              // l'impact : un petit choc mat ; la pensée, s'il y en a une, ne retarde rien
+    try{ if(A.son) jouerBruit(Object.assign(SON.planChute(BRUITAGES.recettes.chute,{masse:clampN(A.son.impact_kg,.005,5,.08),distance:A.dist,graine:seedN,cle:++compteurSons}),{recette:"chute"})); }catch(e){ console.warn("chute :",e&&e.message); }
+    if(A.pensee){ say(A.pensee); direVoix(A.pensee); notePensee(A.pensee,"consequence"); } }
+  if(!chuteForme(A)) return true;
+  const fini=A.t>=A.T+.2; if(fini){ const ob=fiche.objets.find(x=>x&&x.id===A.id); if(ob) ob.formes=A.f0; }
+  buildShapes(fiche,true); return fini;
+}
 function mesureObjet(o){ const k=clampN(o.echelle,.1,5,1), F=(o.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));
   return { taille:MENEUR.envergure(F)*k, haut:Math.max(0,...F.map(f=>f.p[1]+f.taille[1]/2))*k, milieu:Math.max(0,...F.map(f=>f.p[1]))*k*.6+.02 }; }
 /* Ce qu'une action peut viser, rejoindre ou escalader : un objet de la fiche (id), ou un élément du monde proche (« arbre », « rocher »). */
