@@ -15224,7 +15224,7 @@ function v3Frame(p,dt){
     return; }                                        // programmes encore en compilation
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
-  v3Image(p); frames++; regMesure(dt,V3.dtBrut||0);
+  v3Image(p); frames++; if(!ouvRepos&&!BANC.on) regMesure(dt,V3.dtBrut||0);   // pas les images de réchauffe de l'ouverture (premiers dessins) ni le banc
   if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,cuits:V3.tap.cuits,t:performance.now()});
   // Halo et exposition : 28 ms mesurés sur Mali-G77 pour trois petites passes. En mobile, une image sur quatre suffit (ils varient lentement).
   if(QUAL.full||CFG.haloToujours||V3.nImg%4===0||!bl1.fait){ postFX(V3.hist); bl1.fait=true; }
