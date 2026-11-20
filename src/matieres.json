@@ -2030,57 +2030,160 @@
    }
   },
   "pate-organique": {
-   "nom": "pâte organique humide (excrément, boue grasse, terre mouillée pétrie) : brun sombre, marbré, luisant, finement bosselé",
+   "nom": "pâte organique humide (excrément, boue grasse, argile pétrie) : brun marbré, sillons et craquelures à l'échelle de la forme, humide par plaques, mat en séchant, fibres claires, pied mouillé",
    "espace": "volume",
    "couleur": "forme",
+   "relatif": 0.018,
    "variation": {
-    "echelle": 22,
-    "force": 0.45
+    "echelle": 38,
+    "force": 0.42
    },
    "nuance": {
-    "couleur": "#24160b",
-    "force": 0.55,
-    "echelle": 55,
+    "couleur": "#2b1a0d",
+    "force": 0.5,
+    "echelle": [
+     48,
+     26,
+     48
+    ],
     "seuils": [
-     0.45,
+     0.42,
      0.78
     ],
     "fbm": true,
     "decalage": 3
    },
+   "motif": {
+    "type": "fissures",
+    "echelle": [
+     34,
+     150,
+     34
+    ],
+    "seuils": [
+     0.84,
+     0.975
+    ],
+    "profondeur": 0.9,
+    "couleur": "#1d1209",
+    "opacite": 0.85,
+    "fines": {
+     "echelle": [
+      260,
+      300,
+      260
+     ],
+     "decalage": 4,
+     "seuils": [
+      0.9,
+      0.985
+     ],
+     "profondeur": 0.35
+    }
+   },
    "grain": {
-    "echelle": 420,
-    "force": 0.28
+    "echelle": 260,
+    "force": 0.3
    },
    "taches": [
     {
-     "couleur": "#6e4c2b",
+     "couleur": "#1c1009",
+     "force": 0.4,
+     "echelle": [
+      20,
+      12,
+      20
+     ],
+     "seuils": [
+      0.5,
+      0.72
+     ],
+     "fbm": true,
+     "decalage": 11,
+     "brillance": 0.14
+    },
+    {
+     "couleur": "#5c4632",
      "force": 0.3,
-     "echelle": 120,
+     "echelle": [
+      24,
+      16,
+      24
+     ],
      "seuils": [
       0.62,
-      0.78
+      0.82
+     ],
+     "fbm": true,
+     "decalage": 29,
+     "biais": 0.25,
+     "hauteur": [
+      0.0,
+      0.06
+     ],
+     "brillance": 0.03
+    },
+    {
+     "couleur": "#8a7656",
+     "force": 0.3,
+     "echelle": [
+      520,
+      140,
+      520
+     ],
+     "seuils": [
+      0.81,
+      0.825
      ],
      "decalage": 7
+    },
+    {
+     "couleur": "#6e4a22",
+     "force": 0.75,
+     "echelle": [
+      180,
+      180,
+      180
+     ],
+     "seuils": [
+      0.77,
+      0.81
+     ],
+     "decalage": 17,
+     "biais": -0.6,
+     "hauteur": [
+      0.006,
+      0.02
+     ]
     }
    ],
    "relief": {
+    "motif": 0.0022,
     "bosses": [
      {
-      "echelle": 14,
+      "echelle": 30,
       "fbm": true,
       "decalage": 5,
-      "force": 0.004
+      "force": 0.0025
      },
      {
-      "echelle": 70,
+      "echelle": 110,
       "fbm": true,
       "decalage": 2,
-      "force": 0.0022
+      "force": 0.0007
      }
-    ]
+    ],
+    "grain": {
+     "echelle": 300,
+     "force": 0.3
+    }
    },
-   "brillance": 0.45
+   "salissure": {
+    "force": 0.5,
+    "hauteur": 0.012
+   },
+   "brillance": 0.03,
+   "reflet": 160
   },
   "peau": {
    "nom": "peau de main, rosée aux jointures, pores fins, un peu luisante",
@@ -2116,6 +2219,69 @@
     ]
    },
    "brillance": 0.3
+  },
+  "terre-mouillee": {
+   "nom": "terre et litière détrempées au contact d'une chose molle : brun sombre, brins et aiguilles collés, à peine luisante",
+   "espace": "volume",
+   "couleur": "forme",
+   "variation": {
+    "echelle": 60,
+    "force": 0.4
+   },
+   "grain": {
+    "echelle": 200,
+    "force": 0.45
+   },
+   "taches": [
+    {
+     "couleur": "#8a6a40",
+     "force": 0.7,
+     "echelle": [
+      150,
+      150,
+      12
+     ],
+     "seuils": [
+      0.78,
+      0.82
+     ],
+     "decalage": 3
+    },
+    {
+     "couleur": "#9c7a48",
+     "force": 0.6,
+     "echelle": [
+      14,
+      150,
+      150
+     ],
+     "seuils": [
+      0.8,
+      0.83
+     ],
+     "decalage": 9
+    },
+    {
+     "couleur": "#000000",
+     "force": 0.35,
+     "echelle": 30,
+     "seuils": [
+      0.4,
+      0.7
+     ],
+     "fbm": true,
+     "decalage": 5,
+     "brillance": 0.3
+    }
+   ],
+   "relief": {
+    "grain": {
+     "echelle": 120,
+     "force": 0.2
+    }
+   },
+   "brillance": 0.08,
+   "reflet": 60
   }
  },
  "surfaces": {

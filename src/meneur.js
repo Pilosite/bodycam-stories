@@ -1018,11 +1018,20 @@ export function modeleDe(bib, texte, { transforme = false, ramassable } = {}) {
   }
   return best ? { id: best.id, modele: best.modele } : null;
 }
+/* Les formes d'un modèle : `formes`, ou une de ses `variantes` (d'autres listes de formes, même envergure de référence),
+   choisie par la graine (partie et numéro de la chose : on ne voit pas deux fois la même). Sans graine : `formes`. */
+export function varianteModele(m, graine) {
+  const V = [liste(m && m.formes), ...liste(m && m.variantes).filter(Array.isArray)].filter(L => L.length);
+  if (!V.length) return [];
+  if (graine === undefined || !Number.isFinite(Number(graine))) return V[0];
+  let x = (Number(graine) >>> 0) ^ 0x9e3779b9; x = Math.imul(x ^ (x >>> 16), 0x85ebca6b) >>> 0; x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35) >>> 0;
+  return V[((x ^ (x >>> 16)) >>> 0) % V.length];
+}
 /* Les formes d'un modèle à l'échelle demandée. Règle « masse » : une masse dite (« de 5 kg ») donne le volume (densité du
    modèle), donc l'envergure, proportions gardées. Sinon : une longueur ou une comparaison dite, « petit », « énorme » ; à
    défaut, l'envergure de référence. Le détail des matières (recettes, en mètres) ne grossit pas avec l'objet. */
-export function formesModele(m, texte) {
-  const formes = liste(m && m.formes).map(validerForme).filter(Boolean).slice(0, REGLAGES.FORMES_PAR_OBJET);
+export function formesModele(m, texte, graine) {
+  const formes = varianteModele(m, graine).map(validerForme).filter(Boolean).slice(0, REGLAGES.FORMES_PAR_OBJET);
   if (!formes.length) return null;
   const e0 = envergure(formes), ech = isObj(m.echelle) ? m.echelle : {};
   const t = sansAccents(texte || '').replace(/(\d),(\d)/g, '$1.$2');
@@ -1031,7 +1040,7 @@ export function formesModele(m, texte) {
   let k = 1, raison = 'taille de référence';
   const [mn, mx, pq] = bornesTaille(texte);
   if (masse && ech.regle === 'masse') {
-    const V = volumeFormes(formes);
+    const V = volumeFormes(varianteModele(m).map(validerForme).filter(Boolean));   // le volume de la forme de référence : même masse, même échelle, quelle que soit la variante
     // « exagere » : à l'image, une masse dite doit se voir (5 kg : le volume réel ne fait que 31 cm, on attend un tas) ; le
     // modèle dit de combien on grossit l'envergure réelle, proportions gardées
     const ex = num(ech.exagere, 1, 4, 1);
@@ -2159,7 +2168,7 @@ export function creerMeneur(o) {
     let objet = null;
     // la bibliothèque : si la chose demandée est un modèle de référence, il sert de base sûre, à l'échelle demandée (§15)
     const mf = dem.fabrique && R.MODELES === 'base' ? modeleNomme(dem.fabrique.nom, dem.fabrique.quoi, dem.texte) : null;
-    if (mf) { const x = formesModele(mf.modele, (dem.texte || '') + ' ' + demande);   // la taille que dit le joueur passe avant celle que dit Claude
+    if (mf) { const x = formesModele(mf.modele, (dem.texte || '') + ' ' + demande, graine * 31 + partie.monde.compteur + 1);   // la taille que dit le joueur passe avant celle que dit Claude
       const nr = str(isObj(r) && isObj(r.objet) && r.objet.nom, 60), nf = mf.modele.origine === 'corps' && substitution(nr, mf.modele, EX);   // « crotte géante de terre » : non
       if (nf) log('exploit_corrige', { modele: mf.id, nom_objet: nr });
       if (x) { objet = { nom: (!nf && nr) || dem.fabrique.nom || str(mf.modele.nom, 60), formes: x.formes, degage: 0 }; source = 'modele';
