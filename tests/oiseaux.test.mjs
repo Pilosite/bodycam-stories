@@ -1,6 +1,6 @@
 // « Faudrait des oiseaux qui tombent du ciel, morts, à cause de l'odeur de la crotte de 20 kg, avec un bruit de piaf
 // mourant. » (docs/meneur-de-jeu.md §24) Une conséquence d'ambiance en données : au palier démesuré d'une chose répugnante
-// qui sort du corps, 3 à 5 choses d'un modèle d'ambiance tombent autour d'elle, avec un cri qui déraille et un petit choc.
+// qui sort du corps, 4 à 6 choses d'un modèle d'ambiance tombent autour d'elle, avec un cri qui déraille et un petit choc.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -24,13 +24,15 @@ test('données : un modèle d\'ambiance léger, une recette de cri qui existe', 
   for (const m of MC.mots) assert.ok(!new RegExp('\\b' + m + '\\b').test(code), 'le code ne nomme pas « ' + m + ' »');
 });
 
-test('déclenchement : seulement au palier démesuré d\'une chose répugnante du corps ; 3 à 5, espacées, de haut, vite', () => {
+test('déclenchement : seulement au palier démesuré d\'une chose répugnante du corps ; nombre, écart et chute dans les bornes des données', () => {
+  const [n0, n1] = C.nombre, [e0, e1] = C.ecart_s, [h0, h1] = C.hauteur_m, [d0, d1] = C.chute_s;   // les bornes sont celles des données (réglées dans src/modeles.json)
   for (let g = 1; g < 40; g++) {
     const p = planConsequences(MODELES, { palier: 'demesure', facteur: 6.5, modele: SOURCE }, rng(g));
-    assert.ok(p && p.chutes.length >= 3 && p.chutes.length <= 5, 'nombre');
+    assert.ok(p && p.chutes.length >= n0 && p.chutes.length <= n1, 'nombre');
     p.chutes.forEach((c, i) => {
-      if (i) { const e = c.t - p.chutes[i - 1].t; assert.ok(e >= 0.6 - 1e-9 && e <= 2 + 1e-9, 'écart ' + e); }
-      assert.ok(c.hauteur >= 6 && c.hauteur <= 10 && c.chute_s >= 0.8 && c.chute_s <= 1.3);
+      if (i) { const e = c.t - p.chutes[i - 1].t; assert.ok(e >= e0 - 0.01 && e <= e1 + 0.01, 'écart ' + e); }
+      assert.ok(c.hauteur >= h0 - 0.01 && c.hauteur <= h1 + 0.01 && c.chute_s >= d0 - 0.01 && c.chute_s <= d1 + 0.01);
+      assert.ok(c.distance >= C.distance_m[0] - 0.01 && c.distance <= C.distance_m[1] + 0.01, 'tombe près de la chose');
       assert.ok(c.son.duree >= 0.4 && c.son.duree <= 0.8 && c.son.impact_kg < 0.2);
     });
     const pz = p.chutes.filter(c => c.pensee);
@@ -82,8 +84,8 @@ test('« une crotte de 20 kg » : des choses d\'ambiance qui tombent près d\'el
   const { ordres, m } = await jouer('fais une crotte de 20 kg');
   const cr = ordres.filter(o => o.type === 'objet' && o.op === 'creer'), base = cr.find(o => !o.chute), ch = cr.filter(o => o.chute);
   assert.ok(base, 'la chose');
-  assert.ok(ch.length >= 3 && ch.length <= 5, 'nombre : ' + ch.length);
-  for (const o of ch) { assert.equal(o.pres_de, base.objet.id); assert.equal(o.objet.formes.length, MC.formes.length); assert.ok(o.chute.son && o.chute.hauteur >= 6); }
+  assert.ok(ch.length >= C.nombre[0] && ch.length <= C.nombre[1], 'nombre : ' + ch.length);
+  for (const o of ch) { assert.equal(o.pres_de, base.objet.id); assert.equal(o.objet.formes.length, MC.formes.length); assert.ok(o.chute.son && o.chute.hauteur >= C.hauteur_m[0] - 0.01); }
   const crees = m.trace().partie ? m.trace().partie.monde.crees : null;
   if (crees) for (const o of ch) assert.equal(crees.find(c => c.id === o.objet.id).source, 'ambiance');
   const petit = await jouer('fais une crotte de 5 kg');

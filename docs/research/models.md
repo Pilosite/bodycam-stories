@@ -224,6 +224,8 @@ player sentence (text, after dictation)
   (v2: a decision model between 3 and 4, for the medium-confidence band)
 ```
 
+Two cases always take the fallback: `commit` intents (a conditional request, `docs/architecture.md`), whose condition and behaviour must be extracted in the player's words, and anything the validator rejects after a match. This keeps P7 (`docs/principles.md`): the fast path only *selects* what deeper tiers prepared, it never improvises.
+
 The character line in the common case comes **from the frontier entry** (pre-written by the background tier) or from the pack's fallback lines, so no generation happens on the hot path. Admissibility (hard part) is the validator's job, in code; the soft part ("would Sam agree?") is carried by the prepared entry or by staging.
 
 **What must be measured to validate it.**

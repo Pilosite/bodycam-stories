@@ -18,6 +18,8 @@ Why: it is the bodycam constraint taken seriously (we never drive her), it lets 
 
 | Capability | v1 (POC) | v2 | Target |
 |---|---|---|---|
+| The bubble (P3) and arriving in a story (P4) | one story, one arrival, a bubble of a few stations | several short stories one can drop into; the bubble follows an autonomous character | any situation from a prompt; stories as episodes shared by creators |
+| Fuzzy systems (P9, P10) | gauges and principles; one gauge at work in the story | the litmus: a wanted level, a reputation and a guard-and-crime system written in the authoring language only | creators' libraries of systems |
 | Movement | transitions between 4 to 6 stations on one path | autonomous movement on the path, then off it | free roaming with real obstacle handling |
 | Camera | free look at a station, sensor look | look while moving | — |
 | Places | one place, described by a pack | several places, travel between them | any place from a prompt, live |
@@ -25,6 +27,7 @@ Why: it is the bodycam constraint taken seriously (we never drive her), it lets 
 | Character | one strong character, acts in place | autonomous initiative, moves on her own | several characters, creatures |
 | Sound | synthesized cues and voice, driven by PDL | ambience beds, spatial sound | — |
 | PDL | transactions, three horizons, rules, source format with strengths | richer events, time-based rules | a public, versioned standard |
+| Commitments (planning ahead through the character) | conditional requests become promises and rules within a session, kept or broken in character | commitments that persist across sessions; creators define moments that invite them | players' commitments shared and reused as story material |
 | Model tiers | reflex (code), translation, staging, background, behind one adapter | on-device small model for translation | specialised non-generative models per modality |
 | Anticipation | frontier of likely intents per station, measured | speculative pre-rendering of next views | continuous background world growth |
 | Creator tools | session viewer, rule what-if, principle audit, pack checker | assistant-driven authoring commands | hosted creator workspace |

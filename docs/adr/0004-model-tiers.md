@@ -1,89 +1,78 @@
-# ADR 0004: Model tiers and how they are reached
+# 0004. Model tiers and how they are reached
 
-- **Status:** proposed
-- **Date:** 2026-11-20
-- **Evidence:** `docs/research/models.md` (sources, dates, what is usable versus paper versus pitch)
+- Status: proposed
+- Date: 2026-11-20
+- Evidence: `docs/research/models.md` (sources, dates, and what is usable versus paper versus pitch)
 
 ## Context
-
-PDL is spoken by four tiers (`docs/architecture.md`, pillar 4):
+`docs/architecture.md` (pillar 4) defines four tiers that all speak PDL:
 
 - **reflex**: code, < 100 ms;
-- **translation**: 0.2 to 0.8 s. It turns the player's sentence into an intent, the intent into Sam's line, and decides admissibility;
+- **translation**: 0.2 to 0.8 s. It turns the sentence into an intent (including `commit` intents), the intent into Sam's line, and decides admissibility;
 - **staging**: 2 to 8 s, the full reaction;
-- **background**: continuous. It keeps the story, the branches and the frontier of likely next intents.
+- **background**: continuous. It keeps the story and the frontier of likely next intents.
 
-`docs/sdlc.md` §7 says that which model serves which tier is configuration, recorded here, and that one adapter serves two modes: the claude.ai artifact and a local proxy holding the keys.
+`docs/sdlc.md` §7 calls for one adapter with two implementations: the artifact host capability, and a local proxy with the key. Toine asked to look again at "models like JEV" that structure events into data "the AI way, versus LLMs". The research found that this is most probably **Jev**, TypeSafe AI's hosted decision model (15 Sep 2026): it returns typed answers with probabilities and never writes text. Cloudflare Clef (open weights) and OpenAI's Decisions API followed in October. The **JEPA** line (V-JEPA 2, VL-JEPA) has nothing usable for us now. Its useful idea, matching in embedding space and generating only when needed, is available through ordinary sentence encoders.
 
-Toine asked us to look again at "models like JEV", meaning models that structure events into data without generating text. The research found that the name most probably refers to **Jev**, a hosted "decision model" from TypeSafe AI launched on 15 September 2026. It returns typed answers with probabilities and never writes text. Cloudflare (Clef, open weights), OpenAI (Decisions API) and others followed within weeks. The **JEPA** line (V-JEPA 2, VL-JEPA) was also checked. It offers nothing usable for us now; its useful idea, matching in embedding space and generating only when needed, is available through ordinary sentence encoders.
+Four facts shape the decision:
 
-Three facts shape the decision:
-
-1. **Everything the translation tier must decide is enumerable**, because PDL is closed: the intents, the prepared frontier entries and the things within reach of a station. Picking among enumerated candidates is a matching problem, not a generation problem.
-2. **Hosted small LLMs are not fast with thinking on.** Haiku 5.5 takes about 6 s to the first answer token at low effort with thinking on (Artificial Analysis); the Mercury diffusion models measure 2 to 7 s to first answer. Only a model with thinking *off* has a chance at 0.8 s, and that still has to be measured from France.
-3. **In the artifact, the page has three model tiers but no system prompt, no schema enforcement, no prompt-cache control and no network.** Its `default` tier takes 5 to 60 s to first text, and a couple of concurrent calls per viewer at most. It can show the architecture and the frontier hit rate. It cannot show tier latencies.
+1. PDL is closed, so **what translation decides is enumerable**: intents, prepared frontier entries, things within reach. That is matching, not generation.
+2. **Hosted small LLMs are slow with thinking on.** Haiku 5.5 takes about 6 s to the first answer token at low effort; Mercury diffusion models take 2 to 7 s. Only thinking *off* can approach 0.8 s, and that must be measured from France.
+3. **The artifact's `sample` capability** offers the `quick`/`default`/`complex` tiers, a named model and effort, but no system prompt, no schema enforcement, no prompt-cache control, no network, and a couple of concurrent calls per viewer. Its `default` tier takes 5 to 60 s to first text.
+4. **P7 (richness before reactivity).** Speed must not be bought with depth. Here the fast path only *selects* what deeper tiers prepared; it never improvises.
 
 ## Decision
+**One port, three implementations.** `core/` defines `ModelPort { embed, decide, generate }`, implemented by:
 
-### 1. One port, three implementations
+- `cannedPort`: tests and replay;
+- `artifactPort`: `sample`;
+- `proxyPort`: a localhost Node process with the keys.
 
-`core/` defines a `ModelPort` with `embed`, `decide` and `generate` (shape in `docs/research/models.md` §5.3), implemented by:
+Each tier has one fixed JSON schema and one fixed effort, so caches and compiled grammars stay warm. Every call is journaled: tier, port, model, queued/TTFT/total, cache reads and writes, usage, status. The PDL validator has the last word on every output. A refusal or timeout counts as a miss and falls through. Model names live in configuration, never in code.
 
-- `cannedPort`: tests and replay; replay never calls a model;
-- `artifactPort`: the `sample` capability;
-- `proxyPort`: a Node process on localhost with the keys; Claude Messages API, optional decision endpoint, local embeddings.
+**Tier assignments.**
 
-Each tier has **one fixed JSON schema and one fixed effort**, so that prompt caches and compiled grammars stay warm. Every call is journaled with tier, port, model, timings (queued, TTFT, total), cache reads and writes, usage and status. **The PDL validator has the last word on every output, whatever the port.** A refusal or a timeout is a miss, never a crash: the chain falls through to the next tier or to the fallback lines.
-
-### 2. Tier assignments
-
-| Tier | POC v1 (runnable by us this month) | v2 (to try) | Target |
+| Tier | POC v1 (this month) | v2 (to try) | Target |
 |---|---|---|---|
-| **Reflex** | code: alias and exact match on the closed vocabulary, rules firing, validator | add a cache of recent translations (sentence embedding → intent) | unchanged: code |
-| **Translation** | **non-generative first** (§3): a local sentence encoder (multilingual-e5-small or EmbeddingGemma-300M q8, transformers.js, in the page; the same model in Node for the bench), nearest match against intent anchors, frontier anchors and things within reach, with thresholds. **Fallback:** Claude Haiku 5.5, thinking off, effort `low`, structured output = PDL intent schema plus one short line, 1.5 s deadline. Sam's line comes from the frontier entry or the pack's fallback lines in the common case | a **decision model** (Jev 1.14 via OpenRouter or TypeSafe; Clef-flash if open weights matter) for the medium-confidence band, and for admissibility as a `noul`. Compare with an on-device fallback (Chrome Prompt API with `responseConstraint`, or a fine-tuned FunctionGemma) | a small classifier or decision model **fine-tuned on our own journals** (labels for free: what was matched, what staging ended up doing), on-device; generation only for misses |
-| **Staging** | Claude Sonnet 5.5, effort `low`, strict tool use emitting PDL transactions, streamed so that execution starts on the first complete transaction; character and pack context cached (automatic `cache_control`, 5 min TTL, kept warm) | per request class, Haiku 5.5 at `medium` against Sonnet 5.5 at `low`; one comparison run of a diffusion LLM (Mercury) for speed | the cheapest model that holds the principle-audit score |
-| **Background** | Claude Opus 5.5, effort `medium`: keeps the story state and **writes the frontier** (per station, about 10 entries, each with 2 to 5 paraphrase anchors, a pre-written line and its PDL), in a loop with a budget, 1 h cache on the pack. The pack **compiler** and the **audit** go through the Batch API (50 % off), not the live loop | Sonnet 5.5 for frontier refresh and Opus only for arcs; invalidation driven by what was played | continuous world growth (`docs/scope.md` target row) |
+| Reflex | code: alias match on the closed vocabulary, rules, validator | cache of recent sentence → intent translations | code |
+| Translation | **non-generative first**: a local sentence encoder (multilingual-e5-small or EmbeddingGemma-300M q8, transformers.js in the page, the same in Node for the bench), nearest match with thresholds. **Fallback:** Claude Haiku 5.5, thinking off, effort `low`, structured output = PDL intent schema plus one short line, 1.5 s deadline. `commit` intents always take the fallback, which extracts the condition and the behaviour. Lines come from the frontier entry or the pack's fallback lines | a **decision model** (Jev via OpenRouter/TypeSafe, or Clef-flash) for the medium-confidence band and admissibility; an on-device fallback (Chrome Prompt API with `responseConstraint`, or a fine-tuned FunctionGemma) | a classifier or decision model fine-tuned on our journals, on-device |
+| Staging | Claude Sonnet 5.5, effort `low`, strict tool use emitting PDL transactions, streamed (execution starts at the first complete transaction), pack and character context cached | Haiku 5.5 at `medium` against Sonnet; one Mercury speed comparison | cheapest model that holds the audit score |
+| Background | Claude Opus 5.5, effort `medium`, in a budgeted loop: story state plus **frontier entries**, about 10 per station, each with 2 to 5 paraphrase anchors (FR and EN), a pre-written line and its PDL. Compiler and audit via the Batch API | Sonnet 5.5 for refresh, Opus for arcs | continuous growth |
 
-### 3. The translation tier without generation
+**Translation without generation.**
 
 1. Embed the sentence once.
-2. Match it against three sets: (a) 3 to 8 anchors per intent in French and English, embedded when the pack is built; (b) the anchors of the frontier entries, embedded when the background tier adds them; (c) the names and descriptions of the things within reach.
-3. Accept a **frontier hit** when the best score passes θ_hit *and* beats the best *other* entry by a margin μ. Accept an **intent hit** at θ_int. Anything else goes to the fallback.
-4. Calibrate θ and μ on a labelled set so that the false-accept rate stays at or below about 3 %, and measure out-of-scope false accepts on their own.
+2. Match it against intent anchors (embedded at pack build), frontier anchors (embedded when the entry is added) and the things within reach.
+3. Accept a frontier hit only if the score is ≥ θ and beats the best *other* entry by a margin μ; accept an intent hit at its own threshold. Anything else goes to the fallback.
+4. Calibrate θ and μ for a false-accept rate of at most about 3 %, and measure out-of-scope false accepts on their own.
 
-Generation then happens only on misses and in staging.
+**Modes.**
 
-### 4. Modes and what each may claim
+- **Proxy mode** is the measuring mode: encoder in the page, Haiku/Sonnet/Opus as above. It may claim real per-tier latency from a French desktop, cache rates, cost per session and schema-valid rate.
+- **Artifact mode** is a showcase:
+  - translation uses a lexical matcher, plus `quick` via `sample.json` (an encoder is too large to bundle, and the network is closed);
+  - staging uses `quick`, or a named `claude-sonnet-5-5` at `effort: low`;
+  - background uses `default`, throttled so the foreground keeps its slot.
+  
+  It may claim PDL-only, replay, hit rate and the share answered without generation. It must **not** claim tier latencies (P19).
 
-| | Artifact (`artifactPort`) | Local proxy (`proxyPort`) |
-|---|---|---|
-| Translation | lexical matcher (an encoder is too large to bundle and the network is closed); fallback on `quick` via `sample.json` | encoder in the page; Haiku 5.5 fallback; optional decision model |
-| Staging | `quick`, or a named `claude-sonnet-5-5` with `effort: low` (falls back silently to the tier) | Sonnet 5.5 |
-| Background | `default`, throttled so it never takes the slot the foreground needs | Opus 5.5 |
-| May claim | PDL only, replay, hit rate, share answered without generation | real per-tier latency from a French desktop, cache rates, cost per session, schema-valid rate |
-| Must not claim | tier latencies (they include consent, queueing, tier substitution) | — |
+**First experiments (one day each, `docs/research/models.md` §7).**
 
-### 5. First experiments (one day each)
-
-The details are in `docs/research/models.md` §7.
-
-- **E1, offline matching bench.** About 150 labelled sentences (FR and EN, a third out of scope) for two stations. Compare BM25, e5-small and EmbeddingGemma. Report accuracy, risk-coverage curves, the thresholds chosen, and CPU latency. No key needed.
-- **E2, fallback and decision model.** Run the weak band from E1 through Haiku 5.5 (thinking off) and, if a key can be had, Jev with the option order swapped once. Report latency from France, valid rate, accuracy and cost.
+- **E1:** an offline matching bench on about 150 labelled FR/EN sentences, a third of them out of scope. Compare BM25, e5-small and EmbeddingGemma. Report accuracy, risk-coverage curves, the thresholds and CPU latency. No key needed.
+- **E2:** run E1's weak band through Haiku 5.5 with thinking off and, if a key is available, through Jev with the option order swapped once. Report latency from France, valid rate, accuracy and cost.
 
 ## Consequences
+- Translation becomes mostly retrieval, so its speed depends on the encoder and the anchors, not on a provider. **Anchors join the frontier entry and the pack format**: that is a contract change to `docs/architecture.md`, to be written before M4.
+- The background tier gets a measurable job: anchors, lines and PDL; the hit rate scores it.
+- The PDL schema handed to hosted models must be flat, because Claude structured outputs reject recursion and numeric bounds. Bounds stay in the validator.
+- v1 needs one Anthropic key and an encoder download. A decision-model key is needed only for E2 and v2.
+- Haiku 5.5 can refuse on safety grounds with no server-side fallback: the darker beats of the story must be tested, and the fallback lines must cover refusals.
+- `docs/pdl.md` explains « JEV » as "dLLM", which was a guess. Correct it when the sandbox text is next touched, once Toine confirms.
+- No scope row moves. This ADR makes the v2 row "on-device small model for translation" and the target row "specialised non-generative models" concrete.
 
-- The translation tier is mostly **retrieval**, so its speed depends on the encoder and the anchors, not on a provider. Anchors become part of the pack format and of every frontier entry, which touches `docs/architecture.md` (frontier entry) and the pack format. A follow-up contract change is needed.
-- The background tier's job is clearer and measurable: it writes frontier entries with anchors and lines; the hit rate scores it.
-- The schema handed to hosted models must be **flat** (no recursion, no numeric bounds), because Claude structured outputs reject those features. Bounds stay in the validator.
-- A second account (OpenRouter or TypeSafe) is needed only for E2 and v2; v1 depends on one Anthropic key plus a model download.
-- Haiku 5.5 can refuse on safety grounds without a server-side fallback; the story's darker beats must be tested against it.
-- `docs/pdl.md` explains « JEV » as "dLLM". That is now known to be a guess. It should be corrected when the demo text is next touched, after the owner confirms.
-- Scope ledger: no row moves. The "on-device small model for translation" (v2) and "specialised non-generative models" (target) rows are made concrete by this ADR.
-
-## Open questions for the owner
-
-1. Is "JEV" Jev (TypeSafe AI's decision model)? If he meant JEPA, the answer is "not usable yet; its idea is in the translation tier".
-2. Can we open an API account for a decision model (OpenRouter is the simplest: one key reaches Jev, Clef-flash and others) for E2?
-3. Is the local proxy acceptable as the main mode for measurements, the artifact staying a showcase? The artifact cannot prove the latency targets.
-4. Budget for the background tier: Opus 5.5 running continuously during a 10-minute session is the main cost; is a per-session ceiling wanted?
+## Open questions
+1. Is "JEV" Jev (TypeSafe AI)? If JEPA was meant: not usable yet, and its idea already sits in the translation tier.
+2. May we open an OpenRouter (or TypeSafe) account for E2? One key reaches Jev, Clef-flash and others.
+3. Is proxy mode accepted as the measuring mode, with the artifact a showcase that cannot prove the latency targets?
+4. Should there be a per-session cost ceiling for the continuous Opus background tier?
 5. Is French the primary play language? It weighs on the encoder choice and on Jev, whose French quality is not verified.
