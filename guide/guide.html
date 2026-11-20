@@ -18,9 +18,13 @@
 
 <!-- ============================================================ PART I · SEE IT -->
 <section class="hero" id="play" aria-labelledby="hero-title">
-  <p class="kicker"><span class="rec-dot" aria-hidden="true"></span><span data-t="part1">I · See it</span> · <span id="story-title">Louis’s Round</span></p>
+  <p class="kicker"><span class="rec-dot" aria-hidden="true"></span><span data-t="hero.what">An AI-driven procedural experience</span> · <span id="story-title">Louis’s Round</span></p>
   <h1 id="hero-title" data-t="hero.title">Say anything. The world answers.</h1>
   <p class="lede" data-t="hero.lede"></p>
+  <a class="play" id="play-link" href="__PLAY_URL__" target="_blank" rel="noopener">
+    <img id="play-img" alt="" width="54" height="96">
+    <span class="play-t"><b><span class="play-ic" aria-hidden="true">▶</span> <span data-t="play.t">Play the story</span></b><span data-t="play.p">The real game page, story mode, in a new tab</span></span>
+  </a>
 
   <div class="stage">
     <div class="frame-col">
@@ -66,6 +70,12 @@
     </div>
     <p class="note" id="synth-note"></p>
   </div>
+</section>
+
+<section id="worlds" class="sec worlds-sec" aria-labelledby="worlds-h">
+  <h2 id="worlds-h" data-t="worlds.title"></h2>
+  <p class="one" data-t="worlds.p"></p>
+  <div class="worlds" id="worlds-strip"></div>
 </section>
 
 <section id="invert" class="sec" aria-labelledby="invert-h">
@@ -184,7 +194,16 @@
   <p class="kicker"><span class="rec-dot" aria-hidden="true"></span><span data-t="part2">II · Open the hood</span></p>
   <h2 id="hood-h" class="h-part" data-t="hood.title"></h2>
   <p class="one" data-t="hood.p"></p>
+  <div class="map" id="map" role="list" aria-label="The semantic framework"></div>
+  <ul class="map-leg" id="map-leg"></ul>
   <nav class="toc" aria-labelledby="toc-h"><h3 id="toc-h" class="sr" data-t="toc.label">Contents</h3><ol id="toc"></ol></nav>
+</section>
+
+<section id="economy" class="sec" aria-labelledby="economy-h">
+  <h2 id="economy-h"><span class="n">00</span><span data-t="eco.title"></span> <span class="badge b-designed" data-t="eco.badge"></span></h2>
+  <p data-t="eco.p"></p>
+  <div class="eco" id="eco"></div>
+  <p class="note" data-t="eco.note"></p>
 </section>
 
 <section id="s3" class="sec" aria-labelledby="s3-h">

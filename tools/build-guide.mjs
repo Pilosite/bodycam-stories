@@ -3,7 +3,8 @@
 //   dist/guide-artefact.html   the same without doctype, html, head or body (claude.ai wraps it at publication)
 // Second pass (briefs/guide-v2.md): the captured engine stills of guide/stills/*.jpg are inlined as data URIs, and the
 // project's synthesizer src/son.js is inlined (as SON) with its recipes from src/bruitages.json (the recorded "prises" are
-// left out: no recipe the guide can play uses them).
+// left out: no recipe the guide can play uses them), with its table of story cues (indices). guide/worlds/*.jpg: captured
+// renders of other worlds.
 // core/ is inlined as classic-script modules (no bundler, no dependency); the real pack stories/louis-round, the pattern
 // library, the golden journal p8 and a few tables of docs/ are inlined as data, read here at build time. Deterministic:
 // same sources, same bytes (CI checks `git diff --exit-code -- dist`).
@@ -81,8 +82,12 @@ function mediaData() {
   const dir = 'guide/stills', stills = {};
   if (existsSync(join(root, dir))) for (const f of readdirSync(join(root, dir)).filter(f => f.endsWith('.jpg')).sort())
     stills[f.replace(/\.jpg$/, '')] = 'data:image/jpeg;base64,' + readFileSync(join(root, dir, f)).toString('base64');
+  const worlds = [];
+  if (existsSync(join(root, 'guide/worlds'))) for (const f of readdirSync(join(root, 'guide/worlds')).filter(f => f.endsWith('.jpg')).sort())
+    worlds.push({ id: f.replace(/^\d+-|\.jpg$/g, ''), src: 'data:image/jpeg;base64,' + readFileSync(join(root, 'guide/worlds', f)).toString('base64') });
   const B = JSON.parse(read('src/bruitages.json'));
-  return { stills, sound: { micro: B.micro, sortie: B.sortie, recettes: B.recettes } };
+  const game = existsSync(join(root, 'guide/game/first-station.jpg')) ? 'data:image/jpeg;base64,' + readFileSync(join(root, 'guide/game/first-station.jpg')).toString('base64') : '';
+  return { stills, worlds, game, sound: { micro: B.micro, sortie: B.sortie, recettes: B.recettes, indices: B.indices || {} } };
 }
 
 /* ---------------------------------------------------------------- tables of docs/, read at build time (never retyped) */
@@ -128,8 +133,12 @@ function guideData() {
 }
 
 /* ---------------------------------------------------------------- the page */
+// "Play the story": the game page next to the guide on GitHub Pages; the published game artifact from the guide artifact.
+export const PLAY = { full: './index.html?story=louis-round', artefact: 'https://claude.ai/artifact/DEsrQ6mCDTbht7pdZFxtXP' };
 export function buildGuide() {
-  const css = noClose(read('guide/guide.css'), 'guide.css'), body = read('guide/guide.html');
+  const css = noClose(read('guide/guide.css'), 'guide.css'), page = read('guide/guide.html');
+  if (!page.includes('__PLAY_URL__')) throw new Error('guide.html: no __PLAY_URL__');
+  const bodyFor = url => page.split('__PLAY_URL__').join(url);
   const scripts = [
     `<script type="application/json" id="guide-data">${jsonData(guideData())}</script>`,
     `<script type="application/json" id="guide-media">${jsonData(mediaData())}</script>`,
@@ -145,8 +154,8 @@ export function buildGuide() {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
 <style>\n${css}\n</style>`;
-  const artefact = `${title}\n${head}\n${body}\n${scripts}\n`;
-  const full = `<!DOCTYPE html>\n<html lang="en">\n<head>\n${title}\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n${head}\n</head>\n<body>\n${body}\n${scripts}\n</body>\n</html>\n`;
+  const artefact = `${title}\n${head}\n${bodyFor(PLAY.artefact)}\n${scripts}\n`;
+  const full = `<!DOCTYPE html>\n<html lang="en">\n<head>\n${title}\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n${head}\n</head>\n<body>\n${bodyFor(PLAY.full)}\n${scripts}\n</body>\n</html>\n`;
   return { full, artefact };
 }
 

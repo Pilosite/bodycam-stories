@@ -14,11 +14,11 @@ Kept by the coordinator, read by Toine. One page. It is how we talk without redo
 
 | | Now | Owner |
 |---|---|---|
-| 1 | Engine adapter: stations, transitions, the core driving the page (M2) | agent `engine-stations` |
+| 1 | Engine adapter: stations, transitions, the core driving the page (M2) | **done**: « Louis's Round » plays in the page with no model (`src/story.js`, `src/adaptateur-core.js`, `src/reflex-model.js`); see `docs/milestones.md` |
 | 2 | The interactive guide: principles, workflows, the real core running in the page | **done** (`guide/`, `dist/guide.html`, artifact https://claude.ai/artifact/1xjoRPRhuqEgjKU3hKKTqi) |
 | 3 | Creator kit: one command line and scoped instructions so an assistant can run the narrative side of the repo | **done** (`tools/story.mjs`, `stories/CLAUDE.md`, `AGENTS.md`, `stories/_template/`) |
 
-Follow-ups noted by the lots: a pure `judge()` in `core/` for the confidence rule and both-orders (today only in the guide) · a story loop in `core/clocks.js` (`prepare()`) · `model_call` entries must record which adapter answered and whether it was an invention or a judgement (P22) · a compiler for prose `!` and `!!` (44 statements of the pack wait for it) · `story check` in CI · any lot that changes `core/`, the pack or the docs the guide reads must rebuild and commit `dist/guide*.html`.
+Follow-ups noted by the lots: the hide station hides the bank (heading and posture in `stations.json`, a creator's call) · the two endings that are Sam's decision need a model · middle confidence should show doubt · spec §5.1 to mention the station `light` and `anchors.json` in the pack format · the worked examples of `docs/creator-kit.md` to re-run after the p8 golden was regenerated · a pure `judge()` in `core/` for the confidence rule and both-orders (today only in the guide) · a story loop in `core/clocks.js` (`prepare()`) · `model_call` entries must record which adapter answered and whether it was an invention or a judgement (P22) · a compiler for prose `!` and `!!` (44 statements of the pack wait for it) · `story check` in CI · any lot that changes `core/`, the pack or the docs the guide reads must rebuild and commit `dist/guide*.html`.
 
 Next: home node and model port in the page (ADR 0008, after Toine's answers) · model tiers live and measured (M3) · background, frontier, a rule written by a model (M4) · creator view (M5).
 
