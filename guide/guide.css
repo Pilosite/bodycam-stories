@@ -43,7 +43,9 @@ code{font-size:.88em;overflow-wrap:anywhere}
 .sr{position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;padding:0;margin:0;border:0}
 .skip{position:absolute;left:-999px;top:8px;background:var(--bg-2);padding:8px 12px;z-index:20}
 .skip:focus{left:var(--gut-l)}
+[hidden]{display:none!important}
 .dim{color:var(--ink-3)}
+.honest .canned{font:400 .85em var(--f-mono);color:var(--red-ink);border:1px dashed var(--red-line);border-radius:999px;padding:1px 7px;white-space:nowrap}
 .ok{color:var(--ink)} .bad{color:var(--red-ink)}
 
 /* top bar: the camera's overlay */
@@ -256,7 +258,9 @@ summary{cursor:pointer;font:500 11px/1.6 var(--f-mono);letter-spacing:.08em;text
 table{border-collapse:collapse;width:100%;font-size:13px;line-height:1.45}
 th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
 thead th{font:500 11px/1.4 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);background:var(--bg-2);position:sticky;top:0}
-tbody th{font-weight:600;color:var(--ink)}
+tbody th{font-weight:600;color:var(--ink);min-width:150px}
+.tbl code{overflow-wrap:break-word}
+#s9-kit tbody th{min-width:230px}
 td{color:var(--ink-2);min-width:160px}
 tr:last-child>*{border-bottom:0}
 #s11-ledger td,#s11-ms td{min-width:200px}

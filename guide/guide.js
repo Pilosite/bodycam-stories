@@ -165,7 +165,7 @@ function s2() {
       out.append(pre(tokens(tx)));
       WORLD0 = WORLD0 || sessionAt('trailhead').world;
       var v = C.pdl.validate(tx, WORLD0);
-      out.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s2.check')), statusChip(v.status)), reasonsList(v.repair, v.reasons));
+      out.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s2.check')), statusChip(v.status))); var rl = reasonsList(v.repair, v.reasons); if (rl) out.append(rl);
     }
     out.append(h('details', {}, h('summary', {}, 'JSON'), pre(json(c.body))));
   } else if (c && c.status === 'to_compile') {
@@ -276,7 +276,7 @@ function s4Say() {
       if (e.type === 'tx') item = h('li', { class: 'it st-' + e.status + (e.late ? ' late' : '') }, h('span', { class: 'ms' }, (e.latency_ms !== undefined ? e.latency_ms : seen[e.seq]) + ' ms'),
         h('code', {}, GLYPH[e.kind] + ' ' + tokens(e).split('\n')[0].replace(/^(m|e|p|c):[^ ]+ /, '')),
         e.cause && e.cause.amends !== undefined ? chip(t('s4.amends', e.cause.amends), 'strong') : null, e.late ? chip(t('s4.late'), 'bad') : null, e.author && e.author.kind === 'model' ? canned() : null);
-      else if (e.type === 'rule') item = h('li', { class: 'it rule' }, h('span', { class: 'ms' }, seen[e.seq] + ' ms'), h('code', {}, '↯ ' + e.rule + ' ' + e.status + (e.reason ? ' (' + e.reason + ')' : '') + ' · code'));
+      else if (e.type === 'rule') item = h('li', { class: 'it rule' }, h('span', { class: 'ms' }, (E[e.cause.tx] && E[e.cause.tx].latency_ms !== undefined ? E[e.cause.tx].latency_ms : seen[e.seq]) + ' ms'), h('code', {}, '↯ ' + e.rule + ' ' + e.status + (e.reason ? ' (' + e.reason + ')' : '') + ' · code'));
       else item = h('li', { class: 'it call' }, h('span', { class: 'ms' }, (e.latency_ms !== undefined ? e.latency_ms : seen[e.seq]) + ' ms'), h('code', {}, 'model_call ' + e.tier + ' · ' + e.purpose + ' · ' + e.status));
       lanes[loop].push(item);
     });
@@ -372,6 +372,7 @@ function s6() {
     if (cm.strength === 'tendency' && (cm.status === 'kept' || cm.status === 'broken')) out.append(h('p', {}, canned(), ' D7 → ', h('code', {}, cm.status)));
   }
   var from = R.marks[R.marks.length - 1];
+  if (from === E.length && R.marks.length > 1) from = R.marks[R.marks.length - 2];   // nothing new at this step: show the previous one
   out.append(h('h3', { class: 'sub' }, t('s6.journal')));
   var lines = E.slice(from).filter(function (e) { return e.type === 'tx' || (e.type === 'rule') || (e.type === 'event' && /commitment\.due|sound\.played|station\.entered/.test(e.event)); }).map(function (e) {
     var linked = (e.cause && e.cause.commit === 'c.jay') || (e.body && (e.body.commit === 'c.jay' || (e.body.commit && e.body.commit.id === 'c.jay')));
@@ -412,7 +413,7 @@ function s7() {
 function drawChart(g, pts, marks, fired) {
   var box = clear($('s7-chart'));
   if (!g || !pts.length) return;
-  var W = 640, H = 200, L = 34, R = 64, T = 12, B = 26, tmax = Math.max(60, pts[pts.length - 1][0]);
+  var W = Math.round(Math.max(320, Math.min(640, box.clientWidth || 640))), H = W < 480 ? 220 : 200, L = 34, R = 64, T = 12, B = 26, tmax = Math.max(60, pts[pts.length - 1][0]);
   var x = function (v) { return L + (W - L - R) * v / tmax; }, y = function (v) { return T + (H - T - B) * (1 - v); };
   var ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('role', 'img');
@@ -476,7 +477,7 @@ function s8Show(scroll) {
   if (e.loop) out.append(kv(t('s8.clock'), [chip(e.loop, 'strong'), e.latency_ms !== undefined ? chip(e.latency_ms + ' / ' + e.budget_ms + ' ms') : null, e.late ? chip(t('s4.late'), 'bad') : null]));
   var what = e.type === 'tx' ? GLYPH[e.kind] + ' ' + tokens(e) : e.type === 'principles' ? e.records.length + ' principle records' : json(Object.assign({}, e, { scene: undefined, records: undefined, proposed: undefined }));
   out.append(kv(t('s8.what'), pre(what)));
-  if (e.type === 'tx') out.append(reasonsList(e.repair, e.reasons));
+  var rl = e.type === 'tx' && reasonsList(e.repair, e.reasons); if (rl) out.append(rl);
   var chain = [], cur = causeOf(e), guard = 0;
   while (cur !== undefined && cur !== null && J8[cur] && guard++ < 20) { chain.push(J8[cur]); cur = causeOf(J8[cur]); }
   out.append(kv(t('s8.why'), chain.length ? h('ol', { class: 'chain' }, chain.map(function (c) { return h('li', {}, h('button', { type: 'button', class: 'linkish', onclick: function () { s8Sel = c.seq; $('s8-filter').value = 'all'; s8List(); s8Show(true); } }, '#' + c.seq), ' ', h('code', {}, summary(c))); })) : h('span', { class: 'dim' }, e.input ? 'an input' : '—')));
@@ -579,7 +580,7 @@ function renderAll() {
   var k3 = $('s3-tokens').value; s3Presets(); if (k3) s3(); else s3Load();
   s4Sentences(); s4Out();
   s5Questions(); s5(); s6(); if (!$('s7-src').value) $('s7-src').value = S7_DEFAULT; s7();
-  s8List(); s8Show(false); s8Rules(); s9(); s10(); s11();
+  s8List(); s8Show(true); s8Rules(); s9(); s10(); s11();
 }
 function setTheme(v) { if (v === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', v); }
 function wire() {
