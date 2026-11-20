@@ -25,6 +25,7 @@ Why: it is the bodycam constraint taken seriously (we never drive her), it lets 
 | Character | one strong character, acts in place | autonomous initiative, moves on her own | several characters, creatures |
 | Sound | synthesized cues and voice, driven by PDL | ambience beds, spatial sound | — |
 | PDL | transactions, three horizons, rules, source format with strengths | richer events, time-based rules | a public, versioned standard |
+| Commitments (planning ahead through the character) | conditional requests become promises and rules within a session, kept or broken in character | commitments that persist across sessions; creators define moments that invite them | players' commitments shared and reused as story material |
 | Model tiers | reflex (code), translation, staging, background, behind one adapter | on-device small model for translation | specialised non-generative models per modality |
 | Anticipation | frontier of likely intents per station, measured | speculative pre-rendering of next views | continuous background world growth |
 | Creator tools | session viewer, rule what-if, principle audit, pack checker | assistant-driven authoring commands | hosted creator workspace |
