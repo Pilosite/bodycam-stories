@@ -138,15 +138,17 @@ test('échelle : la masse et la nature de la chose bornent sa taille', () => {
   assert.ok(Math.min(...r2.formes.map(f => f.p[1] - f.taille[1] / 2)) > -0.01, 'toujours posée au sol');
 });
 
-test('position de pose prise au tour de voix : s\'il a bougé avant la réponse de l\'accessoiriste, la chose reste où il a fait le geste', async () => {
+test('position de pose prise au geste (§19) : s\'il a bougé avant la réponse de l\'accessoiriste, la chose reste où il a fait le geste', async () => {
   let lacher; const attente = new Promise(r => { lacher = r; });
   const base = sampler('modifie');
   const P = promenade({ demander: (c, o) => /accessoiriste/.test(c) ? attente.then(() => base(c, o)) : base(c, o) });
   await P.avancer(1);
   await P.m.voix('fais une crotte sur le chemin'); await flush();
   const res = P.ordres.find(o => o.type === 'objet' && o.op === 'reserver');
-  assert.ok(res, 'place réservée au tour de voix');
-  const lieu = Object.assign({}, P.monde.reserves[res.ref]);
+  assert.ok(res && res.au_geste, 'place annoncée au tour de voix, prise au geste');
+  assert.equal(P.monde.reserves[res.ref].pos, null, 'pas encore prise : la file n\'a pas atteint le geste');
+  await P.avancer(0.5);                                              // la file atteint le geste : la place est prise là
+  const lieu = Object.assign({}, P.monde.reserves[res.ref].pos);
   P.monde.x += 5; P.monde.z += 3;                                    // il est parti ailleurs entre-temps
   lacher(); await flush(); await flush();
   const o = P.monde.objets.find(x => x.id === 'fab-1');
@@ -325,7 +327,7 @@ test('pose relative au corps : ce qui tombe du corps est à l\'aplomb (derrière
   await P.avancer(1);
   P.monde.yaw = 0.6;                                                 // il regarde de biais
   const x0 = P.monde.x, z0 = P.monde.z, cap = P.monde.yaw;
-  await P.m.voix('fais caca'); await flush(); await flush();
+  await P.m.voix('fais caca'); await flush(); await flush(); await P.avancer(0.5);   // posée quand la file atteint le geste (§19)
   const o = P.monde.objets.find(x => x.id === 'fab-1');
   const devant = Math.sin(cap) * (o.x - x0) + Math.cos(cap) * (o.z - z0);
   assert.ok(devant < 0 && devant > -0.3, 'à l\'aplomb, un peu derrière : ' + devant.toFixed(2));

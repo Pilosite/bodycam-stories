@@ -779,13 +779,15 @@ export function horsDuCorps(pos, corps, rayon, marge = REGLAGES.MARGE_CORPS, ou 
 
 /* Une chose nouvelle ne se pose pas sur une autre : si la place est prise (cercles {x, z, r} des choses déjà là), elle glisse
    autour du porteur, à la même distance ou un peu plus loin, jusqu'à une place libre. */
-export function placeLibre(pos, rayon, autres, corps, marge = REGLAGES.MARGE_CORPS, occupe = null) {
+export function placeLibre(pos, rayon, autres, corps, marge = REGLAGES.MARGE_CORPS, occupe = null, { contre = false } = {}) {
   // occupe(p) : ce que la page sait en plus (les éléments de semis du décor : cailloux, branches, tombes) ; vrai si p est pris
+  // une chose déjà là (obstacle marqué chose) : jamais contre elle (ecartChoses, §19), sauf si le joueur l'a demandé (contre)
   const r = num(rayon, 0, 30, 0), A = liste(autres).filter(o => isObj(o) && Number.isFinite(o.x));
-  const libre = p => A.every(o => Math.hypot(p.x - o.x, p.z - o.z) >= o.r + r + 0.1) && !(typeof occupe === 'function' && occupe(p));
+  const ecart = o => o.chose && !contre ? ecartChoses(o.r, r) : o.r + r + 0.1;
+  const libre = p => A.every(o => Math.hypot(p.x - o.x, p.z - o.z) >= ecart(o)) && !(typeof occupe === 'function' && occupe(p));
   if (libre(pos)) return { x: pos.x, z: pos.z };
   const d0 = Math.max(Math.hypot(pos.x - corps.x, pos.z - corps.z), r + (r > 0.125 ? marge + 0.25 : 0.3)), a0 = Math.atan2(pos.x - corps.x, pos.z - corps.z);
-  for (const d of [d0, d0 + 0.15, d0 + r + 0.3, d0 + 2 * r + 0.6, d0 + 3 * r + 1]) for (let k = d === d0 ? 1 : 0; k <= 10; k++) for (const sg of [1, -1]) {
+  for (const d of [d0, d0 + 0.15, d0 + r + 0.3, d0 + 2 * r + 0.6, d0 + 3 * r + 1, d0 + 3 * r + 2, d0 + 4 * r + 3]) for (let k = d === d0 ? 1 : 0; k <= 10; k++) for (const sg of [1, -1]) {
     const a = a0 + sg * k * 0.3, p = { x: corps.x + Math.sin(a) * d, z: corps.z + Math.cos(a) * d };
     if (libre(p)) return p;
   }
@@ -1323,6 +1325,64 @@ export function planMarche(corps, metres, obstacles, R = REGLAGES) {
   return { points: choix.p.points, fait: r2(choix.fait), demande: N, angle: choix.a, bloque: choix.complet ? null : (choix.p.bloque || essais[0].p.bloque || 'obstacle'),
     bouche, enjambe: !!choix.p.enjambe, recul };
 }
+/* §19. L'écart entre une chose nouvelle et une chose déjà là (rayons r1, r2) : jamais l'une contre l'autre, sauf si le joueur
+   le demande (« à côté de », « contre », « sur »). Fonction des deux envergures. */
+export function ecartChoses(r1, r2) { const s = num(r1, 0, 30, 0) + num(r2, 0, 30, 0); return s + Math.max(0.5, 1.5 * s); }
+/* « Déplace-toi » sans distance ni cible (§19) : il s'éloigne franchement de N m, dans une direction dégagée, de préférence le
+   long du trajet (caps : les caps du sentier, devant puis derrière), en évitant d'aller vers une chose toute proche, et de façon
+   que l'arrivée soit loin des choses déjà là (obstacles marqués chose, écart pour une chose de rayon `rayon`). Rend { cap, fait,
+   libre } : la page se tourne vers cap puis marche N m (planMarche). Fonction pure. */
+export function planDeplacement(corps, metres, obstacles, { caps = [], rayon = 0.3 } = {}, R = REGLAGES) {
+  const N = num(metres, 1, 30, 4), y = num(corps.yaw, -1e3, 1e3, 0), de = { x: corps.x, z: corps.z };
+  const choses = liste(obstacles).filter(o => isObj(o) && o.chose && Number.isFinite(o.x));
+  const vers = c => choses.some(o => { const dx = o.x - de.x, dz = o.z - de.z, m = Math.hypot(dx, dz); return m < 2.5 && (dx * Math.sin(c) + dz * Math.cos(c)) > m * 0.5; });
+  const sentier = liste(caps).filter(Number.isFinite), autour = [0, 45, -45, 90, -90, 135, -135, 180].map(a => y + a * Math.PI / 180);
+  const cands = [...sentier.filter(c => !vers(c)), ...autour.filter(c => !vers(c)), ...sentier.filter(vers), ...autour.filter(vers)];
+  let mieux = null;
+  for (const c of cands) {
+    const p = planMarche({ x: de.x, z: de.z, yaw: c }, N, obstacles, R), fin = p.points.length ? p.points[p.points.length - 1] : de;
+    const libre = choses.every(o => Math.hypot(fin.x - o.x, fin.z - o.z) >= ecartChoses(o.r, rayon));
+    const r = { cap: Math.atan2(Math.sin(c), Math.cos(c)), fait: p.fait, libre };
+    if (libre && p.fait >= N - toleranceMarche(N)) return r;
+    if (!mieux || (libre && !mieux.libre) || (libre === mieux.libre && p.fait > mieux.fait + 0.3)) mieux = r;
+  }
+  return mieux || { cap: y, fait: 0, libre: false };
+}
+/* Une phrase du joueur est une SÉQUENCE ordonnée (§19) : « déplace-toi / avance de 8 m / va près de l'arbre, PUIS fais X » ;
+   « fais X puis éloigne-toi ». Rend null si la phrase ne demande pas à la fois de se déplacer et de faire, sinon
+   { ordre: 'avant' (le déplacement d'abord) | 'apres', deplacement: une action (marcher, rejoindre, deplacer), demiTour,
+   explicite (distance ou cible dite) }. Lit « après avoir… », « avant de… ». Fonction pure, sans IA. */
+const NB = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, quinze: 15, vingt: 20 };
+const FAIRE_O = /\b(fais|fait|faire|refais|refaire|fabrique|chie|chier|ponds|pondre|lache|lacher|depose|deposer|pose|poser|cree|creer|produis|construis)\b(?!\s*(-|\s)\s*(demi|un pas|quelques|\d+ pas|deux pas|trois pas|le tour|gaffe|attention|vite|comme|signe|coucou|ca\b))/;
+const BOUGER = /\b(deplace[sz]?[- ]toi|(?:deplace|eloigne|ecarte|decale|avance|recule)e?s?(?= |$)(?<=(?:etre|avoir) \w+)|deplace[sz]?[- ]vous|bouge[sz]?|decale[sz]?[- ]toi|pousse[sz]?[- ]toi|eloigne[sz]?[- ]toi|ecarte[sz]?[- ]toi|change de (place|coin|endroit)|plus loin|ailleurs|la-bas|pars|partir|repars|t'en aller|va-t-en|file|avance[sz]?|recule[sz]?|marche|va|vas|mets[- ]toi|place[sz]?[- ]toi|approche[sz]?[- ]toi|rapproche[sz]?[- ]toi|rejoins|cours|retourne|reviens)\b/;
+export function ordreDemande(texte) {
+  const t = sansAccents(texte || '').replace(/[’]/g, '\'').replace(/\s+/g, ' ');
+  const f = FAIRE_O.exec(t); if (!f) return null;
+  // le déplacement : le premier verbe qui bouge, hors de la proposition qui fait (« fais une crotte » n'est pas une marche)
+  const re = new RegExp(BOUGER.source, 'g'); let m = null;
+  for (let x; (x = re.exec(t));) { if (/^(va|vas|marche)$/.test(x[1]) && /^ ?(chercher|voir|falloir|bien)/.test(t.slice(x.index + x[0].length))) continue; m = x; break; }
+  if (!m) return null;
+  const pm = m.index, pf = f.index;
+  // sa proposition : jusqu'au prochain lien (et, puis, ensuite, après, virgule…) ou jusqu'à la proposition qui fait
+  const fin = (() => { const r = /,|;|\.| et | puis | ensuite | apres | avant | pour /g; r.lastIndex = pm + m[0].length; const q = r.exec(t); return Math.min(q ? q.index : t.length, pf > pm ? pf : t.length); })();
+  const prop = t.slice(pm, fin), v = m[1];
+  const n = /(\d+(?:[.,]\d+)?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|quinze|vingt)\s*(m\b|metres?|pas\b)/.exec(prop);
+  const d = n ? (NB[n[1]] || parseFloat(n[1].replace(',', '.'))) * (n[2] === 'pas' ? 0.7 : 1) : null;
+  const cible = /\b(arbres?|troncs?|pins?|chenes?|bouleaux?)\b/.test(prop) ? 'arbre' : /\b(rochers?|roches?|blocs?|gres)\b/.test(prop) ? 'rocher' : null;
+  let dep;
+  if (cible && !/^(recule|eloigne|ecarte|pars|partir|repars)/.test(v)) dep = { type: 'rejoindre', objet: cible };
+  else if (/^recule/.test(v)) dep = { type: 'marcher', metres: -Math.min(10, d || 2) };
+  else if (/^(avance|marche|va|vas|cours)$/.test(v) && d) dep = { type: 'marcher', metres: Math.min(30, d) };
+  else if (/^avance/.test(v)) dep = { type: 'marcher', metres: 4 };
+  else dep = { type: 'deplacer', metres: d ? Math.min(30, d) : 0 };
+  // l'ordre : celui de la phrase, sauf « après avoir… » (la proposition qui suit vient d'abord) et « avant de… » (elle vient après)
+  let ordre = pm < pf ? 'avant' : 'apres';
+  const ap = /\bapres (avoir|t'?etre|s'?etre|etre)\b|\bune fois (arrive|la-bas|que)/.exec(t), av = /\bavant de\b/.exec(t);
+  const suit = q => (pm > q && (pf < q || pm < pf)) ? 'm' : 'f';
+  if (ap) ordre = suit(ap.index) === 'm' ? 'avant' : 'apres';
+  else if (av) ordre = suit(av.index) === 'm' ? 'apres' : 'avant';
+  return { ordre, deplacement: dep, demiTour: /demi.?tour/.test(pm < pf ? t.slice(0, fin) : prop), explicite: !!(d || cible) };
+}
 /* Ce qu'il dit après une marche qu'il n'a pas pu faire en entier (§18) : rien s'il a fait (presque) tout ; « c'est bouché »
    seulement s'il n'a pas pu faire un mètre ; sinon ce qu'il a fait, et ce qui l'arrête. */
 const NOMBRES = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'];
@@ -1407,7 +1467,7 @@ export function creerMeneur(o) {
   const partie = creerPartie(h, { graine });
   const entrees = [], appels = [], evenements = [];
   let atelier = null;                                          // l'appel de l'accessoiriste en cours (un seul à la fois)
-  let enVol = null, numero = 0, evtEnAttente = null, relancePrete = null, penseeEnAttente = null, finSeq = null;
+  let enVol = null, numero = 0, nPoses = 0, evtEnAttente = null, relancePrete = null, penseeEnAttente = null, finSeq = null;
   let derniereP = compacter({}), derniereEntreeP = '', sec = 0, dernierePenseeS = -1e9;
   const secoursRejeu = liste(o.secoursRejeu).slice();
   function secours(texte) {                                    // le lexique de la page ; sa réponse est consignée pour le rejeu
@@ -1623,6 +1683,7 @@ export function creerMeneur(o) {
     v.texte = texte;
     const tenue = !estStop(texte) && tenirDemande(v, texte);
     if (!refuse || tenue) preparerModif(v, texte);
+    if (v.fabrique && !estStop(texte)) sequencer(v, texte);
     appliquer(v, 'voix');
   }
   function appliquer(v, type) {
@@ -1659,7 +1720,7 @@ export function creerMeneur(o) {
       noter('porteur', pensee);
     }
     if (v.actions.length) emettre({ type: 'actions', vider: type === 'voix', actions: v.actions });
-    if (v.fabrique || v.suite || v.modifie) commander({ fabrique: v.fabrique, suite: v.suite, modifie: v.modifie, texte: v.texte || '', montrer });   // la pensée est partie : l'accessoiriste travaille ensuite
+    if (v.fabrique || v.suite || v.modifie) commander({ fabrique: v.fabrique, suite: v.suite, modifie: v.modifie, texte: v.texte || '', montrer, reserve: v.reserve });   // la pensée est partie : l'accessoiriste travaille ensuite
     if (type !== 'evenement') { partie.horloge.tours++; partie.trame.derive++; }
     if (v.temps) {
       const t = h.temps.find(x => x.id === v.temps);
@@ -1727,7 +1788,12 @@ export function creerMeneur(o) {
     if (R.MODELES === 'non' || !BIB) return false;
     const t = sansAccents(texte || '');
     if (!FAIRE.test(t) || !/\b(une?|des|du|\d+(?:[.,]\d+)?)\b/.test(t) || /\b(fais-la|fais-le|rends-la|rends-le|la meme|cette|cet)\b/.test(t)) return false;
-    const m = modeleDe(BIB, t, { ramassable: false });
+    let m = modeleDe(BIB, t, { ramassable: false });
+    // « fais-en une autre », « refais-en une » : la même nature que la dernière chose faite (§19)
+    if (!m && /\b(autre|encore une?|une de plus|deuxieme|seconde|refais|fais-en|pareille)\b/.test(t)) {
+      const der = partie.monde.crees.filter(c => !c.retire).pop(), md = der ? modeleNomme(der.nom, '', '') : null;
+      if (md && !md.modele.ramassable && !md.modele.transforme) m = md;
+    }
     if (!m || modeleTransforme(t)) return false;                   // « fais-en un … » : un façonnage, pas une chose nouvelle
     const f = v.fabrique, fm = f ? modeleNomme(f.nom, f.quoi, '') : null;
     if (f && fm && fm.id === m.id) return false;                   // il la fait : la taille vient de la phrase (traiterAtelier)
@@ -1799,6 +1865,42 @@ export function creerMeneur(o) {
     if (pre.length) { v.actions = [...pre, ...liste(v.actions).filter(a => !(o && o.m > 1.2 && a.type === 'marcher') && !(a.type === 'viser' && a.objet === id))].slice(0, 8); log('aller_a', { id, ajoute: pre.map(a => a.type) }); }
   }
 
+  /* Une phrase est une SÉQUENCE (§19) : « déplace-toi PUIS fais X », « fais X PUIS recule ». La page lit l'ordre dans la phrase
+     (ordreDemande) et le tient quelle que soit la réponse (objet seul, marche et objet dans le désordre, texte seul) : le
+     déplacement demandé est ajouté s'il manque, mis avant ou après le geste selon la phrase. La place de la chose se prend
+     quand la file atteint le geste ({type: 'poser', ref}), là où il est arrivé, jamais au tour de voix ; quand une marche suit
+     le geste, il attend la chose avant de partir ({type: 'attendreObjet'}). « Déplace-toi » sans distance : {type: 'deplacer'},
+     au moins 4 m et 2,5 fois l'envergure de ce qu'il va faire, la page choisit une direction dégagée (planDeplacement). */
+  const MOUV = ['marcher', 'rejoindre', 'tourner', 'monter', 'descendre', 'chercher', 'deplacer'];
+  function sequencer(v, texte) {
+    const od = ordreDemande(texte), A = liste(v.actions);
+    let M = A.filter(a => MOUV.includes(a.type)), G = A.filter(a => !MOUV.includes(a.type)), L, ajoute = false;
+    v.reserve = 'p' + (++nPoses);
+    const poser = { type: 'poser', ref: v.reserve };
+    if (od) {
+      const d = Object.assign({}, od.deplacement);
+      if (d.type === 'deplacer') {                                  // assez loin pour qu'elle ne soit pas contre ce qui est déjà là
+        const mf = R.MODELES !== 'non' && BIB ? modeleNomme(v.fabrique.nom, v.fabrique.quoi, texte) : null;
+        const fm = mf ? formesModele(mf.modele, texte + ' ' + v.fabrique.nom) : null, env = fm ? fm.envergure : 0.6;
+        d.rayon = Math.round(env / 2 * 100) / 100;
+        if (!d.metres) d.metres = Math.round(Math.max(4, 2.5 * env) * 10) / 10;
+      }
+      // la phrase dit comment : la marche qu'elle demande remplace celle de la réponse (« déplace-toi » : pas 2 m, mais franchement)
+      const pareil = M.length && M.every(a => a.type === d.type && (d.type !== 'rejoindre' || a.objet === d.objet)
+        && (d.type !== 'marcher' || Math.abs(a.metres - d.metres) < 0.6));
+      if (!pareil) { ajoute = !M.length; M = [...(od.demiTour ? [{ type: 'tourner', degres: 180 }] : []), d];
+        log('sequence', { ordre: od.ordre, deplacement: d.type, de: A.map(a => a.type), ajoute }); }
+      else if (A.findIndex(a => MOUV.includes(a.type)) > A.findIndex(a => !MOUV.includes(a.type)) !== (od.ordre === 'apres')) log('sequence', { ordre: od.ordre, remis_en_ordre: true });
+      L = od.ordre === 'avant' ? [...M, poser, ...G] : [poser, ...G, { type: 'attendreObjet', ref: v.reserve, secondes: 20 }, ...M];
+      if (ajoute && od.ordre === 'avant' && str(v.pensee, 240).length < 190 && !/\b(d'abord|j'y vais|je bouge)\b/i.test(v.pensee || '')) v.pensee = (v.pensee ? v.pensee + ' ' : '') + tirer(['J\'y vais d\'abord.', 'D\'abord je bouge.', 'Pas là. Plus loin.']);
+    } else {                                                        // pas d'ordre dans la phrase : l'ordre de la réponse ; la place au geste
+      const k = A.findIndex(a => a.type === 'posture' && a.hauteur < 0.9);
+      L = k >= 0 ? [...A.slice(0, k), poser, ...A.slice(k)] : [poser, ...A];
+      const i = L.indexOf(poser), j = L.findIndex((a, n) => n > i && MOUV.includes(a.type));
+      if (j > 0) L.splice(j, 0, { type: 'attendreObjet', ref: v.reserve, secondes: 20 });
+    }
+    v.actions = L;
+  }
   /* -------- l'accessoiriste (§13, §14) : un appel en coulisse, la réponse du personnage n'attend pas */
   function commander(dem) {
     if (dem.fabrique && !(R.OBJETS_NOUVEAUX && partie.monde.objets_nouveaux_restants > 0)) {
@@ -1818,11 +1920,16 @@ export function creerMeneur(o) {
       dem.fabrique.ou = mou.modele.ou; delete dem.fabrique.distance;
     } else if (dem.fabrique && (dem.fabrique.ou === 'pieds' || dem.fabrique.ou === 'devant') && dem.fabrique.distance === undefined
       && PETIT_CORPS.test(sansAccents(dem.fabrique.nom + ' ' + dem.fabrique.quoi))) { log('pose_corrigee', { de: dem.fabrique.ou, vers: 'dessous' }); dem.fabrique.ou = 'dessous'; }
-    if (dem.fabrique) {                                          // la place se prend MAINTENANT, là où le geste a lieu
+    if (dem.fabrique) {                                          // la place se prend là où le geste a lieu : au marqueur « poser » de la file (§19), sinon maintenant
       const g = secoursGeste(dem.fabrique.nom) || secoursGeste(dem.texte);
-      dem.reserve = 'r' + id;
+      const au_geste = !!dem.reserve; if (!dem.reserve) dem.reserve = 'r' + id;
       const dist = dem.fabrique.distance !== undefined ? dem.fabrique.distance : g && g.ou === dem.fabrique.ou ? g.distance : undefined;
-      emettre({ type: 'objet', op: 'reserver', ref: dem.reserve, ou: dem.fabrique.ou, distance: dist });
+      // « à côté de l'autre », « contre », « sur » une chose déjà là : le joueur veut qu'elles se touchent presque
+      const t = sansAccents(dem.texte || ''), mt = /\b(a cote|contre|collee?|pres|sur)\b(.*)$/.exec(t);
+      const vivs = partie.monde.crees.filter(c => !c.retire);
+      const cc = mt ? vivs.filter(c => nomme(mt[2], c.nom)).pop() || (/\b(l'autre|la premiere|la precedente|celle-la|celui-la)\b/.test(mt[2]) ? vivs[vivs.length - 1] : null) : null;
+      dem.contre = cc ? cc.id : null;                              // la page la pose tout contre celle-là (§19)
+      emettre(Object.assign({ type: 'objet', op: 'reserver', ref: dem.reserve, ou: dem.fabrique.ou, distance: dist }, au_geste ? { au_geste: true } : {}));
     }
     const c = consigneAtelier(h, partie, derniereP, dem, R, BIB);
     atelier = { id, debut: sec, dem };
@@ -1900,8 +2007,9 @@ export function creerMeneur(o) {
     if (partie.trame.fin) return;
     let idObjet = null;
     if (dem.fabrique) {
-      if (objet) idObjet = creer(objet, { reserve: dem.reserve, ou: dem.fabrique.ou, distance: dem.fabrique.distance }, source, dem.montrer);
+      if (objet) idObjet = creer(objet, Object.assign({ reserve: dem.reserve, ou: dem.fabrique.ou, distance: dem.fabrique.distance }, dem.contre ? { contre: dem.contre } : {}), source, dem.montrer);
       else log('objet_rate', { nom: dem.fabrique.nom });
+      if (!idObjet && dem.reserve) emettre({ type: 'objet', op: 'abandon', ref: dem.reserve });   // la page n'attend plus rien à cette place
       if (!idObjet) suite = null;                                // une suite sans son objet n'a plus de sens
     }
     if (suite) programmer(suite, { '@': idObjet }, source);
@@ -2148,7 +2256,9 @@ export function creerMeneur(o) {
     else {
       if (po.immobile) { po.immobile = false; emettre({ type: 'reprendre' }); }
       // un geste sûr tout de suite, pendant que Claude répond (se baisser, regarder une chose) : rien qui se répète mal
-      const imm = [...secoursCorps(texte, derniereP, partie.monde.crees), ...(secoursGeste(texte) ? secoursGeste(texte).actions.slice(0, 1) : [])]
+      // (pas quand la phrase dit de se déplacer d'abord : « déplace-toi et fais… », il ne s'accroupit pas sur place, §19)
+      const od = ordreDemande(texte), dabord = od && od.ordre === 'avant';
+      const imm = dabord ? [] : [...secoursCorps(texte, derniereP, partie.monde.crees), ...(secoursGeste(texte) ? secoursGeste(texte).actions.slice(0, 1) : [])]
         .filter(a => a.type === 'posture' || a.type === 'viser').filter((a, i, l) => l.findIndex(b => b.type === a.type) === i);
       if (imm.length) { emettre({ type: 'actions', vider: true, actions: imm }); log('geste_immediat', { actions: imm.map(a => a.type) }); }
     }
