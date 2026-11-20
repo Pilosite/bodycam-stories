@@ -14,6 +14,10 @@ And every Bodycam Stories game is a game where **the player is not the player**:
 
 There are three ways to play, and all three are games: **living a story** (talking with the one who is there), **writing one** (P11), and **hosting one**: a person may sit in the game master's chair of a live session and steer it for the players, in place of or alongside the models (P12). What we show first is never the constraint ("you cannot act") but what it opens: immersion, and the fact that anything that can be said can happen.
 
+The founding postulate is **non-deterministic and procedural**: everything is generated, and nothing is decided in advance unless an author chose to fix it. It is not a slow game either: the world lives in real time and does not wait for the player; the aim is an instant reaction, with slower intelligence enriching it as it arrives (P20, ADR 0010).
+
+It is a human experience, as real tabletop role-playing is: the generated image, sound, voices and story are a medium at the service of play that people drive, alone or together.
+
 Under it lies one bet: **semantic engineering**. We are building a system that translates what a story is, and what a game is, into something a machine can run, starting from words.
 
 ## The two key drivers
@@ -27,7 +31,7 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 
 ## A. The experience
 
-**P1. You act indirectly.** The player never acts on the world and never steers the character. They speak to someone who is in the world. This is the identity of the game, not a limitation to work around. *Check: there is no input that moves the character or touches a thing directly.*
+**P1. You act indirectly.** The player never acts on the world and never steers the character. They speak to someone who is in the world. This is the identity of the game, not a limitation to work around. Who the player is, is the author's choice: a voice on the line in one story, a ghost, an object, an idea that has to spread in another. What never changes is that the player holds no controller: they act through words, first of all spoken ones. *Check: there is no input that moves the character or touches a thing directly.*
 
 **P2. The lens is imposed on purpose.** One body camera, one subjective view, the look of phone footage. The frame constrains what can be asked and seen, and that constraint is the art direction: it is what makes an open world of possibilities elegant and tractable. *Check: nothing is shown that the camera could not have filmed.*
 
