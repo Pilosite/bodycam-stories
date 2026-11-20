@@ -676,6 +676,17 @@ function flaner(){                                            // sans consigne, 
   queue.push({type:"tourner",rest:d},{type:"marcher",rest:6+Math.random()*9,libre:true},{type:"attendre",rest:1.5+Math.random()*3});
   if(Math.random()<.4) queue.push({type:"regarder",pitch:(Math.random()-.35)*.5},{type:"attendre",rest:2},{type:"regarder",pitch:-.03});
 }
+/* Story mode (src/story.js, ADR 0003): a station transition walked along given points at walking pace, no obstacle logic
+   (the story checks the legs against the known obstacles and cuts instead); at the end she turns to the station's heading. */
+function trajetPas(a,dt){
+  const q=a.points[a.i];
+  if(!q){ const d=Math.atan2(Math.sin(a.cap-cam.yaw),Math.cos(a.cap-cam.yaw)); cam.yaw+=Math.sign(d)*Math.min(Math.abs(d),1.5*dt); if(Math.abs(d)<2e-3||!Number.isFinite(d)){ if(Number.isFinite(a.cap)) cam.yaw=a.cap; queue.shift(); } return; }
+  const dx=q.x-cam.x, dz=q.z-cam.z, l=Math.hypot(dx,dz);
+  if(l<.05){ a.i++; return; }
+  const d=Math.atan2(Math.sin(Math.atan2(dx,dz)-cam.yaw),Math.cos(Math.atan2(dx,dz)-cam.yaw)); cam.yaw+=Math.sign(d)*Math.min(Math.abs(d),1.8*dt);
+  if(Math.abs(d)>.6) return;                                     // she turns first, then walks
+  const k=Math.min(l,1.35*dt); cam.x+=dx/l*k; cam.z+=dz/l*k; walkDist+=k; walking=true; cam.pitch+=(-.03-cam.pitch)*Math.min(1,dt*1.5);
+}
 function simulate(dt){
   if(Math.abs(cam.zoom/cam.zoomCible-1)>.005){                    // le zoom glisse en une seconde ; l'accumulation repart (comme un téléphone qui refait sa mise au point)
     cam.zoom*=Math.pow(cam.zoomCible/cam.zoom,Math.min(1,dt*3)); if(Math.abs(cam.zoom/cam.zoomCible-1)<.01) cam.zoom=cam.zoomCible; sceneDirty=true; }
@@ -710,6 +721,7 @@ function simulate(dt){
     else if(a.type==="faconner") faconnerPas(a,dt);
     else if(a.type==="ramasser") ramasserPas(a,dt);
     else if(a.type==="finMarche"){ queue.shift(); finMarche(a); }
+    else if(a.type==="trajet") trajetPas(a,dt);                                      // story mode: a station transition (src/story.js)
     else if(a.type==="penser"){ if(!a.espace||pensePeut(a.espace,a)){ queue.shift(); say(a.texte,a.bref); direVoix(a.texte); notePensee(a.texte,"file"); } }
     else if(a.type==="hesiter") hesiterPas(a,dt);
     else if(a.type==="essuyer") essuyerPas(a,dt);
@@ -858,6 +870,7 @@ function flouCapteur(u,t){
   gl.uniform3fv(u.uPosC,p.pos); gl.uniformMatrix3fv(u.uCamC,false,p.mat); gl.uniform3fv(u.uPosA,q.pos); gl.uniformMatrix3fv(u.uCamA,false,q.mat);
 }
 let src0=null;
+const CAPTEUR={ degrade:0, shake:0, off:false, batterie:null };                // story mode (camera.set): sensor degradation, shake, camera off
 function display(src,t,cible){
   if(!P_CAM) return;
   if(!cible) gpuDebut("capteur");
@@ -874,11 +887,13 @@ function display(src,t,cible){
   gl.uniform2f(u.uEbl||null,EBL.v,EBL.tache);                                                        // éblouissement, persistance rétinienne
   gl.uniform1f(u.uGrainPx||null,QUAL.full?Math.max(1,canvas.height/620):1);                          // grain d'une vidéo, pas d'un écran
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
+  gl.uniform2f(u.uAbime||null,CAPTEUR.degrade,CAPTEUR.off?1:0);                                    // story mode: camera.set degrade and off (battery)
+  const kS=1+6*CAPTEUR.shake;
   if(still) gl.uniform3f(u.uShake,0,0,0);                     // sinon : dérive de la main et balancement de la marche
   else gl.uniform3f(u.uShake,
-    .0030*(Math.sin(t*1.31)+.6*Math.sin(t*2.9+1)+.25*Math.sin(t*7.1))+.005*walkAmt*Math.sin(walkDist*4.2),
-    .0036*(Math.sin(t*1.07+2)+.5*Math.sin(t*3.3)+.25*Math.sin(t*6.3+4)),
-    .0040*(Math.sin(t*.83+2)+.5*Math.sin(t*2.3))+.010*walkAmt*Math.sin(walkDist*4.2+1));
+    kS*.0030*(Math.sin(t*1.31)+.6*Math.sin(t*2.9+1)+.25*Math.sin(t*7.1))+.005*walkAmt*Math.sin(walkDist*4.2),
+    kS*.0036*(Math.sin(t*1.07+2)+.5*Math.sin(t*3.3)+.25*Math.sin(t*6.3+4)),
+    kS*.0040*(Math.sin(t*.83+2)+.5*Math.sin(t*2.3))+.010*walkAmt*Math.sin(walkDist*4.2+1));
   gl.bindFramebuffer(gl.FRAMEBUFFER,cible?cible.f:null); gl.viewport(0,0,canvas.width,canvas.height); draw();
 }
 
@@ -1746,7 +1761,7 @@ function hud(now){
   const s=Math.floor((now-startT)/1000), p2=v=>String(v).padStart(2,"0"), d=new Date();
   $("rec").textContent=p2(Math.floor(s/60))+":"+p2(s%60);
   $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
-  $("camid").textContent="CAM 07 · GRAINE "+seedN;
+  $("camid").textContent=CAPTEUR.batterie!==null?"CAM 07 · BATT "+CAPTEUR.batterie+" %":"CAM 07 · GRAINE "+seedN;   // story mode: the camera's battery
   if(dbgOn&&!meneur) dbgMaj();
   $("stat").textContent=V3.on&&!(V3.gp&&V3.omb)?"V3 · PRÉPARATION…":!V3.on&&ptEnCours()?"PRÉPARATION…":V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS"+(ombPrepa()?" · IMAGE COMPLÈTE…":""):V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
@@ -1902,6 +1917,7 @@ function lexique(t){                                          // secours sans IA
   return out;
 }
 async function entendre(texte){
+  if(storyMode&&storyMode.on()) return storyMode.hear(texte);                 // story mode (src/story.js): the narrative core answers
   montrerDit(texte);                                            // ce que le joueur vient de dire reste en haut pendant qu'il y pense et répond en bas
   if(!meneur&&typeof MENEUR!=="undefined"&&!CFG.sansMeneur) demarrerLibre();   // promenade libre : le même meneur, sans histoire écrite
   if(meneur) return meneurEntendre(texte);                      // une histoire se joue : voir « meneur de jeu »
@@ -2128,6 +2144,7 @@ function setFrozen(v,m,sansClavier){
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
   if(v){ $("msg").value=""; $("hint").classList.add("off"); if(!sansClavier) setTimeout(()=>$("msg").focus(),50); }
+  if(storyMode&&storyMode.on()) storyLabels(storyMode.labels());
 }
 // Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
 $("parler").onclick=()=>{ if(appui.avale){ appui.avale=false; return; } const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
@@ -3601,6 +3618,58 @@ resize();
 sondeProg();                                                     // option v3sonde : la sonde se compile dès le départ, sans bloquer
 requestAnimationFrame(frame);
 
+/* ------------------------------------------------------------------ story mode (M2, src/story.js)
+   The narrative core drives the page through the executor: « Louis's Round » with no model at all. Entered from the launch
+   screen (a second choice beside the demo), from « Plus », or by ?story=louis-round (CFG.story). The demo is untouched
+   when the mode is off. New code, English. */
+var storyMode=null;                                             // not `story`: window.story is the test API below
+var STORY_ID=CFG.story||((location.search.match(/[?&]story=([\w-]+)/)||[])[1])||null;
+if(STORY_ID&&!(typeof STORY_PACKS!=="undefined"&&STORY_PACKS[STORY_ID])) STORY_ID=null;
+function storyLabels(T){ if(!T) return;
+  $("parler").textContent=frozen&&mode==="parler"?T.resume:T.talk; $("msg").placeholder=T.placeholder; $("envoi").textContent=T.say; }
+const STORY_PAGE={
+  win:window, doc:document, CORE, ADAPTER, REFLEX, VOIX, packs:STORY_PACKS, reflexes:REFLEXES, bruitages:BRUITAGES, tts:capacite("tts"),
+  cam, look, now:()=>performance.now(),
+  pathYaw:z=>pathYaw(z), pathYawDeg:z=>pathYaw(z)*180/Math.PI, wrapDeg:d=>((d%360)+540)%360-180,
+  posObjet, obstacles:()=>obstaclesConnus(), objetMeneur, patchScene, sunAzimuth:()=>(fiche.ambiance&&fiche.ambiance.soleil&&fiche.ambiance.soleil.azimut)||35,
+  enqueue:a=>enqueue(a), stop:()=>{ queue.length=0; libererPoses(); },
+  frozen:()=>frozen, voiceOn:()=>true,
+  applyPlace:f=>{ applyFiche(CONSTRUCTEUR.resoudreFiche(f)); errance=false; immobile=true; arriveeJeton++; },
+  cut(x,z,yaw,first){ queue.length=0; cam.x=x; cam.z=z; cam.yaw=yaw; cam.pitch=-.03; cam.haut=1; cam.elev=0; look.yaw=0; look.pitch=0; sceneDirty=true;
+    if(first) return; const c=document.createElement("div"); c.style.cssText="position:fixed;inset:0;background:#000;z-index:2;pointer-events:none;transition:opacity .5s"; document.body.appendChild(c);
+    setTimeout(()=>{ c.style.opacity="0"; setTimeout(()=>c.remove(),600); },250); },
+  walk(points,cap){ queue.push({type:"posture",h:1},{type:"trajet",points:points.map(p=>({x:p.x,z:p.z})),i:0,cap}); },
+  placeThing(objet,w){ const q=versFiche(w.x,w.z), v=validerFiche({kit:"foret",objets:[Object.assign({},objet,{devant:q.devant,cote:q.cote})]}).objets; if(!v||!v[0]) return;
+    v[0].id=String(objet.id).slice(0,30); fiche=Object.assign({},fiche,{objets:[...(fiche.objets||[]).filter(o=>o&&o.id!==v[0].id),v[0]]}); buildShapes(fiche); },
+  playPlan:b=>{ try{ jouerBruit(b); }catch(e){ console.warn("story sound:",e&&e.message); } },
+  camera(c){ CAPTEUR.degrade=Math.max(0,Math.min(1,+c.degrade||0)); CAPTEUR.shake=Math.max(0,Math.min(1,+c.shake||0)); CAPTEUR.off=!!c.off; },
+  battery(b){ if(typeof b==="number") CAPTEUR.batterie=Math.max(0,Math.round(b*100)); },
+  subtitle(text,o){ const el=$("pensee"); say(o.speaker?o.speaker+" — "+text:text); el.style.opacity=o.whisper?".72":""; el.style.fontSize=o.whisper?"0.86em":""; },
+  showSaid(t){ montrerDit(t); },
+  end(title,text,act,T){ $("fin-titre").textContent=title; $("fin-texte").textContent=text||""; $("fin").hidden=false; setFrozen(false);
+    $("fin-rejouer").textContent=T.replay; $("fin-quitter").textContent=T.leave;
+    $("fin-rejouer").onclick=()=>{ $("fin").hidden=true; act.replay(); }; $("fin-quitter").onclick=()=>{ $("fin").hidden=true; act.leave(); }; },
+  enter(T){ if(meneur) quitterHistoire(true); quitterLibre(); voixP.taire(); hold=false; setFrozen(false); interfaceHistoire(true); $("fin").hidden=true; storyLabels(T);
+    if($("histoire")) $("histoire").hidden=true; if($("journal")) $("journal").hidden=true; },
+  leave(){ CAPTEUR.degrade=0; CAPTEUR.shake=0; CAPTEUR.off=false; CAPTEUR.batterie=null; $("fin").hidden=true;
+    $("fin-rejouer").textContent="Rejouer"; $("fin-quitter").textContent="Se promener"; $("fin-rejouer").onclick=()=>jouerHistoire(histoireId); $("fin-quitter").onclick=()=>quitterHistoire(false);
+    $("pensee").style.opacity=""; $("pensee").style.fontSize=""; interfaceHistoire(false); setFrozen(false); immobile=false; applyFiche(FICHES[ficheIdx]); },
+  storedLang(){ try{ return localStorage.getItem("bodycam-story-lang"); }catch(_){ return null; } },
+  storeLang(l){ try{ localStorage.setItem("bodycam-story-lang",l); }catch(_){} },
+  labels:T=>storyLabels(T),
+};
+storyMode=STORY.createStoryMode(STORY_PAGE);
+function lancerStory(id,o){ fermerOutils(); const r=$("ouverture"); if(r){ r.hidden=true; r.remove(); document.body.classList.remove("ouverture-on"); } ouvRepos=false;
+  return storyMode.start(id||"louis-round",Object.assign({lang:CFG.lang},o||{})); }
+function storyChoice(){                                           // the launch screen: a second choice beside the demo
+  const l=$("ouv-launch"); if(!l||$("ouv-story")) return;
+  for(const id of Object.keys(STORY_PACKS)){ const b=document.createElement("button"); b.type="button"; b.id="ouv-story"; b.className="ouv-launch"; b.style.marginTop="12px";
+    b.textContent=STORY_PACKS[id].title.en||id; b.onclick=()=>{ voixP.geste&&voixP.geste(); lancerStory(id); }; l.after(b); }
+}
+{ const o=$("outils"); for(const id of Object.keys(STORY_PACKS)){ const b=document.createElement("button"); b.type="button"; b.className="ghost"; b.textContent="Story: "+(STORY_PACKS[id].title.en||id); b.onclick=()=>lancerStory(id); o.prepend(b); } }
+window.story={ start:(id,o)=>lancerStory(id,o), hear:t=>storyMode.hear(t), advance:n=>storyMode.advance(n), look:(t,s)=>storyMode.look(t,s), state:()=>storyMode.state(), journal:()=>storyMode.journal(),
+  gaps:()=>storyMode.gaps(), commands:()=>storyMode.commands(), stop:()=>storyMode.stop(), checkpoint:()=>storyMode.checkpoint() };
+
 /* ------------------------------------------------------------------ ouverture de démo et arrivée dans un lieu
    Le code est dans src/ouverture.js (OUVERTURE) et ouvertures/*.json (OUVERTURES, journaux de préparation réels) ; ici, les
    raccords. Voir docs/ouverture.md. La voix du personnage est ailleurs (window.voix, quand elle existe). */
@@ -3626,7 +3695,7 @@ function arrivee(){                                               // appelée pa
   return false;
 }
 function tourHorizon(k){
-  if(k!==arriveeJeton||(meneur&&!meneurLibre)||frozen||(ouverture&&ouverture.ouvert())) return;
+  if(k!==arriveeJeton||(meneur&&!meneurLibre)||frozen||(ouverture&&ouverture.ouvert())||(storyMode&&storyMode.on())) return;
   queue.length=0;                                                 // un tour d'horizon sur place : tourner et lever la tête, aucun pas
   queue.push({type:"attendre",rest:.6},{type:"tourner",rest:-.55},{type:"attendre",rest:.9},{type:"regarder",pitch:.18},{type:"tourner",rest:1.1},
     {type:"attendre",rest:.7},{type:"regarder",pitch:-.03},{type:"tourner",rest:-.55});
@@ -3678,6 +3747,7 @@ function pretOuverture(){                                        // fin du rejeu
 /* L'ouverture : « Quel monde veux-tu filmer ? » ; rejeu d'une préparation enregistrée, ou vraie chaîne du constructeur. */
 function lancerOuverture(){
   if(ouverture&&ouverture.ouvert()) return;
+  if(storyMode&&storyMode.on()) storyMode.stop();
   if(meneur&&!meneurLibre) quitterHistoire(false);
   setFrozen(false); voixP.taire(); voixInter(true);                         // la démo se joue avec la voix
   const voulue=id=>FICHES.find(f=>f.id===id);
@@ -3688,12 +3758,13 @@ function lancerOuverture(){
     dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
     surDebut:(t,rejeu)=>{ if(!rejeu) ouvRepos=false; },          // rejeu : le moteur reste au repos (il compile) jusqu'au fondu
     surFin:o=>{ ouvRepos=false; if(o.constructeur){ creerMonde(o.texte); return; } const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1200); } });
-  ouverture.ouvrir(); ouvRepos=true;
+  ouverture.ouvrir(); ouvRepos=true; storyChoice();
   const r0=OUVERTURES.find(r=>r.suggestion), f0=r0&&(voulue(r0.fiche)||voulue(r0.ficheSecours));   // en coulisse : la fiche de la suggestion
   if(f0){ const i=FICHES.indexOf(f0); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f0)); arriveeJeton++; ouvCoulisse=f0; }
 }
 setInterval(()=>{ if(ouverture&&ouverture.ouvert()) ouverture.dictee(listening); },300);
-if(DEMO&&!CFG.histoire) lancerOuverture();
+if(DEMO&&!CFG.histoire&&!STORY_ID) lancerOuverture();
+if(STORY_ID) setTimeout(()=>lancerStory(STORY_ID,CFG.storyOpts),0);   // ?story=<id> or CFG.story: straight into the story
 window.balade.ouverture=()=>{ lancerOuverture(); return ouverture; };
 window.balade.ouvertureMesure=()=>ouvMesure;                    // tools/ouverture.mjs : attente entre la fin du rejeu et le fondu
 window.balade.arrivee=()=>({ errance, file:queue.map(a=>a.type), pensee:$("pensee").textContent });
