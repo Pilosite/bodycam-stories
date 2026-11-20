@@ -6,6 +6,7 @@ uniform sampler2D uBloom;    // l'image réduite (avant flou)
 uniform sampler2D uPrev;     // l'exposition précédente
 uniform float uRate;         // part du chemin faite vers la cible à cette passe (inertie du capteur)
 uniform float uMax;          // plafond du gain (la nuit, le noir reste noir)
+uniform float uSpot;         // 0..1 : mesure serree au centre (on cadre une chose de pres : le telephone expose pour elle)
 out vec4 o;
 void main(){
   float s=0., ws=0.;
@@ -13,7 +14,7 @@ void main(){
     vec2 uv=(vec2(float(i),float(j))+.5)/8.;
     float L=dot(textureLod(uBloom,uv,0.).rgb,vec3(.2126,.7152,.0722));
     if(!(L>=0.)) L=0.;                                       // une valeur invalide ne doit jamais rendre l'écran noir
-    vec2 d=uv-.5; float w=1.-1.6*dot(d,d);
+    vec2 d=uv-.5; float w=mix(1.-1.6*dot(d,d),exp(-34.*dot(d,d)),uSpot);
     s+=w*log(min(L,8.)+.004); ws+=w;
   }
   float cible=clamp(.25/exp(s/ws),.25,uMax);

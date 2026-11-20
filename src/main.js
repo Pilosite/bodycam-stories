@@ -831,7 +831,7 @@ function staticRows(p){
   if(row>=H){ row=0; n++; hist=sDst; histPose=p; return true; }
   return false;
 }
-let blBuf=null; const expoL=lectureDiff();
+let blBuf=null, expoSpot=0; const expoL=lectureDiff();
 function postFX(src){
   if(!P_CAM) return;                                           // capteur et halo pas encore compilés (postPret)
   gpuDebut("halo"); gl.useProgram(P_DOWN.p); bindTex(0,src.t,P_DOWN.u.uTex); gl.uniform2f(P_DOWN.u.uDstRes,bl1.w,bl1.h);
@@ -845,6 +845,8 @@ function postFX(src){
     const dtE=expoQuand?Math.min(1,(now-expoQuand)/1000):1e3; expoQuand=now;
     gl.useProgram(P_EXPO.p); bindTex(0,bl1.t,P_EXPO.u.uBloom); bindTex(1,expoT[expoI].t,P_EXPO.u.uPrev);
     gl.uniform1f(P_EXPO.u.uRate,1-Math.exp(-dtE/.45)); gl.uniform1f(P_EXPO.u.uMax,S.nuit?9:14);
+    { const bas=-(cam.pitch+look.pitch), v=Math.max(Math.min(1,Math.max(0,(cam.zoom-1)/.5)),Math.min(1,Math.max(0,(bas-.4)/.35)));   // il cadre une chose de près (zoom, ou regard plongeant) : mesure au centre
+      expoSpot+=(v-expoSpot)*Math.min(1,dtE*2.5); gl.uniform1f(P_EXPO.u.uSpot||null,CFG.expoSpot===false?0:expoSpot); }
     gl.bindFramebuffer(gl.FRAMEBUFFER,expoT[1-expoI].f); gl.viewport(0,0,1,1); draw(); expoI=1-expoI;
     gl.viewport(0,0,bl1.w,bl1.h);
   }
