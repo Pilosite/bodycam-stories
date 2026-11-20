@@ -16,9 +16,9 @@ for (const [pn, pose] of Object.entries(POSES)) for (const [mn, mode] of Object.
   await page.goto('file://' + resolve(root, process.env.PAGE || 'dist/index.html'), { timeout: 600000 });
   await page.waitForFunction(() => window.__state && window.__state.n >= 1, null, { timeout: 900000, polling: 1000 });
   const r = await page.evaluate(() => window.balade.remplissage());
-  await page.waitForFunction(() => window.__state && window.__state.n >= 4, null, { timeout: 900000, polling: 1000 });
-  await page.screenshot({ path: join(out, pn + '-' + mn + '.png') });
   console.log(pn.padEnd(9), mn.padEnd(6), JSON.stringify(r), 'tramés par pixel', (r.trames / r.pixels).toFixed(2), 'gardés par pixel', (r.gardes / r.pixels).toFixed(2));
+  await page.waitForFunction(() => window.__state && window.__state.n >= 4, null, { timeout: 900000, polling: 1000 });
+  await page.screenshot({ path: join(out, pn + '-' + mn + '.png'), timeout: 600000 });
   await page.close();
 }
 await nav.close();

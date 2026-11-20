@@ -35,7 +35,7 @@ uniform float uK;            // recouvrement visé (côté du grain = uK × l'é
 uniform float uMaxPt;
 uniform vec4  uAncre;        // feuilles en marche : ancre du tirage dans le monde (x, z), 1 = actif, cap du secteur
 uniform vec2  uFeuil;        // feuilles : profondeur de tranche au plus, pixels de l'écran
-uniform vec3  uFeuilG;       // feuilles des houppiers : part des grains gardés sur une feuille de plus de y pixels, longueur maximale à l'écran (pixels)
+uniform vec3  uFeuilG;       // feuilles des houppiers : part des grains gardés sur une feuille de plus de y pixels (0 : toutes celles qui en reçoivent plusieurs), longueur maximale à l'écran (pixels)
 uniform vec3  uSoleilC;      // carte d'ombres : centre, base (droite, haut, vers le soleil), demi-largeur et profondeur
 uniform mat3  uSoleilM;
 uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)

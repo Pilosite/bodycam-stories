@@ -1040,7 +1040,7 @@ function ombDiag(){                                           // pour le diagnos
   if(OMB.sig&&OMB.mode!=="socle") L.push("  voulu "+OMB.sig+" : "+(P?P.p?"compilé en "+f(P.ms):P.echec?"échec ("+P.echec+")":"compilation depuis "+f(performance.now()-P.t0):!ECHELLE.peutTenter(OMB.mem,OMB.sig)?"échec mémorisé, pas retenté":"pas encore lancé"));
   const m=ECHELLE.resumer(OMB.mem); if(m.length) L.push("  mémoire : "+m.join(" ; "));
   // Lancement (docs/moteur-v3.md, « Lancement sans gel ») : durée de chaque compilation, plus longue image des 10 premières secondes
-  L.push("Compilations ("+COMP.lances+") : "+COMP.journal.map(j=>j.nom+" "+(j.ms/1000).toFixed(1)+" s").join(" · ")+(COMP.envol.length?" · en cours : "+COMP.envol.map(x=>x.nom).join(", "):""));
+  L.push("Compilations ("+COMP.lances+") : "+COMP.journal.map(j=>j.nom+" "+(j.ms/1000).toFixed(1)+" s").join(" · ")+(COMP.envol.some(x=>!x.note)?" · en cours : "+COMP.envol.filter(x=>!x.note).map(x=>x.nom).join(", "):""));
   L.push("Plus longue image des 10 premières s : "+Math.round(LONGUE.max)+" ms");
   const gk=Object.keys(GT.ms);
   L.push(GT.ext?"Puce (ms) : "+gk.map(k=>k+" "+GT.ms[k].toFixed(1)).join(" · ")+" · image "+(GT.total||0).toFixed(1):"Puce : pas de chronomètre (EXT_disjoint_timer_query_webgl2 absente), image "+Math.round(V3.msMoy)+" ms");
@@ -1372,12 +1372,14 @@ const REG_N=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:1, fG:.6, fMax:64, rais:
   {g:.55, fG:.5, fMax:40, rais:.5, res:1}, {g:.4, fG:.4, fMax:32, rais:.3, res:.85}, {g:.32, fG:.4, fMax:28, rais:0, res:.7} ];
 const REG={ on:CFG.regulateur!==undefined?!!CFG.regulateur:!window.__CFG, niveau:0, ms:0, haut:0, bas:0, t:0, change:0 };
 function regCible(){ return CFG.cibleMs||(QUAL.full?18:33); }
-function regMesure(dt){                                        // après chaque image v3 en marche ou accumulée
+function regMesure(dt,dtBrut){                                 // après chaque image v3 en marche ou accumulée
   if(!REG.on) return;
-  const m=GT.ext&&GT.total>0?GT.total:V3.ms; if(!(m>0)) return;
+  // Sans chronomètre de la puce : l'intervalle entre deux images (il ne descend pas sous celui de l'écran, 16,7 ms à 60 Hz :
+  // on remonte alors dès qu'on tient la cible, au lieu d'attendre une marge qu'on ne peut pas voir).
+  const puce=GT.ext&&GT.total>0, m=puce?GT.total:dtBrut; if(!(m>0)||m>2000) return;
   REG.ms=REG.ms?REG.ms*.85+m*.15:m;
   const c=regCible(), now=performance.now();
-  if(REG.ms>c*1.1) { REG.haut+=dt; REG.bas=0; } else if(REG.ms<c*.65) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
+  if(REG.ms>c*1.1) { REG.haut+=dt; REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
   if(now-REG.change<1500) return;                              // le temps que le niveau précédent se mesure
   let k=REG.niveau;
   if(REG.haut>1&&k<REG_N.length-1) k++; else if(REG.bas>3&&k>0) k--;
@@ -1386,7 +1388,7 @@ function regMesure(dt){                                        // après chaque 
 function regNiveau(k){
   const avant=REG_N[REG.niveau]; REG.niveau=k; REG.haut=REG.bas=0; REG.change=performance.now(); REG.ms=0;
   etapeGL("régulateur : niveau "+k);
-  if(avant.res!==REG_N[k].res){ REG_RES=REG_N[k].res; resize(); }
+  if(avant.res!==REG_N[k].res){ REG_RES=REG_N[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
 }
 const regEtat=()=>REG_N[REG.on?REG.niveau:0];
 /* Montée progressive au démarrage : les premières images ne sèment qu'une part du budget (la puce compile peut-être encore,
@@ -1408,8 +1410,8 @@ function v3Compter(semer){
     gl.clearBufferfv(gl.COLOR,0,[0,0,0,0]); gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
     semer(k); gl.disable(gl.BLEND);
     const b=new Float32Array(W*H*4); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,W,H,gl.RGBA,gl.FLOAT,b);
-    let n=0, mx=0; for(let i=0;i<b.length;i+=4){ n+=b[i]; if(b[i]>mx) mx=b[i]; }
-    r[k===1?"trames":"gardes"]=Math.round(n); if(k===1) r.maxParPixel=mx;
+    let n=0, mx=0; const parts=[0,0,0]; for(let i=0;i<b.length;i+=4){ n+=b[i]; if(b[i]>mx) mx=b[i]; parts[0]+=b[i+1]; parts[1]+=b[i+2]; parts[2]+=b[i+3]; }
+    r[k===1?"trames":"gardes"]=Math.round(n); r[k===1?"tramesFeuillesBoisBlocs":"gardesFeuillesBoisBlocs"]=parts.map(Math.round); if(k===1) r.maxParPixel=mx;
   }
   gl.deleteFramebuffer(fb); t.forEach(x=>gl.deleteTexture(x));
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.enable(gl.DEPTH_TEST);
@@ -1447,7 +1449,7 @@ function v3Image(p){
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
     gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); v3Grains(u,ps); gl.uniform1i(u.uPrx,0);
     gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,ps.nA,ps.nB,ps.nR,ps.nF);
-    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H); { const r=regEtat(), fg=CFG.feuilG||[r.fG,16,r.fMax*Math.max(1,H/480)]; gl.uniform3f(u.uFeuilG||null,fg[0],fg[1],fg[2]); }   // feuilG : [part, seuil px, max px] imposés (essais)
+    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H); { const r=regEtat(), fg=CFG.feuilG||[r.fG,0,r.fMax*Math.max(1,H/480)]; gl.uniform3f(u.uFeuilG||null,fg[0],fg[1],fg[2]); }   // feuilG : [part, seuil px, max px] imposés (essais)
     gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
     gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
     gl.uniform1i(u.uTrait,0);
@@ -1489,7 +1491,7 @@ function v3Image(p){
     gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); v3Grains(u,pc);
     gl.uniform1i(u.uPrx,px.on?1:0); gl.uniform4iv(u.uPrxN,px.n);
     gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
-    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H); { const r=regEtat(), fg=CFG.feuilG||[r.fG,16,r.fMax*Math.max(1,H/480)]; gl.uniform3f(u.uFeuilG||null,fg[0],fg[1],fg[2]); }   // feuilG : [part, seuil px, max px] imposés (essais)
+    gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H); { const r=regEtat(), fg=CFG.feuilG||[r.fG,0,r.fMax*Math.max(1,H/480)]; gl.uniform3f(u.uFeuilG||null,fg[0],fg[1],fg[2]); }   // feuilG : [part, seuil px, max px] imposés (essais)
     gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
     gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
     if(u.uOmbreG){ bindTex(9,V3.sm.t,u.uOmbreG); gl.uniform1i(u.uOmbreOk,1); }   // houppiers : chaque feuille lit son ombre dans la carte de cette image
@@ -1535,7 +1537,7 @@ function v3Frame(p,dt){
     return; }                                        // programmes encore en compilation
   if(sceneDirty||!V3.hist||!samePose(p,V3.histPose)){ V3.n=0; sceneDirty=false; }
   else if(V3.n>=V3.max) return;                               // image posée : on ne recalcule plus
-  v3Image(p); frames++; regMesure(dt);
+  v3Image(p); frames++; regMesure(dt,V3.dtBrut||0);
   if(bench&&walking) bench.push({dt:dt*1000,ms:V3.ms,lvl:-1,grains:V3.parts?V3.parts.total:0,cuits:V3.tap.cuits,t:performance.now()});
   // Halo et exposition : 28 ms mesurés sur Mali-G77 pour trois petites passes. En mobile, une image sur quatre suffit (ils varient lentement).
   if(QUAL.full||CFG.haloToujours||V3.nImg%4===0||!bl1.fait){ postFX(V3.hist); bl1.fait=true; }
@@ -1582,9 +1584,10 @@ const LONGUE={max:0}, REPOS={t:0}; let lastT0=0;
 let ptDit=false, lastT=0, vide=null, bench=null, prof=null, profTexte="", lastMotionMs=0; const startT=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
-  const dt=Math.min(CFG.dtMax||.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;   // dtMax : essais en rendu logiciel, le récit avance malgré des images lentes
+  const dt=Math.min(CFG.dtMax||.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now; V3.dtBrut=dtBrut;   // dtMax : essais en rendu logiciel, le récit avance malgré des images lentes
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
   COMP.img++;
+  if(REG.redim){ REG.redim=false; resize(); }
   if(ouvRepos){ prechauffer(); return; } 
   // Page cachée ou sans le focus (vue embarquée dans une application, l'utilisateur est ailleurs) : au repos, dix images par
   // seconde au plus et pas de gros programme lancé (compLibre) ; le processus graphique est partagé avec l'application hôte.

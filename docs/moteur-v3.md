@@ -352,3 +352,52 @@ Retour sur téléphone (fiche 09, qualité mobile) : net à l'arrêt, « ça pix
 - **Cause** : les grains (feuilles des houppiers surtout, troncs et branches fines) sont des carrés à bord franc de 2 à 4 pixels internes. À l'arrêt, le décalage sous-pixel et l'accumulation les anticrénèlent ; en marche, il n'y a ni décalage ni historique à leur bord (l'historique d'un autre objet, le ciel derrière la feuille, est rejeté par la distance), et la netteté du capteur (`c+=(c-cn)*.7`) accentue encore ces marches. Agrandis ×3,43, ce sont les « gros pixels ». Le damier n'y est pour rien (`v3damier:false` : même image), l'agrandissement final et la reprojection sont déjà bilinéaires.
 - **Correction** (`camera.frag`, `flouCapteur` dans `src/main.js`) : en mouvement, les quatre lectures qui servaient à la netteté se placent le long du déplacement de chaque pixel pendant l'image (point du monde par la distance de l'accumulation, revu depuis la pose de l'image précédente, obturateur d'un tiers d'image, 8 pixels au plus, 0,65 pixel au moins, un peu en travers) et adoucissent au lieu d'accentuer ; macroblocs un peu plus marqués. Part du bougé `uFlou` : monte en une image, retombe en un quart de seconde à l'arrêt. Aucune lecture de texture en plus (la distance vient de la lecture centrale), rien dans l'ombrage (`ombrage-taille` identique). Qualité mobile seulement (option `flou`).
 - **PC** : le défaut existe (feuilles en marches d'un pixel en marche) mais à un pixel d'écran, sans agrandissement : laissé tel quel.
+
+## Lancement sans gel (branche `gel`, 20 novembre 2026)
+
+Retours sur le PC de Toine (Chrome dans la vue web de l'application Claude Code, Windows, RTX, ANGLE → Direct3D 11, FXC) : « gros freeze » de toute l'application au lancement ; « le monde se construit » qui dure « des plombes » ; « ça rame » (106 ms par image à 2 500 000 grains, regard dans les houppiers). Diagnostic relevé sur sa machine : socle compilé en 31,1 s, variante complète en échec au délai de 45 s. Le processus graphique de Chromium est partagé par toute l'application : une compilation longue, plusieurs à la fois, ou une image trop lourde la figent entière. Rien ici n'a tourné sur Direct3D : tout est réduit par construction et mesuré indirectement.
+
+### Tous les programmes, mesurés (`node tools/programmes.mjs`, `node tools/profil.mjs`)
+
+`tools/programmes.mjs` ouvre la page (fiche 09, qualité PC et mobile, option `DEMO=1 REJEU=1` pour l'ouverture), intercepte chaque compilation (moment, sources), et donne pour chaque programme le source, le « déplié » (`tools/deplie.mjs` : chaque appel recopié, chaque boucle à borne fixe déroulée, comme FXC) et le SPIR-V d'ANGLE, plus les lectures synchrones. `tools/profil.mjs fichier "DEFINES"` dit quelles fonctions pèsent et d'où viennent leurs copies. Règle de trois tirée du PC de Toine : environ 10 000 caractères dépliés par seconde de FXC.
+
+| Programme (fiche 09) | déplié avant | après |
+|---|---|---|
+| ombrage complet, PC (S1 A1 R10) | 1 007 729 | 77 187 |
+| ombrage complet, mobile (T1 S1 A1) | 996 821 | 77 361 |
+| ombrage socle | 315 332 | 33 822 |
+| proches (fragment) | 613 675 | 31 118 |
+| proches (sommets) | 37 563 | 20 469 |
+| semeur, tampon G et ombre (HOUPPIER RELIEF, sommets) | 151 268 (×2) | 61 791 (×2) |
+| semeur FORMES (sommets) | 46 670 (×2) | 33 868 (×2) |
+| sol (sommets) | 19 284 | 10 509 |
+| tapis du sol (mobile) | 1 000 773 | 35 222 |
+| sonde (RELIEF) | 306 323 | 17 097 |
+| capteur, halo, exposition | 7 772, 206 + 1 042, 435 | inchangés |
+| lanceur de rayons (variante 0) | 213 236 375 | 6 795 835 |
+
+Programmes de la première image (capteur, halo, exposition, sol, semeur ×2, proches, socle) : ≈ 1 280 000 dépliés avant, ≈ 240 000 après. Le lanceur de rayons était compilé au chargement en qualité mobile avec `v3` (`compilerPT(0)`), alors qu'il ne servait pas : plus maintenant. Il reste énorme, mais le PC ne le compile qu'à la demande.
+
+### Ce qui a été restructuré (même calcul, même image)
+
+- **`uZ`** (`monde.glsl`) : uniforme jamais écrite par la page, donc 0, mais inconnue du compilateur. Une boucle au corps lourd va jusqu'à `N+uZ` et ne se déroule plus : bruits `fbm`/`fbm3`, Voronoï, `canopyT`, marche des proches (24 pas), rais, normales par différences, recette (`k<nr`), tapis.
+- **Un seul site d'appel** par fonction lourde : `bruit2`/`bruit3` (n octaves, n = 1 rend `vnoise` exact) ; dans `recette()`, tous les bruits sont tirés dans une boucle par un seul `rN` (`rSlot` : 16 emplacements, nuance, taches, motif, variation, grain, mousse, grain du relief) ; `recetteH` de même (8 emplacements) ; `matProp` un appel de chaque bruit ; `reliefDetail` un seul `bruitR` (il est dans `terrainH`, appelé partout) ; le semeur n'appelle `semeHoup` qu'une fois (semeA et semeB le demandent) ; les deux pas de Newton des blocs ne font qu'un `formeBloc` ; l'ombrage n'appelle `canopyT` qu'une fois (feuille, soleil, ambiance).
+- Vérifié contre main, même pose, même machine (`out/img-main`, `out/img-main2` pour le plancher de bruit, `out/img-fin`, 400 × 250, 6 images, qualité complète) : écart moyen après flou 4 × 4 de 2,14 (plancher 1,42) sur la 09, 2,10 (1,89) sur la 01, 1,71 (0,85) sur la 06 ; aucune dérive de la moyenne par zone (moins de 1/255). Le reste de l'écart vient de l'ordre des tirages (`cosDir` avant `canopyT`) et des feuilles proches moins recouvertes : il a l'aspect du bruit, sans structure.
+
+### Ordonnancement
+
+- **Une compilation à la fois** (`COMP`, `compLibre` dans `src/main.js`) : au plus un programme en vol, au moins une image entre deux lancements, aucune interrogation (`LINK_STATUS`, uniformes) avant `COMPLETION_STATUS_KHR`. Les gros (ombrage, tapis, lanceur de rayons) attendent aussi 0,9 s sans frappe, que le joueur ne parle pas au porteur (`frozen`) et que la page ait le focus. Ordre : capteur, halo, exposition (`postPret`, plus compilés de façon bloquante au chargement), sol, semeur, ombre, proches, socle (première image), variantes FORMES (`v3Formes`), variante complète, tapis. `compTout` : l'ancien comportement.
+- **Ouverture** : la fiche de la suggestion est appliquée en coulisse ; pendant la question et le rejeu, `frame()` compile (`prechauffer`) au lieu de rendre ; la variante complète se lance aussi pendant l'ouverture. Fin du rejeu : fondu dès la première image, attente bornée à 5 s (`docs/ouverture.md`).
+- Plus de lecture bloquante pendant les trois premières images (`v3premieres` pour la remettre). Journal de `tools/programmes.mjs` : « readPixels synchrone × 6 » avant, aucune après.
+
+### Charge de rendu
+
+- **Temps de la puce par passe** (`EXT_disjoint_timer_query_webgl2`, lu sans attendre) : ombre, sol, proches, grains, tapis, ombrage, halo, capteur ; passes comptées par image (le diagnostic signale une passe doublée).
+- **Régulateur** (`REG`) : cible 18 ms en qualité complète, 33 ms en mobile (`cibleMs`), mesurée par la puce quand elle le dit, sinon par l'intervalle entre images. Une seconde au-dessus de 110 % : un niveau plus bas ; trois secondes sous 65 % : un niveau plus haut. Niveaux, dans l'ordre : feuilles proches moins recouvertes et plus petites à l'écran, grains ×0,75 → ×0,32, pas des rais (lus dans `uAtmo2.z`, borne `RAIS`), résolution interne ×0,85 puis ×0,7. Coupé dans les captures d'essai (`regulateur`).
+- **Feuilles proches** (`semeHoup`, `uFeuilG`) : tous les grains d'une cellule dessinent la même feuille ; au-delà de 16 pixels, on n'en garde que 60 % (3,6 grains par feuille au lieu de 6 : la feuille est dessinée à 97 % des images au lieu de 99,7 %), et une feuille ne dépasse pas 128 pixels de long (à 480 de haut). `balade.remplissage()` et `node tools/remplissage.mjs` comptent les fragments des grains de la caméra (tramés et gardés).
+- **Montée progressive** : 20 % du budget de grains à la première image, plein budget à la dixième. **Repos** : page cachée, rien ; sans le focus, dix images par seconde au plus et aucun gros programme lancé.
+- **Diagnostic** (trois touches sur REC) : durée de chaque compilation, plus longue image des dix premières secondes, temps de la puce par passe, état du régulateur.
+
+### Ce qui n'est pas vérifié, ce qui reste gros
+
+Rien n'a tourné sur Direct3D ni sur un vrai GPU : le déplié est une estimation de ce que fait FXC, et la règle des 10 000 caractères par seconde vient d'une seule mesure. On ne sait pas si ANGLE ou FXC déroulent quand même une boucle à borne `N+uZ` (ils ne le peuvent pas sans connaître `uZ`). Le plus gros restant : la variante complète (77 000), le semeur à houppiers compilé deux fois (tampon G et ombre, 62 000 chacun : même source de sommets), le lanceur de rayons (6,8 millions, compilé seulement s'il sert). En rendu logiciel, une compilation n'a lieu qu'au premier dessin : les durées mesurées ici ne disent rien de FXC.
