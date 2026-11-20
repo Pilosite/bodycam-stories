@@ -28,6 +28,21 @@
     "ridicule": { "duree_s": 0.9, "montee": 1.8, "niveau": 0.5, "bulles": 3, "silence_s": 0.15 }
    }
   },
+  "cri_mourant": {
+   "_doc": "Un petit cri qui déraille : une onde aiguë et ses harmoniques (syrinx), un souffle ténu ; la hauteur glisse vers le grave, le vibrato grandit jusqu'à s'emballer, ça cale (ratés), et la fin s'effondre. Hauteur, durée, force, ratés et vibrato viennent du plan (le modèle qui le demande).",
+   "couches": [
+    { "source": "onde", "forme": "sinus", "rapport": 1, "gain": 1 },
+    { "source": "onde", "forme": "sinus", "rapport": 2, "gain": 0.3 },
+    { "source": "onde", "forme": "scie", "rapport": 1, "gain": 0.08 },
+    { "source": "bruit", "gain": 0.12, "filtre": { "type": "passe_bande", "hz": 3000, "q": 2 } }
+   ],
+   "hauteur": { "glisse": -1.6, "vibrato": { "hz": [11, 19], "profondeur": [0.06, 0.16], "croissance": 2.5 }, "instabilite": 0.06, "instabilite_hz": 14 },
+   "amplitude": { "attaque_s": 0.01, "relache_s": 0.06, "tremble": 0.5 },
+   "rates": { "par_s": 2.5, "duree_s": [0.03, 0.08], "reprise": [0.8, 1.05] },
+   "formants": [ { "hz": 2800, "q": 2, "gain_db": 4 } ],
+   "saturation": 0.15,
+   "fins": { "cale": { "duree_s": 0.18, "montee": -1.4, "niveau": 0.05 } }
+  },
   "chute": {
    "_doc": "Une chose qui tombe au sol : un coup sourd (onde qui descend vite), un peu de bruit d'impact étouffé, des rebonds pour ce qui est léger. La masse donne la hauteur, la durée et la force (echelle).",
    "couches": [
