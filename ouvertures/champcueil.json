@@ -2,7 +2,7 @@
   "type": "rejeu",
   "id": "ouverture-champcueil",
   "titre": "Forêt de Champcueil au lever du soleil",
-  "note": "Journal réel d'une préparation faite le 19 novembre 2026 (recherche web par Claude, puis écriture de scenes/09-champcueil-aube.json ; à défaut de cette fiche dans la page, le rejeu débouche sur scenes/01-grands-avaux.json). Rien n'est ajouté : requêtes, pages lues, pages illisibles et constats sont ceux de cette séance. Les durées sont celles du rejeu, pas celles de la séance (environ une demi-heure de recherche et d'essais de rendu). Aucun texte de source n'est recopié, aucune image n'est importée.",
+  "note": "Journal réel d'une préparation faite le 19 novembre 2026 (recherche web par Claude, puis écriture de scenes/09-champcueil-aube.json ; à défaut de cette fiche dans la page, le rejeu débouche sur scenes/01-grands-avaux.json). Rien n'est ajouté : requêtes, pages lues, pages illisibles et constats sont ceux de cette séance. Les durées sont celles du rejeu, pas celles de la séance (environ une demi-heure de recherche et d'essais de rendu). Aucun texte de source n'est recopié. Le lendemain (20 novembre 2026), une recherche de photos sous licence libre sur Wikimedia Commons a complété la séance : ses vignettes et crédits sont dans ouvertures/photos/champcueil.json, ses observations parmi les constats (source « commons.wikimedia.org (photo) »). Elles n'illustrent que l'écran d'ouverture.",
   "fiche": "champcueil-aube",
   "ficheSecours": "grands-avaux-sentier",
   "suggestion": "fais-moi une forêt en automne au lever du soleil, genre Champcueil",
@@ -141,12 +141,18 @@
     ]
   },
   "constats": {
-    "duree": 4.6,
+    "duree": 4.9,
     "liste": [
       {
         "texte": "Le sentier traverse des chaos de grès et des platières",
         "source": "visorando.com",
         "reglage": "kit forêt, foret.rochers 1 (blocs de grès semés le long du sentier)"
+      },
+      {
+        "texte": "Photo : chaos de blocs arrondis, mousse vert vif sur le dessus, un bouleau devant",
+        "source": "commons.wikimedia.org (photo)",
+        "reglage": "recette gres-patine (mousse), bouleaux du kit forêt",
+        "photo": "avaux03"
       },
       {
         "texte": "Pins, châtaigniers, chênes et bouleaux, fougères en sous-bois",
@@ -164,6 +170,12 @@
         "reglage": "écart : la fiche garde un sentier de sable partout"
       },
       {
+        "texte": "Photo : gros bloc gris troué au bord d'un sentier de terre brune, sans sable",
+        "source": "commons.wikimedia.org (photo)",
+        "reglage": "écart confirmé : la fiche garde un sentier de sable partout",
+        "photo": "avaux01"
+      },
+      {
         "texte": "Rochers couverts de mousse et de lichen, sentiers jonchés de feuilles mortes",
         "source": "decathlon-outdoor.com",
         "reglage": "grès moussu, litière de feuilles (saison automne)"
@@ -177,6 +189,12 @@
         "texte": "Pin sylvestre : écorce creusée de sillons en bas, plus fine et brun orangé en haut chez les vieux arbres",
         "source": "futura-sciences.com",
         "reglage": "recette ecorce-pin (le haut orangé n'est pas encore rendu)"
+      },
+      {
+        "texte": "Photo : pins hauts et espacés, haut du tronc orangé, sol de sable et d'aiguilles",
+        "source": "commons.wikimedia.org (photo)",
+        "reglage": "recette ecorce-pin (le haut orangé n'est pas rendu)",
+        "photo": "fbpins"
       },
       {
         "texte": "Arbres en partie dénudés sur les photos d'arrière-saison",
@@ -194,9 +212,21 @@
         "reglage": "non rendu : ni bruyère ni mare proche dans le vocabulaire"
       },
       {
+        "texte": "Photo de la platière du Télégraphe : dalle de grès à fleur de sol, mare, hautes herbes",
+        "source": "commons.wikimedia.org (photo)",
+        "reglage": "non rendu : ni dalle plate ni mare dans le vocabulaire",
+        "photo": "telegraphe"
+      },
+      {
         "texte": "Châtaignes et champignons ramassés à l'automne",
         "source": "outzer.fr",
         "reglage": "confirme la saison et les châtaigniers"
+      },
+      {
+        "texte": "Photo : entre les blocs, le sol est couvert de bogues de châtaignes",
+        "source": "commons.wikimedia.org (photo)",
+        "reglage": "confirme les perches de châtaigniers ; pas de bogues dans le vocabulaire",
+        "photo": "avaux02"
       },
       {
         "texte": "Lumière dorée tant que le soleil est sous 6° environ ; vers 2 000 K juste après le lever",
@@ -207,6 +237,18 @@
         "texte": "Soleil bas d'automne et brume : rais de lumière en sous-bois, la brume diffuse",
         "source": "lartdelaphoto.fr",
         "reglage": "brume au ras du sol, éclairée par le soleil"
+      },
+      {
+        "texte": "Photo d'automne : bouleau jaune d'or devant une forêt rousse, le lointain bleuit dans la brume",
+        "source": "commons.wikimedia.org (photo)",
+        "reglage": "saison automne, brume qui éclaircit le lointain",
+        "photo": "fbauto01"
+      },
+      {
+        "texte": "Photo : contre-jour bas entre les feuillus, sable clair nu au pied des blocs",
+        "source": "commons.wikimedia.org (photo)",
+        "reglage": "soleil bas en face du sentier, sentier-sable",
+        "photo": "nainville"
       },
       {
         "texte": "À 48,5° de latitude fin novembre : lever vers 121° (sud-est), soleil à 21° au plus haut",
@@ -225,5 +267,6 @@
   },
   "fondu": {
     "duree": 2.2
-  }
+  },
+  "photos": "champcueil"
 }

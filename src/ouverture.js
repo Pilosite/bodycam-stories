@@ -74,18 +74,20 @@ export function programme(r, f, hasard = Math.random, controle = null) {
     // court instant avant que son observation (ou « hors sujet ») ne s'écrive. Environ 3 s en tout.
     ev.push({ t, type: 'etape', id: 'photos', titre: 'Photos du lieu' });
     t += jit(.25, .5);
-    for (const q of V.requetes || []) { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: q, ou: 'Commons' }); t += jit(.2, .4); }
+    const rq = V.requetes || [], nm = Math.min(rq.length, V.requetesMontrees ?? rq.length);
+    rq.slice(0, nm).forEach(q => { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: q, ou: 'Commons' }); t += jit(.16, .4); });
+    if (rq.length > nm) { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: `… et ${rq.length - nm} autres`, ou: 'Commons' }); t += jit(.15, .4); }
     let fin = t;
     V.photos.forEach((p, i) => {
       ev.push({ t, type: 'ligne', etape: 'photos', genre: 'photo', photo: p.id, garde: !p.ecartee });
-      const lu = t + jit(p.ecartee ? .35 : .6, .35);
+      const lu = t + jit(p.ecartee ? .3 : .48, .35);
       ev.push({ t: lu, type: 'photo-lue', etape: 'photos', photo: p.id, garde: !p.ecartee });
-      fin = Math.max(fin, lu + (p.ecartee ? .2 : .55));
+      fin = Math.max(fin, lu + (p.ecartee ? .15 : .4));
       t += .08 + .12 * hasard();
-      if (i % 4 === 3) t += jit(.3, .4);                  // une petite pause entre deux rafales
+      if (i % 4 === 3) t += jit(.22, .4);                  // une petite pause entre deux rafales
     });
     t = Math.max(t, fin);
-    ev.push({ t, type: 'fin-etape', id: 'photos' }); t += jit(.2, .5);
+    ev.push({ t, type: 'fin-etape', id: 'photos' }); t += jit(.15, .5);
   }
   etape('constats', 'Ce que j\'en retiens', r.constats.duree, r.constats.liste, c => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage, photo: c.photo || null }));
   etape('traduction', 'Traduction en vocabulaire du moteur', r.traduction.duree, traduction(f), ([k, x]) => ({ genre: 'valeur', cle: k, texte: x }));
