@@ -16746,8 +16746,8 @@ function quitterLibre(){ if(meneurLibre&&meneur){ journal(); meneur=null; clearI
   b.onclick=()=>{ docile=!docile; try{ localStorage.setItem("bodycam-docile",docile?"1":"0"); }catch(_){} maj();
     if(meneurLibre) quitterLibre();
     else if(meneur) say(docile?"Mode debug : il prendra effet à la prochaine partie (Rejouer).":"Mode debug coupé à la prochaine partie.",true);
-    dbgOn=docile; dbgEl.hidden=!dbgOn; if(!dbgOn) dbgEl.textContent=""; };
-  $("outils").appendChild(b); maj(); setTimeout(()=>{ if(docile){ dbgOn=true; dbgEl.hidden=false; } },0); }
+    };                                                          // le mode docile ne montre plus la ligne de mise au point : elle gâchait la vue (trois touches sur REC pour la voir)
+  $("outils").appendChild(b); maj(); }
 function jouerHistoire(id){
   const h=HIST.find(x=>x.id===id)||(id===undefined||id===true?HIST.find(x=>MENEUR.ficheDe(x)):null);
   if(!h){ console.warn("Histoire inconnue :",id,"— disponibles :",HIST.map(x=>x.id)); return null; }
@@ -16768,14 +16768,14 @@ function quitterHistoire(garderLieu){
 }
 /* Pour l'auteur : une ligne discrète avec le verdict du sas et le temps en cours. CFG.debug, ou trois touches rapides
    sur le chrono REC (réglage gardé dans le navigateur) : utile dans l'artefact sur téléphone, sans console. */
-let dbgOn=!!CFG.debug; try{ if(localStorage.getItem("bodycam-debug")==="1") dbgOn=true; }catch(_){}
+let dbgOn=!!CFG.debug; try{ localStorage.removeItem("bodycam-debug"); }catch(_){}   // jamais affichée par défaut, ni mémorisée d'une visite à l'autre
 const dbgEl=document.body.appendChild(document.createElement("div")); dbgEl.id="debug-meneur"; dbgEl.setAttribute("aria-hidden","true"); dbgEl.hidden=!dbgOn;
 /* Pendant l'écran d'ouverture (« Quel monde veux-tu filmer ? », au-dessus de tout), les mêmes trois touches se font sur la ligne
    « CAM 07 » au point rouge, ou dans le coin haut gauche de l'écran : le diagnostic s'affiche par-dessus, avec la file de
    compilation en direct (dbgMaj, appelée aussi quand le moteur se repose et ne fait que compiler). */
 function dbgTexte(){ return (meneur?meneur.debug()+"\n":"")+(V3.on?ombDiag():"Moteur à rayons"+(ptEnCours()?" : compilation en cours":""))+compFile(); }
 function dbgMaj(){ const o=!!(ouverture&&ouverture.ouvert()); dbgEl.classList.toggle("sur-ouv",o); if(dbgOn) dbgEl.textContent=dbgTexte(); }
-function dbgBascule(){ dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=""; dbgMaj(); try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }
+function dbgBascule(){ dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=""; dbgMaj(); }
 function compFile(){                                            // la file de compilation, en direct (diagnostic)
   const t=performance.now(), x=COMP.envol.filter(e=>!e.note);
   return "\nFile : "+(x.length?x.map(e=>e.nom+" depuis "+((t-e.t0)/1000).toFixed(1)+" s").join(", "):"rien en compilation")+(ouvRepos?" · ouverture (le moteur ne fait que compiler)":""); }
