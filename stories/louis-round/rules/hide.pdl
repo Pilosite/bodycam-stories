@@ -7,10 +7,8 @@
 
 ## rules
 when station.entered(approach) once -> sound(jay.alarm), reveal(f.jay-heard), say(jay.alarm) {r.jay-first}
-when said.loud cooldown 45s if at(approach) and fact(f.jay-heard) -> sound(jay.alarm) {r.jay-loud}
-when said.matches(shout) if at(approach) -> speech.volume(whisper), say(hide.no_shout) {r.no-shout-approach}
-when said.matches(shout) if at(hide) -> speech.volume(whisper), say(hide.no_shout) {r.no-shout-hide}
-when station.entered(hide) once -> body.posture(0.65), say(hide.arrive) {r.hide-sit}
+when said.loud cooldown 45s if beat(hide) and fact(f.jay-heard) -> sound(jay.alarm) {r.jay-loud}
+when said.matches(shout) if beat(hide) -> speech.volume(whisper), say(hide.no_shout) {r.no-shout}
 when station.dwell(hide, 40) once -> sound(bracken.rustle), reveal(f.rustle) {r.rustle}
 when fact.established(f.rustle) once if not promised(silence) -> say(rustle.freeze) {r.rustle-speak}
 when said.matches(approach_sett) if at(hide) -> say(sett.too_close) {r.sett-distance}

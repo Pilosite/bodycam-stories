@@ -13,8 +13,4 @@
 ? Are the badgers seen? -- not in v1 (no moving animal); their sign is enough. If the engine ever can: one shape at the edge of the frame, two seconds, never a close-up. {p.badger-seen}
 
 ## rules
-when station.entered(trailhead) once -> say(greet.first) {r.start}
-when station.entered(fallen-pine) once -> say(jay.remember) {r.jay-remember}
-when station.entered(platiere) once -> say(platiere.arrive) {r.platiere-arrive}
-when station.dwell(platiere, 30) once -> say(down.unknown) {r.down-unknown}
 when station.dwell(platiere, 70) once if not ending.any -> say(walker.meet), reveal(f.walker-saw) {r.walker}
