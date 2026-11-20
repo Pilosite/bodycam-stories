@@ -93,6 +93,7 @@
   },
   "nausee": {
    "_doc": "Une réaction du corps à un dégoût fort (§22.2) : au-delà d'un seuil, le geste s'interrompt UNE fois, après un contact prolongé (phases « contact » : pétrir, diviser, rouler ; jamais en plantant). Seuil sur l'intensité × le contact (contact_s / contact_ref_s, borné à 1) : au-dessus de « toujours », toujours ; en dessous de « jamais », jamais ; entre les deux, selon la graine. Le déroulé (secondes, 6 à 9 en tout) : lâcher, se détourner (60 à 110°, côté dégagé), se pencher, vomir (la chose « modele » de la bibliothèque, posée devant lui, hors de l'ouvrage, comptée comme ambiance), souffler, s'essuyer la bouche, revenir. Un événement « nausee » est exposé pour le bruitage.",
+   "actif": false,
    "toujours": 0.8, "jamais": 0.62, "contact_ref_s": 3,
    "phases_contact": ["petrir", "diviser", "rouler"],
    "modele": "vomi",

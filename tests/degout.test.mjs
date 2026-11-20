@@ -14,6 +14,7 @@ const LIBRE = histoireLibre({ id: 'foret-test', titre: 'Forêt de grès', kit: '
 const voixDe = c => { const m = /La voix dit : (".*")\s*$/m.exec(c); return m ? JSON.parse(m[1]) : null; };
 const ARBRES = [{ x: -2.6, z: 6, haut: 14, rayon: 0.3 }, { x: 3, z: -5, haut: 14, rayon: 0.3 }], ROCHERS = [{ x: 6, z: 14, haut: 1.4, rayon: 1.1 }];
 const sas = { verdict: 'recevable', regle: null, motif: 'possible' }, accroupi = [{ type: 'posture', hauteur: 0.45 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }];
+if (MODELES.degout && MODELES.degout.nausee) MODELES.degout.nausee.actif = true;   // éteinte dans les données (demande de Toine) : les tests de la nausée la rallument
 const DG = degoutDe(MODELES), NZ = DG.nausee;
 const banque = k => Object.values(DG[k]).flat();
 const EF = { avant: 'Avec mes mains. Bon. Je retiens ma respiration.', contact: 'Tiède. C\'est tiède. Je vais mourir.', pendant: ['Par la bouche. On respire par la bouche.', 'Ne regarde pas tes doigts.'],

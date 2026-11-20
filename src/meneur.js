@@ -2155,7 +2155,7 @@ export function creerMeneur(o) {
     // la nausée possible (§22.2) : le seuil se juge sur l'intensité (le contact se mesure sur le geste réel : planDegout, même
     // tirage) ; la chose qu'elle laisse vient de la bibliothèque, comptée comme ambiance, posée seulement quand elle vomit
     const NZ = isObj(DG.nausee) ? DG.nausee : null; let nausee = null;
-    if (NZ && d.intensite > num(NZ.jamais, 0, 1, 0.62)) {
+    if (NZ && NZ.actif !== false && d.intensite > num(NZ.jamais, 0, 1, 0.62)) {   // actif:false dans les données : il est dégoûté, sans plus
       const tirage = Math.round(alea(partie) * 1000) / 1000, hi = num(NZ.toujours, 0, 1, 0.8), lo = num(NZ.jamais, 0, 1, 0.62);
       if (d.intensite >= hi || tirage < (d.intensite - lo) / Math.max(1e-6, hi - lo)) {
         const a = liste(NZ.angle_deg), L2 = k => liste(NZ[k]).filter(x => typeof x === 'string' && x.trim());

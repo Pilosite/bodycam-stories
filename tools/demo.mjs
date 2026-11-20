@@ -232,7 +232,7 @@ await capture('8-bonhomme', 'le bonhomme fini, cadré en pied');
   const sons = await page.evaluate(() => window.balSons || []), ev2 = await page.evaluate(() => balade.trace().evenements.filter(e => /degout/.test(e.type)));
   console.log(sec(), 'dégoût', JSON.stringify(ev2), 'sons', JSON.stringify(sons.map(x => x.evenement)));
   verifier(P.some(p => p.source === 'degout' && p.phase === 'contact'), 'une pensée de dégoût au premier contact');
-  verifier(P.some(p => p.source === 'nausee'), 'l\'énorme : la nausée');
+  verifier(!P.some(p => p.source === 'nausee'), 'l\'énorme : pas de nausée (éteinte dans les données)');
   verifier(ev2.some(e => e.type === 'degout_fin'), 'la réaction finale, dégoût et fierté');
 }
 const ev = (await page.evaluate(() => balade.trace().evenements)).filter(e => /modele|faconnage|objet_|cadrage|docile|consomme/.test(e.type));
