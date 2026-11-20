@@ -420,13 +420,16 @@ Durées réelles contre déplié (`tools/deplie.mjs`) : sol 11 k → 0,4 s, `gra
 | semeur, tampon G | 62 303 | A 27 116 · B 29 354 · R 14 645 · L 13 077 |
 | semeur, ombre | 61 791 | (le même programme) |
 | proches | 51 587 | O 19 811 · B 11 761 · T 23 324 |
-| socle | 33 913 | 33 913 |
+| socle | 33 913 | 31 628 |
 | FORMES, tampon G | 34 997 | 35 230 |
 | FORMES, ombre | 34 758 | (le même programme) |
-| total avant la variante complète | 290 370 | 219 455 |
-| variante complète (PC) | 77 278 | 77 278 |
+| total avant la variante complète | 290 370 | 217 170 |
+| variante complète (PC, S1 A1 R10) | 77 278 | 67 098 |
+| variante complète (mobile, T1 S1 A1) | 77 452 | 68 530 |
 
-Estimation, en prenant les durées réelles du PC pour les programmes inchangés et une loi en carré de la taille pour les autres (étalonnée sur `grainsF` : 35 k → 3 s) : semeur 25,5 s → environ 4,8 s (A 1,8, B 2,1, R 0,5, L 0,4) ; proches 6 s → environ 2,4 s ; `ombreF` 2,8 s → 0. Total avant la première image et les formes : environ 42,6 s → 15,5 s. Le plus long restant : le socle (4,9 s mesurées) et la variante complète (77 k, au moins 11 s). Rien de cela n'est mesuré sur Direct3D : le banc d'essai et le diagnostic donnent maintenant la durée de chaque compilation et de chaque premier dessin.
+Dans l'ombrage (même calcul) : l'historique reprojeté n'est relu qu'une fois (damier et mélange), `pres` est appelée dans une boucle (un seul appel déplié) et ne calcule `terrainH` qu'une fois, les rais (`raisVis`) un seul appel pour le ciel et les surfaces (tirés avant `cosDir` : l'ordre des tirages change, pas leur loi), l'ombre du soleil un seul appel (la vue de mise au point `v3voir` 1 relit la dernière valeur).
+
+Estimation, en prenant les durées réelles du PC pour les programmes inchangés et une loi en carré de la taille pour les autres (étalonnée sur `grainsF` : 35 k → 3 s) : semeur 25,5 s → environ 4,8 s (A 1,8, B 2,1, R 0,5, L 0,4) ; proches 6 s → environ 2,4 s ; `ombreF` 2,8 s → 0. Total avant la première image et les formes : environ 42,6 s → 15,5 s. Le plus long restant : le socle (4,9 s mesurées, un peu moins attendu) et la variante complète (67 k, de l'ordre de 8 à 10 s si la loi en carré tient ; elle n'aboutissait pas en 25 s sur le PC). Rien de cela n'est mesuré sur Direct3D : le banc d'essai et le diagnostic donnent maintenant la durée de chaque compilation et de chaque premier dessin.
 
 ### Premiers dessins et réchauffe pendant l'ouverture
 
@@ -441,3 +444,7 @@ Pas de pompage : on ne remonte pas vers un niveau quitté parce qu'il dépassait
 ### Banc d'essai
 
 « Plus » → « Banc d'essai », ou `balade.banc()` (rend le texte). Environ 15 s, caméra figée sur la fiche courante (de face, puis regard levé de 43° dans les houppiers), régulateur coupé, chaque image recalculée comme en marche, carte d'ombres refaite à chaque image. Pour chaque variante, médiane sur 8 images du temps de la puce (`EXT_disjoint_timer_query_webgl2`) des passes grains, proches, ombre, ombrage et de leur somme ; sans le chronomètre, l'intervalle entre deux fins d'image (`gl.finish`, dans le banc seulement). Variantes, par uniformes et drapeaux (aucun programme nouveau ; `uBanc` du semeur, `BANC.v`) : grains 100, 50 et 25 % ; grains d'un pixel (le coût des sommets seuls) ; sans feuilles, feuilles seules, sans troncs ni branches (grains calculés puis rejetés : le coût de leurs fragments) ; sans semis ni objets ; sans relief de détail (fiches à bosses ou buttes) ; résolution interne × 0,5 (la part du remplissage) ; sans proches. En tête : la machine (`WEBGL_debug_renderer_info`), le navigateur, la fiche, la résolution interne et l'écran, le budget, la présence du chronomètre et de `KHR_parallel_shader_compile` ; en pied : chaque compilation, chaque premier dessin, les gels. Affiché en plein écran (bouton « Copier »).
+
+### Cuisson des grains : évaluée, pas faite
+
+Le brief proposait de cuire une fois ce qui ne dépend pas de la caméra (position, normale, matière des grains statiques) dans des tampons. Ce qui l'empêche ici : un grain n'existe que par rapport à la vue. Il est tiré dans le cap du regard, avec une densité en 1/d² autour de la caméra (ou uniforme sur le disque vu du soleil), et il est re-tiré à chaque image (l'accumulation fait l'anticrénelage) ; les feuilles des houppiers dépendent de la taille à l'écran et de la carte d'ombres de l'image. Cuire le monde reviendrait à un nuage de points fixe avec niveaux de détail par tuiles : à 32 octets par grain (position, normale compactée, coordonnées de recette, code), 2,5 millions de grains font 80 Mo, et il en faudrait plusieurs fois plus pour couvrir tout le tour et toutes les distances (1 million par tuile proche : 32 Mo) ; trop pour un téléphone, et le tirage, donc l'image, changerait de nature (plus d'accumulation par re-tirage). La compilation, elle, est déjà réduite autrement (programmes par famille). Côté rendu, sans mesure fiable de ce qui coûte (sommets ou remplissage), rien n'est changé à l'aveugle : le banc d'essai est fait pour le dire (lignes « grains d'un pixel » et « résolution × 0,5 »). Seul allègement sûr fait : vue du soleil, la tranche des feuilles de la canopée (qui ne sortait rien) n'est plus dessinée.
