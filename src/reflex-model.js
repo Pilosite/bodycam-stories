@@ -84,18 +84,21 @@ export function createReflexModel({ verbs, anchors, stations = [], carrier = 'sa
     return ref && hasLine(ref) && !world().said.some(x => x.ref === ref) ? ref : null;
   }
 
-  function reaction(intent) {
-    const w = world(), n = notes.get(intent.text) || {}, out = [], p = n.p ?? 0.3;
-    if (p < (V.ask_below ?? 0.5)) return [say(V.ask_line || 'ask.back')];
+  /* `s` (optional, from the clocks): { p, play, stance } when a judgement or judge() decided; a judged intent whose verb
+     differs from what the lexical analysis found does not use that analysis's notes. */
+  function reaction(intent, s = {}) {
+    const w = world(), n0 = notes.get(intent.text) || {}, n = n0.verb === undefined || n0.verb === intent.verb ? n0 : { p: n0.p }, out = [], p = s.p ?? n.p ?? 0.3;
+    if (s.play === 'ask' || p < (V.ask_below ?? 0.5)) return [say(V.ask_line || 'ask.back')];
     if (intent.verb === 'commit') {
-      const c = A.commit_classes[intent.class], id = intent.commit;
-      const refuse = c.refuse || (c.refuse_in_beats || []).includes(w.story.beat);
-      const status = refuse ? 'refused' : n.amend && c.amend ? 'amended' : 'accepted';
-      out.push(status === 'amended' && c.amend.line ? sayLine(c.amend.line) : say(status === 'refused' ? 'commit.refuse' : 'commit.accept'));
+      const c = A.commit_classes[intent.class] || {}, id = intent.commit;
+      const refuse = !!c.refuse || (c.refuse_in_beats || []).includes(w.story.beat) || s.stance === 'refuse' || s.stance === 'argue';
+      const status = refuse ? 'refused' : s.stance === 'amend' || (!s.stance && n.amend && c.amend) ? 'amended' : 'accepted';
+      out.push(status === 'amended' && c.amend && c.amend.line ? sayLine(c.amend.line) : say(status === 'refused' ? 'commit.refuse' : status === 'amended' ? 'commit.amend' : 'commit.accept'));
       out.push({ author: player, horizon: 'story', kind: 'fact', body: { subject: carrier, predicate: 'promised', value: (refuse ? 'refused: ' : '') + String(c.promise || intent.behaviour).slice(0, 110), commit: { id, party: carrier, status, strength: 'hard' } } });
       if (!refuse && c.rule) out.push({ author: player, horizon: 'story', kind: 'rule', body: Object.assign({ id, commit: id }, JSON.parse(JSON.stringify(c.rule))) });
       return out;
     }
+    if ((s.stance === 'refuse' || s.stance === 'argue') && intent.verb !== 'say' && intent.verb !== 'ask') return [say(s.stance === 'refuse' ? 'engine.cant' : V.ask_line || 'ask.back')];
     if (n.classLine !== undefined) { if (n.classLine && n.unless !== w.body.station) out.push(say(n.classLine)); return out; }
     if (n.line) return [say(n.line)];
     const spec = (V.verbs || {})[intent.verb] || {};
@@ -128,11 +131,11 @@ export function createReflexModel({ verbs, anchors, stations = [], carrier = 'sa
     async decide(req) {
       if (req.question === 'intent') {
         const r = analyse(req.text);
-        notes.set(req.text, Object.assign({ p: r.p }, r.note || {}));
+        notes.set(req.text, Object.assign({ p: r.p, verb: r.answer.verb }, r.note || {}));
         if (notes.size > 32) notes.delete(notes.keys().next().value);
         return { answer: r.answer, p: r.p, uncertain: r.p < (V.act_from ?? 0.8), tier: 'reflex' };
       }
-      if (req.question === 'reaction') return { answer: serialize(reaction(req.state.intent)), tier: 'reflex' };
+      if (req.question === 'reaction') return { answer: serialize(reaction(req.state.intent, req.state)), tier: 'reflex' };
       return { answer: null, p: 0, uncertain: true, tier: 'reflex' };
     },
     arrival() { const a = arriveLine(world().body.station); return a ? [say(a)] : []; },
