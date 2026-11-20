@@ -355,7 +355,7 @@ function buildShapes(f,seulsGestes){                            // seulsGestes :
     if(!formes.length || row+formes.length>SEM0) continue;
     const R=repereObjet(o), {x,z,yaw,ech}=R;
     const y=R.y, c=Math.cos(yaw), sn=Math.sin(yaw), i=S.objN; let rad=.1;
-    const mou=formes.some(fo=>fo.lisse>0||fo.creux>0||fo.bosse>0), bmn=[1e9,1e9,1e9], bmx=[-1e9,-1e9,-1e9];
+    const mou=formes.some(fo=>fo.lisse>0||fo.creux>0||fo.bosse>0);
     formes.forEach((fo,k)=>{
       const p=(Array.isArray(fo.p)?fo.p:[0,0,0]).map(v=>clampN(v,-30,30,0)*ech);
       const t=(Array.isArray(fo.taille)?fo.taille:[1,1,1]).map(v=>clampN(v,.01,40,1)*ech*.5);
@@ -368,14 +368,14 @@ function buildShapes(f,seulsGestes){                            // seulsGestes :
                       t[0],t[1],t[2], ca,
                       col[0],col[1],col[2], (matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0)+bo,
                       li, ar, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
-      if(mou&&li>=0){ const e=etendueForme(FORMES[fo.f],t,ar,ca,clampN(pe[0],-90,90,0)*Math.PI/180,clampN(pe[1],-90,90,0)*Math.PI/180), m=Math.max(li,0)+bo*Math.min(...t)+.01;
-        [cx,y+p[1],cz].forEach((v,j)=>{ bmn[j]=Math.min(bmn[j],v-e[j]-m); bmx[j]=Math.max(bmx[j],v+e[j]+m); }); }
+
       if(fo.vacille>0) S.vac.push([r,col[0],col[1],col[2],clampN(fo.vacille,0,1,0),k*1.7+i]);   // éclat qui tremble (flamme) : voir vaciller()
       rad=Math.max(rad,Math.hypot(p[0],p[1],p[2])+Math.hypot(t[0],t[1],t[2]));
     });
     shapesData.set([x,y,z,rad, row,formes.length, clampN(o.degage,0,12,0), (o.visible===false||cacheObj.has(o.id))?0:1], i*16);
-    if(mou&&bmx[0]>bmn[0]){ shapesData.set([(bmn[0]+bmx[0])/2,(bmn[1]+bmx[1])/2,(bmn[2]+bmx[2])/2,1, (bmx[0]-bmn[0])/2,(bmx[1]-bmn[1])/2,(bmx[2]-bmn[2])/2,0], i*16+8);
-      if(!(o.visible===false||cacheObj.has(o.id))) S.mou=true; }   // objet mou : sa boîte (programme des proches PATE)
+    if(mou){ const kS=Math.max(0,...formes.map(fo=>clampN(fo.lisse,0,.5,0)*ech));
+      shapesData.set([kS,kS,0,1], i*16+8);                          // objet mou : marge des boîtes (fondu, bourrelet), drapeau
+      if(!(o.visible===false||cacheObj.has(o.id))) S.mou=true; }
     row+=formes.length; S.objN++; S.objRows=row-8;
     S.objTop=Math.max(S.objTop,y+rad-S.rel[2]*z);
   }
@@ -384,17 +384,6 @@ function buildShapes(f,seulsGestes){                            // seulsGestes :
   S.yTop=Math.max(S.kit===0?23:5,terr+Math.max(S.objTop,...S.semTop));
   gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,4,SH_ROWS,gl.RGBA,gl.FLOAT,shapesData);
   sceneDirty=true;
-}
-/* Demi-étendue dans les axes du monde d'une forme (demi-tailles t, arrondi ar), tournée comme primMonde (monde.glsl) :
-   cap ca, penche autour de x (px) puis de z (pz). Même boîte de forme que v3_proches.vert (boite). */
-function etendueForme(ty,t,ar,ca,px,pz){
-  const h=ty>=2&&ty<=4?[t[0]+ar,t[1]+(ty===4?t[0]+ar:ar),t[0]+ar]:[t[0]+ar,t[1]+ar,t[2]+ar];
-  const rot=q=>{ let [a,b,d]=q, C, Sn;
-    if(px){ C=Math.cos(px); Sn=Math.sin(px); [b,d]=[C*b-Sn*d,Sn*b+C*d]; }
-    if(pz){ C=Math.cos(pz); Sn=Math.sin(pz); [a,b]=[C*a-Sn*b,Sn*a+C*b]; }
-    C=Math.cos(ca); Sn=Math.sin(ca); return [C*a+Sn*d,b,-Sn*a+C*d]; };
-  const ax=[rot([h[0],0,0]),rot([0,h[1],0]),rot([0,0,h[2]])];
-  return [0,1,2].map(j=>Math.abs(ax[0][j])+Math.abs(ax[1][j])+Math.abs(ax[2][j]));
 }
 /* Une boîte posée au sol descend sous terre : sur une pente, sa base ne flotte pas (fondation, soubassement). */
 function ancrer(f,p,t,pe,prof){
@@ -2557,6 +2546,7 @@ function faconnerPas(a,dt){
   if(G.tas){ const j=L.findIndex(x=>x&&x.id===G.tas); if(j>=0){ const reste=G.tasF.filter((f,n)=>!G.pris.has(n)); L[j]=Object.assign({},L[j],{formes:reste.length?reste:[Object.assign({},G.tasF[0],{taille:[.01,.01,.01]})]}); } }
   // les mains : où elles vont pour cette opération, et ce qu'elles tiennent (la matière suit la main qui la porte)
   const M=mainsGeste(tr,u,t,F,G);
+  { const X=F.find(f=>f._k===tr.cle); a.dbg={op:tr.op,sol:!!tr.sol,r:X?+(Math.max(...X.taille)/2*G.R.ech).toFixed(3):0,X:X?versMonde(G.R,X.p).map(v=>+v.toFixed(3)):null,H:M.H.map(h=>h.p.map(v=>+v.toFixed(3)))}; }
   mainsVers(M.H,dt);
   if(M.tenu&&mainsEtat.H){ const d=[0,0,0]; let n=0;              // l'écart entre la main réelle (elle glisse) et sa cible
     for(const h of M.tenu.mains){ for(let j=0;j<3;j++) d[j]+=mainsEtat.H[h].p[j]-M.H[h].p[j]; n++; }
@@ -3186,7 +3176,7 @@ window.balade={
   mainsP:()=>mainsEtat.H?mainsEtat.H.map(h=>h.p.map(v=>+v.toFixed(3))):null,   // essais : centres des paumes
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,
     file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4).toFixed(2):-1,
-      total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0}))}),
+      total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0,dbg:a.dbg}))}),
   vue(id){ const q=cibleMonde(id); if(!q) return null; const c=corpsAxes().e; return vueDegagee(c[0],c[1],c[2],q.x,q.z,q.taille/2,q.haut,id); },   // rien entre la caméra et la chose ?
   resolution(px){ CFG.maxPx=+px||undefined; resize(); },        // pixels internes (essais : finesse d'une capture)
   sonde:(x,y,z)=>probe(x,y,z)[0],

@@ -4,7 +4,7 @@
   "_doc": "Le corps du porteur dans le champ (docs/meneur-de-jeu.md §17) : deux avant-bras et deux mains, attachés à la caméra, en formes du vocabulaire (capsules, boules). Des données : mesures en mètres (coude : à côté, sous et devant la caméra ; repos : où les mains attendent), matières en recettes.",
   "mains": {
    "_doc2": "Chaque bras : l'épaule sous la caméra (côté, haut, avant), le bras dans sa manche courte (dure, tissu, long : longueur du bras), le coude placé pour que l'avant-bras (peau, long) atteigne la main ; puis la main, paume, pouce en deux phalanges, quatre doigts ; les formes de peau sont molles (lisse : elles se fondent : poignet, jointures). Repère de la main : d du poignet vers les doigts, n la normale de la paume (vers ce qu'elle touche). Poses clés, interpolées : doigts (flexion à la jointure, degrés, un nombre ou un par doigt de l'index à l'auriculaire), ecart (degrés entre deux doigts), pouce [ouverture, flexion] (degrés). 9 formes par main.",
-   "epaule": [0.22, -0.2, -0.1],
+   "epaule": [0.2, -0.32, -0.14],
    "manche": {"rayon": 0.04, "long": 0.3, "couleur": "#2b2f36", "matiere": "tissu"},
    "avant_bras": {"rayon": 0.026, "long": 0.25, "couleur": "#c29072", "matiere": "peau"},
    "paume": {"taille": [0.082, 0.026, 0.088], "couleur": "#c39577", "matiere": "peau"},
@@ -14,11 +14,11 @@
    "poignet": 0.07,
    "repos": [0.16, -0.3, 0.3],
    "poses": {
-    "ouverte": {"doigts": 14, "ecart": 7, "pouce": [48, 8]},
+    "ouverte": {"doigts": 14, "ecart": 10, "pouce": [48, 8]},
     "coupe": {"doigts": 42, "ecart": 2, "pouce": [32, 30]},
     "pince": {"doigts": [52, 62, 96, 100], "ecart": 0, "pouce": [22, 52]},
     "poing": {"doigts": 98, "ecart": 0, "pouce": [12, 62]},
-    "plat": {"doigts": 4, "ecart": 3, "pouce": [22, 2]}
+    "plat": {"doigts": 6, "ecart": 7, "pouce": [22, 2]}
    }
   }
  },

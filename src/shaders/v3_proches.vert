@@ -10,10 +10,11 @@ precision highp float; precision highp int; precision highp sampler2D;
 #ifndef PF
 #define PF 0
 #endif
-/* PATE : variante du programme des formes (PF 1) pour les objets MOUS (pâte, boue, neige, argile, chair) : un objet dont une
-   forme se fond (lisse), creuse (creux) ou bosselle (bosse) est dessiné en UNE boîte (sa boîte englobante, calculée par la page :
-   lignes 0 à 7 de uShapes, texels 2 et 3), et chaque pixel y cherche l'union adoucie de toutes ses formes (v3_proches.frag,
-   sdMou). Compilée seulement quand un objet mou existe ; sinon, et tant qu'elle n'est pas prête, le programme PF 1 dessine
+/* PATE : variante du programme des formes (PF 1) pour les objets MOUS (pâte, boue, neige, argile, chair) : dans un objet dont
+   une forme se fond (lisse), creuse (creux) ou bosselle (bosse), chaque forme garde sa boîte, élargie du fondu, du bourrelet et
+   des bosses (marge de l'objet calculée par la page : lignes 0 à 7 de uShapes, texel 2), et chaque pixel y cherche l'union
+   adoucie de TOUTES les formes de l'objet (v3_proches.frag, sdMou). Une boîte par forme et non une pour l'objet : une boîte
+   qui passe derrière la caméra (bras, épaule) se projette mal. Compilée seulement quand un objet mou existe ; sinon, et tant qu'elle n'est pas prête, le programme PF 1 dessine
    ses formes une à une, sans fondu. Ne dessine que les emplacements des objets (pas de semis). */
 #ifndef PATE
 #define PATE 0
@@ -66,16 +67,18 @@ void main(){
     if(e.x<0.) return;                                            // un creux n'a pas de surface à lui : il creuse les formes molles
 #if PATE
     vec4 m0=oi>=0?texelFetch(uShapes,ivec2(2,oi),0):vec4(0.);
-    if(m0.w>.5){                                                  // objet mou : une seule boîte pour tout l'objet, à sa première forme
-      if(row!=int(o1.x)) return;
-      hb=texelFetch(uShapes,ivec2(3,oi),0).xyz; cl=uCamPos-m0.xyz; W=m0.xyz+coin(u,hb,cl); diam=2.*length(hb);
-      vK=ivec4(5,row,int(o1.y),0);
-    } else
+    float mg=0.;
+    if(m0.w>.5){ mg=m0.x+.4*m0.y; vK=ivec4(5,int(o1.x),int(o1.y),0); }   // objet mou : la boîte de la forme, élargie du fondu et des bosses
+    else vK=ivec4(0,row,0,0);
+#else
+    vK=ivec4(0,row,0,0);
 #endif
     {
     hb=boite(a.w,b.xyz,e.y)*1.04+.03;
+#if PATE
+    hb+=mg+(m0.w>.5?fract(texelFetch(uShapes,ivec2(2,row),0).w)*min(b.x,min(b.y,b.z)):0.);
+#endif
     cl=primLocal(uCamPos,row); W=primMonde(coin(u,hb,cl),row,false); diam=2.*length(hb);
-    vK=ivec4(0,row,0,0);
     }
   }
 #endif

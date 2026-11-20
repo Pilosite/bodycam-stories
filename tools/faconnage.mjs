@@ -57,7 +57,7 @@ for (let k = 0; k < NP; k++) {
   const url = await lire(), nom = `g-${String(k + 1).padStart(2, '0')}`;
   writeFileSync(join(out, nom + '.jpg'), Buffer.from(url.split(',')[1], 'base64'));
   planche.push({ nom, t: f.file[0].t, geste: f.file[0].geste, mains: f.mains });
-  console.log(sec(), nom, `t ${f.file[0].t} s`, f.file[0].geste, 'mains', f.mains, JSON.stringify(await page.evaluate(() => [balade.mainsP(), balade.corps().x, balade.corps().z, balade.corps().haut])), 'proches', await page.evaluate(() => window.__v3 && window.__v3.gp && window.__v3.gp.prochesM ? 'PATE' : 'sans fondu'));
+  console.log(sec(), nom, `t ${f.file[0].t} s`, f.file[0].geste, 'mains', f.mains, JSON.stringify(f.file[0].dbg), 'proches', await page.evaluate(() => window.__v3 && window.__v3.gp && window.__v3.gp.prochesM ? 'PATE' : 'sans fondu'));
   await page.evaluate(() => { balade.grains(40000); balade.resolution(30000); balade.pause(false); });
 }
 writeFileSync(join(out, 'planche.html'), `<!doctype html><meta charset=utf-8><style>body{margin:0;background:#111;color:#ddd;font:12px sans-serif;display:grid;grid-template-columns:repeat(${TEL ? 8 : 4},1fr);gap:4px;padding:4px}img{width:100%;display:block}</style>`

@@ -25,7 +25,7 @@ uniform vec2 uJitPx;
    - bosse (partie fractionnaire de la matière, 0 à 0,4) : bosses molles à l'échelle de la forme, dans son repère (elles
      tournent avec elle quand on la roule).
    Une seule boucle sur les formes de l'objet, un seul appel de sdPrim : borné par le nombre de formes de l'objet (24 au plus),
-   évalué seulement dans la boîte de l'objet. */
+   évalué seulement dans les boîtes des formes de l'objet. */
 float smaxP(float a, float b, float k){ return -smin(-a,-b,k); }
 float bosseP(vec3 q){ return sin(q.x*1.9+1.3*sin(q.z*1.6))*sin(q.y*2.2+1.1+.8*sin(q.x*1.2))*sin(q.z*2.0+.7*sin(q.y*1.7)); }
 float sdMou(vec3 p, int st, int cn, bool mou, out float brow){
