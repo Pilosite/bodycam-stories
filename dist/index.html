@@ -8114,7 +8114,7 @@ function modelSummary(journal) {
     const k = (e.adapter || e.tier || '?') + '/' + (e.instrument || '?') + (e.status === 'failed' ? '/failed' : '');
     calls[k] = (calls[k] || 0) + 1;
     const m = e.timings && typeof e.timings.model_ms === 'number' ? e.timings.model_ms : e.latency_ms;
-    if (e.status !== 'failed') (lat[e.instrument || '?'] = lat[e.instrument || '?'] || []).push(m);
+    if (e.status !== 'failed') (lat[(e.adapter || e.tier || '?') + '/' + (e.instrument || '?')] = lat[(e.adapter || e.tier || '?') + '/' + (e.instrument || '?')] || []).push(m);
   }
   const first = [], full = E.filter(e => e.type === 'model_call' && e.status === 'landed' && e.instrument === 'invention' && !e.stale).map(e => e.latency_ms);
   for (const i of E.filter(e => e.type === 'tx' && e.kind === 'intent' && e.loop === 'now')) {
@@ -9610,7 +9610,7 @@ function createStoryMode(P) {
     const lang = mk('button', { type: 'button', className: 'ghost', id: 'story-lang', textContent: L().lang }, tools);
     lang.onclick = () => { st.lang = st.lang === 'en' ? 'fr' : 'en'; P.storeLang(st.lang); lang.textContent = L().lang; makeVoices(); P.labels(L()); panel(); };
     const models = mk('div', { id: 'story-models' });
-    models.setAttribute('style', 'position:fixed;top:8px;right:10px;z-index:30;font:400 10px/1.3 ui-monospace,monospace;color:rgba(243,240,232,.75);background:rgba(10,12,9,.45);padding:2px 6px;border-radius:6px;pointer-events:none');
+    models.setAttribute('style', 'position:fixed;top:62px;left:18px;z-index:30;font:400 10px/1.3 ui-monospace,monospace;color:rgba(243,240,232,.75);background:rgba(10,12,9,.45);padding:2px 6px;border-radius:6px;pointer-events:none');
     st.ui = { els, box, pre, models };
     indicator();
   }
