@@ -13,7 +13,7 @@
 //   docile : le Claude simulé « oublie » gestes et objets ; le mode DOCILE de la page complète.
 // Variables : PASSES (images accumulées par capture, 10), PASSES_PLANCHE (4), PLANCHE (14), SCENE (indice de la fiche, 8 :
 //   09-champcueil-aube), VUE=pc (tout en 960 × 600, 16/10, dans out/demo-pc), GENTIL=1 (le Claude simulé d'avant, qui fait ce
-//   qu'on dit), SANS_OBSTACLE=1, CFGX='{"ombrage":"socle"}' (options de page en plus).
+//   qu'on dit), SANS_OBSTACLE=1, SANS_SEMIS=1, CFGX='{"ombrage":"socle"}' (options de page en plus).
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -224,6 +224,35 @@ if (!process.env.SANS_OBSTACLE) {
   verifier(mini >= 0.3 && fin >= 0.3, `jamais dans le bloc : au plus près ${mini.toFixed(2)} m de son bord (cercle JS), arrêt à ${fin.toFixed(2)} m ; sonde du moteur à la caméra : ${sonde.toFixed(2)} m`);
   verifier(sonde > 0.2, 'la caméra reste hors de toute surface (sonde v3)');
   await capture('12-obstacle-apres', 'arrêté devant le bloc : « ' + (await page.textContent('#pensee')) + ' »');
+}
+
+// 6. la boule blanche (§17.1) : le corps posé juste devant un élément de semis (éclat de grès, branche morte), dos à lui ; « fais une
+// petite crotte » : elle tomberait dessus ; elle glisse à côté, et le cadrage voit la crotte, pas l'éclat
+if (!process.env.SANS_SEMIS) {
+  const ici = await page.evaluate(() => {
+    const c = balade.corps(); let best = null;
+    for (let i = -40; i <= 40; i++) for (let j = -40; j <= 40; j++) { const x = c.x + i * 0.15, z = c.z + j * 0.15, y = balade.sol(x, z).hauteur;
+      if (balade.semis(x, y + 0.03, z) < 0 && balade.obstacles().every(o => Math.hypot(o.x - x, o.z - z) > o.r + 1.2)) { const m = Math.hypot(i, j); if (!best || m < best.m) best = { x, z, m }; } }
+    return best;
+  });
+  if (!ici) verifier(false, 'aucun élément de semis trouvé autour');
+  else {
+    // le corps à 0,3 m de l'élément, dos tourné (ce qui tombe « dessous » tombe derrière les talons, donc dessus)
+    const a = Math.random() * 6.28, bx = ici.x + Math.sin(a) * 0.32, bz = ici.z + Math.cos(a) * 0.32;
+    await page.evaluate(([x, z, y]) => balade.placer(x, z, y), [bx, bz, a]);
+    await attendre(1000);
+    const avant = await page.evaluate(() => balade.objets().map(o => o.id));
+    console.log(sec(), 'élément de semis en', ici.x.toFixed(2), ici.z.toFixed(2), '; corps dos à lui, à 0,32 m');
+    await dire(PH[0]);
+    await quand(a => balade.objets().some(o => /^fab-/.test(o.id) && !a.includes(o.id)), avant);
+    await auRepos();
+    const idS = await page.evaluate(a => balade.objets().map(o => o.id).find(i => /^fab-/.test(i) && !a.includes(i)), avant);
+    const oS = await page.evaluate(i => { const o = balade.objets().find(x => x.id === i); return o; }, idS), pS = await objet(idS);
+    const dans = await page.evaluate(([x, z, t]) => balade.semisSous(x, z, t / 2, t / 2), [oS.x, oS.z, pS.taille]);
+    verifier(!dans, `posée hors de l'élément de semis (${Math.hypot(oS.x - ici.x, oS.z - ici.z).toFixed(2)} m de lui)`);
+    await vueLibre(idS, 'à côté d\'un élément de semis');
+    await capture('13-semis', 'posée à côté d\'un élément de semis, cadrée sans rien devant');
+  }
 }
 
 await page.click('#journal').catch(() => {});
