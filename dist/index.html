@@ -153,14 +153,28 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   transition:opacity 2.2s ease,background-color .6s;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))}
 .ouv[hidden]{display:none}
 .ouv.ouv-fondu{opacity:0;pointer-events:none}
-.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(5vh,calc(50vh - 340px));transition:padding-top .7s ease}
+.ouv-cadre{width:100%;max-width:720px;display:flex;flex-direction:column;min-height:0;padding-top:max(4vh,calc(50vh - 390px));transition:padding-top .7s ease}
 .ouv-travail .ouv-cadre{padding-top:28px}
-.ouv-marque{margin:0 0 30px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:320px;overflow:hidden}
-.ouv-nom{margin:0 0 8px;font:600 clamp(38px,9vw,68px)/1 var(--f-ui);letter-spacing:-.025em;text-wrap:balance}
-.ouv-concept{margin:0 0 12px;font:500 clamp(11.5px,1.5vw,14px)/1.35 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--rec)}
-.ouv-expl{margin:0;max-width:34em;font:400 clamp(14.5px,1.7vw,17px)/1.5 var(--f-ui);color:var(--ink-dim);text-wrap:pretty}
+.ouv-marque{margin:0 0 30px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:560px;overflow:hidden}
+.ouv-surtitre{margin:0 0 16px;font:500 11.5px/1 var(--f-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
+.ouv-surtitre .ouv-pt{animation:blink 1.6s steps(1) infinite}
+.ouv-nom{margin:0 0 14px;font:600 clamp(46px,10.5vw,104px)/.88 var(--f-ui);letter-spacing:-.035em;text-transform:uppercase;text-shadow:0 0 42px rgba(255,90,70,.22)}
+.ouv-nom span{color:transparent;-webkit-text-stroke:1.5px var(--ink);letter-spacing:-.02em}
+.ouv-concept{margin:0 0 22px;font:500 clamp(11.5px,1.45vw,15px)/1.35 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--rec)}
+.ouv-chaine{list-style:none;margin:0;padding:0;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.ouv-chaine li{display:flex;flex-direction:column;gap:5px;flex:1 1 110px;min-width:96px;max-width:170px;color:var(--ink)}
+.ouv-chaine svg{color:var(--rec);margin-bottom:2px}
+.ouv-chaine b{font:600 12px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase}
+.ouv-chaine i{font:400 12.5px/1.35 var(--f-ui);font-style:normal;color:var(--ink-dim)}
+.ouv-chaine .ouv-fl{flex:0 0 auto;min-width:0;align-self:flex-start;padding-top:3px;font:400 18px/1 var(--f-mono);color:var(--ink-dim)}
 .ouv-travail .ouv-marque{max-height:0;margin:0;opacity:0}
-@media (max-height:640px){.ouv-expl{display:none}.ouv-marque{margin-bottom:18px}}
+.ouv:not(.ouv-travail)::before{content:"";position:absolute;inset:14px;pointer-events:none;opacity:.5;
+  background:linear-gradient(var(--ink),var(--ink)) 0 0/26px 1.5px no-repeat,linear-gradient(var(--ink),var(--ink)) 0 0/1.5px 26px no-repeat,
+  linear-gradient(var(--ink),var(--ink)) 100% 0/26px 1.5px no-repeat,linear-gradient(var(--ink),var(--ink)) 100% 0/1.5px 26px no-repeat,
+  linear-gradient(var(--ink),var(--ink)) 0 100%/26px 1.5px no-repeat,linear-gradient(var(--ink),var(--ink)) 0 100%/1.5px 26px no-repeat,
+  linear-gradient(var(--ink),var(--ink)) 100% 100%/26px 1.5px no-repeat,linear-gradient(var(--ink),var(--ink)) 100% 100%/1.5px 26px no-repeat}
+@media (max-width:560px){.ouv-chaine .ouv-fl{display:none}.ouv-chaine li{flex-basis:40%}}
+@media (max-height:700px){.ouv-chaine i{display:none}.ouv-marque{margin-bottom:18px}}
 .ouv-sur{margin:0 0 14px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
 .ouv-pt{width:7px;height:7px;border-radius:50%;background:var(--rec);box-shadow:0 0 10px var(--rec)}
 .ouv-q{margin:0 0 18px;font:600 24px/1.12 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
@@ -4971,9 +4985,18 @@ function creerOuverture(deps) {
   racine.id = 'ouverture'; racine.className = 'ouv'; racine.setAttribute('aria-labelledby', 'ouv-q'); racine.hidden = true;
   racine.innerHTML = `<div class="ouv-cadre">
   <header class="ouv-marque">
-    <p class="ouv-nom">Bodycam Stories</p>
-    <p class="ouv-concept">Génération procédurale complète par intelligence artificielle</p>
-    <p class="ouv-expl">Tu décris un monde. Une IA l'écrit, le moteur le fabrique entièrement par code, sans image ni modèle 3D, et le filme comme une caméra-piéton. Puis tu parles à celui qui la porte.</p>
+    <p class="ouv-surtitre"><span class="ouv-pt"></span>REC · prototype</p>
+    <p class="ouv-nom">BODYCAM<br><span>STORIES</span></p>
+    <p class="ouv-concept">From prompt to multimodal procedural generation</p>
+    <ol class="ouv-chaine" aria-label="Du texte au monde">
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H10l-4 4v-4H4z"/><path d="M8 9h5"/><path d="M8 12.5h8"/></svg><b>Prompt</b><i>tu décris un monde</i></li>
+      <li class="ouv-fl" aria-hidden="true">→</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><b>IA</b><i>elle l'écrit et le met en scène</i></li>
+      <li class="ouv-fl" aria-hidden="true">→</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V5h3M21 8V5h-3M3 16v3h3M21 16v3h-3"/><path d="M6 16l4-6 3 4 2-2.5 3 4.5"/><circle cx="16.5" cy="8.5" r="1.3"/></svg><b>Monde</b><i>fabriqué par code, sans image ni modèle 3D</i></li>
+      <li class="ouv-fl" aria-hidden="true">→</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v0M7.5 9v6M11 6v12M14.5 9.5v5M18 7.5v9M21 11v2"/></svg><b>Voix</b><i>tu parles à celui qui filme</i></li>
+    </ol>
   </header>
   <p class="ouv-sur"><span class="ouv-pt"></span>CAM 07 · nouveau tournage</p>
   <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>

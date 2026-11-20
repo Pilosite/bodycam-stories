@@ -111,9 +111,18 @@ export function creerOuverture(deps) {
   racine.id = 'ouverture'; racine.className = 'ouv'; racine.setAttribute('aria-labelledby', 'ouv-q'); racine.hidden = true;
   racine.innerHTML = `<div class="ouv-cadre">
   <header class="ouv-marque">
-    <p class="ouv-nom">Bodycam Stories</p>
-    <p class="ouv-concept">Génération procédurale complète par intelligence artificielle</p>
-    <p class="ouv-expl">Tu décris un monde. Une IA l'écrit, le moteur le fabrique entièrement par code, sans image ni modèle 3D, et le filme comme une caméra-piéton. Puis tu parles à celui qui la porte.</p>
+    <p class="ouv-surtitre"><span class="ouv-pt"></span>REC · prototype</p>
+    <p class="ouv-nom">BODYCAM<br><span>STORIES</span></p>
+    <p class="ouv-concept">From prompt to multimodal procedural generation</p>
+    <ol class="ouv-chaine" aria-label="Du texte au monde">
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H10l-4 4v-4H4z"/><path d="M8 9h5"/><path d="M8 12.5h8"/></svg><b>Prompt</b><i>tu décris un monde</i></li>
+      <li class="ouv-fl" aria-hidden="true">→</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><b>IA</b><i>elle l'écrit et le met en scène</i></li>
+      <li class="ouv-fl" aria-hidden="true">→</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V5h3M21 8V5h-3M3 16v3h3M21 16v3h-3"/><path d="M6 16l4-6 3 4 2-2.5 3 4.5"/><circle cx="16.5" cy="8.5" r="1.3"/></svg><b>Monde</b><i>fabriqué par code, sans image ni modèle 3D</i></li>
+      <li class="ouv-fl" aria-hidden="true">→</li>
+      <li><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v0M7.5 9v6M11 6v12M14.5 9.5v5M18 7.5v9M21 11v2"/></svg><b>Voix</b><i>tu parles à celui qui filme</i></li>
+    </ol>
   </header>
   <p class="ouv-sur"><span class="ouv-pt"></span>CAM 07 · nouveau tournage</p>
   <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>
