@@ -1,5 +1,5 @@
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Bodycam procédurale</title>
+<title>Bodycam Stories</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -148,12 +148,18 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   transition:opacity 2.2s ease,background-color .6s;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))}
 .ouv[hidden]{display:none}
 .ouv.ouv-fondu{opacity:0;pointer-events:none}
-.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(8vh,calc(50vh - 260px));transition:padding-top .7s ease}
+.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(5vh,calc(50vh - 340px));transition:padding-top .7s ease}
 .ouv-travail .ouv-cadre{padding-top:28px}
+.ouv-marque{margin:0 0 30px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:320px;overflow:hidden}
+.ouv-nom{margin:0 0 8px;font:600 clamp(38px,9vw,68px)/1 var(--f-ui);letter-spacing:-.025em;text-wrap:balance}
+.ouv-concept{margin:0 0 12px;font:500 clamp(11.5px,1.5vw,14px)/1.35 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--rec)}
+.ouv-expl{margin:0;max-width:34em;font:400 clamp(14.5px,1.7vw,17px)/1.5 var(--f-ui);color:var(--ink-dim);text-wrap:pretty}
+.ouv-travail .ouv-marque{max-height:0;margin:0;opacity:0}
+@media (max-height:640px){.ouv-expl{display:none}.ouv-marque{margin-bottom:18px}}
 .ouv-sur{margin:0 0 14px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
 .ouv-pt{width:7px;height:7px;border-radius:50%;background:var(--rec);box-shadow:0 0 10px var(--rec)}
-.ouv-q{margin:0 0 22px;font:600 32px/1.08 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
-@media (min-width:760px){.ouv-q{font-size:44px}}
+.ouv-q{margin:0 0 18px;font:600 24px/1.12 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
+@media (min-width:760px){.ouv-q{font-size:30px}}
 .ouv-travail .ouv-q{font-size:15px;margin:0 0 10px;color:var(--ink-dim);font-weight:500}
 .ouv-form{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:18px;padding:12px;background:rgba(243,240,232,.045)}
 .ouv-form:focus-within{border-color:rgba(243,240,232,.55)}
@@ -4187,6 +4193,11 @@ function creerOuverture(deps) {
   const racine = d.createElement('section');
   racine.id = 'ouverture'; racine.className = 'ouv'; racine.setAttribute('aria-labelledby', 'ouv-q'); racine.hidden = true;
   racine.innerHTML = `<div class="ouv-cadre">
+  <header class="ouv-marque">
+    <p class="ouv-nom">Bodycam Stories</p>
+    <p class="ouv-concept">Génération procédurale complète par intelligence artificielle</p>
+    <p class="ouv-expl">Tu décris un monde. Une IA l'écrit, le moteur le fabrique entièrement par code, sans image ni modèle 3D, et le filme comme une caméra-piéton. Puis tu parles à celui qui la porte.</p>
+  </header>
   <p class="ouv-sur"><span class="ouv-pt"></span>CAM 07 · nouveau tournage</p>
   <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>
   <form id="ouv-form" class="ouv-form" autocomplete="off">
