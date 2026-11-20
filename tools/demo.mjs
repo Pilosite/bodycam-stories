@@ -163,7 +163,9 @@ verifier(!/terre/.test(await page.textContent('#pensee')), 'sa pensée ne parle 
   verifier(G && G.duree >= 2.5 && G.f0 <= 90, `énorme : le gros bruit, ${G && G.duree} s, ${G && Math.round(G.f0)} Hz, à +${G && G.t} s`);
   const souffles = P.filter(p => p.source === 'file' && p.file[0] === 'effort');
   verifier(G && souffles.every(p => p.t < G.t), 'les souffles avant le gros bruit');
-  verifier(G && ch && ch.t >= G.t + G.duree - 0.3 && ch.t - (G.t + G.duree) < 1.5, `la chose tombe juste après : chute à +${ch && ch.t} s`);
+  // le temps du corps avance par pas bornés (dtMax) : en rendu logiciel, une image lente l'étire par rapport à l'horloge du journal ;
+  // on vérifie l'ordre (la chute après le gros bruit, rien entre les deux) et on rapporte l'écart
+  verifier(G && ch && ch.t >= G.t + G.duree - 0.3 && !B.some(b => b.t > G.t), `la chose tombe après le gros bruit, rien entre : chute à +${ch && ch.t} s (fin du bruit +${G && (G.t + G.duree).toFixed(2)} s, horloge murale)`);
   const pendant = G ? P.filter(p => p.t > G.t && p.t < G.t + G.duree) : [];
   verifier(pendant.every(p => J.some(e => e.voix_differee_s && Math.abs(e.t - p.t) < 0.2)), `aucune pensée dite pendant le gros bruit (${pendant.length} affichée(s), voix différée)`);
 }
