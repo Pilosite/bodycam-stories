@@ -19,6 +19,7 @@
 //            v3max, v3detail, v3net, v3pcf, v3amb, v3voir, et les optimisations mobiles (v3tapis, v3damier, v3acc32,
 //            capteur4, sondeSync, expoSync, v3sync, v3solPlein) décrites en tête du bloc « moteur v3 » de src/main.js. En v3, le
 //            nombre de passes attendu est le nombre d'images accumulées à l'arrêt.
+//   flou     bougé du capteur en mouvement (true l'impose, false le coupe ; par défaut : qualité mobile seulement)
 //
 // CHROME=/chemin/vers/chrome force l'exécutable (sinon celui de Playwright). PAGE=autre.html : une autre page que dist/index.html.
 import { chromium } from 'playwright';
