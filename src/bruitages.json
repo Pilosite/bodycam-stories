@@ -1,10 +1,10 @@
 {
  "_doc": "Bruitages en recettes (docs/bruitages.md), lus par src/son.js. Des DONNÉES : aucune chose ni aucun modèle nommés dans le code. micro : la prise micro de téléphone (toute la sortie y passe). sortie : volume général, baisse quand le joueur parle, limiteur et plafond. recettes : chacune faite de couches du vocabulaire (impulsions, bruit, onde, prise), hauteur, amplitude, ratés, fins, formants, saturation ; echelle pour un bruitage qui suit la masse. prises : quelques enregistrements libres embarqués (crédits dans docs/bruitages.md), une source comme une autre.",
  "micro": {
-  "passe_haut_hz": 110, "passe_bas_hz": 7000,
+  "passe_haut_hz": 90, "passe_bas_hz": 7000,
   "presence": { "hz": 2600, "gain_db": 4 },
-  "compression": { "seuil_db": -26, "ratio": 4 },
-  "ecretage": { "seuil": 0.55, "pousse": 2.2, "rattrape": 1.3 },
+  "compression": { "seuil_db": -6, "ratio": 2 },
+  "ecretage": { "seuil": 0.55, "pousse": 1.8, "rattrape": 1.3 },
   "reverb": { "duree_s": 0.3, "mouille": 0.08 }
  },
  "sortie": { "volume": 0.5, "baisse": 0.25, "limiteur_db": -3, "plafond": 0.9 },
@@ -19,7 +19,7 @@
    ],
    "hauteur": { "glisse": -0.3, "vibrato": { "hz": [5, 9], "profondeur": [0.03, 0.12], "croissance": 1.5 }, "instabilite": 0.12, "instabilite_hz": 6 },
    "amplitude": { "attaque_s": 0.015, "relache_s": 0.04, "tremble": 0.3 },
-   "rates": { "par_s": 0.5, "duree_s": [0.08, 0.3], "reprise": [0.85, 1.3] },
+   "rates": { "par_s": 0.5, "duree_s": [0.12, 0.35], "reprise": [0.85, 1.3] },
    "formants": [ { "hz": 250, "q": 2, "gain_db": 6 }, { "hz": 700, "q": 3, "gain_db": 4 }, { "hz": 2600, "q": 2, "gain_db": -6 } ],
    "saturation": 0.5,
    "fins": {
@@ -38,7 +38,7 @@
    "amplitude": { "forme": "percussion", "chute_rapport": 0.3, "rebond_s": [0.07, 0.12], "rebond_g": [0.2, 0.4] },
    "formants": [ { "hz": 180, "q": 1, "gain_db": 4 } ],
    "saturation": 0.1,
-   "echelle": { "masse_ref_kg": 1, "hauteur_hz": 120, "exposant_hauteur": -0.3, "duree_s": 0.2, "exposant_duree": 0.2, "force": 0.45, "exposant_force": 0.15, "distance_ref_m": 1.5, "rebond_sous": 0.3, "rebonds": [1, 2] }
+   "echelle": { "masse_ref_kg": 1, "hauteur_hz": 120, "exposant_hauteur": -0.2, "duree_s": 0.2, "exposant_duree": 0.2, "force": 0.45, "exposant_force": 0.15, "distance_ref_m": 1.5, "rebond_sous": 0.3, "rebonds": [1, 2] }
   }
  },
  "prises_credit": {"auteur": "Yle Arkisto (archives de la radiotélévision finlandaise), via Freesound (son 425594), versé sur Wikimedia Commons par Zache", "licence": "CC BY 3.0", "licence_url": "https://creativecommons.org/licenses/by/3.0/", "source": "https://commons.wikimedia.org/wiki/File:425594_ylearkisto_farts-pieruja.wav", "titre": "425594 ylearkisto farts-pieruja.wav (« Different kind of real farts », 1986)"},

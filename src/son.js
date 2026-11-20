@@ -170,8 +170,8 @@ export function partition(rec, ev) {
   if (nb) { const u0 = 0.55, a0 = tf + df * u0 + sil, a1 = d - 0.03; for (let k = 0; k < nb; k++) bulles.push({ t: lerp(a0, a1, (k + 0.3 * rnd()) / nb), l: 0.025 + 0.03 * rnd(), g: 0.45 + 0.5 * rnd(), h: 1.1 + 0.7 * rnd() }); }
   // les ratés : ça cale (silence, la hauteur tombe), puis ça repart (plus haut ou plus bas)
   const rates = [];
-  const nr = poisson(rnd, num(ev.rates, 0, 10, 0) * num(Ra.par_s, 0, 5, 0.5) * tf);
-  for (let k = 0; k < nr; k++) {
+  const nr = Math.max(Math.floor(num(ev.rates, 0, 10, 0)), poisson(rnd, num(ev.rates, 0, 10, 0) * num(Ra.par_s, 0, 5, 0.5) * tf));   // au moins la partie entière de « rates »
+  for (let k = 0, essais = 0; rates.length < nr && essais < 4 * nr; essais++) {
     const t = lerp(0.15 * tf, 0.85 * tf, rnd()), l = entre(rnd, Ra.duree_s, [0.08, 0.25]);
     if (t + l < tf - 0.05 && !rates.some(r => Math.abs(r.t - t) < r.l + l + 0.1)) rates.push({ t, l, reprise: entre(rnd, Ra.reprise, [0.9, 1.2]) });
   }
@@ -323,7 +323,9 @@ export function chaine(ctx, B = {}) {
   const pousse = ctx.createGain(); pousse.gain.value = num(EC.pousse, 0.5, 8, 2);
   const ec = ctx.createWaveShaper(); ec.curve = courbe(x => { const a = Math.abs(x); return Math.sign(x) * (a < s ? a : s + (1 - s) * Math.tanh((a - s) / (1 - s))); }); ec.oversample = '2x';
   const apres = ctx.createGain(); apres.gain.value = 1 / Math.max(1, num(EC.pousse, 0.5, 8, 2)) * num(EC.rattrape, 0.5, 4, 1.4);
-  entree.connect(hp); hp.connect(lp); lp.connect(pr); pr.connect(co); co.connect(pousse); pousse.connect(ec); ec.connect(apres);
+  entree.connect(hp); hp.connect(lp); lp.connect(pr);
+  if (num(CO.ratio, 1, 20, 4) > 1.01) { pr.connect(co); co.connect(pousse); } else pr.connect(pousse);   // la compression du téléphone (Chrome y ajoute un gain de rattrapage) ; ratio 1 : aucune
+  pousse.connect(ec); ec.connect(apres);
   const general = ctx.createGain(); general.gain.value = 0;
   apres.connect(general);
   const RV = isObj(M.reverb) ? M.reverb : {};
@@ -357,12 +359,14 @@ export function voixBruit(ctx, chaineE, rec, ev, data, quand = 0) {
   src.start(Math.max(ctx.currentTime, quand));
   return { src, gain: g };
 }
-/* Rendu hors ligne (essais) : un bruit seul, par la même chaîne, dans un OfflineAudioContext. Rend un Float32Array. */
-export async function rendreHorsLigne(Hors, B, ev, sr = 44100) {
-  const rec = B.recettes[ev.recette], data = synthese(rec, ev, sr, B.prises || {});
-  const ctx = new Hors(1, data.length + Math.round(0.4 * sr), sr), c = chaine(ctx, B);
+/* Rendu hors ligne (essais) : des bruits ({...ev, t} en s), par la même chaîne, dans un OfflineAudioContext. Rend un Float32Array. */
+export async function rendreHorsLigne(Hors, B, evs, sr = 44100) {
+  const L = (Array.isArray(evs) ? evs : [evs]).map(ev => ({ ev, rec: B.recettes[ev.recette] })).filter(x => x.rec);
+  const D = L.map(x => Object.assign(x, { data: synthese(x.rec, x.ev, sr, B.prises || {}) }));
+  const fin = Math.max(0.1, ...D.map(x => num(x.ev.t, 0, 600, 0) + x.data.length / sr));
+  const ctx = new Hors(1, Math.ceil((fin + 0.5) * sr), sr), c = chaine(ctx, B);
   c.general.gain.value = c.volume;
-  voixBruit(ctx, c.entree, rec, ev, data, 0);
+  for (const x of D) voixBruit(ctx, c.entree, x.rec, x.ev, x.data, num(x.ev.t, 0, 600, 0));
   const r = await ctx.startRendering();
   return r.getChannelData(0);
 }

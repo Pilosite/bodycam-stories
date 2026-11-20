@@ -2116,6 +2116,7 @@ sonsInter(CFG.sons!==undefined?!!CFG.sons:(()=>{ try{ return localStorage.getIte
 $("sons-inter").onclick=()=>{ const on=sonsInter(!sons.actif()); try{ localStorage.setItem("bodycam-sons",on?"1":"0"); }catch(_){} };
 addEventListener("pointerdown",()=>sons.geste(),true); addEventListener("keydown",()=>sons.geste(),true); $("dire").addEventListener("submit",()=>sons.geste());
 document.addEventListener("visibilitychange",()=>sons.masquer(document.hidden));
+{ const c=BRUITAGES.prises_credit; if(c&&$("sons-credit")) $("sons-credit").textContent="Sons : synthèse par code, et des prises de « "+c.titre+" », "+c.auteur+", "+c.licence+" (transformées)."; }   // crédit des prises (docs/bruitages.md)
 window.sons={ etat:()=>sons.etat(), actif:v=>v===undefined?sons.actif():sonsInter(!!v), journal:journalSons };
 for(const id of ["parler","mic","banque-dicter"]) if($(id)) $(id).addEventListener("click",()=>voixP.taire());   // le joueur prend la parole : il se tait
 $("msg").addEventListener("input",()=>voixP.taire());

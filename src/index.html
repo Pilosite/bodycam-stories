@@ -142,6 +142,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .outils[hidden]{display:none}
 .outils{pointer-events:auto;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:30em;padding:10px;border-radius:18px;
   background:rgba(14,17,13,.82);border:1px solid var(--line);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.credit-sons{flex-basis:100%;text-align:center;font-size:11px;opacity:.7}
 .outils button{padding:11px 14px;font-size:14px;min-height:44px}
 #plus[aria-expanded="true"]{color:var(--ink);border-color:var(--ink)}
 .banque-liste .groupe{font:500 11.5px/1 var(--f-mono);color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;padding:10px 2px 2px}
@@ -220,6 +221,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
     <button id="banc" type="button" class="ghost" title="Environ 15 s, caméra figée : ce que coûte chaque partie de l'image sur cet appareil">Banc d'essai</button>
     <button id="voix-inter" type="button" class="ghost" aria-pressed="false" title="Ses pensées lues à voix haute">Voix : non</button>
     <button id="sons-inter" type="button" class="ghost" aria-pressed="true" title="Bruitages (crédits des prises : docs/bruitages.md)">Sons : oui</button>
+    <small id="sons-credit" class="credit-sons"></small>
     <button id="suivi" type="button" class="ghost" aria-pressed="true" hidden>Suivi du téléphone : oui</button>
     <button id="qualite" type="button" class="ghost" aria-pressed="false" title="Mobile : téléphone moyen. Complète : ordinateur, pleine résolution.">Qualité : mobile</button>
     <button id="v2" type="button" class="ghost" aria-pressed="false" hidden title="Essai : tourner des panoramiques, puis les projeter">Moteur v2</button>
