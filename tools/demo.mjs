@@ -48,7 +48,7 @@ await page.addInitScript(([c, oublie]) => {
   }
   const sampler = { json: c => new Promise(r => setTimeout(() => r(repondre(c)), 1500)) };
   window.claude = { use: () => Promise.resolve(sampler) };
-}, [{ maxPx: +px, mobile: true, still: true, graine: 7, debug: true, v3: true, grains: GESTES, dtMax: 0.4, scene: +(process.env.SCENE ?? 8) }, mode === 'docile']);
+}, [{ maxPx: +px, mobile: true, still: true, graine: 7, debug: true, v3: true, grains: GESTES, dtMax: 0.4, scene: +(process.env.SCENE ?? 8), ...JSON.parse(process.env.CFGX || '{}') }, mode === 'docile']);
 await page.goto('file://' + join(root, 'dist/index.html'), { timeout: 240000 });
 await page.waitForFunction(() => window.balade && window.__state && window.__state.n > 2, null, { timeout: 240000 });
 
