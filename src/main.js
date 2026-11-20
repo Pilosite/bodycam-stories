@@ -2136,7 +2136,8 @@ function reveler(id){
   const L=differes.get(id); differes.delete(id); if(!L) return;
   const b=(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===id); if(!b) return;
   const q=posObjet(b), r=Math.max(.08,mesureObjet(b).taille/2), dx=cam.x-q.x, dz=cam.z-q.z, l=Math.hypot(dx,dz)||1, ux=dx/l, uz=dz/l;
-  L.forEach((o,k)=>{ const s=k%2?-1:1; objetMeneur(Object.assign({},o,{differe:undefined,pres_de:id,decale:[uz*s*(r+.1)+ux*.24,-ux*s*(r+.1)+uz*.24]})); });   // à côté d'elle, côté porteur
+  // devant elle, un peu de côté, côté porteur : dans le champ pendant qu'il travaille (la main y prend ce qu'il faut)
+  L.forEach((o,k)=>{ const s=k%2?-1:1, c=r*.5+.08, v=r*.6+.04; objetMeneur(Object.assign({},o,{differe:undefined,pres_de:id,decale:[uz*s*c+ux*v,-ux*s*c+uz*v]})); });
 }
 function tournerVers(id){                                        // sa face (+z) vers le porteur : c'est de ce côté qu'il la façonne
   const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], i=L.findIndex(x=>x&&x.id===id); if(i<0) return;
@@ -2252,7 +2253,7 @@ function objetMains(Hs,quelles=[0,1]){
 function bougerCamera(a,c,t){
   const B=a.base, {e}=corpsAxes(), yv=Math.atan2(c[0]-e[0],c[2]-e[2]), pv=Math.atan2(c[1]-e[1],Math.hypot(c[0]-e[0],c[2]-e[2]));
   const dy=wrapA(yv-B.yaw);
-  cam.yaw=B.yaw+.3*dy+.03*Math.sin(t*1.3+.5)+.01*Math.sin(t*4.3);
+  cam.yaw=B.yaw+.4*dy+.03*Math.sin(t*1.3+.5)+.01*Math.sin(t*4.3);
   cam.pitch=Math.max(-1.1,B.pitch*.65+pv*.35+.035*Math.sin(t*2.1)-.03*Math.abs(Math.sin(t*3.7)));
   cam.haut=B.haut+.015*Math.sin(t*2.9);
 }
