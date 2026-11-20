@@ -166,7 +166,6 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
   g.fs=clamp(abs(dot(nf,v)),.18,1.);                         // vue de biais, la feuille s'amincit
   return true;
 }
-}
 #endif
 #if !FORMES
 /* ---- arbres (sdTreeA) : tronc, trois branches, et pour les conifères le cœur de feuillage (le même cône que sdTreeA) */
