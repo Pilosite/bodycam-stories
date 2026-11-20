@@ -1,5 +1,5 @@
 // The harvest record (core/harvest.js) and the page's browser cap (src/harvest.js keepRecords). Level A (docs/sdlc.md §3):
-// the golden journals and one small legacy fixture (the free session of 20 November 2026, reconstructed); no browser.
+// the golden journals and one small legacy fixture (the free session of 20 November 2026, the raw journal); no browser.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -32,17 +32,17 @@ test('legacy French journal: header, turns, the refusal, the recorded fact, turn
   assert.equal(r.mode, 'free'); assert.equal(r.turns, 6); assert.equal(r.duration_s, 114);
   assert.deepEqual(r.asked_not_doable.map(i => [i.kind, i.seq]), [['refused', 1]]);
   const f = r.improvised.filter(i => i.kind === 'fact');
-  assert.equal(f.length, 1); assert.match(f[0].text, /Léo .* Manon/); assert.equal(f[0].said, "Comment s'appellent tes mômes ?");
+  assert.equal(f.length, 1); assert.match(f[0].text, /Léo .* Manon/); assert.equal(f[0].said, 'Comment s appelle tes momes ?');
   const nf = r.slow_or_doubtful.filter(i => i.kind === 'no_first_reaction');
   assert.equal(nf.length, 5, 'the only immediate gesture was on turn 2');
-  assert.ok(!nf.some(i => i.said === 'Ok va près du feu avec ta famille'));
+  assert.ok(!nf.some(i => i.said === 'Ok va przs du feu avec ta famille'));
   assert.equal(r.summary.full_reaction_ms, 5000);
 });
 
 test('strip: no player sentence is left anywhere in the record, the class stays', () => {
   const l = harvestRecord(FREE, { strip: true }), c = harvestRecord(P1, { strip: true });
   const all = JSON.stringify(l) + JSON.stringify(c);
-  for (const s of ["T'es qui dans l'histoire ?", 'Comment s', 'touche le cairn', 'regarde la marque sur ce pin']) assert.ok(!all.includes(s), s);
+  for (const s of ["T es qui dans l histoire ?", 'Comment s', 'touche le cairn', 'regarde la marque sur ce pin']) assert.ok(!all.includes(s), s);
   assert.ok(l.stripped && l.improvised.find(i => i.kind === 'fact').said === '[player: voice]');
   assert.match(c.asked_not_doable.find(i => i.missing === 'op:fly').said, /^\[player: \w+\]$/);
 });
@@ -67,7 +67,7 @@ test('merged report: one proposal list per layer, counted across records, with p
   const free = harvestRecord(FREE), m = mergeRecords([free, Object.assign(harvestRecord(FREE), { id: 'free-again' }), harvestRecord(P1, { meta: { id: 'p1' } })]);
   const fact = m.proposals.story.find(p => p.kind === 'fact' && /Léo/.test(p.title));
   assert.equal(fact.seen, 2); assert.deepEqual(fact.sessions, ['free-217113628', 'free-again']);
-  assert.match(fact.text, /^\/\/ improvised by .* #8 .*\n\? .*\{imp\.[a-z0-9-]+\}$/);
+  assert.match(fact.text, /^\/\/ improvised by .* #11 .*\n\? .*\{imp\.[a-z0-9-]+\}$/);
   assert.ok(m.proposals.engine.some(p => p.key === 'material:marble' && p.owner === "the engine's owner"));
   assert.ok(m.proposals.framework.some(p => p.kind === 'prepared_option' && p.seen === 10));
   assert.ok(m.proposals.character.some(p => p.kind === 'example'));

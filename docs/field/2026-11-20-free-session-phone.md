@@ -12,3 +12,5 @@ Legacy free mode ("libre"), a prompted world (a family around a camp fire at nig
 | 6 | "Demande-lui si ça va" | 5.5 s | speaks to Manon; nobody is there to answer |
 
 Readings: the carrier holds a voice and invents coherently; nothing was conceived before play (no people, relations or stake); the engine shows no people, so the chairs are empty, which Toine found interesting; answers take 4 to 7.5 s on this path; the carrier is called "Sam" by default although the prompt made him a father. Consequences: ADR 0011.
+
+The raw journal is kept in `harvest/journals/2026-11-20-free-session-phone.txt`, and its harvest report in `harvest/2026-11-20-free-session-phone.md`.

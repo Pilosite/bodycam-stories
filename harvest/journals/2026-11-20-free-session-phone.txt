@@ -1,35 +1,60 @@
-# RECONSTRUCTED, not the raw journal. The raw text Toine pasted is not in the repository; this file rebuilds its shape from
-# docs/field/2026-11-20-free-session-phone.md and from the entry forms the coordinator quoted. Real: the header, the six
-# sentences, the answer times, the statuses, the one immediate gesture, the walk of 12 m, the one recorded fact (its
-# content). Reconstructed: the minutes (spread over 1.9 min), the sas wording, the thoughts (paraphrased in brackets
-# from the note), the exact wording of the fact. Lines starting with # are ignored by the parser.
+# Raw journal as pasted by Toine on 20 November 2026 (free mode, his phone). Lines starting with # are ignored by the parser.
 JOURNAL · libre · graine 217113628 · avec Claude · Mali-G77 · 2026-11-20T23:27
-[0,1 min] VOIX · joueur : "T'es qui dans l'histoire ?" · recue en 6,0 s
-    sas : refuse · hors du monde : la voix demande qui il est dans l'histoire
-    (hesite) « [reconstructed: he deflects in character, as a father by the fire, without answering the question] »
-[0,1 min] sas · verdict refuse · regle null · motif hors du monde : la voix demande qui il est dans l'histoire · voix T'es qui dans l'histoire ?
-[0,4 min] VOIX · joueur : "Ok va près du feu avec ta famille" · recue en 4,0 s
-    sas : recevable · aller près du feu
-    (suit) « [reconstructed: he goes to the fire, to his family] »
-    actions : marcher 12
-[0,4 min] geste_immediat · actions ["posture"]
-[0,4 min] sas · verdict recevable · regle null · motif aller près du feu · voix Ok va près du feu avec ta famille
-[0,7 min] VOIX · joueur : "Parle à ta femme" · recue en 5,0 s
-    sas : recevable · parler à sa femme
-    (suit) « [reconstructed: her chair is empty; the children are cold] »
-[0,7 min] sas · verdict recevable · regle null · motif parler à sa femme · voix Parle à ta femme
-[1,0 min] VOIX · joueur : "Comment s'appellent tes mômes ?" · recue en 7,5 s
-    sas : recevable · nommer les enfants
-    (suit) « [reconstructed: Léo, four, and Manon, seven] »
-    faits : ["Les enfants s'appellent Léo (4 ans) et Manon (7 ans)"]
-[1,0 min] sas · verdict recevable · regle null · motif nommer les enfants · voix Comment s'appellent tes mômes ?
-[1,4 min] VOIX · joueur : "Va voir Manon" · recue en 4,5 s
-    sas : recevable · aller voir Manon
-    (suit) « [reconstructed: he walks to the small chairs] »
-    actions : marcher 4
-[1,4 min] sas · verdict recevable · regle null · motif aller voir Manon · voix Va voir Manon
-[1,7 min] VOIX · joueur : "Demande-lui si ça va" · recue en 5,5 s
-    sas : recevable · parler à Manon
-    (suit) « [reconstructed: he asks Manon if she is all right; nobody answers] »
-[1,7 min] sas · verdict recevable · regle null · motif parler à Manon · voix Demande-lui si ça va
-ÉTAT · 1,9 min · tours 6 · temps passés  · fin — · peur 0 confiance 0 agacement 0
+[0,0 min] VOIX · joueur : "T es qui dans l histoire ?" · recue en 6,0 s
+    sas : refuse · monde · Question sur le récit et le rôle, hors monde : Sam hausse les épaules et regarde ailleurs.
+    (refuse) « Qui je suis ? Un type qui a froid aux pieds et qui a envie de savoir ce qui cuit là-bas, c'est déjà assez compliqué. »
+    actions : viser
+    faits : []
+    question : false
+    defaire : []
+[0,1 min] sas · verdict refuse · regle monde · motif Question sur le récit et le rôle, hors monde : Sam hausse les épaules et regarde ailleurs. · voix T es qui dans l histoire ?
+[0,1 min] pensee · voix · « Qui je suis ? Un type qui a froid aux pieds et qui a envie de savoir ce qui cuit là-bas, c'est déjà assez compliqué. »
+[0,3 min] VOIX · joueur : "Ok va przs du feu avec ta famille" · recue en 4,0 s
+    sas : recevable · Marcher jusqu'au feu de camp, geste ordinaire et possible.
+    (suit) « Bon, j'y vais. Mes pieds sont gelés, mais ça sent bon là-bas. »
+    actions : marcher 12, regarder
+    faits : []
+    question : false
+    defaire : []
+[0,3 min] geste_immediat · actions ["posture"]
+[0,4 min] sas · verdict recevable · regle null · motif Marcher jusqu'au feu de camp, geste ordinaire et possible. · voix Ok va przs du feu avec ta famille
+[0,4 min] pensee · voix · « Bon, j'y vais. Mes pieds sont gelés, mais ça sent bon là-bas. »
+[0,7 min] VOIX · joueur : "Parles a ta femme" · recue en 5,0 s
+    sas : recevable · Parler à sa femme est un geste ordinaire, possible sans rien ajouter.
+    (suit) « Chérie ? T'es où ? Ta chaise est vide, et les petits ont froid, tu le sais. »
+    actions : viser , attendre 2
+    faits : []
+    question : true
+    defaire : []
+[0,8 min] sas · verdict recevable · regle null · motif Parler à sa femme est un geste ordinaire, possible sans rien ajouter. · voix Parles a ta femme
+[0,8 min] pensee · voix · « Chérie ? T'es où ? Ta chaise est vide, et les petits ont froid, tu le sais. »
+[1,0 min] VOIX · joueur : "Comment s appelle tes momes ?" · recue en 7,5 s
+    sas : recevable · Question simple sur les enfants : Sam peut y répondre de vive voix.
+    (suit) « Léo et Manon, quatre et sept ans. Pourquoi tu me demandes ça maintenant, toi ? Ils ont froid, je te l'ai dit. »
+    faits : ["Les enfants s'appellent Léo (4 ans) et Manon (7 ans)."]
+    question : false
+    resume : Sam marche vers une clairière de pins la nuit. Une famille est installée autour d'un feu : deux petites chaises d'enfant, la grande chaise du père, et la chaise vide de la mère, à l'écart. Sam parle à sa femme, cherche où elle est, et dit que les enfants ont froid. La voix lui demande le prénom des
+    defaire : []
+[1,2 min] sas · verdict recevable · regle null · motif Question simple sur les enfants : Sam peut y répondre de vive voix. · voix Comment s appelle tes momes ?
+[1,2 min] pensee · voix · « Léo et Manon, quatre et sept ans. Pourquoi tu me demandes ça maintenant, toi ? Ils ont froid, je te l'ai dit. »
+[1,3 min] VOIX · joueur : "Va voir manon" · recue en 4,5 s
+    sas : recevable · Aller voir Manon : un simple déplacement, possible ici.
+    (suit) « Manon. Bon, j'y vais. Elle a intérêt à être assise bien au chaud. »
+    actions : marcher 3.5, viser
+    faits : []
+    question : false
+    resume : Sam suit le sentier de sable jusqu'à la clairière de pins, où une famille campe autour d'un feu. Il a rencontré la voix qui lui demande les prénoms des enfants : Léo, 4 ans, et Manon, 7 ans. Ils ont froid. La mère est assise à l'écart. Sam s'approche des deux petites chaises d'enfant.
+    defaire : []
+[1,4 min] sas · verdict recevable · regle null · motif Aller voir Manon : un simple déplacement, possible ici. · voix Va voir manon
+[1,4 min] pensee · voix · « Manon. Bon, j'y vais. Elle a intérêt à être assise bien au chaud. »
+[1,7 min] VOIX · joueur : "Demande lui si ca va" · recue en 5,5 s
+    sas : recevable · Demander à Manon si ça va : geste simple et possible.
+    (suit) « « Ça va, ma puce ? T'as pas froid, assise là ? » Je m'approche doucement, les mains dans les poches. »
+    actions : marcher 2, attendre 1
+    faits : []
+    question : true
+    resume : Sam marche dans une clairière de pins la nuit, au bout d'un sentier de sable. Une famille campe autour d'un feu : Léo (4 ans) et Manon (7 ans) sont sur des chaises d'enfant. Sam s'approche de Manon pour lui demander si ça va.
+    defaire : []
+[1,8 min] sas · verdict recevable · regle null · motif Demander à Manon si ça va : geste simple et possible. · voix Demande lui si ca va
+[1,8 min] pensee · voix · « « Ça va, ma puce ? T'as pas froid, assise là ? » Je m'approche doucement, les mains dans les poches. »
+ÉTAT · 1,9 min · tours 6 · temps passés  · fin — · peur 0 confiance 3 agacement 0
