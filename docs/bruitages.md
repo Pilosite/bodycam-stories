@@ -61,7 +61,7 @@ La couche `prise` lit l'enregistrement par grains de 60 ms (fenêtre de Hann, re
 - **Synchronisation** : les bruits sont portés par les efforts de la file ; chacun part quand le temps écoulé de son effort atteint son instant, donc il suit les arrêts du monde. La synthèse est faite à l'arrivée du geste (quelques dizaines de ms pour 4 s), pas au moment de jouer.
 - **Le tremblé** d'effort (§20) est modulé par l'enveloppe des bruits en cours (force comprise) : le gros bruit secoue le téléphone, plus vite et plus fort.
 - **La voix ne couvre pas le gros bruit** : une pensée qui arrive pendant un bruit de plus de 0,8 s est affichée mais dite à sa fin (journal : `voix_differee_s`) ; les souffles ne tombent jamais pendant un bruit (calage).
-- **La chute** : une chose demandée qui arrive au sol (posée à la place réservée au geste) fait un coup sourd, sa masse estimée par le volume de ses formes (une demi-tonne par m³), sa distance au porteur réduisant la force.
+- **La chute** : ce qui sort du corps tombe à la fin de l'effort : le coup sourd part à ce moment, que la chose soit déjà arrivée de l'accessoiriste ou non (le meneur met sa masse estimée dans `exploit.masse` : le volume de ses formes, une demi-tonne par m³). Une autre chose demandée fait son coup en arrivant au sol (posée à la place réservée au geste), sa distance au porteur réduisant la force.
 - **Journal** : `window.balSons` (chaque plan avec ses souffles et sa pose, chaque bruit joué avec son instant, `audio` vrai s'il a réellement sonné) ; `window.sons.etat()`.
 
 ## Vérification (personne n'a écouté)

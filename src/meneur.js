@@ -1930,7 +1930,8 @@ export function creerMeneur(o) {
       }
       // le geste : accroupi, l'effort, relevé ; les autres gestes de la réponse (marche, regard) sont gardés, la séquence les range
       const garde = liste(v.actions).filter(a => !['posture', 'attendre', 'effort', 'penser'].includes(a.type));
-      v.actions = [...gesteExploit(fm.facteur, EX, tirer), ...garde];
+      const kg = Math.round(volumeFormes(fm.formes) * 500 * 100) / 100;   // ordre de grandeur pour le bruit de sa chute (docs/bruitages.md)
+      v.actions = [...gesteExploit(fm.facteur, EX, tirer).map(a => a.type === 'effort' ? Object.assign(a, { exploit: Object.assign(a.exploit, { masse: kg }) }) : a), ...garde];
     }
     let apres = null, source = null;
     if (pal !== 'normal') {
