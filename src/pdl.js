@@ -83,3 +83,28 @@ export function trameActions(actions, rang = 1) {
 
 /* La traduction en clair d'un jeton : « ◆r7k = relief · amplitude : 0,8 ». */
 export const traduire = j => j.s + ' = ' + j.cle + ' : ' + j.val;
+
+/* La réaction attendue du personnage à une demande (panneau d'activité, bloc « persona ») : calculée à partir de ses VRAIS
+   réglages (ceux de la recherche de l'ouverture) et de la nature de la demande, jamais d'un objet en dur.
+   perso : { id, genre, age, pays, annee, metier, ton[], peur (0..3), humour, sait[] } ;
+   nature : { repugnance 0..1, facteur (échelle), effort (s), chercher, faconner }. Rend null si ses réglages ne jouent pas. */
+export function reactionAttendue(perso, nature = {}) {
+  if (!perso || typeof perso !== 'object') return null;
+  const n = nature || {}, rp = +n.repugnance || 0, fa = +n.facteur || 1, ef = +n.effort || 0;
+  if (!(rp > 0 || fa >= 3 || ef >= 4 || n.chercher || n.faconner)) return null;
+  const F = perso.genre === 'F', e = s => F ? s + 'e' : s, ton = [].concat(perso.ton || []);
+  const R = [];
+  if (ton.includes('sec')) R.push('râle, court');
+  R.push('obéit');
+  if (rp >= .5) R.push(fa >= 3 || rp >= .85 ? 'dégoût marqué, se retient' : 'dégoût marqué');
+  else if (rp > 0) R.push('grimace');
+  if (fa >= 5) R.push(e('incrédule') + ' devant la taille');
+  if (ef >= 4) R.push('souffle, effort long');
+  if (n.chercher) R.push((perso.sait || []).length ? 'cherche en ' + (F ? 'connaisseuse' : 'connaisseur') : 'cherche sans discuter');
+  if ((+perso.peur || 0) <= 1) R.push('pas ' + e('impressionné'));
+  else R.push(e('inquiet'));
+  if (ton.includes('drôle') || perso.humour) R.push('humour à froid');
+  const profil = [perso.id ? perso.id[0].toUpperCase() + perso.id.slice(1) : 'perso', (perso.genre || '') + (perso.age || ''), (perso.pays || '') + (perso.annee || ''), perso.metier, ton.length ? 'ton ' + ton.join(', ') : ''].filter(Boolean).join(' · ');
+  const tr = trame('personnage', { id: perso.id, genre: perso.genre, age: perso.age, pays: perso.pays, annee: perso.annee, ton, peur: perso.peur, demande: { repugnance: rp || undefined, facteur: fa !== 1 ? fa : undefined, effort: ef || undefined } }, 2);
+  return { profil, reaction: R, texte: profil + ' → ' + R.join(', '), trame: tr };
+}

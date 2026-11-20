@@ -3363,14 +3363,26 @@ const activite=(()=>{
     +"opacity:0;transition:opacity .8s;white-space:pre-wrap;word-break:break-word;display:flex;flex-direction:column;justify-content:flex-end}#activite.on{opacity:.8}"
     +"#activite .l{display:flex;gap:6px}#activite .h{flex:none;width:2.6em;color:#7d8a74;font-size:10.5px;padding-top:1px}#activite .s{flex:none;width:1em}"
     +"#activite .k-gt .s,#activite .k-gt{color:#fff}#activite .k-lt{color:#a9d6f0}#activite .k-ex{color:#f0b47a}#activite .k-go{color:#e8e39a}#activite .k-ok{color:#8fbf7f}#activite .k-ti{color:#9ab}"
-    +"#activite.tr .l:not(.k-tr){font-size:10.5px;opacity:.55}#activite .k-tr{display:block;margin:3px 0 2px;color:#f3f0e8;font-size:13px;letter-spacing:.02em}#activite .k-tr .s{color:#e5352b}"
+    +"#activite.tr .l:not(.k-tr):not(.k-pe):not(.lie){font-size:9.5px;opacity:.5!important}#activite .k-tr{display:block;margin:2px 0;color:#f3f0e8;font-size:11px;line-height:1.35}#activite .k-tr .s{color:#e5352b}"
+    +"#activite .k-pe,#activite.tr .l.k-pe{opacity:1;color:#f3f0e8;font-size:10.5px}#activite .k-pe .s{color:#e5352b}#activite .l.lie{border-left:2px solid #e5352b;padding-left:4px;margin-left:-6px;opacity:1}#activite.tr .l.lie{font-size:11px;opacity:1}"
     +"#activite .tj{margin-right:.45em}#activite .tj.p3{color:#fff;font-weight:500}#activite .tj.p2{color:#e6e2d8}#activite .tj.p1{color:#9c988f}#activite .tj.sg{color:#e5352b}#activite .lg{display:block;font-size:10.5px;color:#9c988f;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     +"#activite .c{display:inline-block;width:.55em;background:#cfd8c4;animation:actc 1s steps(1) infinite}@keyframes actc{50%{opacity:0}}@media (max-width:760px),(orientation:portrait){#activite{display:none}}";
   document.head.appendChild(st);
   const el=document.body.appendChild(document.createElement("div")); el.id="activite"; el.setAttribute("aria-hidden","true");
-  const classe={">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
+  const classe={"⇢":"k-pe",">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
   let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false, tTrad=-1e9;
   // une trame PDL (src/pdl.js) : ses jetons s'écrivent comme une ligne ; dessous, la traduction en clair de 2 jetons défile
+  // le profil du personnage : les vrais réglages issus de la recherche de l'ouverture (ouvertures/*.json, section personnage)
+  const PERSO=(()=>{ try{ const r=(typeof OUVERTURES!=="undefined"?OUVERTURES:[]).find(r=>r.personnage&&r.personnage.reglages); return r?r.personnage.reglages:null; }catch(_){ return null; } })();
+  let persona=null;
+  function ajouterPersona(texte){ if(!PERSO||typeof PDL==="undefined") return;
+    const t=String(texte||""), m=MENEUR.modeleDe?MENEUR.modeleDe(MODELES,t):null, tm=MENEUR.modeleDe?MENEUR.modeleDe(MODELES,t,{transforme:true}):null, mm=m||tm;
+    const fm=m&&MENEUR.formesModele?MENEUR.formesModele(m.modele,t):null, ex=MENEUR.exploitDe?MENEUR.exploitDe(MODELES):null;
+    const nature={ repugnance:mm&&mm.modele?+mm.modele.repugnance||0:0, facteur:fm?fm.facteur:1, effort:fm&&ex&&MENEUR.dureeEffort&&mm.modele.origine==="corps"?MENEUR.dureeEffort(fm.facteur,ex):0,
+      chercher:/cherch|ramass|rapport|trouve/i.test(t), faconner:!!tm };
+    const r=PDL.reactionAttendue(PERSO,nature); if(!r) return;
+    const l=ajouter({k:"◈",t:r.trame.texte}); l.tr=r.trame; l.pe=1;
+    ajouter({k:"⇢",t:"réaction attendue · traducteur : "+r.texte}).pe=1; persona={lie:false}; tTrad=performance.now(); }
   function ajouterTrame(tr){ if(!tr||!tr.jetons.length) return; const l=ajouter({k:"◈",t:tr.texte}); l.tr=tr; el.classList.add("tr"); tTrad=performance.now(); }
   function rendreTrame(l,curseur){ const tr=l.tr, J=[{s:tr.entete,poids:3,sg:1},...tr.jetons,{s:tr.somme,poids:1,sg:1}]; let c=0, h="";
     for(const j of J){ if(c>=l.n) break; c+=j.s.length+1; h+='<span class="tj p'+j.poids+(j.sg?' sg':'')+'">'+esc(j.s)+'</span>'; }
@@ -3386,8 +3398,8 @@ const activite=(()=>{
     if(L.some(l=>l.tr)) sale=true;   // la légende des trames défile
     if(!sale) return; sale=false;
     const V=L.slice(-16), dern=V.findIndex(l=>l.n<l.t.length);
-    el.innerHTML=V.map((l,i)=>l.tr?'<div class="l k-tr"><span class="s">◈</span> '+rendreTrame(l,i===dern)+'</div>'
-      :'<div class="l '+(classe[l.k]||"")+'" style="opacity:'+(.45+.55*Math.min(1,(i+1)/(V.length-6||1)))+'"><span class="h">'+(l.h/1000).toFixed(1)+'</span><span class="s">'+esc(l.k)+'</span><span>'
+    el.innerHTML=V.map((l,i)=>l.tr?'<div class="l k-tr'+(l.pe?' pe':'')+'"><span class="s">'+(l.pe?'●':'◈')+'</span> '+rendreTrame(l,i===dern)+'</div>'
+      :'<div class="l '+(classe[l.k]||"")+(l.pe?' k-pe':'')+(l.lie?' lie':'')+'" style="opacity:'+(.45+.55*Math.min(1,(i+1)/(V.length-6||1)))+'"><span class="h">'+(l.h/1000).toFixed(1)+'</span><span class="s">'+esc(l.k)+'</span><span>'
       +esc(l.t.slice(0,l.n))+(i===dern||(dern<0&&i===V.length-1&&tFin===0)?'<span class="c">&nbsp;</span>':'')+'</span></div>').join("");
   }
   function pas(){
@@ -3422,10 +3434,11 @@ const activite=(()=>{
   }
   return {
     entendre(texte){ if(!on||typeof ACTIVITE==="undefined") return; t0=performance.now(); L=[]; appel=fab=act=null; finQ=tFin=0; repondu=false;
-      el.classList.remove("tr");
-      try{ const A=ACTIVITE.analyser(texte,MENEUR,MODELES); A.forEach(ajouter); if(typeof PDL!=="undefined") ajouterTrame(PDL.trameDemande(texte,A)); }catch(e){ console.warn("activité",e); }
+      el.classList.remove("tr"); persona=null;
+      try{ const A=ACTIVITE.analyser(texte,MENEUR,MODELES); A.forEach(ajouter); if(typeof PDL!=="undefined") ajouterTrame(PDL.trameDemande(texte,A)); ajouterPersona(texte); }catch(e){ console.warn("activité",e); }
       el.classList.add("on"); if(!timer) timer=setInterval(pas,100); pas(); },
-    evt(e){ if(!on||!timer) return; const x=ACTIVITE.ligneEvenement(e); if(x) ajouter(x); },
+    evt(e){ if(!on||!timer) return; const x=ACTIVITE.ligneEvenement(e); if(!x) return; const l=ajouter(x);
+      if(persona&&!persona.lie&&e.type==="pensee"){ persona.lie=true; l.lie=1; } },   // la pensée dite, reliée à la réaction attendue
     bascule(){ on=!on; try{ localStorage.setItem("bodycam-activite",on?"1":"0"); }catch(_){} if(!on){ clearInterval(timer); timer=0; el.classList.remove("on"); } return on; },
     on:()=>on, lignes:()=>L.map(l=>l.k+" "+l.t), traduit:()=>performance.now()-tTrad
   };

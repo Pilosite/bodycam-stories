@@ -396,62 +396,82 @@ export function creerOuverture(deps) {
   function taper(el, texte) { let i = 0; const pas = () => { if (fini) return; i = Math.min(texte.length, i + 4); el.textContent = texte.slice(0, i); if (i < texte.length) timers.push(setTimeout(pas, 14)); }; pas(); }
 
   /* Réseau d'agents (colonne de droite, PC) : une mise en scène de la répartition du travail entre modèles — Haiku tirent les
-     requêtes une à une, Sonnet récupèrent les sources et en tirent les constats, Opus écrivent le PDL, des traducteurs temps
-     réel (petits modèles très rapides) le convertissent pour le moteur (image, son, histoire). Il ne mesure rien de ce qui
-     tourne : une seule horloge, celle du rejeu ; chaque impulsion suit une ligne écrite à gauche (ou un jeton de PDL). */
+     requêtes une à une, Sonnet récupèrent les sources et en tirent les constats, des traducteurs instantanés (petits modèles
+     très rapides, « JEV » dans nos notes : dLLM, modèles de langage à diffusion) passent chaque constat en langage
+     intermédiaire, Opus écrivent le PDL, que le moteur rend (image, son, histoire). Il ne mesure rien de ce qui tourne :
+     une seule horloge, celle du rejeu ; chaque impulsion suit une ligne écrite à gauche (ou un paquet de jetons de PDL).
+     Toute impulsion passe par rayon() : l'émetteur s'allume en rouge avant le départ et pendant l'émission, le récepteur
+     clignote en vert à l'arrivée puis reste vert doux le temps de traiter, puis « terminé » (gris clair, jamais noir). */
   const NS = 'http://www.w3.org/2000/svg';
   const motCle = t => (String(t).split(/\s+/).find(w => w.length > 3) || String(t)).slice(0, 14);
   const trad = j => j.s + ' = ' + j.cle + ' : ' + j.val;
   function creerReseau(hote) {
-    const W = 520, H = 336, rang = (n, y, m) => Array.from({ length: n }, (_, i) => ({ x: m + (W - 2 * m) * (n > 1 ? i / (n - 1) : .5), y }));
-    const R = { h: rang(15, 42, 78), s: rang(5, 112, 120), o: rang(2, 180, 210), t: rang(6, 246, 120), m: rang(3, 308, 170),
+    const W = 520, H = 322, rang = (n, y, m) => Array.from({ length: n }, (_, i) => ({ x: m + (W - 2 * m) * (n > 1 ? i / (n - 1) : .5), y }));
+    const R = { h: rang(15, 42, 78), s: rang(5, 106, 120), t: rang(4, 158, 170), o: rang(2, 214, 220), m: rang(3, 292, 170),
       n: { q: 0, s: 0, t: 0 }, kq: 0, ks: 0, kc: 0, kt: 0, flux: [], ar: {} };
     const el = d.createElement('div'); el.className = 'ouv-reseau';
     const lignes = [], ligne = (a, b, cle) => { lignes.push([a, b, cle]); };
     R.h.forEach((p, i) => ligne(p, R.s[i % 5], 'h' + i + 's' + (i % 5)));
-    R.s.forEach((p, i) => R.o.forEach((q, j) => ligne(p, q, 's' + i + 'o' + j)));
-    R.o.forEach((p, j) => R.t.forEach((q, k) => ligne(p, q, 'o' + j + 't' + k)));
-    R.t.forEach((p, k) => ligne(p, R.m[k % 3], 't' + k + 'm' + (k % 3)));
+    R.s.forEach((p, i) => ligne(p, R.t[i % 4], 's' + i + 't' + (i % 4)));
+    R.t.forEach((p, k) => R.o.forEach((q, j) => ligne(p, q, 't' + k + 'o' + j)));
+    R.o.forEach((p, j) => R.m.forEach((q, k) => ligne(p, q, 'o' + j + 'm' + k)));
     let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><g class="ouv-ar">`;
     R.h.forEach(p => { svg += `<line class="web" x1="${p.x}" y1="${p.y - 8}" x2="${p.x}" y2="6"/>`; });
     lignes.forEach(([a, b]) => { svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`; });
     svg += '</g><g class="ouv-chaud">';
     lignes.forEach(([a, b, k]) => { svg += `<line data-k="${k}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`; });
     svg += '</g>';
-    const noeud = (p, r, cls, i) => `<circle class="ouv-nd ${cls}" cx="${p.x}" cy="${p.y}" r="${r}" style="transform-origin:${p.x}px ${p.y}px"/>`;
+    const noeud = (p, r, cls) => `<circle class="ouv-nd ${cls}" cx="${p.x}" cy="${p.y}" r="${r}" style="transform-origin:${p.x}px ${p.y}px"/>`;
     const mc = (p, r, cls) => `<text class="ouv-mc ${cls}" x="${p.x}" y="${p.y + r + 11}" text-anchor="middle"></text>`;
     R.h.forEach(p => svg += noeud(p, 6, 'h')); R.s.forEach(p => svg += noeud(p, 10, 's') + mc(p, 10, 's'));
-    R.o.forEach(p => svg += noeud(p, 14, 'o') + mc(p, 14, 'o')); R.t.forEach(p => svg += noeud(p, 7, 't') + mc(p, 7, 't'));
+    R.t.forEach(p => svg += noeud(p, 5, 't') + mc(p, 5, 't')); R.o.forEach(p => svg += noeud(p, 14, 'o') + mc(p, 14, 'o'));
     R.m.forEach((p, i) => svg += `<rect class="ouv-nd m" x="${p.x - 9}" y="${p.y - 9}" width="18" height="18" rx="2" style="transform-origin:${p.x}px ${p.y}px"/><text class="ouv-mn" x="${p.x + 15}" y="${p.y + 4}">${MOTEUR[i]}</text>`);
-    svg += `<text x="4" y="10">web</text><text x="4" y="46">haiku × 15</text><text x="4" y="116">sonnet × 5</text><text x="4" y="184">opus × 2</text>`
-      + `<text x="4" y="242" class="ouv-tr">traducteurs</text><text x="4" y="254" class="ouv-tr">temps réel × 6</text><text x="4" y="266" class="ouv-tr2">dLLM · diffusion</text>`
-      + `<text x="4" y="312">moteur</text><g class="ouv-imp"></g><g class="ouv-eti"></g></svg>`;
-    el.innerHTML = `<p class="ouv-planche-t">Réseau d'agents</p>${svg}<p class="ouv-leg"><span><i class="h"></i>recherche</span> · <span><i class="s"></i>analyse</span> · <span><i class="o"></i>écriture PDL</span> · <span><i class="t"></i>traduction → moteur</span></p><p class="ouv-etat-r"></p>`;
+    svg += `<text x="4" y="10">web</text><text x="4" y="46">haiku × 15</text><text x="4" y="110">sonnet × 5</text>`
+      + `<text x="4" y="156" class="ouv-tr">JEV × 4</text><text x="4" y="168" class="ouv-tr2">dLLM · instantané</text><text x="4" y="218">opus × 2</text>`
+      + `<text x="4" y="296">moteur</text><g class="ouv-imp"></g><g class="ouv-eti"></g></svg>`;
+    el.innerHTML = `<p class="ouv-planche-t">Réseau d'agents</p>${svg}<p class="ouv-leg"><span><i class="h"></i>recherche</span> · <span><i class="s"></i>analyse</span> · <span><i class="t"></i>traduction instantanée</span> · <span><i class="o"></i>écriture PDL</span> · <span><i class="em"></i>émet</span> <span><i class="re"></i>reçoit</span> <span><i class="fa"></i>terminé</span></p><p class="ouv-etat-r"></p>`;
     hote.appendChild(el);
     R.el = el; R.svg = el.querySelector('svg'); R.imp = el.querySelector('.ouv-imp'); R.eti = el.querySelector('.ouv-eti'); R.rc = el.querySelector('.ouv-etat-r');
-    R.nd = { h: [...el.querySelectorAll('.ouv-nd.h')], s: [...el.querySelectorAll('.ouv-nd.s')], o: [...el.querySelectorAll('.ouv-nd.o')], t: [...el.querySelectorAll('.ouv-nd.t')], m: [...el.querySelectorAll('.ouv-nd.m')] };
-    R.mc = { s: [...el.querySelectorAll('.ouv-mc.s')], o: [...el.querySelectorAll('.ouv-mc.o')], t: [...el.querySelectorAll('.ouv-mc.t')] };
-    R.cn = { s: [0, 0, 0, 0, 0], o: [0, 0], t: [0, 0, 0, 0, 0, 0] };
+    R.nd = { h: [...el.querySelectorAll('.ouv-nd.h')], s: [...el.querySelectorAll('.ouv-nd.s')], t: [...el.querySelectorAll('.ouv-nd.t')], o: [...el.querySelectorAll('.ouv-nd.o')], m: [...el.querySelectorAll('.ouv-nd.m')] };
+    R.mc = { s: [...el.querySelectorAll('.ouv-mc.s')], t: [...el.querySelectorAll('.ouv-mc.t')], o: [...el.querySelectorAll('.ouv-mc.o')] };
+    R.cn = { s: [0, 0, 0, 0, 0], t: [0, 0, 0, 0], o: [0, 0] };
     for (const x of el.querySelectorAll('.ouv-chaud line')) R.ar[x.dataset.k] = { el: x, n: 0 };
     R.cpt = () => {
       const now = performance.now(); R.flux = R.flux.filter(f => now - f[0] < 1500);
-      const debit = Math.round(R.flux.reduce((a, f) => a + f[1], 0) / 1.5), actifs = R.svg.querySelectorAll('.ouv-nd.actif').length;
+      const debit = Math.round(R.flux.reduce((a, f) => a + f[1], 0) / 1.5), actifs = R.svg.querySelectorAll('.ouv-nd.emet,.ouv-nd.recoit').length;
       R.rc.innerHTML = `<b>${debit}</b> tok/s · <b>${actifs}</b> agents actifs · ${R.n.q} requêtes · ${R.n.s} sources · ${R.n.t} tokens PDL`;
     };
     R.cpt();
     return R;
   }
-  function etat(c, st, ms) {                                // attente (rien), actif, fait ; « actif » revient à « fait » après ms
-    if (!c) return; clearTimeout(c._t); c.classList.remove('actif', 'fait'); if (st) c.classList.add(st);
-    if (st === 'actif' && ms) { c._t = setTimeout(() => etat(c, 'fait'), ms); timers.push(c._t); }
+  /* L'état d'un nœud : « emet » (rouge) et « recoit » (vert, clignote à l'arrivée) se posent pour ms (Infinity sans ms) et ne
+     font que s'allonger ; ensuite reste « fait » (gris clair). */
+  function poser(c, cls, ms) {
+    if (!c) return;
+    const k = '_' + cls, fin = ms ? performance.now() + ms : Infinity;
+    if (cls === 'recoit') { c.classList.remove('flash'); c.getBoundingClientRect(); c.classList.add('flash'); }
+    c.classList.add('fait');
+    if (c.classList.contains(cls) && (c[k] || 0) >= fin) return;
+    clearTimeout(c[k + 't']); c[k] = fin; c.classList.add(cls);
+    if (ms) { c[k + 't'] = setTimeout(() => { c.classList.remove(cls); c[k] = 0; }, ms); timers.push(c[k + 't']); }
   }
-  function allumer(c) { c.classList.remove('on'); requestAnimationFrame(() => c.classList.add('on')); timers.push(setTimeout(() => c.classList.remove('on'), 500)); }
+  function finir(c) { if (!c) return; for (const cls of ['emet', 'recoit']) { clearTimeout(c['_' + cls + 't']); c['_' + cls] = 0; c.classList.remove(cls); } c.classList.add('fait'); }
   function impulsion(R, a, b, ms = 550, cls = '') {          // un point qui file le long d'une arête, en transform
     const c = d.createElementNS(NS, 'circle'); c.setAttribute('r', cls === 'g' ? '3.4' : '2.6'); c.setAttribute('cx', a.x); c.setAttribute('cy', a.y);
     if (cls) c.setAttribute('class', cls);
     c.style.transform = 'translate(0,0)'; c.style.transitionDuration = ms + 'ms'; R.imp.appendChild(c);
-    requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transform = `translate(${b.x - a.x}px,${b.y - a.y}px)`; c.style.opacity = '.2'; }));
+    requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transform = `translate(${b.x - a.x}px,${b.y - a.y}px)`; c.style.opacity = '.25'; }));
     timers.push(setTimeout(() => c.remove(), ms + 100));
+  }
+  /* La seule façon de lancer une impulsion : de (rang a, n° ia) vers (rang b, n° ib) ; 'web' = hors du graphe, au-dessus d'un Haiku.
+     Émetteur rouge dès le départ et pendant l'émission ; récepteur vert clignotant à l'arrivée, vert doux pendant garde ms. */
+  function rayon(R, a, ia, b, ib, ms = 500, cls = '', garde = 900, puis) {
+    const web = { x: R.h[a === 'web' ? ib : ia] ? R.h[a === 'web' ? ib : ia].x : 0, y: 6 };
+    const ea = a === 'web' ? null : R.nd[a][ia], eb = b === 'web' ? null : R.nd[b][ib];
+    poser(ea, 'emet', ms + 120);
+    impulsion(R, a === 'web' ? web : R[a][ia], b === 'web' ? web : R[b][ib], ms, cls);
+    if (ea && eb) trafic(R, a + ia + b + ib);
+    timers.push(setTimeout(() => { poser(eb, 'recoit', garde); R.cpt(); if (puis) puis(); }, ms));
   }
   function trafic(R, k) { const a = R.ar[k]; if (!a) return; a.n++; a.el.style.opacity = Math.min(.85, .1 + a.n * .07).toFixed(2); }
   function etiquette(R, p, txt, dx = 9) {                   // une étiquette fugace : monte et s'efface (transform, opacity)
@@ -460,52 +480,50 @@ export function creerOuverture(deps) {
   }
   function compte(R, rang, i, v) { R.cn[rang][i] += v; R.mc[rang][i].textContent = R.cn[rang][i]; }
   function debit(R, tok) { R.flux.push([performance.now(), tok]); }
+  // Sonnet → JEV → Opus : le constat passe par un traducteur instantané (bref), qui le réémet vers un Opus
+  function parJev(R, s, o, ms, cls, garde) {
+    const t = s % 4;
+    rayon(R, 's', s, 't', t, ms, cls, 260, () => { compte(R, 't', t, 1); rayon(R, 't', t, 'o', o, Math.round(ms * .6), cls, garde); });
+  }
   function reseauEtape(R, id, blocs) {
     if (id === 'photos') R.el.classList.add('bandeau');      // les photos arrivent : le réseau se réduit en bandeau au-dessus
     if (id === 'pdl') {
       R.el.classList.remove('bandeau'); R.el.classList.add('pdl');
-      // transmission groupée : tout ce que les Sonnet ont retenu part vers les Opus
-      R.s.forEach((p, i) => { R.o.forEach((q, j) => { impulsion(R, p, q, 520 + 90 * i + 60 * j, 'g'); trafic(R, 's' + i + 'o' + j); }); etat(R.nd.s[i], 'fait'); });
-      R.nd.o.forEach(c => etat(c, 'actif')); R.nd.t.forEach(c => etat(c, null));
+      // transmission groupée : tout ce que les Sonnet ont retenu part vers les Opus, par les traducteurs
+      R.s.forEach((p, i) => R.o.forEach((q, j) => timers.push(setTimeout(() => parJev(R, i, j, 360, 'g', 2000), 70 * i + 40 * j))));
+      timers.push(setTimeout(() => R.nd.o.forEach(c => poser(c, 'recoit')), 900));   // les Opus écrivent jusqu'au contrôle
       etiquette(R, R.o[0], 'contexte → opus', 18);
       if (blocs && blocs.planche) blocs.planche.classList.add('ouv-replie');   // les photos ont servi : place à l'aperçu du PDL
       if (blocs && blocs.droite && !blocs.apercu) blocs.apercu = creerApercu(blocs.droite);
     } else R.el.classList.remove('pdl');
     if (id === 'controle') {
-      R.nd.o.forEach(c => etat(c, 'fait'));
-      R.t.forEach((p, k) => { impulsion(R, p, R.m[k % 3], 450 + 70 * k); trafic(R, 't' + k + 'm' + (k % 3)); etat(R.nd.t[k], 'actif', 900); });
-      R.nd.m.forEach(c => etat(c, 'actif', 1600));
+      R.o.forEach((p, j) => R.m.forEach((q, k) => rayon(R, 'o', j, 'm', k, 420 + 90 * k, '', 1400)));
+      timers.push(setTimeout(() => R.nd.o.forEach(finir), 900));
     }
     R.cpt();
   }
   function reseauLigne(R, e) {
     if (e.genre === 'requete' || e.genre === 'photo') {     // un Haiku tire la requête : aller vers le web, retour
-      const i = R.kq++ % 15, p = R.h[i], haut = { x: p.x, y: 6 };
-      etat(R.nd.h[i], 'actif', 1000); impulsion(R, p, haut, 360);
-      timers.push(setTimeout(() => impulsion(R, haut, p, 360), 380));
-      if (e.genre === 'requete') etiquette(R, p, motCle(e.texte));
+      const i = R.kq++ % 15;
+      rayon(R, 'h', i, 'web', i, 340, '', 0, () => rayon(R, 'web', 0, 'h', i, 340, '', 700));
+      if (e.genre === 'requete') etiquette(R, R.h[i], motCle(e.texte));
       if (e.genre === 'requete' && e.etape !== 'photos') R.n.q++;
       debit(R, Math.ceil(String(e.texte || '').length / 4) + 6);
     } else if (e.genre === 'source') {                       // le résultat converge vers un Sonnet
       const i = R.ks++, h = i % 15, s = h % 5;
-      impulsion(R, R.h[h], R.s[s], 480); trafic(R, 'h' + h + 's' + s);
-      etat(R.nd.s[s], 'actif', 1500); compte(R, 's', s, 1); etiquette(R, R.s[s], '+1 source', 13);
+      rayon(R, 'h', h, 's', s, 480, '', 1500); compte(R, 's', s, 1); etiquette(R, R.s[s], '+1 source', 13);
       R.n.s++; debit(R, Math.ceil(String(e.texte || '').length / 4) + 40);
-    } else if (e.genre === 'constat') {                      // un constat écrit à gauche = un Sonnet qui émet
-      const s = R.kc++ % 5, o = s % 2;
-      etat(R.nd.s[s], 'actif', 1100); allumer(R.nd.s[s]); impulsion(R, R.s[s], R.o[o], 700); trafic(R, 's' + s + 'o' + o);
+    } else if (e.genre === 'constat') {                      // un constat écrit à gauche = un Sonnet qui émet, via un JEV
+      const s = R.kc++ % 5; parJev(R, s, s % 2, 320, '', 800);
       debit(R, Math.ceil(String(e.texte || '').length / 4));
-    } else if (e.genre === 'pdl' && !e.trame) { const i = R.kt++ % 2; allumer(R.nd.o[i]); if (e.tok) R.n.t = e.tok; }
+    } else if (e.genre === 'pdl' && !e.trame) { const i = R.kt++ % 2; rayon(R, 'o', i, 'm', i % 3, 300, '', 500); if (e.tok) R.n.t = e.tok; }
     else if (e.genre === 'bilan') { etiquette(R, R.o[1], e.tok + ' tok', 18); R.n.t = e.tok; }
     R.cpt();
   }
-  function reseauJeton(R, k, n) {                           // un paquet de jetons : un Opus l'écrit, un traducteur le passe au moteur
-    const o = k % 2, t = R.kt++ % 6, m = t % 3;
-    allumer(R.nd.o[o]); compte(R, 'o', o, n);
-    impulsion(R, R.o[o], R.t[t], 300); trafic(R, 'o' + o + 't' + t);
-    etat(R.nd.t[t], 'actif', 700); compte(R, 't', t, n);
-    timers.push(setTimeout(() => { impulsion(R, R.t[t], R.m[m], 300); trafic(R, 't' + t + 'm' + m); etat(R.nd.m[m], 'actif', 600); }, 300));
-    if (k % 4 === 3) etiquette(R, R.t[t], n * 4 + ' tok', 10);
+  function reseauJeton(R, k, n) {                           // un paquet de jetons : un Opus l'écrit, le moteur le reçoit
+    const o = k % 2, m = R.kt++ % 3;
+    compte(R, 'o', o, n); rayon(R, 'o', o, 'm', m, 300, '', 600);
+    if (k % 4 === 3) etiquette(R, R.o[o], n * 4 + ' tok', 18);
     R.n.t += n; debit(R, n * 4); R.cpt();
   }
 
@@ -540,7 +558,7 @@ export function creerOuverture(deps) {
         i++;
       }
       if (leg) leg.textContent = lot.slice(-2).map(trad).join('   ');
-      if (ap && !ap.fin) { ap.n += lot.length; cpt.textContent = ap.n + ' tokens'; }
+      if (ap) { ap.n += lot.length; cpt.textContent = ap.n + ' tokens'; }
       if (R) reseauJeton(R, k++, lot.length);
       if (i < tr.jetons.length) timers.push(setTimeout(pas, 45));
       else { bloc.insertBefore(sp('ouv-tj som', tr.somme), cur); cur.remove(); if (gauche) gauche.textContent += ' ' + tr.somme; if (ap) ap.flux.appendChild(sp('ouv-lien', '⇢')); }
