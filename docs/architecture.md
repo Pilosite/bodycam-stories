@@ -25,6 +25,29 @@ This is the shared contract for the real proof of concept. It follows `docs/poc-
 | 9 | **Commitments** | The player plans ahead through the character: a conditional request becomes a promise and a rule, with a strength, that she keeps (or breaks) later. | One commitment made at an early station and honoured two stations later, linked in the journal. |
 | 10 | **Collaboration and creator view** | The narrative space is layered and every transaction carries its author. Creators see what players did and how the world reacted, and refine rules. | Two creator layers merged with provenance; a session viewer; one rule edited and the session replayed against it. |
 
+## Shape: a hexagon and three clocks (P20, P21)
+
+```
+        input port            model port             store port
+   (speech, text, look)   (embed, decide, generate)   (journal, packs)
+            \                    |                      /
+             +----------- NARRATIVE CORE ---------------+
+             |  world state · principles · gauges        |
+             |  commitments · rules · PDL validate/repair|
+             |                                           |
+             |  NOW loop      SCENE loop     STORY loop  |
+             |  < 100 ms      seconds        continuous  |
+             +-------------------------------------------+
+                                 |
+                            engine port
+                    (executor: image, sound, body)
+```
+
+- **The core is pure** and knows only ports. The engine, the models, the input and the storage are adapters. Tests run the core with a paper world and canned models.
+- **Three loops, three budgets.** `now`: reflex code first, then the leanest model; first visible reaction under 0.5 s, and it never awaits another loop. `scene`: full reaction in seconds. `story`: continuous, prepares the frontier and the long arcs.
+- **Loops communicate only by PDL transactions and events, asynchronously.** A slower loop may add to, amend or cancel what a faster one did, through transactions tagged with `cause`; it cannot block it. Every transaction records the loop and the latency against its budget, so a blocked present shows up in the journal as a defect.
+- **Uncertainty is routed by horizon.** What the player just said goes to `now`. What he might do next goes to `story`, which prepares for it.
+
 ## The authoring format: one text, a spectrum from soft to hard
 
 JSON describes values; it cannot say "she tends to…". Story assets are therefore written as **PDL source**: plain text files, readable by a person and by a model, diffable in Git. JSON remains only as the compiled, machine form.

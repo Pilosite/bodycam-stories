@@ -4,7 +4,7 @@ Strong on architecture, light on ceremony. This page is binding for everyone wor
 
 ## 0. The constitution
 
-`docs/principles.md` holds the founding principles (P1 to P19). It ranks above this page, the architecture and the plan. Consequences:
+`docs/principles.md` holds the founding principles (P1 to P21). It ranks above this page, the architecture and the plan. Consequences:
 
 - Every brief names the principles its lot serves or risks. Every review checks the change against them; a change that breaks one is not merged, however good the code.
 - A principle changes only through an ADR and Toine's explicit agreement.

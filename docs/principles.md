@@ -10,6 +10,15 @@ A place where people come to **tell themselves stories**: to enter an atmosphere
 
 Under it lies one bet: **semantic engineering**. We are building a system that translates what a story is, and what a game is, into something a machine can run, starting from words.
 
+## The two key drivers
+
+Every design choice is weighed against these two, in this order of layers:
+
+1. **Creativity.** The range and richness of what can be imagined, told and lived. This is why people come.
+2. **Reactivity of the present.** What happens right now, between the player and the character, answers at once. The layer that handles the present is deliberately lean: little AI, fast AI, nothing that waits.
+
+They do not compete, because they do not live in the same layer. Like a film, a story has what is happening now, what is brewing in the scene, and what is being prepared far ahead. Each has its own clock and its own means, and **the slow layers never hold the fast one back** (P20).
+
 ## A. The experience
 
 **P1. You act indirectly.** The player never acts on the world and never steers the character. They speak to someone who is in the world. This is the identity of the game, not a limitation to work around. *Check: there is no input that moves the character or touches a thing directly.*
@@ -24,7 +33,7 @@ Under it lies one bet: **semantic engineering**. We are building a system that t
 
 **P6. Foresight is the player's lever.** Because the player cannot act, their power is to prepare: to agree with the character on what to do if something happens. These commitments are recorded in the story and honoured or broken later.
 
-**P7. Richness before reactivity.** We optimise atmosphere, coherence and the feeling that anything can be told. Time that the system needs to think is given to the character as time to act or hesitate. We never trade depth for twitch speed.
+**P7. Depth is prepared, the present is immediate.** We optimise atmosphere, coherence and the feeling that anything can be told, and we get that depth from the layers that have time. The present moment must still answer at once: the character reacts, even if the full consequence arrives a little later. Time the system needs to think is given to the character as time to act or hesitate, never to the player as waiting.
 
 ## B. Authoring: for players and creators alike
 
@@ -48,6 +57,10 @@ Under it lies one bet: **semantic engineering**. We are building a system that t
 
 **P16. One channel, replayable.** Nothing changes the world except a transaction in the intermediate language. Decisions are indeterminate; their execution is deterministic. A session can be replayed from its journal.
 
+**P20. Three clocks, decoupled.** The present (what is happening), the scene (what is brewing here) and the story (what is being prepared far ahead) are separate layers. Each has its own latency budget and its own kind of intelligence: reflexes and the leanest models for the present, fuller models for the scene, the largest for the story. They talk only through the intermediate language, asynchronously. A slow layer can enrich or correct what a fast one did; it can never make it wait. Not knowing what the player will do next (go back to the car, or stay) is the business of the slow layers; answering what he just said is the business of the fast one.
+
+**P21. Hexagonal.** The narrative core (story state, principles, horizons, commitments) knows nothing of the engine, the models, the input device or storage. Each is reached through a port and can be replaced without touching the core. This is what lets the rendering, the models and the tools evolve while the gameplay stays.
+
 **P17. What happened can be read.** Those who keep a story alive must be able to see what players did, how the world and its principles reacted, and why, in order to refine them.
 
 ## D. How we go
@@ -63,4 +76,5 @@ Under it lies one bet: **semantic engineering**. We are building a system that t
 - A feature built for one kind of object, creature or situation.
 - A rule language so precise that only a programmer can write it.
 - Refusing a request because nobody planned for it.
-- Speed bought at the cost of the character's time to be a person.
+- An answer in the present that waits for a slow layer.
+- A slow model on the path between the player's words and the character's first reaction.
