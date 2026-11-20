@@ -12,6 +12,7 @@
 //   node tools/story.mjs audit   <journal>                      what was asked, repaired, rejected, which rules fired, commitments, gauges
 //   node tools/story.mjs journal <journal> [--all]              a journal, readable
 //   node tools/story.mjs new     <pack-id> [--author id]        a new pack from stories/_template/
+//   node tools/story.mjs harvest <files or folders…> [--out f] [--strip]   harvest records or journals → the merged report and its proposals (tools/harvest.mjs)
 //
 // The pure functions are exported (tests/story.test.mjs); the I/O is in the loaders and in main() at the bottom.
 // tools/pack-check.mjs is an alias of `check`.
@@ -1066,6 +1067,10 @@ export async function main(argv, { print = console.log } = {}) {
       const E = readJournal(f);
       out(E, renderJournal(E, { all, lang }));
       return 0;
+    }
+    case 'harvest': {                                            // alias of tools/harvest.mjs (ADR 0011)
+      const H = await import('./harvest.mjs');
+      return H.main(json ? [...args, '--json'] : args, { print });
     }
     case 'new': {
       const author = opt(args, '--author'), id = args[0]; if (!id) break;
