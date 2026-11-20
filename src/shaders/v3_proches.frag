@@ -29,7 +29,7 @@ uniform vec2 uJitPx;
 float smaxP(float a, float b, float k){ return -smin(-a,-b,k); }
 float bosseP(vec3 q){ return sin(q.x*1.9+1.3*sin(q.z*1.6))*sin(q.y*2.2+1.1+.8*sin(q.x*1.2))*sin(q.z*2.0+.7*sin(q.y*1.7)); }
 float sdMou(vec3 p, int st, int cn, bool mou, out float brow){
-  float so=1e5, ha=1e5, cr=1e5, kS=0., kC=0., bs=1e5, bh=1e5, rs=float(st), rh=float(st);
+  float so=1e5, ha=1e5, cr=1e5, kS=0., kC=0., bs=1e5, bh=1e5, rs=float(st), rh=float(st), wb=1e5;
   for(int j=0;j<24+uZ;j++){
     if(j>=cn) break;
     int row=st+j;
@@ -40,9 +40,11 @@ float sdMou(vec3 p, int st, int cn, bool mou, out float brow){
     if(bo>.001){ float sz=max(min(b.x,min(b.y,b.z)),.004); dd+=bo*sz*bosseP(q*(2.2/sz)+float(row)*1.7); }
     if(e.x>0.){ so=smin(so,dd,e.x); kS=max(kS,e.x); if(dd<bs){ bs=dd; rs=float(row); } }
     else if(e.x<0.){ cr=min(cr,dd); kC=max(kC,-e.x); }
-    else { ha=min(ha,dd); if(dd<bh){ bh=dd; rh=float(row); } }
+    else { ha=min(ha,dd); if(dd<bh){ bh=dd; rh=float(row); wb=.6*min(b.x,min(b.y,b.z)); } }
   }
-  if(ha<1e4 && so<1e4) so=smin(so,max(ha-.8*kS,so-.4*kS),.5*kS);   // bourrelet de matière autour de ce qui y est planté
+  // bourrelet de matière autour de ce qui y est planté, à l'échelle de la forme dure la plus proche (sinon un petit caillou
+  // pressé dans la pâte disparaît sous son propre bourrelet)
+  if(ha<1e4 && so<1e4){ float w=min(.8*kS,wb); so=smin(so,max(ha-w,so-.5*w),.6*w); }
   if(cr<1e4) so=smaxP(so,-cr,kC);                                    // empreintes
   brow=ha<so?rh:rs;
   return min(so,ha);

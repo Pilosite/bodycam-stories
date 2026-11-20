@@ -2630,7 +2630,9 @@ function faconnerPas(a,dt){
     while(G.dites<G.D.pensees.length&&tg>=G.D.pensees[G.dites].t&&pensePeut(3,G)){ const q=G.D.pensees[G.dites++]; say(q.texte); direVoix(q.texte); notePensee(q.texte,"degout",q.phase); } }
   if(k!==a.k){ a.k=k; a.i=k; if(tr.pile!==null&&tr.pile!==undefined&&G.tas) G.pris.add(tr.pile); }   // la main prend dans le tas : il quitte le tas
   let F=MENEUR.etatGeste(tr,ue);
-  if(F.length>G.place) F=F.slice().sort((p,q)=>Math.max(...q.taille)-Math.max(...p.taille)).slice(0,G.place);   // le budget fixe (64 formes) : les miettes d'abord
+  // le budget fixe (64 formes) : les miettes de pâte d'abord ; les ajouts (_k « j » : ce qu'on plante ou presse, petits mais
+  // lisibles, les yeux) jamais avant elles, ce sont les derniers à recycler
+  if(F.length>G.place){ const aj=f=>/^j/.test(f._k||"")?1:0; F=F.slice().sort((p,q)=>aj(q)-aj(p)||Math.max(...q.taille)-Math.max(...p.taille)).slice(0,G.place); }
   const L=fiche.objets.slice(), i=L.findIndex(x=>x&&x.id===a.objet); if(i<0){ fin(); return; }
   if(G.tas){ const j=L.findIndex(x=>x&&x.id===G.tas); if(j>=0){ const reste=G.tasF.filter((f,n)=>!G.pris.has(n)); L[j]=Object.assign({},L[j],{formes:reste.length?reste:[Object.assign({},G.tasF[0],{taille:[.01,.01,.01]})]}); } }
   // les mains : où elles vont pour cette opération, et ce qu'elles tiennent (la matière suit la main qui la porte)
@@ -3331,6 +3333,8 @@ window.balade={
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,
     file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4-(a.pause||0)).toFixed(2):-1,nausee:!!a.nau,pause:+(a.pause||0).toFixed(2),
       total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0,dbg:a.dbg}))}),
+  vueLocale(id){ const o=(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===id); if(!o) return null;   // essais : les formes de la chose et la caméra dans son repère (MENEUR.ajoutsVus)
+    return {formes:o.formes||[],oeil:versLocal(repereObjet(o),corpsAxes().e),echelle:repereObjet(o).ech,zoom:cam.zoom}; },
   vue(id){ const q=cibleMonde(id); if(!q) return null; const c=corpsAxes().e; return vueDegagee(c[0],c[1],c[2],q.x,q.z,q.taille/2,q.haut,id); },   // rien entre la caméra et la chose ?
   resolution(px){ CFG.maxPx=+px||undefined; resize(); },        // pixels internes (essais : finesse d'une capture)
   sonde:(x,y,z)=>probe(x,y,z)[0],
