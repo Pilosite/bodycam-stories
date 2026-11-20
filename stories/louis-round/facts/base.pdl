@@ -1,0 +1,34 @@
+# facts — story facts (base)
+@id facts-base  @kind facts  @layer base  @author toine  @lang en  @scope story  @horizon story
+
+// Facts the story can establish during play. Rules and beats reveal them by id.
+// `!!` canon that nothing may contradict; `!` true and revealable; `?` left open on purpose.
+
+## premise
+!! Louis Vasseur, ranger for the département, died three weeks ago below the platière of the Grands Avaux; his heart. {f.louis-dead}
+!! The camera Sam wears is Louis's bodycam, returned to her with his things. {f.camera-is-louis}
+! Louis did his rounds with someone on the line who watched the feed and talked to him. {f.voice-on-line}
+? Who the voice is. -- never answered; the player may claim, Sam may guess. {f.voice-identity}
+
+## the path
+! Orange stripes at chest height on the trunks are not forestry marks; they are Louis's own code. {f.marks-private}
+! One stripe means "my way"; two stripes mean "leave the path here". {f.marks-meaning}
+! After the platière the marks leave the path and go downslope. {f.marks-lead-down}
+
+## the platiere
+! Louis stopped on the platière: three flat stones stacked on the sandstone, his habit since childhood. {f.cairn}
+! An orange tape is knotted on a birch at the edge, its loose end pointing downslope. {f.tape}
+! People walk the platière in the morning; one of them saw the ranger go "down towards the sand". {f.walker-saw}
+
+## the hide
+! Below the platière, against a pine, a low screen of dead branches and bracken with a flat stone seat: a hide. {f.hide}
+! The hide faces a sandy bank with fresh pale spoil heaps and several entrances: a badger sett, in use. {f.sett}
+! Bracken has been dragged into one entrance: the badgers are bedding in for winter. {f.bedding}
+! November is in the underground hunting season; a sett whose location is known can be dug. Louis told no one. {f.sett-secret}
+! Louis stayed past his shift to watch the clan come home at dawn; that is why his round stops in the middle. {f.louis-stayed}
+
+## session state
+! The battery has passed half. {f.battery-half}
+! The jay has given the alarm near the hide. {f.jay-heard}
+! Sam has decided to come back and keep the watch. {f.takeover}
+! Sam has turned the camera off herself. {f.camera-off}
