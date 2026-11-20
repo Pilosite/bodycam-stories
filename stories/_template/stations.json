@@ -1,0 +1,18 @@
+{
+  "version": 0,
+  "note": "Two viewpoints on one path (docs/scope.md, ADR 0003). along_m / side_m: position along the path of place.json. connects: where she can go from here, and the battery seconds it costs.",
+  "start": "path",
+  "stations": [
+    {
+      "id": "path", "name": { "en": "The path", "fr": "Le chemin" }, "beat": "arrival",
+      "along_m": 0, "side_m": 0, "heading": "path", "within_reach": [], "visible": ["bench"],
+      "connects": [{ "to": "clearing", "cost_s": 30 }],
+      "arrive_line": "greet"
+    },
+    {
+      "id": "clearing", "name": { "en": "The clearing", "fr": "La clairière" }, "beat": "arrival",
+      "along_m": 30, "side_m": 1, "heading": "path", "within_reach": ["bench"], "visible": ["bench"],
+      "connects": [{ "to": "path", "cost_s": 30 }]
+    }
+  ]
+}

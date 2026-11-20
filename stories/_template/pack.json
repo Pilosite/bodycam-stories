@@ -1,0 +1,24 @@
+{
+  "format": 0,
+  "id": "template",
+  "title": { "en": "A new story", "fr": "Une nouvelle histoire" },
+  "summary": { "en": "One place, two stations, one person carrying the camera. Replace every line.", "fr": "Un lieu, deux stations, une personne qui porte la caméra. Remplacez chaque ligne." },
+  "languages": ["en", "fr"],
+  "story_language": "en",
+  "authors": [{ "id": "you", "role": "creator" }],
+  "place": "place.json",
+  "stations": "stations.json",
+  "beats": "beats.json",
+  "lines": { "en": "lines/en.json", "fr": "lines/fr.json" },
+  "carrier": "ana",
+  "layers": [
+    { "id": "base", "author": "you", "files": ["characters/ana.pdl", "facts/base.pdl", "rules/story.pdl"] }
+  ],
+  "patterns": [],
+  "clocks": {},
+  "cues": {
+    "bird.call": { "en": "a single bird call, close, then silence", "in_engine": false }
+  },
+  "intent_classes": [],
+  "commit_classes": ["wait"]
+}

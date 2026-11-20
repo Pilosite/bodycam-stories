@@ -1,0 +1,16 @@
+# Louis's Round: the first commitment of the story (beats.json, c.jay), made at the fallen pine, tested at the approach.
+#   node tools/story.mjs play stories/louis-round --script stories/louis-round/scripts/jay.txt
+lang fr
+wait 15
+say Bonjour. Je suis là.
+say Vas-y, avance.
+say regarde ce trait orange => look marque-1
+say Continue.
+wait 20
+say si le geai crie, arrête-toi et couche-toi => commit jay amend
+  when sound(jay.alarm) -> body.stop, body.posture(0.55), say(commit.keeping)
+say On continue.
+wait 30
+say par le ruban, descends => go approach via=tape
+wait 45
+say! ARRÊTE DE PARLER

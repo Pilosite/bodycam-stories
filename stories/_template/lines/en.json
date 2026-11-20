@@ -1,0 +1,16 @@
+{
+  "lang": "en",
+  "note": "Fallback lines, said when no model answers in time. Same keys in every language. Default speaker: the carrier.",
+  "lines": {
+    "greet": ["Right. It's on. Can you hear me?"],
+    "move.ok": ["Going.", "Okay."],
+    "look.ok": ["Looking."],
+    "touch.ok": ["Cold. Damp wood."],
+    "commit.accept": ["Fine. I'll do that."],
+    "commit.amend": ["Almost. I'll do it my way."],
+    "commit.refuse": ["No. Not that."],
+    "commit.keeping": ["Like you said."],
+    "clearing.arrive": ["A clearing. And a bench. Somebody comes here."],
+    "ending.leave": ["That's enough for today. I'm going."]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 0,
+  "id": "template-place",
+  "titre": "Un chemin, une clairière",
+  "inspiration": "A path through an ordinary wood in the morning, to a small clearing with a bench.",
+  "graine": 1,
+  "kit": "foret",
+  "foret": { "densite": 0.6, "rochers": 0.3, "feuillage": 0.4 },
+  "ambiance": { "saison": "automne", "meteo": "voile", "soleil": { "azimut": 120, "hauteur": 12 }, "brume": 0.01 },
+  "camera": { "profil": "bodycam-poitrine", "hauteur": 1.36, "champ": 125 },
+  "parcours": { "type": "sentier", "pas": 5.5 },
+  "objets": [
+    {
+      "id": "bench",
+      "nom": "banc de bois gris au bord de la clairière",
+      "devant": 32, "cote": 1.6, "degage": 1,
+      "formes": [
+        { "f": "boite", "p": [0, 0.45, 0], "taille": [1.6, 0.06, 0.4], "matiere": "mat", "couleur": "#7a7066" },
+        { "f": "boite", "p": [-0.7, 0.22, 0], "taille": [0.08, 0.44, 0.36], "matiere": "mat", "couleur": "#6a6056" },
+        { "f": "boite", "p": [0.7, 0.22, 0], "taille": [0.08, 0.44, 0.36], "matiere": "mat", "couleur": "#6a6056" }
+      ]
+    }
+  ]
+}

@@ -1,8 +1,10 @@
-// Story pack structure (tools/pack-check.mjs): one structural test file, as docs/sdlc.md §3 asks.
+// Story pack structure (`story check`, tools/story.mjs; tools/pack-check.mjs is its alias): one structural test file,
+// as docs/sdlc.md §3 asks. The pack is parsed by core/source.js, the only PDL parser.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { checkPack, loadPack, loadLibrary, parsePdl, mergeLayers } from '../tools/pack-check.mjs';
+import { checkPack, loadPack, loadLibrary } from '../tools/pack-check.mjs';
+import { compilePack } from '../core/source.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pack = () => loadPack(root + 'stories/louis-round');
@@ -20,12 +22,11 @@ test("Louis's Round checks clean: references resolve, both languages, three boun
 
 test('layers merge in order, deterministically, with provenance and overrides', () => {
   const p = pack();
-  const docs = Object.fromEntries(Object.entries(p.texts).map(([f, t]) => [f, parsePdl(t, f)]));
-  const a = mergeLayers(p.manifest, docs), b = mergeLayers(p.manifest, docs);
+  const a = compilePack(p, library), b = compilePack(p, library);
   assert.deepEqual(a, b);
-  const sett = a.statements.find(s => s.id === 'f.sett');
-  assert.equal(sett.provenance.layer, 'ranger-notes');
-  assert.equal(sett.provenance.author, 'contributor-a');
+  const sett = a.principles.find(s => s.id === 'f.sett');
+  assert.equal(sett.layer, 'ranger-notes');
+  assert.equal(sett.author.id, 'contributor-a');
   assert.equal(sett.overrides[0].layer, 'base');
   const rule = checkPack(p, library).compiled.rules.find(r => r.id === 'rn.rule.last-line');
   assert.equal(rule.provenance.layer, 'ranger-notes');

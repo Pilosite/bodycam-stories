@@ -1,0 +1,7 @@
+# facts — story facts
+@id facts-base  @kind facts  @layer base  @author you  @lang en  @scope story  @horizon story
+
+// `!` a fact that is true and can be revealed (reveal(id)); `!!` canon nothing may contradict; `?` left open.
+
+## the place
+! There is a clearing at the end of the path, with a grey wooden bench. {f.clearing}
