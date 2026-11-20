@@ -153,16 +153,18 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   transition:opacity 2.2s ease,background-color .6s;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))}
 .ouv[hidden]{display:none}
 .ouv.ouv-fondu{opacity:0;pointer-events:none}
-.ouv-cadre{width:100%;max-width:720px;display:flex;flex-direction:column;min-height:0;padding-top:max(4vh,calc(50vh - 390px));transition:padding-top .7s ease}
+.ouv-cadre{width:100%;max-width:720px;display:flex;flex-direction:column;min-height:0;padding-top:max(3vh,calc(50vh - 420px));transition:padding-top .7s ease}
 .ouv-travail .ouv-cadre{padding-top:28px}
-.ouv-marque{margin:0 0 30px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:560px;overflow:hidden}
+.ouv-marque{margin:0 0 26px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:640px;overflow:hidden}
 .ouv-surtitre{margin:0 0 16px;font:500 11.5px/1 var(--f-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
 .ouv-surtitre .ouv-pt{animation:blink 1.6s steps(1) infinite}
 .ouv-nom{margin:0 0 14px;font:600 clamp(46px,10.5vw,104px)/.88 var(--f-ui);letter-spacing:-.035em;text-transform:uppercase;text-shadow:0 0 42px rgba(255,90,70,.22)}
 .ouv-nom span{color:transparent;-webkit-text-stroke:1.5px var(--ink);letter-spacing:-.02em}
-.ouv-concept{margin:0 0 22px;font:500 clamp(11.5px,1.45vw,15px)/1.35 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--rec)}
+.ouv-concept{margin:0 0 14px;font:500 clamp(11.5px,1.45vw,15px)/1.35 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--rec)}
+.ouv-expl{margin:0 0 22px;max-width:36em;font:400 clamp(15px,1.6vw,18px)/1.5 var(--f-ui);color:var(--ink-dim);text-wrap:pretty}
+.ouv-expl b{color:var(--ink);font-weight:600}
 .ouv-chaine{list-style:none;margin:0;padding:0;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
-.ouv-chaine li{display:flex;flex-direction:column;gap:5px;flex:1 1 110px;min-width:96px;max-width:170px;color:var(--ink)}
+.ouv-chaine li{display:flex;flex-direction:column;gap:5px;flex:1 1 96px;min-width:88px;max-width:150px;color:var(--ink)}
 .ouv-chaine svg{color:var(--rec);margin-bottom:2px}
 .ouv-chaine b{font:600 12px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase}
 .ouv-chaine i{font:400 12.5px/1.35 var(--f-ui);font-style:normal;color:var(--ink-dim)}
@@ -174,7 +176,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   linear-gradient(var(--ink),var(--ink)) 0 100%/26px 1.5px no-repeat,linear-gradient(var(--ink),var(--ink)) 0 100%/1.5px 26px no-repeat,
   linear-gradient(var(--ink),var(--ink)) 100% 100%/26px 1.5px no-repeat,linear-gradient(var(--ink),var(--ink)) 100% 100%/1.5px 26px no-repeat}
 @media (max-width:560px){.ouv-chaine .ouv-fl{display:none}.ouv-chaine li{flex-basis:40%}}
-@media (max-height:700px){.ouv-chaine i{display:none}.ouv-marque{margin-bottom:18px}}
+@media (max-height:760px){.ouv-chaine i{display:none}.ouv-marque{margin-bottom:18px}.ouv-nom{font-size:clamp(40px,8vw,76px)}}
 .ouv-sur{margin:0 0 14px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
 .ouv-pt{width:7px;height:7px;border-radius:50%;background:var(--rec);box-shadow:0 0 10px var(--rec)}
 .ouv-q{margin:0 0 18px;font:600 24px/1.12 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
