@@ -1144,6 +1144,7 @@ function v3Init(){                                             // rend vrai quan
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   }
+  if(OMB.e.socle&&OMB.e.socle.p&&V3.gp.grainsF) v3Mou();        // après les formes : la pâte (petite, celle des gestes), compilée d'office avant la variante complète
   const r=v3Ombrage();
   if(OMB.e.socle&&OMB.e.socle.p) v3Formes();                   // après le socle : les variantes FORMES, puis (v3Ombrage) la complète
   return r;
@@ -1159,13 +1160,13 @@ function v3Tranches(G,ps,vue){                                 // [programme, pr
   const t=[[G.grainsA,0,ps.part[0]],[G.grainsB,ps.part[0],ps.part[1]],[G.grainsR,ps.part[1],ps.part[2]]];
   if(!vue) t.push([G.grainsL,ps.part[2],ps.part[3]]);
   t.push([BANC.v&&BANC.v.sansF?null:G.grainsF,ps.part[3],ps.total]); return t; }
-function v3Lancer(k){                                          // un programme du semeur, dans la variante voulue par la fiche
+function v3Lancer(k,compte){                                   // un programme du semeur, dans la variante voulue par la fiche (compte : PRXCOMPTE, essais)
   const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
   const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
   const SP=V3_FAM[k]?[FS_V3GBUF,Hp(VS_V3GRAINS).replace("\n","\n#define FAM "+V3_FAM[k]+"\n")]:
-    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+"\n")):
+    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+(compte?"\n#define PRXCOMPTE 1":"")+"\n")):
     { sol:[FS_V3GBUF,R(VS_V3SOL)], grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))] }[k];
-  return lancer(SP[0],SP[1],"v3 "+k);
+  return lancer(SP[0],SP[1],"v3 "+k+(compte?" (compte)":""));
 }
 function v3Formes(){                                           // rend vrai quand les deux variantes FORMES sont en service
   if(!V3.gp) return false; if(V3.gp.grainsF) return true;
@@ -1186,7 +1187,7 @@ function v3Mou(){
   const x=V3.lance.prochesM;
   if(!x){ if(compLibre(true)) V3.lance.prochesM=v3Lancer("prochesM"); return false; }
   if(!fini(x)) return false;
-  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; return true;
+  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; if(!ouvRepos) V3.chaufferMou=true; return true;   // premier dessin (vide) au calme, pas au premier geste
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
@@ -1458,6 +1459,12 @@ function gpuImage(){                                           // fin d'une imag
    de la cible) pendant trois secondes, on remonte. Mesure : temps de la puce quand il est connu, sinon intervalle entre images.
    Niveaux, dans l'ordre : feuilles proches moins recouvertes et plus petites, moins de grains, moins de pas de rais,
    résolution interne plus basse. Option regulateur:false (défaut des captures d'essai, window.__CFG) pour le couper. */
+/* Un geste lourd à l'écran (effort accroupi, ramassage, façonnage : mains et pâte de près, cadrage zoomé) : le régulateur
+   réagit plus vite, réduit d'abord grains, feuilles et rais (ce qui ne se voit pas alors) et garde la résolution ; la carte
+   d'ombres n'est refaite qu'une image sur six. */
+const enGeste=()=>!!mainsObj||cam.zoom>1.05||!!(queue[0]&&/^(effort|ramasser|faconner)$/.test(queue[0].type));
+const REG_G=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:.7, fG:.5, fMax:48, rais:.5, res:1}, {g:.5, fG:.4, fMax:32, rais:0, res:1},
+  {g:.35, fG:.4, fMax:28, rais:0, res:1}, {g:.28, fG:.4, fMax:28, rais:0, res:.85}, {g:.22, fG:.4, fMax:24, rais:0, res:.7} ];
 const REG_N=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:1, fG:.6, fMax:64, rais:1, res:1}, {g:.75, fG:.5, fMax:48, rais:1, res:1},
   {g:.55, fG:.5, fMax:40, rais:.5, res:1}, {g:.4, fG:.4, fMax:32, rais:.3, res:.85}, {g:.32, fG:.4, fMax:28, rais:0, res:.7} ];
 const REG={ on:CFG.regulateur!==undefined?!!CFG.regulateur:!window.__CFG, niveau:0, ms:0, haut:0, bas:0, t:0, change:0, vu:{}, quand:{} };
@@ -1468,9 +1475,11 @@ function regMesure(dt,dtBrut){                                 // après chaque 
   // on remonte alors dès qu'on tient la cible, au lieu d'attendre une marge qu'on ne peut pas voir).
   const puce=GT.ext&&GT.total>0, m=puce?GT.total:dtBrut; if(!(m>0)||m>2000) return;
   REG.ms=REG.ms?REG.ms*.85+m*.15:m;
-  const c=regCible(), now=performance.now();
-  if(REG.ms>c*1.1) { REG.haut+=dt; REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
-  if(now-REG.change<1500) return;                              // le temps que le niveau précédent se mesure
+  const c=regCible(), now=performance.now(), g=enGeste();
+  if(REG.geste&&!g){ REG.vu={}; }                              // fin du geste : la scène a changé, les niveaux quittés pendant le geste se retentent
+  if(g!==REG.geste){ REG.geste=g; regNiveau(REG.niveau); }      // l'échelle change (REG_G / REG_N) au même niveau
+  if(REG.ms>c*1.1) { REG.haut+=dt*(g?4:1); REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
+  if(now-REG.change<(g?400:1500)) return;                      // le temps que le niveau précédent se mesure (geste : vite)
   let k=REG.niveau;
   /* Pas de pompage : on ne remonte pas vers un niveau qu'on vient de quitter parce qu'il dépassait la cible (mesuré au-dessus
      de 100 % il y a moins de 20 s). Passé ce temps (la scène a pu changer), on réessaie. */
@@ -1482,9 +1491,9 @@ function regNiveau(k){
   const avant=REG_N[REG.niveau]; REG.vu[REG.niveau]=REG.ms; REG.quand[REG.niveau]=performance.now();   // ce que coûtait le niveau quitté
   REG.niveau=k; REG.haut=REG.bas=0; REG.change=performance.now(); REG.ms=0;
   etapeGL("régulateur : niveau "+k);
-  if(avant.res!==REG_N[k].res){ REG_RES=REG_N[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
+  const L=REG.geste?REG_G:REG_N; if(REG_RES!==L[k].res){ REG_RES=L[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
 }
-const regEtat=()=>REG_N[REG.on?REG.niveau:0];
+const regEtat=()=>(REG.on&&REG.geste?REG_G:REG_N)[REG.on?REG.niveau:0];
 /* Montée progressive au démarrage : les premières images ne sèment qu'une part du budget (la puce compile peut-être encore,
    et la première seconde ne doit pas cumuler compilation et rendu plein pot). Pas dans les captures d'essai (window.__CFG). */
 function v3Budget(){
@@ -1511,10 +1520,37 @@ function v3Compter(semer){
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.enable(gl.DEPTH_TEST);
   c(r);
 }
+/* Coût des éléments proches (essais : balade.prochesCompte) : la même passe, avec les variantes PRXCOMPTE (compilées à la
+   demande, de façon bloquante : jamais dans la boucle normale), dans une cible flottante additive, sans profondeur. Rend les
+   pixels couverts (au moins un fragment), les fragments (chacun marche son rayon), les formes évaluées, par pixel couvert. */
+function v3PrxCompte(p,px,jc,jit,e1,e2,e3){
+  const ok=V3.prxCompte; V3.prxCompte=null; const C=V3.prxC||(V3.prxC={});
+  const G=V3.gp, PM=S.mou&&G.prochesM?"prochesM":"prochesO";
+  for(const k of new Set([PM,"prochesO","prochesB","prochesT"])) if(!C[k]) C[k]=finir(v3Lancer(k,true));
+  const f32=!!gl.getExtension("EXT_float_blend"), t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,f32?gl.RGBA32F:gl.RGBA16F,W,H);
+  const t2=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t2); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA16F,W,H);
+  const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,t2,0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]); gl.clearBufferfv(gl.COLOR,0,[0,0,0,0]); gl.clearBufferfv(gl.COLOR,1,[0,0,0,0]);
+  gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
+  for(const [k,de,a] of [[PM,0,e1],["prochesB",e1,e2],["prochesT",e2,e3],["prochesO",e3,px.total]]){ if(a<=de) continue;
+    const P=C[k], u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
+    gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); }
+  gl.disable(gl.BLEND);
+  const b=new Float32Array(W*H*4); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,W,H,gl.RGBA,gl.FLOAT,b);
+  let couverts=0, frag=0, ev=0, touches=0, mx=0, mxe=0, boites=0;
+  for(let i=0;i<b.length;i+=4){ if(b[i]>0){ couverts++; frag+=b[i]; ev+=b[i+1]; touches+=b[i+2]; boites+=b[i+3]; if(b[i]>mx) mx=b[i]; if(b[i+1]>mxe) mxe=b[i+1]; } }
+  gl.deleteFramebuffer(fb); gl.deleteTexture(t); gl.deleteTexture(t2);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]); gl.enable(gl.DEPTH_TEST);
+  const r=x=>Math.round(x*100)/100;
+  ok({pixels:W*H,couverts,partCouverte:r(couverts/(W*H)),fragments:Math.round(frag),fragParPixel:r(frag/Math.max(1,couverts)),evaluations:Math.round(ev),evalParPixel:r(ev/Math.max(1,couverts)),
+    evalParFragment:r(ev/Math.max(1,frag)),testsBoiteParPixel:r(boites/Math.max(1,couverts)),touches:Math.round(touches),maxFragPixel:mx,maxEvalPixel:mxe,mou:PM==="prochesM",zoom:cam.zoom});
+}
 function v3Image(p){
   v3Cibles();
   const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
-  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
+  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; (V3.passesD||(V3.passesD={}))[nom]=t-tp; tp=t; };
   const rnd=Math.random;
   const jit=bouge?[0,0]:[rnd()-.5,rnd()-.5];                   // décalage sous-pixel, seulement à l'arrêt
   // soleil de cette image : tiré dans le disque solaire (pénombre par accumulation)
@@ -1531,7 +1567,7 @@ function v3Image(p){
   // (1) carte d'ombres
   // En marche, la carte n'est refaite qu'une image sur trois : le soleil ne bouge pas, et c'était une grosse part du coût mesuré sur téléphone.
   if(BANC.on) V3.smP=null;                                    // banc d'essai : la carte d'ombres à chaque image (mesurée)
-  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%3===0));
+  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%(enGeste()&&!BANC.on?6:3)===0));   // geste : une image sur six
   let u;
   if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w}; gpuDebut("ombre");
   const Ns=V3.ombre||Math.round(v3Budget()*.6);
@@ -1561,7 +1597,7 @@ function v3Image(p){
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
   const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol; so.dmax=S.eau&&S.eau[3]>0?150:420;
-  gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
+  chrono("avant"); gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
   if(CFG.v3solPlein){                                         // l'ancien maillage : six sommets par quadrilatère, tout le tour
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,Math.PI,so.secteurs); gl.uniform1i(u.uSolIdx,0);
     so.tri=so.anneaux*so.secteurs*2; gl.drawArrays(gl.TRIANGLES,0,so.anneaux*so.secteurs*6);
@@ -1581,7 +1617,9 @@ function v3Image(p){
     for(const [P,de,a] of [[PM,0,e1],[G.prochesB,e1,e2],[G.prochesT,e2,e3],[G.prochesO,e3,px.total]]){ if(a<=de) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
     gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
-    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); } }
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); }
+    chrono("proches",g);
+    if(V3.prxCompte) v3PrxCompte(p,px,jc,jit,e1,e2,e3); }
   const pc=v3Partage(v3Budget(),0,p); V3.parts=pc; gpuDebut("grains");
   const semer=compte=>{
   for(const [P,de,a] of v3Tranches(G,pc,0)){
@@ -1716,7 +1754,7 @@ function frame(now){
   if(!(exposure>0)||!Number.isFinite(exposure)){ exposure=1.2; if(!(expTarget>0)) expTarget=1.2; }
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
   gpuFin(); gpuImage();
-  if(chauffe) v3ChaufferFroids();
+  if(chauffe||V3.chaufferMou){ V3.chaufferMou=false; v3ChaufferFroids(); }   // ouverture, ou la pâte vient d'être prête : premier dessin au calme
   premiersDessins();
   if(BANC.on&&BANC.vi>=0&&!GT.ext){ syncPuce(); const t=performance.now(); if(BANC.tFin) BANC.rec.push({v:BANC.vi,nom:"image",ms:t-BANC.tFin,img:V3.nImg}); BANC.tFin=t; }   // sans chronomètre de la puce : intervalle entre deux fins d'image (syncPuce, ici seulement)
   if(now-t00<10000&&lastT0>0) LONGUE.max=Math.max(LONGUE.max,dtBrut);   // plus longue image des dix premières secondes (diagnostic)
@@ -2792,6 +2830,13 @@ function objetMains(Hs,quelles=[0,1]){
     peau("boule",P,n,[pt[0],pt[1],pt[2]]);
     // quatre doigts : de l'index (côté pouce) à l'auriculaire, fléchis à la jointure vers la paume
     const V=H.v;
+    // loin de la caméra (main au sol, hors gros plan) : les quatre doigts en une seule forme et le pouce d'une pièce (5 formes
+    // au lieu de 9 : moins de formes évaluées à chaque pas, aucune différence à cette taille une fois l'image salie)
+    if(Math.hypot(...v3s(P,e))>.55){ const fl=(V[0]+V[1]+V[2]+V[3])/4*rad, dir=v3n(v3a(v3a([0,0,0],d,Math.cos(fl)),n,Math.sin(fl))), Lm=(DL[1]||.08);
+      peau("capsule",v3a(v3a(P,d,pt[2]/2-.008),dir,Lm/2),dir,[pas*3.4,Math.max(.006,Lm-pas*1.7),2*dr],dg.couleur,dg.matiere);
+      const Bp=v3a(v3a(Wr,d,.03),uT,pt[0]*.36), d1=v3n(v3a(v3a([0,0,0],d,Math.cos(V[5]*rad+.35)),uT,Math.sin(V[5]*rad+.35))), Lp=PL[0]+PL[1]*.8;
+      peau("capsule",v3a(Bp,d1,Lp/2),d1,[2*pr,Math.max(.006,Lp-2*pr),2*pr],po.couleur,po.matiere);
+      objs.push(o); return; }
     for(let j=0;j<4;j++){ const K=v3a(v3a(v3a(P,d,pt[2]/2-.008),uT,pas*(1.5-j)),n,.002), ea=V[4]*(1.5-j)*rad, c=V[j]*rad;
       const dj=v3n(v3a(v3a([0,0,0],d,Math.cos(ea)),uT,Math.sin(ea))), dir=v3n(v3a(v3a([0,0,0],dj,Math.cos(c)),n,Math.sin(c))), Lj=DL[j]||.07;
       peau("capsule",v3a(K,dir,Lj/2),dir,[2*dr*(j===3?.88:1),Math.max(.006,Lj-2*dr),2*dr*(j===3?.88:1)],dg.couleur,dg.matiere); }
@@ -3327,7 +3372,9 @@ window.balade={
   pauseQuand(type,t){ pauseQuand={type,t:+t}; },                 // figer quand le geste en tête de file (ramasser : part 0..1 ; faconner : secondes) atteint t
   enPause:()=>pauseTest,
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },
-  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },   // fragments des grains de la caméra sur la prochaine image (v3Compter)
+  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },
+  prochesCompte(){ return new Promise(ok=>{ V3.prxCompte=ok; V3.n=0; sceneDirty=true; }); },   // essais : coût des éléments proches sur la prochaine image (v3PrxCompte)
+  passes(){ return Object.assign({},V3.passesD||{}); },                                        // essais (option v3detail) : durée de la dernière de chaque passe, attente de la puce comprise   // fragments des grains de la caméra sur la prochaine image (v3Compter)
   regulateur(){ return { niveau:REG.niveau, ms:REG.ms, cible:regCible(), etat:regEtat(), puce:GT.ms, total:GT.total||0 }; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
   mainsP:()=>mainsEtat.H?mainsEtat.H.map(h=>h.p.map(v=>+v.toFixed(3))):null,   // essais : centres des paumes
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,

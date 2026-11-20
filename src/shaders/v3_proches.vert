@@ -41,11 +41,6 @@ vec3 coin(vec3 u, vec3 hb, vec3 cl){
   if(abs(u.z)<.999) r.z=angulaire(u.z,hb.z,cl.z,max(length(cl.xy),.05));
   return r;
 }
-vec3 boite(float ty, vec3 b, float ar){                       // demi-tailles de la boîte englobante d'une forme (repère de la forme)
-  ty=mod(ty,8.);                                             // dents du peigne : même boîte
-  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
-  return b+ar;
-}
 void main(){
   sansGrain();
   gl_Position=vec4(2.,2.,2.,1.); vK=ivec4(-1); vId=vec2(0.); vPrx=vec2(0.); vW=vec3(0.);
@@ -55,7 +50,10 @@ void main(){
   vec2 uw=(vec2(float(qd-(qd/NS)*NS),float(qd/NS))+cr)/float(NS)*2.-1.;
   int ax=f>>1; float sg=(f&1)==0?1.:-1.;
   vec3 u=ax==0?vec3(sg,uw.x,uw.y):ax==1?vec3(uw.y,sg,uw.x):vec3(uw.x,uw.y,sg);
-  vec3 W, cl; vec3 hb; float diam;
+  vec3 W, cl, hb, O; mat2 Mr; int rs=-1;                     // repère de la boîte : forme (rs, primMonde) ou rotation Mr et origine O
+#if (PF==0 || PF==1) && !PATE
+  ElemS e;
+#endif
   if(false){}
 #if PF==0 || PF==1
   else if(slot<uPrxO){                                            // forme d'un objet de la fiche
@@ -65,21 +63,13 @@ void main(){
     if(oi>=0 && o1.w<.5) return;                                  // objet caché
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
     if(e.x<0.) return;                                            // un creux n'a pas de surface à lui : il creuse les formes molles
+    hb=boiteP(a.w,b.xyz,e.y)*1.04+.03; vK=ivec4(0,row,0,0);
 #if PATE
     vec4 m0=oi>=0?texelFetch(uShapes,ivec2(2,oi),0):vec4(0.);
-    float mg=0.;
-    if(m0.w>.5){ mg=m0.x+.4*m0.y; vK=ivec4(5,int(o1.x),int(o1.y),0); }   // objet mou : la boîte de la forme, élargie du fondu et des bosses
-    else vK=ivec4(0,row,0,0);
-#else
-    vK=ivec4(0,row,0,0);
+    if(m0.w>.5){ float mg=m0.x+.4*m0.y; vK=ivec4(5,int(o1.x),int(o1.y),row); vId=vec2(mg,0.);   // objet mou : la boîte de la forme, élargie du fondu et des bosses (le fragment refait la même, marge mg)
+      hb+=mg+fract(texelFetch(uShapes,ivec2(2,row),0).w)*min(b.x,min(b.y,b.z)); }
 #endif
-    {
-    hb=boite(a.w,b.xyz,e.y)*1.04+.03;
-#if PATE
-    hb+=mg+(m0.w>.5?fract(texelFetch(uShapes,ivec2(2,row),0).w)*min(b.x,min(b.y,b.z)):0.);
-#endif
-    cl=primLocal(uCamPos,row); W=primMonde(coin(u,hb,cl),row,false); diam=2.*length(hb);
-    }
+    rs=row; cl=primLocal(uCamPos,row);
   }
 #endif
 #if PF==0 || PF==2
@@ -87,12 +77,9 @@ void main(){
     int s=slot-uPrxO; vec2 id=floor(uCamPos.xz/CC)+vec2(float(s-(s/5)*5)-2.,float(s/5)-2.);
     Bloc B; if(!blocGres(id,B)) return;
     hb=B.rad*1.12+.15*B.R+vec3(.05,.4,.05);                   // bosses, et le sol qui varie sous le bloc
-    vec2 cw=(id+.5)*CC+B.o; float th=terrainH(cw);
-    float ca=cos(B.a), sa=sin(B.a);
-    vec3 lc=uCamPos-vec3(cw.x,th+B.R*.22,cw.y); vec2 lr=mat2(ca,sa,-sa,ca)*lc.xz; cl=vec3(lr.x,lc.y,lr.y);
-    vec3 lp=coin(u,hb,cl); vec2 xz=lp.xz*mat2(ca,sa,-sa,ca);
-    W=vec3(cw.x+xz.x,th+B.R*.22+lp.y,cw.y+xz.y);
-    diam=2.*length(hb);
+    vec2 cw=(id+.5)*CC+B.o; float ca=cos(B.a), sa=sin(B.a);
+    O=vec3(cw.x,terrainH(cw)+B.R*.22,cw.y); Mr=mat2(ca,sa,-sa,ca);
+    vec3 lc=uCamPos-O; cl=vec3(Mr*lc.xz,lc.y).xzy;
     vK=ivec4(2,0,0,0); vId=id;
   }
 #endif
@@ -109,13 +96,11 @@ void main(){
       c0=(id+.5)*CB-17.3; ax0=B.o; lean=B.lean; H=B.H; r=B.r0*1.4+.07; M=RB; y1=H+.3; }
     vec2 ctr=ax0+lean*(H-1.)*.5; float hx=max(r+abs(lean.x)*(H+1.)*.5,R)+.05, hz=max(r+abs(lean.y)*(H+1.)*.5,R)+.05;
     if(R>0.) ctr=ax0;
-    vec2 pied=(c0+ctr)*M; float th=terrainH(pied);
+    float th=terrainH((c0+ctr)*M);
     hb=vec3(hx,(y1-y0)*.5,hz);
     vec3 bc=vec3(ctr.x,y0+hb.y+th,ctr.y);                    // repère de la cellule ; le sol varie peu sous un tronc (marge en bas)
     vec2 cq=M*uCamPos.xz-c0; cl=vec3(cq.x,uCamPos.y,cq.y)-bc;
-    vec3 lp=bc+coin(u,hb,cl);
-    vec2 xz=(c0+lp.xz)*M; W=vec3(xz.x,lp.y,xz.y);
-    diam=2.*length(hb);
+    O=vec3((c0+bc.xz)*M,bc.y).xzy; Mr=M;
     vK=ivec4(arbre?3:4,0,0,0); vId=id;
   }
 #endif
@@ -124,7 +109,7 @@ void main(){
     int k=slot<uPrxS.x?0:slot<uPrxS.y?1:slot<uPrxS.z?2:3;
     int s=slot-(k==0?uPrxO+uPrxB+uPrxA+uPrxP:k==1?uPrxS.x:k==2?uPrxS.y:uPrxS.z);
     int n=k==0?uPrxN.x:k==1?uPrxN.y:k==2?uPrxN.z:uPrxN.w, w=2*n+1;
-    ElemS e; semisTete(k,1.,e);
+    semisTete(k,1.,e);
     int cn=int(e.K.z); if(cn<1) return;
     int ce=s/cn, j=s-ce*cn; vec2 id;
     if(e.rg){
@@ -137,15 +122,35 @@ void main(){
     if(!semisElem(k,id,e)) return;
     int row=SEM0+k*SEML+4+j;
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), ee=texelFetch(uShapes,ivec2(3,row),0);
-    hb=boite(a.w,b.xyz,ee.y)*1.06+.05/e.s;
-    cl=primLocal(semisLocal(uCamPos,e),row); W=semisMonde(primMonde(coin(u,hb,cl),row,false),e);
-    diam=2.*length(hb)*e.s*max(1.,e.sy);
+    hb=boiteP(a.w,b.xyz,ee.y)*1.06+.05/e.s;
+    rs=row; cl=primLocal(semisLocal(uCamPos,e),row);
     vK=ivec4(1,row,k,int(e.side)); vId=id;
   }
 #endif
   else return;
+  // face tournée vers l'arrière (la caméra du côté intérieur de son plan) : rien, et avant tout calcul. La face avant couvre
+  // les mêmes pixels et sa marche y trouve la forme ; c'était la moitié des fragments, chacun marchant son rayon pour rien.
+  // Caméra dans la boîte : toutes les faces.
+  bool dedans=all(lessThan(abs(cl),hb));
+  vec3 m=vec3(equal(ivec3(ax),ivec3(0,1,2)));
+  if(!dedans && dot(cl,u*m)<dot(hb,m)) return;
+  vec3 lp=coin(u,hb,cl);                                      // un seul coin pour toutes les familles
+#if PF==0 || PF==1
+  if(rs>=0){ W=primMonde(lp,rs,false);
+#if !PATE
+    if(vK.x==1) W=semisMonde(W,e);
+#endif
+  }
+#endif
+#if PF!=1
+  if(rs<0) W=O+vec3(lp.xz*Mr,lp.y).xzy;
+#endif
+  float diam=2.*length(hb);
+#if (PF==0 || PF==1) && !PATE
+  if(vK.x==1) diam*=e.s*max(1.,e.sy);
+#endif
   vec4 pos; float dist, ang;
   projette(W,3.13,pos,dist,ang);
   gl_Position=pos; vW=W;
-  vPrx=vec2(all(lessThan(abs(cl),hb))?1.:0.,diam);
+  vPrx=vec2(dedans?1.:0.,diam);
 }
