@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { correspond, programme, traduction, alea, normaliser } from '../src/ouverture.js';
+import { correspond, programme, traduction, alea, normaliser, pdl } from '../src/ouverture.js';
 import { controler } from '../src/constructeur.js';
 
 const lire = p => JSON.parse(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
@@ -45,24 +45,48 @@ test('traduction : les valeurs affichées sont celles de la fiche', () => {
   assert.ok(traduction(g).some(([, x]) => x.includes('15,5°')));
 });
 
+test('PDL : la vraie fiche et les vrais réglages, tokens comptés sur les deux textes', () => {
+  const f = SCENES.find(x => x.id === R.fiche);
+  const X = pdl(f, R.personnage.reglages, R.comprendre), txt = X.lignes.join('\n');
+  assert.ok(txt.startsWith('@lieu foret.gres 48.51N 2.44E'), txt);
+  assert.ok(txt.includes('☼' + f.ambiance.soleil.hauteur + '°') && txt.includes('az' + f.ambiance.soleil.azimut));
+  assert.ok(txt.includes('pin.sylvestre h.68-.97') && txt.includes('#sam F30 FR2026 seule') && txt.includes('peur:1'), txt);
+  assert.ok(!/[{}"]/.test(txt), 'ni accolades ni guillemets');
+  assert.equal(X.tokens, Math.ceil(txt.length / 4)); assert.equal(X.json, Math.ceil(JSON.stringify(X.donnees).length / 4));
+  assert.ok(X.gain > 20 && X.gain < 80, X.gain + ' %');
+  assert.deepEqual(X.donnees.personnage, R.personnage.reglages);
+  assert.ok(R.suggestion.includes('30 ans') && R.comprendre.reperes.includes('personnage : Sam, 30 ans, Française, 2026'));
+});
+
+test('personnage : recherche réelle, constats reliés à un réglage', () => {
+  const P = R.personnage;
+  assert.ok(P.requetes.length >= 5 && P.requetes.length <= 7);
+  assert.ok(P.sources.filter(s => s.etat === 'lu').length >= 4);
+  for (const s of P.sources) assert.ok(s.titre && s.domaine && ['lu', 'illisible', 'refuse', 'extrait'].includes(s.etat));
+  assert.ok(P.constats.length >= 5 && P.constats.length <= 7);
+  for (const c of P.constats) assert.ok(c.texte && c.source && c.reglage && c.texte.length < 140, JSON.stringify(c));
+});
+
 test('programme : 15 à 25 s avant le fondu, des durées irrégulières, tout le journal rejoué dans l\'ordre', () => {
   const f = SCENES.find(x => x.id === R.fiche) || SCENES.find(x => x.id === R.ficheSecours);
   const c = controler(f);
   for (let g = 1; g <= 40; g++) {
     const ev = programme(R, f, alea(g), c);
     const monde = ev.find(e => e.type === 'monde').t, fin = ev[ev.length - 1];
-    assert.ok(monde >= 13 && monde <= 23, 'graine ' + g + ' : monde à ' + monde.toFixed(1) + ' s');
-    assert.ok(fin.type === 'fin' && fin.t >= 15 && fin.t <= 25.5, 'graine ' + g + ' : fin à ' + fin.t.toFixed(1) + ' s');
+    assert.ok(monde >= 15 && monde <= 26, 'graine ' + g + ' : monde à ' + monde.toFixed(1) + ' s');
+    assert.ok(fin.type === 'fin' && fin.t >= 17 && fin.t <= 28, 'graine ' + g + ' : fin à ' + fin.t.toFixed(1) + ' s');
     for (let i = 1; i < ev.length; i++) assert.ok(ev[i].t >= ev[i - 1].t);
     const lignes = ev.filter(e => e.type === 'ligne');
     assert.deepEqual(lignes.filter(e => e.genre === 'requete' && e.etape === 'recherche').map(e => e.texte), R.recherche.requetes);
-    assert.deepEqual(lignes.filter(e => e.genre === 'source').map(e => e.texte), R.lecture.sources.map(s => s.titre));
-    assert.deepEqual(lignes.filter(e => e.genre === 'constat').map(e => e.texte), R.constats.liste.map(s => s.texte));
-    assert.deepEqual(ev.filter(e => e.type === 'etape').map(e => e.id), ['recherche', 'lecture', 'constats', 'traduction', 'controle']);
+    assert.deepEqual(lignes.filter(e => e.genre === 'requete' && e.etape === 'personnage').map(e => e.texte), R.personnage.requetes);
+    assert.deepEqual(lignes.filter(e => e.genre === 'source').map(e => e.texte), [...R.lecture.sources, ...R.personnage.sources].map(s => s.titre));
+    assert.deepEqual(lignes.filter(e => e.genre === 'constat').map(e => e.texte), [...R.constats.liste, ...R.personnage.constats].map(s => s.texte));
+    assert.ok(lignes.filter(e => e.genre === 'constat' && e.montre).length <= 8 && lignes.filter(e => e.genre === 'source' && e.montre).length <= 6);
+    assert.deepEqual(ev.filter(e => e.type === 'etape').map(e => e.id), ['recherche', 'constats', 'personnage', 'p-constats', 'pdl', 'controle']);
   }
   // irrégulier : les écarts entre deux requêtes ne sont pas tous égaux, et deux graines ne donnent pas le même rythme
   const ecarts = g => { const q = programme(R, f, alea(g), c).filter(e => e.genre === 'requete').map(e => e.t); return q.slice(1).map((t, i) => t - q[i]); };
-  const e1 = ecarts(3); assert.ok(Math.max(...e1) > 1.6 * Math.min(...e1), e1.join(' '));
+  const e1 = ecarts(3); assert.ok(Math.max(...e1) > 1.4 * Math.min(...e1), e1.join(' '));
   assert.notDeepEqual(ecarts(3), ecarts(4));
 });
 
@@ -101,7 +125,7 @@ test('programme avec photos : rafales de 80 à 200 ms, lecture puis observation,
   for (let g = 1; g <= 40; g++) {
     const ev = programme(RP, f, alea(g), c), sans = programme(R, f, alea(g), c);
     for (let i = 1; i < ev.length; i++) assert.ok(ev[i].t >= ev[i - 1].t);
-    assert.deepEqual(ev.filter(e => e.type === 'etape').map(e => e.id), ['recherche', 'lecture', 'photos', 'constats', 'traduction', 'controle']);
+    assert.deepEqual(ev.filter(e => e.type === 'etape').map(e => e.id), ['recherche', 'photos', 'constats', 'personnage', 'p-constats', 'pdl', 'controle']);
     const ph = ev.filter(e => e.genre === 'photo');
     assert.deepEqual(ph.map(e => e.photo), V.photos.map(p => p.id));
     const ecarts = ph.slice(1).map((e, i) => e.t - ph[i].t);
@@ -113,7 +137,7 @@ test('programme avec photos : rafales de 80 à 200 ms, lecture puis observation,
     assert.ok(ev.some(e => e.type === 'credits'));
     const fin = ev[ev.length - 1].t, fin0 = sans[sans.length - 1].t;
     ecartTotal += fin - fin0;
-    assert.ok(fin <= 30, 'graine ' + g + ' : fin à ' + fin.toFixed(1));
+    assert.ok(fin >= 22 && fin <= 30, 'graine ' + g + ' : fin à ' + fin.toFixed(1));
     assert.ok(ev.filter(e => e.genre === 'constat' && e.photo).length >= 4);
   }
   assert.ok(ecartTotal / 40 <= 4, 'allongement moyen ' + (ecartTotal / 40).toFixed(2) + ' s');

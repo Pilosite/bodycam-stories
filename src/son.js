@@ -74,6 +74,10 @@ export function planExploit(bruit, { palier = 'normal', facteur = 1 } = {}, rnd 
       prise: choix(liste(A.prises).length ? A.prises : P.prises), prise_part: num(A.prise_part, 0, 1, num(P.prise_part, 0, 1, 0.5)),
     });
   }
+  if (A.crescendo && out.length > 1) {                         // crescendo : du plus court et discret au plus long et fort, puis le principal
+    const D = out.map(e => e.duree).sort((x, y) => x - y), G = out.map(e => e.force).sort((x, y) => x - y), H = out.map(e => e.f0).sort((x, y) => y - x);
+    out.forEach((e, i) => { e.duree = D[i]; e.force = G[i]; e.gain = r1(Math.min(gainMax, G[i] * gainMax)); e.f0 = H[i]; });
+  }
   return [...out, principal];
 }
 

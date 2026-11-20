@@ -2,10 +2,10 @@
   "type": "rejeu",
   "id": "ouverture-champcueil",
   "titre": "Forêt de Champcueil au lever du soleil",
-  "note": "Journal réel d'une préparation faite le 19 novembre 2026 (recherche web par Claude, puis écriture de scenes/09-champcueil-aube.json ; à défaut de cette fiche dans la page, le rejeu débouche sur scenes/01-grands-avaux.json). Rien n'est ajouté : requêtes, pages lues, pages illisibles et constats sont ceux de cette séance. Les durées sont celles du rejeu, pas celles de la séance (environ une demi-heure de recherche et d'essais de rendu). Aucun texte de source n'est recopié. Le lendemain (20 novembre 2026), une recherche de photos sous licence libre sur Wikimedia Commons a complété la séance : ses vignettes et crédits sont dans ouvertures/photos/champcueil.json, ses observations parmi les constats (source « commons.wikimedia.org (photo) »). Elles n'illustrent que l'écran d'ouverture.",
+  "note": "Journal réel d'une préparation faite le 19 novembre 2026 (recherche web par Claude, puis écriture de scenes/09-champcueil-aube.json ; à défaut de cette fiche dans la page, le rejeu débouche sur scenes/01-grands-avaux.json). Rien n'est ajouté : requêtes, pages lues, pages illisibles et constats sont ceux de cette séance. Les durées sont celles du rejeu, pas celles de la séance (environ une demi-heure de recherche et d'essais de rendu). Aucun texte de source n'est recopié. Le lendemain (20 novembre 2026), une recherche de photos sous licence libre sur Wikimedia Commons a complété la séance : ses vignettes et crédits sont dans ouvertures/photos/champcueil.json, ses observations parmi les constats (source « commons.wikimedia.org (photo) »). Elles n'illustrent que l'écran d'ouverture. Le 20 novembre 2026 encore, une recherche web sur le personnage (Sam, 30 ans, Française, 2026) a ajouté la section « personnage » : requêtes, pages lues ou refusées, constats et réglages, réellement faits ; aucune image.",
   "fiche": "champcueil-aube",
   "ficheSecours": "grands-avaux-sentier",
-  "suggestion": "Sam, 24 ans, vit seule depuis trois ans au fond de la forêt de Champcueil, dans l'Essonne. Ce matin de novembre, elle a retrouvé la caméra-piéton de son frère, garde forestier, et l'a accrochée à sa veste. Le soleil se lève à peine entre les pins, la brume traîne sur le sentier de sable, entre les gros rochers de grès. Elle ne sait pas encore ce qu'elle cherche. Filme ce qu'elle voit, et laisse-moi lui parler.",
+  "suggestion": "Sam, 30 ans, vit seule depuis trois ans au fond de la forêt de Champcueil, dans l'Essonne. Ce matin de novembre, elle a retrouvé la caméra-piéton de son frère, garde forestier, et l'a accrochée à sa veste. Le soleil se lève à peine entre les pins, la brume traîne sur le sentier de sable, entre les gros rochers de grès. Elle ne sait pas encore ce qu'elle cherche. Filme ce qu'elle voit, et laisse-moi lui parler.",
   "mots": [
     "champcueil",
     "grands avaux",
@@ -45,15 +45,20 @@
   "enregistre": "2026-11-19",
   "comprendre": {
     "duree": 1.3,
-    "texte": "Sam, une jeune femme qui vit seule dans les bois de Champcueil (Essonne), un matin de novembre au lever du soleil, la caméra de son frère sur la veste : je cherche à quoi ressemble ce lieu avant de le construire, puis je lui donne une voix.",
+    "texte": "Sam, une Française de 30 ans qui vit seule dans les bois de Champcueil (Essonne), un matin de novembre 2026 au lever du soleil, la caméra de son frère sur la veste : je cherche à quoi ressemble ce lieu et qui elle est, avant de construire le monde et de lui donner une voix.",
     "reperes": [
-      "personnage : Sam, 24 ans, seule ; on voit par sa caméra-piéton", "lieu réel : Champcueil, Essonne",
+      "personnage : Sam, 30 ans, Française, 2026",
+      "lieu réel : Champcueil, Essonne",
       "saison : automne",
       "heure : lever du soleil"
+    ],
+    "coordonnees": [
+      48.51,
+      2.44
     ]
   },
   "recherche": {
-    "duree": 4.0,
+    "duree": 1.6,
     "requetes": [
       "forêt départementale des Grands Avaux Champcueil",
       "Champcueil platières grès chaos rochers pins sylvestres bruyère sable",
@@ -65,10 +70,11 @@
       "fougère aigle automne couleur rousse sous-bois landes sableuses Île-de-France",
       "lumière lever du soleil sous-bois rayons crépusculaires brume matinale forêt automne photographie",
       "sunrise sun elevation color temperature golden hour Kelvin low sun forest crepuscular rays mist"
-    ]
+    ],
+    "apport": "Avant de construire, je regarde à quoi ressemble le vrai lieu : ce qu'en disent randonneurs, grimpeurs et botanistes."
   },
   "lecture": {
-    "duree": 4.4,
+    "duree": 1.6,
     "sources": [
       {
         "titre": "The Forest of Grands Avaux (randonnée)",
@@ -141,18 +147,20 @@
     ]
   },
   "constats": {
-    "duree": 4.9,
+    "duree": 3.2,
     "liste": [
       {
         "texte": "Le sentier traverse des chaos de grès et des platières",
         "source": "visorando.com",
-        "reglage": "kit forêt, foret.rochers 1 (blocs de grès semés le long du sentier)"
+        "reglage": "kit forêt, foret.rochers 1 (blocs de grès semés le long du sentier)",
+        "vitrine": true
       },
       {
         "texte": "Photo : chaos de blocs arrondis, mousse vert vif sur le dessus, un bouleau devant",
         "source": "commons.wikimedia.org (photo)",
         "reglage": "recette gres-patine (mousse), bouleaux du kit forêt",
-        "photo": "avaux03"
+        "photo": "avaux03",
+        "vitrine": true
       },
       {
         "texte": "Pins, châtaigniers, chênes et bouleaux, fougères en sous-bois",
@@ -194,7 +202,8 @@
         "texte": "Photo : pins hauts et espacés, haut du tronc orangé, sol de sable et d'aiguilles",
         "source": "commons.wikimedia.org (photo)",
         "reglage": "recette ecorce-pin (le haut orangé n'est pas rendu)",
-        "photo": "fbpins"
+        "photo": "fbpins",
+        "vitrine": true
       },
       {
         "texte": "Arbres en partie dénudés sur les photos d'arrière-saison",
@@ -231,7 +240,8 @@
       {
         "texte": "Lumière dorée tant que le soleil est sous 6° environ ; vers 2 000 K juste après le lever",
         "source": "timeanddate.com, adobe.com",
-        "reglage": "soleil bas, sous 10° : le moteur rougit alors la lumière et l'horizon"
+        "reglage": "soleil bas, sous 10° : le moteur rougit alors la lumière et l'horizon",
+        "vitrine": true
       },
       {
         "texte": "Soleil bas d'automne et brume : rais de lumière en sous-bois, la brume diffuse",
@@ -255,18 +265,167 @@
         "source": "calcul astronomique",
         "reglage": "la fiche du jour (21°) est juste ; à l'aube on place le soleil en face du sentier, légèrement à gauche"
       }
-    ]
+    ],
+    "apport": "Chaque constat devient un réglage du monde, ou un écart assumé quand le moteur ne sait pas encore le faire."
+  },
+  "personnage": {
+    "apport": "Sam n'est pas un avatar : je cherche comment vit, parle et s'habille une Française de 30 ans seule en forêt en 2026, pour que sa voix sonne juste.",
+    "duree": 2.2,
+    "requetes": [
+      "prénoms les plus donnés en France en 1996 filles",
+      "néo-ruraux trentenaires quittent Paris vivre en forêt cabane témoignage",
+      "tenue randonnée forêt novembre quoi porter couches équipement",
+      "femme seule en forêt peur sécurité randonnée solo témoignage",
+      "génération Y millennials française rapport au smartphone filmer sa vie",
+      "métiers reconversion néo-rurale bûcheronne élagueuse maraîchère femme trentenaire"
+    ],
+    "sources": [
+      {
+        "titre": "Classement des prénoms en France depuis 1900",
+        "domaine": "insee.fr",
+        "etat": "illisible",
+        "pourquoi": "outil interactif, aucun classement dans la page"
+      },
+      {
+        "titre": "Résultats de recherche : prénoms les plus donnés depuis 1946",
+        "domaine": "lyonmag.com",
+        "etat": "extrait"
+      },
+      {
+        "titre": "Le blues des néo-ruraux : ils rêvaient de la campagne, ils ont (un peu) déchanté",
+        "domaine": "pretto.fr",
+        "etat": "lu"
+      },
+      {
+        "titre": "En Corrèze, désobéir pour vivre en pleine nature",
+        "domaine": "linfodurable.fr",
+        "etat": "lu"
+      },
+      {
+        "titre": "Vivre en cabane, une résistance poétique",
+        "domaine": "reporterre.net",
+        "etat": "refuse",
+        "pourquoi": "accès refusé (403)"
+      },
+      {
+        "titre": "Rando solo : le guide féministe",
+        "domaine": "ffrandonnee.fr",
+        "etat": "lu"
+      },
+      {
+        "titre": "Comment la marche libère les femmes",
+        "domaine": "slate.fr",
+        "etat": "refuse",
+        "pourquoi": "accès refusé (403)"
+      },
+      {
+        "titre": "Comment s'habiller en randonnée : la technique des 3 couches",
+        "domaine": "conseilsport.decathlon.fr",
+        "etat": "lu"
+      },
+      {
+        "titre": "Après le marketing, Laura a changé de vie pour prendre soin des arbres",
+        "domaine": "lavenir.net",
+        "etat": "lu"
+      },
+      {
+        "titre": "Résultats de recherche : la génération Y et son portable",
+        "domaine": "timeout.fr, cbnews.fr",
+        "etat": "extrait"
+      }
+    ],
+    "constats_apport": "Ce que j'en retiens règle sa voix : son ton, ses mots, ses peurs, ce qu'elle sait faire.",
+    "constats_duree": 2.4,
+    "constats": [
+      {
+        "texte": "Manon en tête des prénoms vers 1994-1996 : Sam est de la génération des Manon et des Camille",
+        "source": "lyonmag.com (résultats)",
+        "reglage": "vocabulaire d'une trentenaire de 2026, pas d'argot d'ado",
+        "vitrine": true
+      },
+      {
+        "texte": "Néo-ruraux : isolement, voisins qui observent, « fous de Parisiens », coups de blues après quelques mois",
+        "source": "pretto.fr",
+        "reglage": "peur d'être jugée plus que de la forêt ; humour sec sur « ceux du village »",
+        "vitrine": true
+      },
+      {
+        "texte": "Vie en habitat léger : eau de source, four solaire, procédure d'expulsion du maire",
+        "source": "linfodurable.fr",
+        "reglage": "sait se débrouiller (eau, feu, bois) ; reste vague sur sa cabane"
+      },
+      {
+        "texte": "Randonnée solo : la forêt comme refuge ; apprendre à s'orienter sans téléphone",
+        "source": "ffrandonnee.fr",
+        "reglage": "peur basse (1 sur 3) ; se repère sans GPS",
+        "vitrine": true
+      },
+      {
+        "texte": "Trois couches, bonnet et sous-gants dès qu'il fait frais",
+        "source": "conseilsport.decathlon.fr",
+        "reglage": "tenue : polaire, veste coupe-vent, bonnet ; froid aux doigts"
+      },
+      {
+        "texte": "Ancienne du marketing devenue élagueuse : métier très masculin, toujours à deux sur un chantier",
+        "source": "lavenir.net",
+        "reglage": "métier : élagueuse ; nomme les arbres ; seule aujourd'hui, et ça l'agace",
+        "vitrine": true
+      },
+      {
+        "texte": "68 % des jeunes Français disent leur portable vital",
+        "source": "timeout.fr (résultats)",
+        "reglage": "filme sans poser ; parle à la caméra comme à quelqu'un"
+      }
+    ],
+    "reglages": {
+      "id": "sam",
+      "genre": "F",
+      "age": 30,
+      "pays": "FR",
+      "annee": 2026,
+      "seule": true,
+      "metier": "élagueuse",
+      "ton": [
+        "sec",
+        "drôle"
+      ],
+      "peur": 1,
+      "vocabulaire": "trentenaire, phrases courtes, jamais d'argot d'ado",
+      "humour": "pince-sans-rire, sur les gens du village",
+      "sait": [
+        "nommer les arbres",
+        "se repérer sans GPS",
+        "eau",
+        "feu"
+      ],
+      "tenue": [
+        "polaire",
+        "veste coupe-vent",
+        "bonnet"
+      ],
+      "poches": [
+        "portable",
+        "couteau",
+        "briquet"
+      ],
+      "camera": "celle du frère ; filme sans poser"
+    }
   },
   "traduction": {
     "duree": 2.6,
     "texte": "Je traduis en vocabulaire du moteur : relief, semis, matières, lumière."
   },
   "controle": {
-    "duree": 1.3,
-    "texte": "Contrôle sans image : champ du téléphone, portée de la brume, passage libre."
+    "duree": 1.1,
+    "texte": "Contrôle sans image : champ du téléphone, portée de la brume, passage libre.",
+    "apport": "Avant de tourner, je vérifie sans image que le monde tient : champ de la caméra, brume, passage libre."
   },
   "fondu": {
     "duree": 2.2
   },
-  "photos": "champcueil"
+  "photos": "champcueil",
+  "pdl": {
+    "duree": 3.0,
+    "apport": "PDL, « Procedural Diaphasic Language » : une notation pensée pour qu'un LLM décrive un monde, un son et une histoire en très peu de tokens. Ici, la vraie fiche et les vrais réglages de Sam, transcrits."
+  }
 }

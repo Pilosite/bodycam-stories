@@ -688,11 +688,11 @@ function simulate(dt){
     else if(errance && idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
   const a=queue[0];
   if(a){
-    if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
+    if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*(a.libre?1:gesteK())*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
-    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(1.35,Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
-    else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*dt); if(Math.abs(d)<.012) queue.shift(); }
-    else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
+    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK(),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
+    else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*gesteK()*dt); if(Math.abs(d)<.012) queue.shift(); }
+    else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*gesteK()*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
     else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet,a.cadre);   // vers un objet : la page calcule cap et inclinaison
       if(v&&v.raide&&!a.cadre) queue.unshift({type:"cadrer",objet:a.objet});              // presque sous lui : il recule et se baisse pour la voir
       else if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
@@ -739,6 +739,10 @@ let mLevel=0, msMotion=50, msPerRow=.25, exposure=1.2, expTarget=1.2, lastExpRea
 const coarse=matchMedia("(pointer:coarse)").matches;
 /* Qualité : « mobile » tient un téléphone moyen ; « complète » est faite pour un ordinateur (pleine résolution, bien plus de grains,
    carte d'ombres plus fine). Par défaut : complète sans écran tactile, mobile sinon. Le choix est gardé dans le navigateur. */
+const DEMO_VITE=CFG.demo!==false;                                  // mode démo (« Claude réagit plus vite ») : actif par défaut, {"demo":false} pour les durées d'origine
+function reglagesMeneur(){ const r=Object.assign({},DEMO_VITE?MENEUR.REGLAGES_DEMO:{},docile?{DOCILE:true}:{}); return Object.keys(r).length?r:undefined; }
+const vitK=()=>meneur&&meneur.reglages&&meneur.reglages.MARCHE_K||1;
+const gesteK=()=>vitK()>1?2.4:1;                               // démo : se relever, se retourner, se pencher vont nettement plus vite   // marches dirigées, ramassage, regard : plus vifs en démo
 var docile=!!CFG.docile; try{ if(localStorage.getItem("bodycam-docile")==="1") docile=true; }catch(_){}   // mode essai : il fait exactement ce qu'on demande
 var errance=true;                                             // il se promène de lui-même ; dès qu'on lui parle, il attend qu'on lui dise quoi faire
 var immobile=false;                                           // « arrête-toi » : ni flânerie ni petits pas tant qu'on ne lui dit pas autre chose
@@ -1841,7 +1845,7 @@ function enqueue(actions){
     if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});
     else if(a.type==="marcher") queue.push({type:"marche",metres:clampN(a.metres,-10,30,0)});   // « avance de N m » : le trajet est calculé au moment de partir (§18)
     else if(a.type==="regarder") queue.push({type:"regarder",pitch:clampN(a.degres,-60,75,0)*Math.PI/180});
-    else if(a.type==="attendre") queue.push({type:"attendre",rest:clampN(a.secondes,0,5,1)});
+    else if(a.type==="attendre"){ const s=clampN(a.secondes,0,5,1); queue.push({type:"attendre",rest:vitK()>1?(s<=1?Math.min(s,.2):s*.4):s}); }   // démo : pas de temps morts
     else if(a.type==="posture") queue.push({type:"posture",h:clampN(a.hauteur,.35,1,1)});
     else if(a.type==="viser"&&typeof a.objet==="string") queue.push({type:"viser",objet:a.objet.slice(0,30)});
     else if((a.type==="rejoindre"||a.type==="cadrer")&&typeof a.objet==="string") queue.push({type:a.type,objet:a.objet.slice(0,30),sur_place:a.sur_place===true});
@@ -2665,7 +2669,7 @@ function preparerGeste(id,op,a={}){
   let tasL=[], tasF=[];
   if(tas){ const Rp=repereObjet(tas); tasF=(tas.formes||[]).slice();
     tasL=tasF.map(f=>Object.assign({},f,{p:versLocal(R,versMonde(Rp,f.p)),taille:f.taille.map(v=>v*Rp.ech/E),cap:(f.cap||0)+(Rp.yaw-R.yaw)*180/Math.PI})); }
-  const apres=op.etapes[op.etapes.length-1], T=MENEUR.gesteFaconnage(avant,apres,tasL,{echelle:R.ech});
+  const apres=op.etapes[op.etapes.length-1], T=MENEUR.gesteFaconnage(avant,apres,tasL,{echelle:R.ech,duree:meneur&&meneur.reglages&&meneur.reglages.FACONNAGE_S||15});
   const autres=L.filter(x=>x&&x.id!==id&&!(x.visible===false||cacheObj.has(x.id))).reduce((n,x)=>n+Math.min(24,(x.formes||[]).length),0);
   const dom=(T[0]&&T[0].a.find(f=>/^m/.test(f._k))||{}).matiere;
   const D=a.degout?MENEUR.planDegout(T,a.degout,typeof MODELES!=="undefined"&&MODELES?MODELES.degout:null):null;   // §22 : pensées et regards détournés, datés sur les phases
@@ -3183,7 +3187,7 @@ function planCorps(a){
   if(a.type==="chercher"){                                          // aller chercher : un endroit plausible, il y va, se baisse, ramasse, se relève
     const L=supportsProches(), lieu=MENEUR.lieuChercher(a.quoi,{x:cam.x,z:cam.z,yaw:cam.yaw},L,z=>S.kit!==1?pathX(z):cam.x,S.traj[1]||1,MODELES);
     dernierLieu=lieu;
-    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},{type:"ramasser",rest:1.6,duree:1.6},{type:"tourner",rest:.45},{type:"ramasser",rest:1.5,duree:1.5},
+    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},...(k=>[{type:"ramasser",rest:1.6*k,duree:1.6*k},{type:"tourner",rest:.45},{type:"ramasser",rest:1.5*k,duree:1.5*k}])(vitK()>1?.5:1),
       {type:"posture",h:1},{type:"regarder",pitch:-.1}];
   }
   const q=cibleMonde(a.objet); if(!q) return [];
@@ -3233,7 +3237,7 @@ function ticMeneur(){
   if(dbgOn) dbgMaj();
   if(meneur.fini()) clearInterval(meneurTimer);
 }
-function meneurEntendre(texte){ say("…");
+function meneurEntendre(texte){ say("…"); activite.entendre(texte);
   if(meneurLibre){                                             // promenade libre : une fois qu'on lui a parlé, il ne repart plus tout seul
     const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
     errance=/promene|balade-toi|balade toi|continue ta|reprends ta|comme tu veux|ou tu veux|fais ta vie/.test(t);
@@ -3252,9 +3256,9 @@ function histoireLibre(f){ return MENEUR.histoireLibre(f); }   // le contrat de 
 function demarrerLibre(){
   const h=histoireLibre(fiche), v=MENEUR.validerHistoire(h,{fiches:FICHES});
   if(!v.ok){ console.warn("Promenade libre : contrat refusé",v.erreurs); return false; }
-  meneur=MENEUR.creerMeneur({ histoire:h, modeles:MODELES, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
+  meneur=MENEUR.creerMeneur({ histoire:h, modeles:MODELES, reglages:reglagesMeneur(), graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
-    emettre:executer });
+    emettre:executer, surEvenement:e=>activite.evt(e) });
   meneurLibre=true; histoireId="libre"; meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
   if($("journal")) $("journal").hidden=false;
   return true;
@@ -3277,9 +3281,9 @@ function jouerHistoire(id){
   if(!v.ok){ console.warn("Histoire invalide :",v.erreurs); return null; }
   quitterLibre(); quitterHistoire(true);
   applyFiche(MENEUR.ficheDe(h,FICHES)||fiche);
-  meneur=MENEUR.creerMeneur({ histoire:h, modeles:MODELES, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
+  meneur=MENEUR.creerMeneur({ histoire:h, modeles:MODELES, reglages:reglagesMeneur(), graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
-    emettre:executer });
+    emettre:executer, surEvenement:e=>activite.evt(e) });
   histoireId=h.id; hold=false; patience=10; cam.haut=1; cam.elev=0; immobile=false; setFrozen(false); interfaceHistoire(true);
   meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
   return meneur.partie();
@@ -3347,6 +3351,102 @@ function montrerJournal(){ $("mesure-txt").textContent=journal()||"Aucune partie
   const c=document.createElement("button"); c.type="button"; c.className="ghost"; c.textContent="Journal de la partie"; $("fin-quitter").after(c); c.onclick=montrerJournal; }
 $("fin-rejouer").onclick=()=>jouerHistoire(histoireId);
 $("fin-quitter").onclick=()=>quitterHistoire(false);
+
+/* ------------------------------------------------------------------ panneau d'activité (docs/activite.md)
+   Une colonne à droite, sur PC : ce que la page fait pendant que Claude réfléchit, dans le petit langage de src/activite.js.
+   Lignes vraies (analyse locale, appel en cours, journal du meneur, file d'actions) ; seule la frappe est de l'habillage.
+   Mise à jour par lots, 10 fois par seconde au plus, et seulement entre une phrase et la fin de ce qu'elle déclenche. */
+const activite=(()=>{
+  let on=true; try{ on=localStorage.getItem("bodycam-activite")!=="0"; }catch(_){}
+  const st=document.createElement("style"); st.textContent="#activite{position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:22vh;width:340px;max-height:52vh;overflow:hidden;z-index:6;pointer-events:none;"
+    +"font-family:var(--f-mono);font-size:12.5px;line-height:1.45;color:#cfd8c4;background:rgba(6,8,6,.46);border-left:2px solid rgba(160,200,140,.35);padding:8px 10px;border-radius:4px;"
+    +"opacity:0;transition:opacity .8s;white-space:pre-wrap;word-break:break-word;display:flex;flex-direction:column;justify-content:flex-end}#activite.on{opacity:1}"
+    +"#activite .l{display:flex;gap:6px}#activite .h{flex:none;width:2.6em;color:#7d8a74;font-size:10.5px;padding-top:1px}#activite .s{flex:none;width:1em}"
+    +"#activite .k-gt .s,#activite .k-gt{color:#fff}#activite .k-lt{color:#a9d6f0}#activite .k-ex{color:#f0b47a}#activite .k-go{color:#e8e39a}#activite .k-ok{color:#8fbf7f}#activite .k-ti{color:#9ab}"
+    +"#activite .c{display:inline-block;width:.55em;background:#cfd8c4;animation:actc 1s steps(1) infinite}@keyframes actc{50%{opacity:0}}@media (max-width:760px),(orientation:portrait){#activite{display:none}}";
+  document.head.appendChild(st);
+  const el=document.body.appendChild(document.createElement("div")); el.id="activite"; el.setAttribute("aria-hidden","true");
+  const classe={">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
+  let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false;
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"})[c]);
+  const ms=()=>Math.round(performance.now()-t0);
+  function ajouter(x){ if(!x) return null; const l={k:x.k,t:x.t,n:0,h:ms()}; L.push(l); if(L.length>40) L.shift(); sale=true; tFin=0; return l; }
+  function rendre(){
+    // frappe : la première ligne pas encore écrite avance ; s'il y en a beaucoup en retard, les anciennes s'écrivent d'un coup
+    const att=L.filter(l=>l.n<l.t.length); att.slice(0,Math.max(0,att.length-3)).forEach(l=>l.n=l.t.length);
+    if(att.length){ const l=att.find(l=>l.n<l.t.length); l.n=Math.min(l.t.length,l.n+14); sale=true; }
+    if(!sale) return; sale=false;
+    const V=L.slice(-16), dern=V.findIndex(l=>l.n<l.t.length);
+    el.innerHTML=V.map((l,i)=>'<div class="l '+(classe[l.k]||"")+'" style="opacity:'+(.45+.55*Math.min(1,(i+1)/(V.length-6||1)))+'"><span class="h">'+(l.h/1000).toFixed(1)+'</span><span class="s">'+esc(l.k)+'</span><span>'
+      +esc(l.t.slice(0,l.n))+(i===dern||(dern<0&&i===V.length-1&&tFin===0)?'<span class="c">&nbsp;</span>':'')+'</span></div>').join("");
+  }
+  function pas(){
+    const now=performance.now();
+    if(meneur){
+      const v=meneur.enVol(), a=meneur.atelier&&meneur.atelier();
+      if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interprète",0))};
+        appel.l.t=ACTIVITE.ligneAppel("interprète",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
+      else if(appel){ appel.l.k="✓"; appel.l.t="interprète  répondu en "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true; }
+      if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("accessoiriste",0))};
+        fab.l.t=ACTIVITE.ligneAppel("accessoiriste",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
+      else if(fab){ fab.l.k="✓"; fab.l.t="accessoiriste  rendu en "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
+    }
+    const q=queue[0];
+    if(q!==(act&&act.a)){
+      if(act){ act.l.k="✓"; act.l.t=act.l.t.replace(/ [█░]+$/,""); act.l.n=act.l.t.length; }
+      act=null;
+      if(q){ const t=ACTIVITE.ligneAction(q), p=L[L.length-1];
+        // pas d'un même trajet (tourner, marcher, tourner…) : une seule ligne qui compte
+        if(p&&p.k==="✓"&&p.type===q.type&&/^(marcher|tourner)$/.test(q.type)){ p.k="▶"; p.x=(p.x||1)+1; p.t=t+" ×"+p.x; p.n=p.t.length; act={a:q,l:p,r0:q.rest}; }
+        else { const l=ajouter({k:"▶",t}); l.type=q.type; act={a:q,l,r0:q.rest}; } }
+      sale=true;
+    } else if(act&&q.type==="effort"&&act.r0>0){ act.l.t=ACTIVITE.ligneAction({type:"effort",secondes:act.r0})+" "+ACTIVITE.barre(1-q.rest/act.r0); act.l.n=act.l.t.length; sale=true; }
+    rendre();
+    // la fin : plus d'appel, plus de fabrication, la file vide ; on laisse lire 4 s, puis fondu
+    const calme=repondu&&!appel&&!fab&&!queue.length;
+    if(!calme){ finQ=0; tFin=0; }
+    else if(!finQ) finQ=now;
+    else if(now-finQ>4000&&!tFin){ tFin=now; el.classList.remove("on"); }
+    if(tFin&&now-tFin>1200||now-t0>90000){ clearInterval(timer); timer=0; el.classList.remove("on"); }
+  }
+  return {
+    entendre(texte){ if(!on||typeof ACTIVITE==="undefined") return; t0=performance.now(); L=[]; appel=fab=act=null; finQ=tFin=0; repondu=false;
+      try{ ACTIVITE.analyser(texte,MENEUR,MODELES).forEach(ajouter); }catch(e){ console.warn("activité",e); }
+      el.classList.add("on"); if(!timer) timer=setInterval(pas,100); pas(); },
+    evt(e){ if(!on||!timer) return; const x=ACTIVITE.ligneEvenement(e); if(x) ajouter(x); },
+    bascule(){ on=!on; try{ localStorage.setItem("bodycam-activite",on?"1":"0"); }catch(_){} if(!on){ clearInterval(timer); timer=0; el.classList.remove("on"); } return on; },
+    on:()=>on, lignes:()=>L.map(l=>l.k+" "+l.t)
+  };
+})();
+{ const b=document.createElement("button"); b.type="button"; b.id="activite-bouton"; b.className="ghost";
+  const maj=()=>{ b.textContent="Activité : "+(activite.on()?"oui":"non"); b.setAttribute("aria-pressed",String(activite.on())); };
+  b.onclick=()=>{ activite.bascule(); maj(); }; $("outils").appendChild(b); maj(); }
+window.balActivite=activite;   // essais : balActivite.lignes()
+
+/* ------------------------------------------------------------------ la régie : un petit bandeau à gauche pendant le jeu
+   Une illustration de démo (pas une mesure) : des « agents » par domaine, dont le voyant s'allume quand leur domaine travaille
+   (file d'actions, attente de la réponse, son, marche). Aucun coût de rendu : quatre mises à jour par seconde, opacité seulement. */
+const regie=(()=>{
+  if(window.__CFG&&!CFG.regie) return null;
+  const el=document.createElement("div"); el.id="regie"; el.setAttribute("aria-hidden","true");
+  const L=[["ciel","Ciel · lumière"],["monde","Monde · terrain"],["histoire","Histoire"],["evenements","Événements"],["corps","Comportement"],["son","Son · voix"]];
+  el.innerHTML='<p class="rg-t">Agents · régie</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
+  document.body.appendChild(el);
+  const N={}; for(const p of el.querySelectorAll(".rg-l")) N[p.dataset.k]={p,b:p.querySelector("b"),n:0,t:0};
+  const etats={ciel:["veille","exposition","brume"],monde:["veille","sème","relief"],histoire:["écoute","écrit","décide"],evenements:["veille","prépare","déclenche"],corps:["repos","planifie","agit"],son:["silence","mixe","joue"]};
+  let i=0;
+  setInterval(()=>{ i++;
+    const jeu=!(ouverture&&ouverture.ouvert())&&!document.hidden&&innerWidth>=760&&activite.on()&&!CFG.nohud;
+    el.classList.toggle("on",jeu); if(!jeu) return;
+    const attente=$("pensee").textContent==="…", q=queue.length, type=q?queue[0].type:"", parle=$("pensee").classList.contains("on")&&!attente;
+    const sonne=!!(window.balSon&&window.balSon.occupe&&window.balSon.occupe());
+    const v={ ciel:(i%23<3)||Math.abs(exposure-expTarget)>.08?1:0, monde:walking?2:(i%17<2?1:0), histoire:attente?2:parle?1:0,
+      evenements:/effort|poser|faconner|chercher/.test(type)?2:q>2?1:0, corps:q?(/attendre|penser/.test(type)?1:2):0, son:sonne?2:parle||listening?1:0 };
+    for(const k in N){ const o=N[k], n=v[k]; if(n!==o.n){ o.n=n; o.p.dataset.n=n; o.b.textContent=etats[k][n]; } }
+  },250);
+  for(const k in N){ N[k].p.dataset.n=0; N[k].b.textContent=etats[k][0]; }
+  return el;
+})();
 
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={

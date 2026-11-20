@@ -68,7 +68,19 @@ export const REGLAGES = {
   ENJAMBE_LARGE_M: 0.4,            // ... et plus étroit que ça (une enjambée) : une galette basse mais large se contourne (§18)
   ENJAMBE_PLAT_M: 0.15,            // ... sauf si c'est plat (moins que ça) : une pierre plate, on marche dessus, quelle que soit sa largeur (§18)
   MARGE_PIEDS: 0.12,               // ce qui s'enjambe, on l'évite quand même d'un pas de côté si c'est facile : cette marge aux pieds (§18)
+  // Réactivité (démo du 20/11, « Claude réagit plus vite ») : valeurs de REGLAGES_DEMO, la page les active par défaut.
+  ANTICIPER: false,                // une demande que la page reconnaît seule (chose de la bibliothèque, façonnage, chercher, marche) est jouée
+                                   // dès la phrase, sans attendre Claude ; sa réponse ne fait qu'enrichir (jauges, faits), sans rien refaire
+  CONSIGNE_REDUIRE: 0,             // 0..4 : consigne du tour raccourcie d'avance (moins d'échanges, de faits, pas de résumé)
+  EFFORT: null,                    // {base_s, par_palier_s, max_s} : remplace la durée d'effort de la bibliothèque (exploit.effort)
+  PAUSE_S: null,                   // les temps morts entre deux gestes (avant le cadrage, avant la réaction) ; null : ceux d'origine
+  FACONNAGE_S: 15,                 // durée du façonnage (MENEUR.gesteFaconnage, lue par la page)
+  DEGOUT_K: 1,                     // hésitation et mains essuyées (§22) : durées des données × ce facteur
+  MARCHE_K: 1,                     // la page : vitesse des marches dirigées (rejoindre, chercher, cadrer), gestes de ramassage et de regard
 };
+/* Mode démo : réagir vite (première réaction sous 0,5 s, chose à l'écran en quelques secondes). Les tests gardent REGLAGES. */
+export const REGLAGES_DEMO = { ANTICIPER: true, DELAI_VOIX_S: 10, DELAI_AUTRE_S: 10, DELAI_OBJET_S: 10, CONSIGNE_REDUIRE: 4,
+  EFFORT: { base_s: 2, par_palier_s: 1.4, max_s: 6 }, PAUSE_S: 0.2, FACONNAGE_S: 9.5, MARCHE_K: 1.35, DEGOUT_K: 0.5 };
 /* Les deux caractères : valeurs posées par REGLAGES.CARACTERE avant les réglages de l'histoire. */
 export const CARACTERES = {
   obeissant: { CEDER_APRES_REFUS: 0, COUT_HORS_MONDE: 0 },
@@ -1806,7 +1818,7 @@ export function creerMeneur(o) {
     return isObj(r) ? r : {};
   }
   const emettre = ord => { try { o.emettre && o.emettre(ord); } catch (_) {} };
-  const log = (type, x = {}) => evenements.push(Object.assign({ min: +minutes(partie).toFixed(2), type }, x));
+  const log = (type, x = {}) => { const e = Object.assign({ min: +minutes(partie).toFixed(2), type }, x); evenements.push(e); if (o.surEvenement) try { o.surEvenement(e); } catch (_) {} };   // surEvenement : le panneau d'activité
   const tirer = l => l[Math.floor(alea(partie) * l.length)];
 
   function perimer(a) { if (!a) return; a.perime = true; if (a.fini) { const f = a.fini; a.fini = null; f(); } }
@@ -1906,7 +1918,7 @@ export function creerMeneur(o) {
   function delai(type) { return type === 'voix' ? R.DELAI_VOIX_S : R.DELAI_AUTRE_S; }
   function lancer(motif, fini) {
     const id = ++numero;
-    const c = consigne(h, partie, derniereP, motif, R);
+    const c = consigne(h, partie, derniereP, motif, R, Math.round(num(R.CONSIGNE_REDUIRE, 0, 4, 0)));
     const appel = { id, type: motif.type, motif, debut: sec, fini, perime: false, fait: false };
     enVol = appel; partie.horloge.appels++;
     appels.push({ id, type: motif.type, min: +minutes(partie).toFixed(2), consigne: c, reponse: null, statut: 'en_vol' });
@@ -1916,7 +1928,7 @@ export function creerMeneur(o) {
     // la pensée d'une réponse au joueur s'affiche dès qu'elle est écrite (flux), filtrée comme la pensée finale ; le reste suit
     const opt = { modelTier: 'quick', cache: false };
     if (motif.type === 'voix') opt.onPensee = t0 => {
-      if (enVol !== appel || appel.perime || appel.apercu) return;
+      if (enVol !== appel || appel.perime || appel.apercu || appel.anticipe) return;   // anticipé : la pensée est déjà dite
       const t = penseeSure(couperPensee(t0), h, partie); if (!t) return;
       if (apercuFautif(motif.texte, t)) { log('apercu_jete', { texte: t }); return; }
       appel.apercu = t; const a = appels.find(x => x.id === id); if (a) a.apercu_s = Math.round((sec - appel.debut) * 10) / 10;
@@ -1941,7 +1953,7 @@ export function creerMeneur(o) {
     } else {
       const v = validerSortie(rep);
       if (a) a.statut = v ? statut : (statut === 'delai' ? 'delai' : 'invalide');
-      if (appel.type === 'voix') { appliquerVoix(appel.motif.texte, v); perimer(appel); }
+      if (appel.type === 'voix') { if (appel.anticipe) enrichir(v); else appliquerVoix(appel.motif.texte, v); perimer(appel); }
       else if (appel.type === 'evenement') { if (v) appliquer(v, 'evenement'); }
       else if (appel.type === 'relance') relancePrete = { v, motif: appel.motif };
       else if (appel.type === 'fin') { if (v) { const t = penseeSure(v.pensee, h, partie, { fin: true }); if (t) { afficher(t, 'cloture', false); noter('porteur', t); } } finSeq && (finSeq.cloture = true); }
@@ -1959,7 +1971,7 @@ export function creerMeneur(o) {
       const compris = s.compris !== false && (liste(s.actions).length > 0 || isObj(s.scene)) || !!g || corps.length > 0 || !!def || !!cible || stop;
       let actions = stop ? [] : validerActions(s.actions);
       if (g || corps.length || def) actions = validerActions([...(g ? g.actions : []), ...corps, ...(def ? [{ type: 'posture', hauteur: 0.6 }, { type: 'attendre', secondes: 3 }, { type: 'posture', hauteur: 1 }] : []), ...(g || def || corps.some(a => a.type !== 'posture') ? [] : actions)]);
-      const pensee = stop ? tirer(['Je bouge plus.', 'OK. Je reste là.', 'Je m\'arrête. Quoi ?']) : cible ? tirer(['Attends… là. Et là. Voilà. Pas mal, hein ?', 'Bon. Avec ce qui traîne par terre… Voilà.']) : g ? g.pensee : def ? tirer(['Vite. De la terre dessus, je piétine, je piétine…', 'Voilà. C\'est fait. Plus rien.']) : corps.length && !liste(s.actions).length ? tirer(['Hm. Voilà.', 'Là. Tu vois ce que je vois ?', 'Bon.']) : str(s.pensee, 240);
+      const pensee = stop ? tirer(['Je bouge plus.', 'OK. Je reste là.', 'Je m\'arrête. Quoi ?']) : cible ? tirer(anticipant ? ['Bon. Je trouve ce qu\'il faut, et je m\'y mets.', 'D\'accord. Deux secondes, je cherche de quoi faire.'] : ['Attends… là. Et là. Voilà. Pas mal, hein ?', 'Bon. Avec ce qui traîne par terre… Voilà.']) : g ? g.pensee : def ? tirer(['Vite. De la terre dessus, je piétine, je piétine…', 'Voilà. C\'est fait. Plus rien.']) : corps.length && !liste(s.actions).length ? tirer(['Hm. Voilà.', 'Là. Tu vois ce que je vois ?', 'Bon.']) : str(s.pensee, 240);
       v = { sas: null, pensee: compris ? pensee : tirer(INCOMPRIS), attitude: compris ? 'suit' : 'hesite',
         actions, scene: g || def ? null : s.scene || null, temps: null, fin: null, etat: { peur: 0, confiance: 0, agacement: 0 },
         faits: [], intention: '', question: false, fabrique: g ? { nom: g.nom, quoi: '', ou: g.ou } : null, suite: null, defaire: def ? [def] : [], modifie: cible ? { objet: cible, quoi: rt ? rt.quoi : str(tm.modele.nom, 60) } : null, resume: null, secours: true };
@@ -2173,6 +2185,7 @@ export function creerMeneur(o) {
      l'effort ; (2) quelle qu'elle soit, au-delà du palier « gros », une réaction après le cadrage, une seule fois : celle de
      Claude (« apres ») si elle est recevable, sinon la banque. */
   const EX = exploitDe(BIB);
+  const EXG = () => EX && isObj(R.EFFORT) ? Object.assign({}, EX, { effort: R.EFFORT }) : EX;   // la durée d'effort du mode démo
   function tenirExploit(v, texte) {
     if (!EX || !v.fabrique || R.MODELES === 'non') return;
     const mf = modeleNomme(v.fabrique.nom, v.fabrique.quoi, texte); if (!mf || mf.modele.ramassable || mf.modele.transforme) return;
@@ -2190,14 +2203,14 @@ export function creerMeneur(o) {
     const pal = palierExploit(fm.facteur, EX);
     if (corps) {
       const mot = sub(v.pensee);
-      if (!str(v.pensee, 240) || mot || refusDit(v.pensee, EX)) {
+      if (!str(v.pensee, 240) || mot || refusDit(v.pensee, EX) || anticipant) {   // anticipé : une phrase d'« avant » de la banque, tout de suite
         const L = phrasesExploit(isObj(EX.avant) ? EX.avant[pal] : [], { masse });
         if (L.length) { fautes.pensee = v.pensee || ''; v.pensee = tirer(L); }
       }
       // le geste : accroupi, l'effort, relevé ; les autres gestes de la réponse (marche, regard) sont gardés, la séquence les range
       const garde = liste(v.actions).filter(a => !['posture', 'attendre', 'effort', 'penser'].includes(a.type));
       const kg = Math.round(volumeFormes(fm.formes) * 500 * 100) / 100;   // ordre de grandeur pour le bruit de sa chute (docs/bruitages.md)
-      v.actions = [...gesteExploit(fm.facteur, EX, tirer).map(a => a.type === 'effort' ? Object.assign(a, { exploit: Object.assign(a.exploit, { masse: kg }) }) : a), ...garde];
+      v.actions = [...gesteExploit(fm.facteur, EXG(), tirer).map(a => a.type === 'effort' ? Object.assign(a, { exploit: Object.assign(a.exploit, { masse: kg }) }) : a), ...garde];
     }
     let apres = null, source = null;
     if (pal !== 'normal') {
@@ -2210,7 +2223,7 @@ export function creerMeneur(o) {
     const pc = planConsequences(BIB, { palier: pal, facteur: fm.facteur, modele: md }, () => alea(partie));   // §24 : ce que la démesure fait autour d'elle
     if (pc) v.fabrique.consequences = pc;
     if (Object.keys(fautes).length) log('exploit_corrige', Object.assign({ modele: mf.id }, fautes));
-    log('exploit', { modele: mf.id, facteur: fm.facteur, palier: pal, corps, effort_s: corps ? dureeEffort(fm.facteur, EX) : 0, apres: source });
+    log('exploit', { modele: mf.id, facteur: fm.facteur, palier: pal, corps, effort_s: corps ? dureeEffort(fm.facteur, EXG()) : 0, apres: source });
   }
   /* Le flux de la pensée (aperçu) d'une demande au corps ne montre pas une autre matière : elle sera remplacée. */
   function apercuFautif(texte, t) {
@@ -2250,7 +2263,7 @@ export function creerMeneur(o) {
     let pendant = liste(ia.pendant).map(t => { const x = ok(t); if (!x && t) jetees.push(t); return x; }).filter(Boolean).slice(0, 3);
     if (pendant.length) src.pendant = 'ia';
     else { const L = banque('pendant'); src.pendant = 'banque'; while (pendant.length < nP && L.length) pendant.push(L.splice(Math.floor(alea(partie) * L.length), 1)[0]); }
-    const sec = k => num(isObj(DG[k]) ? DG[k][pal] : 2, 0.5, 6, 2), esp = num(DG.espacement_s, 0.5, 20, 3);
+    const sec = k => num(isObj(DG[k]) ? DG[k][pal] : 2, 0.5, 6, 2) * num(R.DEGOUT_K, 0.1, 1, 1), esp = num(DG.espacement_s, 0.5, 20, 3);
     // la nausée possible (§22.2) : le seuil se juge sur l'intensité (le contact se mesure sur le geste réel : planDegout, même
     // tirage) ; la chose qu'elle laisse vient de la bibliothèque, comptée comme ambiance, posée seulement quand elle vomit
     const NZ = isObj(DG.nausee) ? DG.nausee : null; let nausee = null;
@@ -2429,7 +2442,10 @@ export function creerMeneur(o) {
     log(dem.modifie ? 'modif_demandee' : 'objet_demande', dem.modifie ? { id: dem.modifie.objet, quoi: dem.modifie.quoi, remplace: !!dem.modifie.remplace }
       : { nom: dem.fabrique && dem.fabrique.nom, ou: dem.fabrique && dem.fabrique.ou, suite: dem.suite || undefined });
     if (o.rejeu) return;
-    if (typeof o.demander !== 'function') { Promise.resolve().then(() => recevoirObjet(id, null)); return; }
+    // la bibliothèque suffit (mode démo) : pas d'accessoiriste, la chose part tout de suite (les suites d'ambiance de Claude en moins)
+    const local = R.ANTICIPER && R.MODELES === 'base' && (dem.fabrique ? !!mou : !!(dem.modifie && dem.modifie.modele));
+    if (local) log('atelier_local', { nom: dem.fabrique ? dem.fabrique.nom : dem.modifie.modele });
+    if (local || typeof o.demander !== 'function') { Promise.resolve().then(() => recevoirObjet(id, null)); return; }
     let pr;
     try { pr = Promise.resolve(o.demander(c, { modelTier: 'default', cache: false })); } catch (_) { pr = Promise.resolve(null); }
     pr.then(r => recevoirObjet(id, r), () => recevoirObjet(id, null));
@@ -2541,9 +2557,10 @@ export function creerMeneur(o) {
   /* Montrer le résultat : la page le cadre (distance faite pour sa taille, accroupi s'il est petit). Pas pendant que le
      joueur a dit de ne plus bouger : il le vise seulement. */
   function montrerObjet(id, etonne) {
-    const ac = partie.porteur.immobile ? [{ type: 'viser', objet: id }] : [{ type: 'attendre', secondes: 0.5 }, { type: 'cadrer', objet: id }];
+    const P = (s) => R.PAUSE_S === null || R.PAUSE_S === undefined ? s : Math.min(s, num(R.PAUSE_S, 0, 5, s));
+    const ac = partie.porteur.immobile ? [{ type: 'viser', objet: id }] : [{ type: 'attendre', secondes: P(0.5) }, { type: 'cadrer', objet: id }];
     // la réaction (§20) : dite quand il l'a vue entière, jamais avant ; une fois par chose (creer n'a lieu qu'une fois)
-    if (etonne && etonne.texte) { ac.push({ type: 'attendre', secondes: 0.8 }, { type: 'penser', texte: etonne.texte });
+    if (etonne && etonne.texte) { ac.push({ type: 'attendre', secondes: P(0.8) }, { type: 'penser', texte: etonne.texte });
       noter('porteur', etonne.texte); log(etonne.degout ? 'degout_fin' : 'etonnement', { id, palier: etonne.palier, source: etonne.source, texte: etonne.texte }); }
     emettre({ type: 'actions', actions: ac }); log('cadrage', { id, immobile: !!partie.porteur.immobile });
   }
@@ -2772,7 +2789,9 @@ export function creerMeneur(o) {
     perimer(enVol);
     evtEnAttente = null; relancePrete = null; penseeEnAttente = null; partie.relance.palier = 0;
     // « stop » n'attend pas Claude : la file est vidée tout de suite, et il ne repart pas de lui-même avant un autre ordre
+    const anticipe = R.ANTICIPER && !estStop(texte) && reconnuLocal(texte);
     if (estStop(texte)) { po.immobile = true; emettre({ type: 'stop' }); log('stop', { voix: texte }); }
+    else if (anticipe) { if (po.immobile) { po.immobile = false; emettre({ type: 'reprendre' }); } }
     else {
       if (po.immobile) { po.immobile = false; emettre({ type: 'reprendre' }); }
       // un geste sûr tout de suite, pendant que Claude répond (se baisser, regarder une chose) : rien qui se répète mal
@@ -2782,7 +2801,34 @@ export function creerMeneur(o) {
         .filter(a => a.type === 'posture' || a.type === 'viser').filter((a, i, l) => l.findIndex(b => b.type === a.type) === i);
       if (imm.length) { emettre({ type: 'actions', vider: true, actions: imm }); log('geste_immediat', { actions: imm.map(a => a.type) }); }
     }
-    return new Promise(res => lancer({ type: 'voix', texte }, res));
+    return new Promise(res => {
+      lancer({ type: 'voix', texte }, res);
+      if (anticipe && enVol) {                                   // la page sait déjà quoi faire : le geste part maintenant, Claude enrichira
+        enVol.anticipe = true; log('anticipe', { voix: texte });
+        anticipant = true; try { appliquerVoix(texte, null); } finally { anticipant = false; }
+      }
+    });
+  }
+  /* Mode démo : ce que la page sait faire seule, sans attendre Claude. */
+  let anticipant = false;
+  function reconnuLocal(texte) {
+    const t = sansAccents(texte || '');
+    if (BIB && R.MODELES !== 'non') {
+      if (FAIRE.test(t) && modeleDe(BIB, t, { ramassable: false }) && !modeleTransforme(t)) return true;   // une chose de la bibliothèque
+      if (modeleTransforme(t) && (partie.monde.crees.some(demandee) || enFabrication())) return true;     // « fais-en un bonhomme »
+    }
+    if (secoursChercher(texte)) return true;
+    return secoursPas(texte, designer(texte, null, true)).length > 0;
+  }
+  /* La réponse de Claude à un tour anticipé : elle n'arrête ni ne refait rien, elle nourrit l'état (jauges, faits, intention). */
+  function enrichir(v) {
+    if (!v) return;
+    const po = partie.porteur;
+    for (const j of JAUGES) po[j] = Math.min(5, Math.max(0, po[j] + num(v.etat && v.etat[j], -5, 5, 0)));
+    for (const f of liste(v.faits)) if (penseeSure(f, h, partie)) ajouterFait(f, 'impro');
+    if (v.intention) po.intention = v.intention;
+    if (v.resume && partie.journal.demande_resume) { partie.journal.resume = v.resume; partie.journal.demande_resume = false; }
+    log('enrichi', { faits: liste(v.faits).length });
   }
 
   recompter();
@@ -2801,6 +2847,7 @@ export function creerMeneur(o) {
     partie: () => clone(partie),
     fini: () => partie.trame.fin_jouee,
     enVol: () => enVol ? { id: enVol.id, type: enVol.type } : null,
+    atelier: () => atelier ? { id: atelier.id, depuis_s: sec - atelier.debut } : null,
   };
 }
 
