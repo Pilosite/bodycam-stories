@@ -10,6 +10,12 @@
     "rochers": 1,
     "feuillage": 0.2,
     "variete": 1,
+    "trouee": {
+      "le_long": 4,
+      "vers": "soleil",
+      "longueur": 110,
+      "largeur": 12
+    },
     "houppiers": {
       "arbres": {
         "a": {
@@ -128,7 +134,10 @@
   },
   "parcours": {
     "type": "sentier",
-    "pas": 5.5
+    "pas": 5.5,
+    "depart": {
+      "lumiere": "soleil"
+    }
   },
   "evenements": [],
   "surfaces": {

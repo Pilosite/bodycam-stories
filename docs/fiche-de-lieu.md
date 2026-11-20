@@ -218,6 +218,17 @@ Ce que fait le moteur :
 - Coût : les rais et l'atmosphère sont des variantes du shader d'ombrage, compilées seulement si la fiche demande `atmosphere` (et les rais en qualité complète) ; une fiche sans `atmosphere` garde le programme d'avant.
 - Ce que la brume ne sait pas : elle suit le sol de la caméra (pas les creux du relief), et la canopée y est statistique (pas de rais découpés par les feuilles, seulement par les troncs, perches et rochers de la carte d'ombres).
 
+## Départ et trouée (`parcours.depart`, `foret.trouee`)
+
+```json
+"parcours": { "type": "sentier", "depart": { "lumiere": "soleil" } },
+"foret": { "trouee": { "le_long": 4, "vers": "soleil", "longueur": 110, "largeur": 12 } }
+```
+
+- `parcours.depart.lumiere` (`soleil` ou `ombre`) : au chargement, la page cherche le long du trajet (de -60 à 160 m, sur l'axe et jusqu'à 1,4 m de côté) le point où le sol autour du porteur (disque de 2,5 m, devant et derrière) est au soleil (ou à l'ombre), libre d'obstacle, puis le cap le long du trajet qui met le soleil de trois quarts. Calcul en JS (`src/lumiere.js`, `chercherDepart`) : relief, troncs, perches, charpentières, bouquets de feuilles troués des houppiers, blocs. Déterministe. Sans le champ : le début du trajet, comme avant.
+- `foret.trouee` : une bande sans arbre, perche, bloc ni élément de semis, qui part du trajet à `le_long` m et s'ouvre vers le soleil (`vers` : `soleil` ou un azimut en degrés) sur `longueur` m (5 à 200), `largeur` m (4 à 40), bords ondulés. Une seule par lieu. À 8° de hauteur, une forêt dense ne laisse aucun point du sentier au soleil (les houppiers des pins portent leur ombre à 60-120 m) : la trouée fait l'éclaircie. Même formule dans `monde.glsl` (`cleared`) et `src/lumiere.js` (`troue`).
+- Le moteur v3 ne sème pas le sol dans la carte d'ombres : un talus n'y fait pas d'ombre ; la recherche le compte quand même.
+
 ## Lointain : l'horizon
 
 `lointain` décrit ce qu'on voit au-dessus des arbres : une chaîne de montagnes ou des collines, calculée par direction du regard et non tracée (coût négligeable). `eau` (`#rrggbb` ou `true`) pose une mer, une baie ou un lac sous l'horizon, là où les rayons ne touchent rien : reflet du ciel, vagues, éclats du soleil. Au bout d'une rue qui descend, c'est la baie. `hauteur` est l'angle des plus hauts sommets en degrés (collines 3 à 6, montagne 8 à 15, haute montagne vue de la vallée 18 à 30), `decoupe` la finesse des crêtes (0 à 1), `neige` la part enneigée (0 à 1), `couleur` la roche, `couleur_bas` les contreforts. Exemple : `essais/chalet-mont-blanc.json`.
