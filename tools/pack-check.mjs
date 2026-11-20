@@ -3,7 +3,7 @@
 // One parser: the PDL source is read by core/source.js; the checks across the pack's files live in tools/story.mjs.
 //
 //   node tools/pack-check.mjs stories/louis-round          report, exit 1 on errors
-//   node tools/pack-check.mjs stories/louis-round --json   print the compiled form (principles with provenance, scene, rules)
+//   node tools/pack-check.mjs stories/louis-round --json   the report as JSON: ok, errors, warnings, stats, compiled form
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { main } from './story.mjs';

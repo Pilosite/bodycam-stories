@@ -42,7 +42,7 @@ The JSON form is the canonical form. Tokens round-trip to it exactly. Source com
 
 ## 2. PDL source: one text, a spectrum from soft to hard
 
-A source file (`*.pdl`, UTF-8) holds **statements**, each with a **strength**. The grammar below is the one the story pack and the pattern library are written in (`stories/louis-round/`, `patterns/`): the pack's de facto draft is adopted, with the differences listed in §2.10. `core/source.js` parses it (`parseSource`, `serializeSource`, `compilePack`); `tools/pack-check.mjs` checks references across a pack.
+A source file (`*.pdl`, UTF-8) holds **statements**, each with a **strength**. The grammar below is the one the story pack and the pattern library are written in (`stories/louis-round/`, `patterns/`): the pack's de facto draft is adopted, with the differences listed in §2.10. `core/source.js` parses it (`parseSource`, `serializeSource`, `compilePack`); `node tools/story.mjs check` (alias `tools/pack-check.mjs`) checks references across a pack with that parser.
 
 ### 2.1 Lines
 
@@ -213,7 +213,7 @@ audit { type: "audit", principle, ref_seq, relevant: bool, respected: bool | nul
 | 10 | Absolutes in prose only | — | **added** the explicit `!! never call [if …]` form, compiled by code | lets a creator write an absolute that holds today, without a compile step |
 | 11 | Gauges | — | **added** `gauge id "label": …` (§2.5) | architecture "Gauges" (P10) |
 | 12 | Counter-example why, open-question note | required | required (parse error otherwise) | as the pack |
-| 13 | Parser | `tools/pack-check.mjs` has its own | `core/source.js` is the reference; both parse the pack identically today | follow-up: pack-check should import the parser from core (not done: outside this lot) |
+| 13 | Parser | `tools/pack-check.mjs` had its own | `core/source.js` is the only parser; `tools/story.mjs check` (and its alias `tools/pack-check.mjs`) compiles through `compilePack` and adds the cross-file checks | one parser (done in the creator-kit lot) |
 
 ---
 
@@ -442,7 +442,7 @@ A `scene` rule only fires in the scene it was registered in. A `tendency` rule d
 | engine | the executor below | `core/paper-world.js` (tests); the page (M2, §12) |
 | model | `embed(texts)`, `decide({ tier, question, options?, state? }) → { answer, p?, uncertain? }`, `generate({ tier, purpose, context }) → { tokens }` (ADR 0004; tiers are roles, models are configuration) | `core/canned-model.js` (tests); artifact and proxy adapters (later lot) |
 | input | `subscribe(handler)`; events `{ kind: speech, text, lang, loud? }`, `{ kind: look, target, s }` | the page (later) |
-| store | `readPack`, `readLibrary`, `appendJournal`, `readJournal` | `tools/pack-check.mjs` `loadPack` / `loadLibrary` (files) |
+| store | `readPack`, `readLibrary`, `appendJournal`, `readJournal` | `tools/story.mjs` `loadPack` / `loadLibrary` (files; re-exported by `tools/pack-check.mjs`) |
 
 `missing(port, impl)` lists what an adapter lacks. Whatever a model returns goes through `validate`; the core never trusts a port.
 

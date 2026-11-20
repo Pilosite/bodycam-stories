@@ -813,6 +813,8 @@ function outcome(E) {
 export function whatif(entries, compiled) {
   const head = entries[0];
   if (!head || head.type !== 'session') throw new Error('journal: no session header');
+  if (!head.scene.id) throw new Error('the journal\'s scene names no pack: whatif compares a session played from a pack (story play) with that pack edited');
+  if (compiled.scene.id && head.scene.id !== compiled.scene.id) throw new Error(`the journal is a session of ${head.scene.id}, not of ${compiled.scene.id}`);
   const recorded = entries.filter(e => e.type === 'principles').flatMap(e => e.records);
   const principles = clone(compiled.principles), carried = carryCompiled(recorded, principles);
   const edited = [Object.assign({}, head, { scene: compiled.scene }), ...entries.slice(1)];
@@ -907,9 +909,10 @@ export function renderWhatif(w, entries) {
   const L = [], ctx = contextOf(entries), ctxB = contextOf(w.journal);
   const pc = w.pack;
   L.push(`pack changes: ${pc.added.length} added, ${pc.removed.length} removed, ${pc.changed.length} changed${w.scene.length ? '; scene: ' + w.scene.join(', ') : ''}${w.carried.length ? `; compiled forms carried from the journal: ${w.carried.join(', ')}` : ''}`);
-  for (const x of pc.changed) L.push(`  ~ ${x.id} (${x.what.join(', ')})${x.from !== x.to ? `\n      was: ${x.from}\n      now: ${x.to}` : ''}`);
-  for (const x of pc.added) L.push(`  + ${x.id} ${x.mark} ${short(x.text, 90)}`);
-  for (const x of pc.removed) L.push(`  - ${x.id} ${x.mark} ${short(x.text, 90)}`);
+  const cap = (xs, f) => { xs.slice(0, 20).forEach(f); if (xs.length > 20) L.push(`  … ${xs.length - 20} more (--json lists them all)`); };
+  cap(pc.changed, x => L.push(`  ~ ${x.id} (${x.what.join(', ')})${x.from !== x.to ? `\n      was: ${x.from}\n      now: ${x.to}` : ''}`));
+  cap(pc.added, x => L.push(`  + ${x.id} ${x.mark} ${short(x.text, 90)}`));
+  cap(pc.removed, x => L.push(`  - ${x.id} ${x.mark} ${short(x.text, 90)}`));
   if (w.equal) { L.push('\nsame session: every entry and the hash are unchanged'); return L.join('\n'); }
   L.push(`\nfirst difference: #${w.first}${w.first_in_play !== null && w.first_in_play !== w.first ? ` (the pack's rules as registered); first difference in play: #${w.first_in_play}` : ''}`);
   if (w.at) {
@@ -999,7 +1002,7 @@ export async function main(argv, { print = console.log } = {}) {
   switch (cmd) {
     case 'check': {
       const dir = args[0] || 'stories/louis-round', res = checkPack(loadPack(dir), lib());
-      out(json ? res.compiled : null, renderCheck(dir, res));
+      out({ ok: !res.errors.length, errors: res.errors, warnings: res.warnings, stats: res.stats, compiled: res.compiled }, renderCheck(dir, res));
       return res.errors.length ? 1 : 0;
     }
     case 'build': {

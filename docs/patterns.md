@@ -1,6 +1,6 @@
 # Narrative patterns
 
-A pattern is a reusable story shape written as PDL source in `patterns/<id>.pdl`: roles to bind, the facts a story must provide, principles and rules written against the roles (`$role`, `$role.attr`, `$param`), hints for beats, and named variations. A story **instantiates** a pattern with a small file in `stories/<pack>/patterns/` that binds every role; `tools/pack-check.mjs` expands the pattern's rules with the bindings and checks every reference.
+A pattern is a reusable story shape written as PDL source in `patterns/<id>.pdl`: roles to bind, the facts a story must provide, principles and rules written against the roles (`$role`, `$role.attr`, `$param`), hints for beats, and named variations. A story **instantiates** a pattern with a small file in `stories/<pack>/patterns/` that binds every role; `node tools/story.mjs check` (through `core/source.js`) expands the pattern's rules with the bindings and checks every reference.
 
 Deviation from `docs/architecture.md`: the architecture sketches the library as `patterns/<id>.json`. Since its rules are `when … -> …` statements and its principles carry strengths, the library is PDL source too (`.pdl`), with the sections named after the fields: `summary`, `roles`, `facts_required`, `principles`, `rules`, `beats_hint`, `variations`.
 
