@@ -61,6 +61,24 @@ Each tier has one fixed JSON schema and one fixed effort, so caches and compiled
 - **E1:** an offline matching bench on about 150 labelled FR/EN sentences, a third of them out of scope. Compare BM25, e5-small and EmbeddingGemma. Report accuracy, risk-coverage curves, the thresholds and CPU latency. No key needed.
 - **E2:** run E1's weak band through Haiku 5.5 with thinking off and, if a key is available, through Jev with the option order swapped once. Report latency from France, valid rate, accuracy and cost.
 
+**Owner's answer (20 Nov 2026), now part of the decision.**
+
+- "JEV" means **decision models as a class**, not one vendor: cheap models that turn an indeterminate input into a structured, typed event. Open-weight ones of the same kind are welcome (Clef and Clef-flash today).
+- The architecture is **provider-agnostic**. Tiers are named by role and speed (`fast`, `mid`, `large`), never by a model family; the same roles can be served by Anthropic, Google or OpenAI models, chosen in configuration.
+- Decision models are **intermediate workers at every level**, not only in translation. `ModelPort.decide(state, questions)` is the single entry point, and the core calls it wherever a typed judgement is needed:
+
+| Where | The question asked |
+|---|---|
+| Translation | which of these intents is it? is it a conditional (a commitment)? |
+| Validation | is this request admissible here? does it break this `!!` statement? |
+| Gauges (P10) | given what happened, is `heat` low, medium or high? was that "too often"? |
+| Commitments | the condition is met: does she keep her word (`~`) given the moment? |
+| Staging | which of the prepared reactions fits? does the scene need the large tier? |
+| Audit | was this tendency relevant here? respected? |
+
+- In v1, `decide` is always available: it is served by a decision model when a key or local weights are present, and otherwise by the fast generative model with a flat structured output. The core does not know which. This moves decision models from "v2 to try" to "v1 behind the port, measured in E2".
+- Known weakness to design around: answers can flip when the option order changes. `decide` therefore asks each binary question in both orders when the stake is high, and treats disagreement as "uncertain".
+
 ## Consequences
 - Translation becomes mostly retrieval, so its speed depends on the encoder and the anchors, not on a provider. **Anchors join the frontier entry and the pack format**: that is a contract change to `docs/architecture.md`, to be written before M4.
 - The background tier gets a measurable job: anchors, lines and PDL; the hit rate scores it.
@@ -71,7 +89,7 @@ Each tier has one fixed JSON schema and one fixed effort, so caches and compiled
 - No scope row moves. This ADR makes the v2 row "on-device small model for translation" and the target row "specialised non-generative models" concrete.
 
 ## Open questions
-1. Is "JEV" Jev (TypeSafe AI)? If JEPA was meant: not usable yet, and its idea already sits in the translation tier.
+1. ~~Is "JEV" Jev?~~ Answered: the class of decision models, open-weight ones included.
 2. May we open an OpenRouter (or TypeSafe) account for E2? One key reaches Jev, Clef-flash and others.
 3. Is proxy mode accepted as the measuring mode, with the artifact a showcase that cannot prove the latency targets?
 4. Should there be a per-session cost ceiling for the continuous Opus background tier?
