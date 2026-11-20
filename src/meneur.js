@@ -80,7 +80,7 @@ export const REGLAGES = {
 };
 /* Mode démo : réagir vite (première réaction sous 0,5 s, chose à l'écran en quelques secondes). Les tests gardent REGLAGES. */
 export const REGLAGES_DEMO = { ANTICIPER: true, DELAI_VOIX_S: 10, DELAI_AUTRE_S: 10, DELAI_OBJET_S: 10, CONSIGNE_REDUIRE: 4,
-  EFFORT: { base_s: 2, par_palier_s: 1.4, max_s: 6 }, PAUSE_S: 0.2, FACONNAGE_S: 9.5, MARCHE_K: 1.35, DEGOUT_K: 0.5 };
+  EFFORT: { base_s: 2, par_palier_s: 1.4, max_s: 6 }, PAUSE_S: 0.2, FACONNAGE_S: 9.5, MARCHE_K: 1.35, DEGOUT_K: 0.12 };
 /* Les deux caractères : valeurs posées par REGLAGES.CARACTERE avant les réglages de l'histoire. */
 export const CARACTERES = {
   obeissant: { CEDER_APRES_REFUS: 0, COUT_HORS_MONDE: 0 },
