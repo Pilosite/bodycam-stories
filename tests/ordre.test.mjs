@@ -53,6 +53,7 @@ test('ordreDemande : le déplacement avant ou après la chose, selon la phrase',
     ['fais une crotte et éloigne-toi', 'apres'], ['mets-toi près de l\'arbre, ensuite fais une crotte', 'avant'],
     ['fais une crotte après t\'être déplacé', 'avant'], ['avant de faire une crotte, avance de 5 m', 'avant'],
     ['fais une crotte avant de partir', 'apres'], ['fais une crotte', null], ['avance de 5 mètres', null], ['bouge un peu plus loin et chie', 'avant'],
+    ['commence par t\'éloigner, puis fais une crotte', 'avant'], ['avant de te déplacer fais une crotte', 'apres'], ['fais demi-tour et avance de 6 mètres', null],
   ];
   for (const [p, att] of cas) { const o = ordreDemande(p); assert.equal(o ? o.ordre : null, att, p + ' : ' + JSON.stringify(o)); }
 });
