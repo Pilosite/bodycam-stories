@@ -1,0 +1,45 @@
+{
+ "_doc": "Bruitages en recettes (docs/bruitages.md), lus par src/son.js. Des DONNÉES : aucune chose ni aucun modèle nommés dans le code. micro : la prise micro de téléphone (toute la sortie y passe). sortie : volume général, baisse quand le joueur parle, limiteur et plafond. recettes : chacune faite de couches du vocabulaire (impulsions, bruit, onde, prise), hauteur, amplitude, ratés, fins, formants, saturation ; echelle pour un bruitage qui suit la masse. prises : quelques enregistrements libres embarqués (crédits dans docs/bruitages.md), une source comme une autre.",
+ "micro": {
+  "passe_haut_hz": 110, "passe_bas_hz": 7000,
+  "presence": { "hz": 2600, "gain_db": 4 },
+  "compression": { "seuil_db": -26, "ratio": 4 },
+  "ecretage": { "seuil": 0.55, "pousse": 2.2, "rattrape": 1.3 },
+  "reverb": { "duree_s": 0.3, "mouille": 0.08 }
+ },
+ "sortie": { "volume": 0.5, "baisse": 0.25, "limiteur_db": -3, "plafond": 0.9 },
+ "recettes": {
+  "flatulence": {
+   "_doc": "Des lèvres qui vibrent : un train d'impulsions à hauteur glissante (fermeture sèche = le claquement), un souffle filtré qui suit chaque impulsion, une onde grave, et la prise si la démesure en désigne une. Vibrato qui grandit, instabilité, ratés (ça cale, ça repart), fins.",
+   "couches": [
+    { "source": "impulsions", "gain": 1, "ouverture": 0.45, "jitter": 0.08, "shimmer": 0.35, "irregularite": 0.05, "claquement": 0.7 },
+    { "source": "bruit", "gain": 0.35, "suit": "impulsions", "filtre": { "type": "passe_bande", "hz_rapport": 4, "q": 1.5 } },
+    { "source": "onde", "forme": "sinus", "rapport": 1, "gain": 0.35, "suit": "impulsions" },
+    { "source": "prise", "gain": 1.2 }
+   ],
+   "hauteur": { "glisse": -0.3, "vibrato": { "hz": [5, 9], "profondeur": [0.03, 0.12], "croissance": 1.5 }, "instabilite": 0.12, "instabilite_hz": 6 },
+   "amplitude": { "attaque_s": 0.015, "relache_s": 0.04, "tremble": 0.3 },
+   "rates": { "par_s": 0.5, "duree_s": [0.08, 0.3], "reprise": [0.85, 1.3] },
+   "formants": [ { "hz": 250, "q": 2, "gain_db": 6 }, { "hz": 700, "q": 3, "gain_db": 4 }, { "hz": 2600, "q": 2, "gain_db": -6 } ],
+   "saturation": 0.5,
+   "fins": {
+    "sec": { "duree_s": 0.04, "niveau": 0.2, "pop": true },
+    "bulle": { "duree_s": 0.35, "montee": 0.4, "niveau": 0.6, "bulles": 3, "silence_s": 0.05 },
+    "ridicule": { "duree_s": 0.9, "montee": 1.8, "niveau": 0.5, "bulles": 3, "silence_s": 0.15 }
+   }
+  },
+  "chute": {
+   "_doc": "Une chose qui tombe au sol : un coup sourd (onde qui descend vite), un peu de bruit d'impact étouffé, des rebonds pour ce qui est léger. La masse donne la hauteur, la durée et la force (echelle).",
+   "couches": [
+    { "source": "onde", "forme": "sinus", "rapport": 1, "gain": 1 },
+    { "source": "bruit", "gain": 0.7, "decroit_s": 0.03, "filtre": { "type": "passe_bas", "hz": 900, "q": 0.7 } }
+   ],
+   "hauteur": { "chute_initiale": { "rapport": 2.2, "duree_s": 0.02 } },
+   "amplitude": { "forme": "percussion", "chute_rapport": 0.3, "rebond_s": [0.07, 0.12], "rebond_g": [0.2, 0.4] },
+   "formants": [ { "hz": 180, "q": 1, "gain_db": 4 } ],
+   "saturation": 0.1,
+   "echelle": { "masse_ref_kg": 1, "hauteur_hz": 120, "exposant_hauteur": -0.3, "duree_s": 0.2, "exposant_duree": 0.2, "force": 0.45, "exposant_force": 0.15, "distance_ref_m": 1.5, "rebond_sous": 0.3, "rebonds": [1, 2] }
+  }
+ },
+ "prises": {}
+}

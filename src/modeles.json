@@ -28,6 +28,20 @@
    "normal": [],
    "gros": ["Ah. Quand même. Elle est grosse, celle-là.", "Ouah. C'est moi qui ai fait ça ? … Ça va, je me sens léger.", "Hé ben. Je savais pas que j'avais ça en moi."],
    "demesure": ["{masse}. C'est sorti de moi, ça. Comment je tiens encore debout ?", "Non mais… regarde la taille. C'est sorti de MOI ? Je devrais être mort.", "J'y crois pas. J'ai fait ça. … Je suis fier, et j'ai peur pour mon ventre.", "Oh. Mon. Dieu. … C'est plus gros que mon sac. Comment c'est possible ?"]
+  },
+  "bruit": {
+   "_doc": "Le bruit pendant l'effort (docs/bruitages.md). Des DONNÉES : la recette de src/bruitages.json et comment elle varie avec la démesure (paliers ; dans un palier, la place du facteur entre les bornes de « facteur » : plus démesuré = plus long, plus grave). nombre : combien de bruits ; le dernier est le principal, qui finit juste avant la pose ; les autres (« avant », plus courts) vont entre les souffles. duree_s et hauteur_hz : du bas au haut du palier. force 0..1. rates : combien ça cale et repart. fin : une fin de la recette. prises : les prises libres qui peuvent servir de source. ecart_voix_s : pas de bruit dans ce délai après un souffle dit.",
+   "recette": "flatulence", "gain_max": 0.9,
+   "ecart_voix_s": 1.3, "marge_debut_s": 0.7, "marge_pose_s": 0.25, "ecart_bruits_s": 0.35, "marge_souffle_s": 0.4,
+   "facteur": { "normal": [0.5, 1.6], "gros": [1.6, 4], "demesure": [4, 7] },
+   "paliers": {
+    "normal": { "nombre": [2, 3], "duree_s": [0.15, 0.4], "hauteur_hz": [300, 180], "force": 0.32, "rates": 0, "fin": "sec", "vibrato": 0.15, "alea": 0.5,
+     "avant": { "duree_rapport": [0.5, 0.9], "hauteur_rapport": [1, 1.2], "force_rapport": [0.7, 1], "fin": "sec" } },
+    "gros": { "nombre": [2, 3], "duree_s": [0.7, 1.8], "hauteur_hz": [160, 95], "force": 0.6, "rates": 0.6, "fin": "bulle", "vibrato": 0.5,
+     "avant": { "duree_rapport": [0.2, 0.4], "hauteur_rapport": [1.2, 1.6], "force_rapport": [0.5, 0.7], "fin": "sec" } },
+    "demesure": { "nombre": [2, 3], "duree_s": [2.5, 5], "hauteur_hz": [90, 45], "force": 1, "rates": 1.2, "fin": "ridicule", "vibrato": 1,
+     "avant": { "duree_rapport": [0.06, 0.12], "hauteur_rapport": [1.8, 2.6], "force_rapport": [0.35, 0.5], "fin": "sec" } }
+   }
   }
  },
  "modeles": {
