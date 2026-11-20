@@ -2538,7 +2538,7 @@ function faconnerPas(a,dt){
   const objet=()=>(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===a.objet);
   if(!op){ a.attente+=dt; const o=objet();                        // l'accessoiriste n'a pas encore répondu : il pétrit déjà
     if(o){ const R=repereObjet(o), F=o.formes||[], g=F.reduce((m,f)=>Math.max(m,Math.max(...f.taille)),.05);
-      const c=versMonde(R,[0,Math.max(...F.map(f=>f.p[1]),.03),0]); mainsVers(geste1("petrir",c,g*R.ech/2,t),dt); bougerCamera(a,c,t); buildShapes(fiche,true); }
+      const c=versMonde(R,[0,Math.max(...F.map(f=>f.p[1]),.03)*.6,0]); mainsVers(mainsPetrir(c,g*R.ech/2,t).H,dt); bougerCamera(a,c,t); buildShapes(fiche,true); }
     if(a.attente>30) fin(); return; }
   if(a.i<0){ reveler(a.objet); tournerVers(a.objet); a.G=preparerGeste(a.objet,op); a.i=0; a.t0=t; a.k=-1; return; }
   const G=a.G; let tt=t-a.t0-.4, k=0;                             // un temps pour poser ce qu'il a rapporté
@@ -2552,19 +2552,18 @@ function faconnerPas(a,dt){
   let F=MENEUR.etatGeste(tr,ue);
   if(F.length>G.place) F=F.slice().sort((p,q)=>Math.max(...q.taille)-Math.max(...p.taille)).slice(0,G.place);   // le budget fixe (64 formes) : les miettes d'abord
   const L=fiche.objets.slice(), i=L.findIndex(x=>x&&x.id===a.objet); if(i<0){ fin(); return; }
-  L[i]=Object.assign({},L[i],{formes:F,echelle:G.E});
   if(G.tas){ const j=L.findIndex(x=>x&&x.id===G.tas); if(j>=0){ const reste=G.tasF.filter((f,n)=>!G.pris.has(n)); L[j]=Object.assign({},L[j],{formes:reste.length?reste:[Object.assign({},G.tasF[0],{taille:[.01,.01,.01]})]}); } }
+  // les mains : où elles vont pour cette opération, et ce qu'elles tiennent (la matière suit la main qui la porte)
+  const M=mainsGeste(tr,u,t,F,G);
+  mainsVers(M.H,dt);
+  if(M.tenu&&mainsEtat.H){ const d=[0,0,0]; let n=0;              // l'écart entre la main réelle (elle glisse) et sa cible
+    for(const h of M.tenu.mains){ for(let j=0;j<3;j++) d[j]+=mainsEtat.H[h].p[j]-M.H[h].p[j]; n++; }
+    const f=F.find(x=>x._k===M.tenu.cle); if(f&&n){ const w=versMonde(G.R,f.p); f.p=versLocal(G.R,[w[0]+d[0]/n,w[1]+d[1]/n,w[2]+d[2]/n]); } }
+  // les empreintes : là où une paume appuie, la matière molle se creuse ; la main partie, le creux se résorbe
+  F=F.concat(empreintes(G,M.appui||[],t));
+  L[i]=Object.assign({},L[i],{formes:F,echelle:G.E});
   fiche=Object.assign({},fiche,{objets:L});
-  const R=G.R, W=p=>versMonde(R,p);
-  const act=F.find(f=>f._k===tr.cle)||F.filter(f=>f.matiere===G.dom).sort((p,q)=>Math.max(...q.taille)-Math.max(...p.taille))[0]||F[0];
-  const cible=W(act.p), r=Math.max(...act.taille)/2*R.ech;
-  let H;
-  if(tr.geste==="prendre"&&u<.4&&tr.pile!==null&&tr.pile!==undefined){ const de=tr.de.find(f=>f._k===tr.cle); H=geste1("prendre",W(de.p),Math.max(...de.taille)/2*R.ech,t,u/.4); }
-  else if(tr.geste==="diviser"||tr.geste==="rouler"){ const bs=F.filter(f=>f.matiere===G.dom&&!(f.taille[1]<.12*Math.max(f.taille[0],f.taille[2]))).sort((p,q)=>p.p[0]-q.p[0]);
-    const b0=bs[0]||act, b1=bs[bs.length-1]||act; H=[W(b0.p),W(b1.p)].map((c,s)=>{ const rr=Math.max(...(s?b1:b0).taille)/2*R.ech, w=t*9+s*1.7;
-      return [c[0]+.03*Math.cos(w),c[1]+rr+.035+.012*Math.sin(w*1.3),c[2]+.03*Math.sin(w)]; }); }
-  else H=geste1(tr.geste==="prendre"?"poser":tr.geste,cible,r,t,u);   // prendre, 2e temps : la main porte ce qu'elle a pris
-  mainsVers(H,dt); bougerCamera(a,cible,t);
+  bougerCamera(a,M.vise||versMonde(G.R,[0,.3,0]),t);
   buildShapes(fiche,true);
 }
 /* Le façonnage préparé une fois (§17) : la chose et ce qu'il a rapporté, dans le repère de la chose, puis la suite des
@@ -2580,53 +2579,128 @@ function preparerGeste(id,op){
   const apres=op.etapes[op.etapes.length-1], T=MENEUR.gesteFaconnage(avant,apres,tasL);
   const autres=L.filter(x=>x&&x.id!==id&&!(x.visible===false||cacheObj.has(x.id))).reduce((n,x)=>n+Math.min(24,(x.formes||[]).length),0);
   const dom=(T[0]&&T[0].a.find(f=>/^m/.test(f._k))||{}).matiere;
-  return {T,R,E,dom,tas:tas&&tas.id,tasF,pris:new Set(),place:Math.max(8,Math.min(24,64-autres-(MAINS?6:0)))};
+  return {T,R,E,dom,tas:tas&&tas.id,tasF,pris:new Set(),emp:[],place:Math.max(8,Math.min(22,64-autres-2*MAINS_N-2))};   // 2 : les empreintes
 }
-/* ---- Les mains à l'ouvrage (§17). Deux avant-bras (manche) et deux mains (paume, pouce) en formes, attachés au corps sous
-   la caméra, qui vont où le geste les mène : presser des deux côtés (petrir), rouler sur le dessus (diviser, rouler), porter ce
-   qu'on pose (poser), saisir dans le tas puis porter (prendre), tapoter (tapoter). Jamais figées : un peu de tremblé toujours. */
-const mainsEtat={H:null};
+/* ---- Les mains à l'ouvrage (§17, §22). Deux mains en formes fondues (src/modeles.json, corps.mains : avant-bras sortant d'une
+   manche, paume, pouce, quatre doigts ; poses clés interpolées), attachées au corps sous la caméra, chacune un objet (sa boîte :
+   variante PATE des proches). Une main se décrit par sa paume : p (centre), n (normale, vers ce qu'elle touche), d (vers les
+   doigts, sinon dans le prolongement de l'avant-bras) et sa pose. Jamais figées : un peu de tremblé toujours. */
+const mainsEtat={H:null}, MAINS_N=9;
+const v3a=(a,b,k=1)=>[a[0]+b[0]*k,a[1]+b[1]*k,a[2]+b[2]*k], v3s=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], v3d=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const v3x=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]], v3n=a=>{ const l=Math.hypot(...a)||1; return a.map(v=>v/l); };
+function poseVec(nom){ const P=(MAINS&&MAINS.poses)||{}, p=P[nom]||P.ouverte||{}, dg=Array.isArray(p.doigts)?p.doigts:[0,1,2,3].map(()=>+p.doigts||0), po=Array.isArray(p.pouce)?p.pouce:[40,10];
+  return [...[0,1,2,3].map(i=>+dg[i]||0),+p.ecart||0,+po[0]||0,+po[1]||0]; }
+const main=(p,n,pose,d=null)=>({p,n:v3n(n),d:d?v3n(d):null,v:Array.isArray(pose)?pose:poseVec(pose)});
 function corpsAxes(){ const y=cam.yaw; return {e:[cam.x,terrainH(cam.x,cam.z)+S.eye*cam.haut+cam.elev,cam.z],f:[Math.sin(y),0,Math.cos(y)],r:[Math.cos(y),0,-Math.sin(y)]}; }
-function mainsRepos(){ const {e,f,r}=corpsAxes(), q=(MAINS&&MAINS.repos)||[.14,-.26,.34];
-  return [-1,1].map(s=>[e[0]+r[0]*s*q[0]+f[0]*q[2],e[1]+q[1],e[2]+r[2]*s*q[0]+f[2]*q[2]]); }
-/* Où vont les deux mains pour un geste autour d'un point c (monde), d'une chose de rayon r : [gauche, droite]. */
-function geste1(g,c,r,t,u=0){
-  const {e}=corpsAxes(), dx=e[0]-c[0], dz=e[2]-c[2], l=Math.hypot(dx,dz)||1, vx=dx/l, vz=dz/l, sx=-vz, sz=vx;   // v : vers lui ; s : sur le côté
-  const tr=(k,a)=>.004*Math.sin(t*k+a);                           // jamais figées
-  if(g==="prendre"){ const rep=mainsRepos(), k=u*u*(3-2*u), cible=[c[0]+vx*r*.5,c[1]+r*.6+.025,c[2]+vz*r*.5];
-    return [rep[0],[rep[1][0]+(cible[0]-rep[1][0])*k,rep[1][1]+(cible[1]-rep[1][1])*k+tr(11,0),rep[1][2]+(cible[2]-rep[1][2])*k]]; }
-  return [-1,1].map(s=>{
-    if(g==="poser"||g==="prendre2") return s>0?[c[0]+vx*(r+.03),c[1]+.01+tr(9,s),c[2]+vz*(r+.03)]:[c[0]+sx*s*(r+.05)+vx*.06,c[1]-r*.4+tr(7,s),c[2]+sz*s*(r+.05)+vz*.06];
-    if(g==="tapoter"){ const h=Math.abs(Math.sin(t*7.5+s*1.6)); return [c[0]+sx*s*r*.75+vx*r*.35,c[1]+r*.45+.05*h,c[2]+sz*s*r*.75+vz*r*.35]; }
-    const p=.018*Math.sin(t*6.5+(s>0?0:2.1));                     // pétrir : presser des deux côtés, en rythme
-    return [c[0]+sx*s*(r*.92+.03+p)+vx*r*.35,c[1]+.012*Math.sin(t*4.1+s)+tr(13,s),c[2]+sz*s*(r*.92+.03+p)+vz*r*.35];
-  });
+function mainsRepos(){ const {e,f,r}=corpsAxes(), q=(MAINS&&MAINS.repos)||[.16,-.3,.3];
+  return [-1,1].map(s=>main([e[0]+r[0]*s*q[0]+f[0]*q[2],e[1]+q[1],e[2]+r[2]*s*q[0]+f[2]*q[2]],[-r[0]*s*.3,-1,-r[2]*s*.3],"ouverte")); }
+const EP=()=>(((MAINS&&MAINS.paume&&MAINS.paume.taille)||[0,.026,0])[1]/2);   // demi-épaisseur de la paume
+/* Les axes du travail autour d'un point c : v vers lui (horizontal), sx sur le côté (sa droite), y en haut. */
+function axesTravail(c){ const {e,r}=corpsAxes(), dx=e[0]-c[0], dz=e[2]-c[2], l=Math.hypot(dx,dz)||1; return {v:[dx/l,0,dz/l],sx:r,y:[0,1,0]}; }
+/* Pétrir une masse de centre c et de rayon r : les deux paumes de part et d'autre, en coupe, qui pressent en rythme. */
+function mainsPetrir(c,r,t){
+  const {v,sx}=axesTravail(c), H=[], appui=[];
+  [-1,1].forEach((s,i)=>{ const pr=.5+.5*Math.sin(t*6.5+(s>0?0:2.4)), n=v3a(v3a([0,0,0],sx,-s),[0,-1,0],.25);
+    const ct=v3a(v3a(c,sx,s*r*.95),v,r*.25), p=v3a(ct,n,-EP()+pr*.014);
+    H.push(main(p,n,"coupe",v3a([0,1,0],v,-.4))); if(pr>.55) appui.push({i,p,n,k:(pr-.55)/.45}); });
+  return {H,appui,pr:[.5+.5*Math.sin(t*6.5+2.4),.5+.5*Math.sin(t*6.5)]};
 }
-/* Les mains glissent vers leurs cibles (jamais de saut d'une transition à l'autre), puis l'objet des mains est refait. */
+/* Où vont les mains pour une transition du geste, et ce qu'elles tiennent. F : les formes de la chose à cet instant. */
+function mainsGeste(tr,u,t,F,G){
+  const R=G.R, W=p=>versMonde(R,p), op=tr.op||tr.geste, ech=R.ech, tr0=(k,a)=>.003*Math.sin(t*k+a);
+  const forme=k=>F.find(f=>f._k===k), rayon=f=>f?Math.max(...f.taille)/2*ech:.05, haut=f=>f?f.taille[1]/2*ech:.05;
+  const masse=forme(tr.masse||"mm")||F.filter(f=>f.matiere===G.dom).sort((p,q)=>Math.max(...q.taille)-Math.max(...p.taille))[0]||F[0];
+  const X=tr.cle&&forme(tr.cle), Xc=X?W(X.p):W(masse.p), {v,sx}=axesTravail(Xc), up=[0,1,0], e=EP();
+  const repos=mainsRepos();
+  if(op==="petrir"){ const c=W(masse.p), r=rayon(masse), m=mainsPetrir(c,r,t);   // la masse s'écrase entre les paumes
+    const sq=(m.pr[0]+m.pr[1])/2; masse.taille=[masse.taille[0]*(1-.1*sq),masse.taille[1]*(1+.05*sq),masse.taille[2]*(1+.05*sq)];
+    return {H:m.H,appui:m.appui,vise:c}; }
+  if(op==="diviser"){ const M=W(masse.p), rM=rayon(masse), rX=rayon(X), w=Math.min(1,u/.25);
+    const top=v3a(Xc,up,haut(X)+e), saisie=v3a(v3a(M,up,haut(masse)*.6+e),v,rM*.2);   // la main droite saisit dans la boule, puis tire
+    const pd=u<.25?v3a(saisie,v3s(top,saisie),0):top;
+    const H=[main(v3a(v3a(M,sx,-rM*.9),up,haut(masse)*.25),v3a(sx,up,-.3),"plat",v3a(up,v,-.5)), main(v3a(pd,up,tr0(9,1)),[0,-1,0],w<1?"coupe":"pince",v3a(v,v3a([0,0,0],sx,-.3),-1))];
+    H[1].v=H[1].v.map((x,j)=>x+(poseVec("pince")[j]-x)*Math.min(1,Math.max(0,(u-.2)/.3)));
+    return {H,tenu:u>.2?{cle:tr.cle,mains:[1]}:null,appui:[{i:0,p:H[0].p,n:H[0].n,k:.6}],vise:v3a(M,v3s(Xc,M),.5)}; }
+  if(op==="rouler"){ const r=rayon(X), w=t*7.5, off=v3a(v3a([0,0,0],sx,Math.cos(w)*r*.35),v,Math.sin(w)*r*.35);
+    const H=[main(v3a(v3a(Xc,up,-(haut(X)+e)),off,-1),up,"coupe",v3a(v,[0,0,0],-1)), main(v3a(v3a(Xc,up,haut(X)+e),off),[0,-1,0],"coupe",v3a(v3a([0,0,0],v,-1),sx,-.3))];
+    return {H,tenu:{cle:tr.cle,mains:[0,1]},vise:Xc}; }
+  if(op==="poser"){ const r=rayon(X), pr=Math.max(0,Math.sin(Math.PI*Math.min(1,Math.max(0,(u-.6)/.4)))), pose=u>.6?"plat":"coupe";
+    const H=[main(v3a(Xc,sx,-(rayon(X)+e)),sx,pose,v3a(v,[0,0,0],-1)), main(v3a(Xc,up,haut(X)+e-pr*.012+tr0(8,0)),[0,-1,0],pose,v3a(v3a([0,0,0],v,-1),sx,-.25))];
+    return {H,tenu:u<.85?{cle:tr.cle,mains:[0,1]}:null,appui:pr>.3?[{i:1,p:H[1].p,n:H[1].n,k:pr}]:[],vise:v3a(Xc,up,-r*.3)}; }
+  if(op==="planter"||op==="presser"){
+    const corpsF=F.filter(f=>f.matiere===G.dom).sort((p,q)=>q.p[1]-p.p[1]), haute=corpsF[Math.min(1,corpsF.length-1)]||masse;
+    const tient=main(v3a(W(haute.p),up,haut(haute)+e),[0,-1,0],"plat",v3a(v,[0,0,0],-1));   // la main gauche tient l'ouvrage
+    if(u<.25&&tr.pile!==null&&tr.pile!==undefined){ const de=tr.de.find(f=>f._k===tr.cle), c=W(de.p), w=u/.25;
+      const P=main(v3a(c,up,de.taille[1]/2*ech+e+.01*(1-w)),[0,-1,0],"ouverte",v3a(v,[0,0,0],-1)); P.v=P.v.map((x,j)=>x+(poseVec("poing")[j]-x)*Math.max(0,(w-.6)/.4));
+      return {H:[tient,P],vise:v3a(c,v3s(W(haute.p),c),.5)}; }
+    const ax=tr.axe?v3n(versMonde({...R,x:0,y:0,z:0,ech:1},tr.axe)):up, L=X?Math.max(...X.taille)*ech:.1;
+    let P;
+    if(op==="planter"){ const g=v3a(Xc,ax,L*.32); let n=v3s([0,0,0],v); n=v3n(v3s(n,v3a([0,0,0],ax,v3d(n,ax))));
+      P=main(v3a(g,n,-(X.taille[0]/2*ech+e)),n,"poing",v3x(ax,n)); }
+    else { const n=v3s([0,0,0],v); P=main(v3a(v3a(Xc,v,rayon(X)+e+.035),up,.02),n,"pince",v3a(up,sx,-.5)); }
+    return {H:[tient,P],tenu:u<.97?{cle:tr.cle,mains:[1]}:null,appui:[{i:0,p:tient.p,n:tient.n,k:.5}],vise:v3a(Xc,v3s(W(haute.p),Xc),.3)}; }
+  // lisser : les deux paumes à plat sur l'ouvrage, en arcs
+  const corpsF=F.filter(f=>f.matiere===G.dom).sort((p,q)=>q.p[1]-p.p[1]), hautF=corpsF[0]||masse, mil=corpsF[1]||hautF;
+  const a1=Math.sin(t*4.8), a2=Math.sin(t*4.8+2);
+  const n0=v3n(v3a(sx,[0,-1,0],.3)), c1=W(mil.p);
+  const H=[main(v3a(v3a(c1,sx,-(rayon(mil)+e)),up,a2*rayon(mil)*.4),n0,"plat",v3a(up,v,-.3)), main(v3a(v3a(W(hautF.p),up,haut(hautF)+e),sx,a1*rayon(hautF)*.35),[0,-1,0],"plat",v3a(v,[0,0,0],-1))];
+  if(u>.7){ const w=(u-.7)/.3; H.forEach((h,i)=>{ h.p=v3a(h.p,v3s(repos[i].p,h.p),w*w); }); }
+  return {H,appui:u<.7?[{i:1,p:H[1].p,n:H[1].n,k:.4+.3*Math.abs(a1)}]:[],vise:W(mil.p)};
+}
+/* Empreintes : une paume qui appuie creuse la matière molle de la chose (forme « creux », une par main) ; la main partie, le
+   creux remonte et se résorbe en deux secondes et demie. */
+function empreintes(G,appui,t){
+  const P=(MAINS&&MAINS.paume&&MAINS.paume.taille)||[.082,.026,.088], R=G.R;
+  for(const a of appui){ const h=mainsEtat.H&&mainsEtat.H[a.i]; if(!h) continue; G.emp[a.i]={p:h.p.slice(),n:h.n.slice(),k:Math.min(1,a.k),t}; }
+  const out=[];
+  G.emp.forEach(e=>{ if(!e) return; const w=Math.max(0,1-(t-e.t)/2.5)*e.k; if(w<.05) return;
+    const c=v3a(e.p,e.n,-(1-w)*P[1]*1.2);
+    out.push(axeForme(R,"boule",c,e.n,[P[0]*.9/R.ech,P[1]*1.3/R.ech,P[2]*.9/R.ech],"#000000","mat",{creux:.012/R.ech,_k:"emp"})); });
+  return out;
+}
+/* Une forme dont l'axe (y) suit d dans le monde, dans le repère R d'un objet : cap et penche (même repère que sdPrim). */
+function axeForme(R,f0,c,d,taille,couleur,matiere,extra){ let [dx,dy,dz]=v3n(d); if(dy<0){ dx=-dx; dy=-dy; dz=-dz; }
+  const w=Math.acos(Math.min(1,dy)), Y=Math.atan2(dz,-dx), cap=((Y-R.yaw)*180/Math.PI%360+540)%360-180;
+  return Object.assign({f:f0,p:versLocal(R,c),taille,cap,penche:[0,w*180/Math.PI],couleur,matiere},extra||{}); }
+/* Les mains glissent vers leurs cibles (jamais de saut d'une transition à l'autre), poses comprises, puis leurs objets sont refaits. */
 function mainsVers(H,dt,quelles=[0,1]){                          // quelles : les mains dans le champ (0 gauche, 1 droite)
   if(!MAINS) return;
-  if(quelles.length===2){ const {r}=corpsAxes();                  // la main gauche va à la cible de gauche (les bras ne se croisent pas)
-    if((H[0][0]-H[1][0])*r[0]+(H[0][2]-H[1][2])*r[2]>0) H=[H[1],H[0]]; }
   if(!mainsEtat.H) mainsEtat.H=mainsRepos();
-  const k=Math.min(1,dt*9);
-  mainsEtat.H=mainsEtat.H.map((h,i)=>h.map((v,j)=>v+(H[i][j]-v)*k));
+  const k=Math.min(1,dt*12);
+  mainsEtat.H=mainsEtat.H.map((h,i)=>{ const c=H[i]; if(!c) return h;
+    return {p:h.p.map((x,j)=>x+(c.p[j]-x)*k),n:v3n(h.n.map((x,j)=>x+(c.n[j]-x)*k)),d:c.d?v3n((h.d||c.d).map((x,j)=>x+(c.d[j]-x)*k)):null,v:h.v.map((x,j)=>x+(c.v[j]-x)*k)}; });
   mainsObj=objetMains(mainsEtat.H,quelles);
 }
 function objetMains(Hs,quelles=[0,1]){
-  const M=MAINS, {e,f,r}=corpsAxes(), q=versFiche(cam.x,cam.z), o={id:"·mains",nom:"",devant:q.devant,cote:q.cote,formes:[]}, R=repereObjet(o);
-  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], add=(a,b,k=1)=>[a[0]+b[0]*k,a[1]+b[1]*k,a[2]+b[2]*k], nrm=a=>{ const l=Math.hypot(...a)||1; return a.map(v=>v/l); };
-  // une forme dont l'axe (y) suit d dans le monde : cap et penche (même repère que sdPrim, voir dansForme dans meneur.js)
-  const axe=(f0,c,d,taille,couleur,matiere)=>{ let [dx,dy,dz]=nrm(d); if(dy<0){ dx=-dx; dy=-dy; dz=-dz; }
-    const w=Math.acos(Math.min(1,dy)), Y=Math.atan2(dz,-dx), cap=((Y-R.yaw)*180/Math.PI%360+540)%360-180;
-    return {f:f0,p:versLocal(R,c),taille,cap,penche:[0,w*180/Math.PI],couleur,matiere}; };
-  const ep=M.coude||[.24,-.3,.06], ma=M.manche||{}, pa=M.paume||{}, po=M.pouce||{}, pg=M.poignet||.07;
-  Hs.forEach((H,i)=>{ if(!quelles.includes(i)) return; const s=i?1:-1, rac=[e[0]+r[0]*s*ep[0]+f[0]*ep[2],e[1]+ep[1],e[2]+r[2]*s*ep[0]+f[2]*ep[2]];
-    const d=nrm(sub(H,rac)), Wr=add(H,d,-pg), rm=ma.rayon||.045, a=add(Wr,d,-.015), L=Math.max(.03,Math.hypot(...sub(a,rac)));
-    o.formes.push(axe("capsule",add(rac,sub(a,rac),.5),d,[2*rm,Math.max(.01,L-2*rm),2*rm],ma.couleur||"#2b2f36",ma.matiere||"tissu"));
-    o.formes.push(axe("boule",add(H,d,-.01),d,(pa.taille||[.085,.17,.034]).slice(),pa.couleur||"#c39577",pa.matiere||"mat"));
-    const autre=Hs[1-i], dedans=nrm([autre[0]-H[0],0,autre[2]-H[2]]), b=add(Wr,dedans,.03), bout=add(add(b,d,po.long||.065),dedans,.015), rp=po.rayon||.012;
-    o.formes.push(axe("capsule",add(b,sub(bout,b),.5),sub(bout,b),[2*rp,Math.max(.01,Math.hypot(...sub(bout,b))-2*rp),2*rp],po.couleur||"#bb8c6f",po.matiere||"mat")); });
-  return o;
+  const M=MAINS, {e,f,r}=corpsAxes(), q=versFiche(cam.x,cam.z), rad=Math.PI/180;
+  const ep=M.coude||[.2,-.34,-.02], ma=M.manche||{}, ab=M.avant_bras||{}, pa=M.paume||{}, dg=M.doigts||{}, po=M.pouce||{}, li=+M.lisse||.011;
+  const pt=pa.taille||[.082,.026,.088], DL=dg.long||[.074,.082,.077,.062], dr=dg.rayon||.0092, pas=dg.pas||.0205, PL=po.long||[.042,.036], pr=po.rayon||.0115;
+  const objs=[];
+  Hs.forEach((H,i)=>{ if(!quelles.includes(i)) return;
+    const o={id:"·main"+i,nom:"",devant:q.devant,cote:q.cote,formes:[]}, R=repereObjet(o), s=i?1:-1;
+    const peau=(f0,c,d,t,col,mat)=>o.formes.push(axeForme(R,f0,c,d,t,col||pa.couleur||"#c39577",mat||pa.matiere||"peau",{lisse:li}));
+    const E=[e[0]+r[0]*s*ep[0]+f[0]*ep[2],e[1]+ep[1],e[2]+r[2]*s*ep[0]+f[2]*ep[2]], n=H.n, P=H.p;
+    let d0=H.d||v3s(P,E); d0=v3s(d0,v3a([0,0,0],n,v3d(d0,n))); const d=v3n(v3d(d0,d0)>1e-6?d0:f), sl=v3x(n,d), uT=i?sl:v3s([0,0,0],sl);
+    const Wr=v3a(P,d,-(pt[2]/2+.004)), fa=v3s(Wr,E), La=Math.hypot(...fa), da=v3n(fa), ra=ab.rayon||.026;
+    // manche (dure), avant-bras, paume
+    const lm=ma.long||.09, rm=ma.rayon||.05;
+    o.formes.push(axeForme(R,"capsule",v3a(E,da,lm/2-.03),da,[2*rm,Math.max(.01,lm-2*rm),2*rm],ma.couleur||"#2b2f36",ma.matiere||"tissu"));
+    peau("capsule",v3a(E,fa,.5),da,[2*ra,Math.max(.01,La-2*ra),2*ra],ab.couleur,ab.matiere);
+    peau("boule",P,n,[pt[0],pt[1],pt[2]]);
+    // quatre doigts : de l'index (côté pouce) à l'auriculaire, fléchis à la jointure vers la paume
+    const V=H.v;
+    for(let j=0;j<4;j++){ const K=v3a(v3a(v3a(P,d,pt[2]/2-.008),uT,pas*(1.5-j)),n,.002), ea=V[4]*(1.5-j)*rad, c=V[j]*rad;
+      const dj=v3n(v3a(v3a([0,0,0],d,Math.cos(ea)),uT,Math.sin(ea))), dir=v3n(v3a(v3a([0,0,0],dj,Math.cos(c)),n,Math.sin(c))), Lj=DL[j]||.07;
+      peau("capsule",v3a(K,dir,Lj/2),dir,[2*dr*(j===3?.88:1),Math.max(.006,Lj-2*dr),2*dr*(j===3?.88:1)],dg.couleur,dg.matiere); }
+    // pouce : deux phalanges, ouvert (vers le côté) et fléchi (vers la paume)
+    const Bp=v3a(v3a(v3a(Wr,d,.03),uT,pt[0]*.36),n,.004), oo=V[5]*rad, fl=V[6]*rad;
+    let d1=v3n(v3a(v3a([0,0,0],d,Math.cos(oo+.35)),uT,Math.sin(oo+.35))); d1=v3n(v3a(v3a([0,0,0],d1,Math.cos(fl*.5)),n,Math.sin(fl*.5)));
+    const nn=v3n(v3s(n,v3a([0,0,0],d1,v3d(n,d1)))), d2=v3n(v3a(v3a([0,0,0],d1,Math.cos(fl)),v3a(nn,uT,-.35),Math.sin(fl)));
+    peau("capsule",v3a(Bp,d1,PL[0]/2),d1,[2*pr,Math.max(.006,PL[0]-2*pr),2*pr],po.couleur,po.matiere);
+    const b2=v3a(Bp,d1,PL[0]-pr*.6);
+    peau("capsule",v3a(b2,d2,PL[1]/2),d2,[2*pr*.92,Math.max(.006,PL[1]-2*pr),2*pr*.92],po.couleur,po.matiere);
+    objs.push(o); });
+  return objs;
 }
 /* Pendant qu'il travaille, la caméra (sur sa poitrine) suit un peu ses mains : elle se penche vers l'ouvrage, bouge avec les gestes. */
 function bougerCamera(a,c,t){
@@ -2641,7 +2715,7 @@ function ramasserPas(a,dt){
   a.rest-=dt; const u=1-Math.max(0,a.rest)/a.duree, {e,f,r}=corpsAxes(), rep=mainsRepos();
   if(!a.sol){ const x=e[0]+f[0]*.45+r[0]*.06, z=e[2]+f[2]*.45+r[2]*.06; a.sol=[x,terrainH(x,z)+.035,z]; }
   const k=u<.45?(u/.45)**2*(3-2*u/.45):u<.62?1:1-((u-.62)/.38)**2*(3-2*(u-.62)/.38);
-  const H=[[rep[0][0],rep[0][1]-.05,rep[0][2]],rep[1].map((v,i)=>v+(a.sol[i]-v)*k+(i===1&&u>.45&&u<.62?.01*Math.sin(u*80):0))];
+  const so=v3a(a.sol,[0,1,0],EP()+.01), H=[rep[0],main(rep[1].p.map((v,i)=>v+(so[i]-v)*k+(i===1&&u>.45&&u<.62?.01*Math.sin(u*80):0)),[0,-1,0],u>.5&&u<.75?"poing":"ouverte",f)];
   mainsVers(H,dt,[1]); buildShapes(fiche,true);
   if(a.rest<=0){ queue.shift(); mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); }
 }
@@ -3087,12 +3161,13 @@ window.balade={
   obstacles:()=>obstaclesConnus().map(o=>({id:o.id,nom:o.nom,x:+o.x.toFixed(2),z:+o.z.toFixed(2),r:+o.r.toFixed(2)})),   // §16 : ce que le corps contourne
   lieuCherche:()=>dernierLieu,
   pause(v){ pauseTest=!!v; },
+  objet(o){ objetMeneur(o); },                                   // essais : un ordre de l'accessoiriste, tel quel (creer, faconner, retirer…)
   pauseQuand(type,t){ pauseQuand={type,t:+t}; },                 // figer quand le geste en tête de file (ramasser : part 0..1 ; faconner : secondes) atteint t
   enPause:()=>pauseTest,
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },
   remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },   // fragments des grains de la caméra sur la prochaine image (v3Compter)
   regulateur(){ return { niveau:REG.niveau, ms:REG.ms, cible:regCible(), etat:regEtat(), puce:GT.ms, total:GT.total||0 }; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
-  faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?mainsObj.formes.length:0,
+  faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,
     file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4).toFixed(2):-1,
       total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0}))}),
   vue(id){ const q=cibleMonde(id); if(!q) return null; const c=corpsAxes().e; return vueDegagee(c[0],c[1],c[2],q.x,q.z,q.taille/2,q.haut,id); },   // rien entre la caméra et la chose ?

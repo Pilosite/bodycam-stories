@@ -433,9 +433,9 @@ test('façonnage continu, à la main : pétrir, puis pour chaque boule (la plus 
   const p1 = etatGeste(T[3], 1), k1 = T[3].cle; assert.ok(surPlace(p1, k1) && p1.filter(f => /^m\d/.test(f._k)).length === 1, 'une seule boule posée');
   // diviser : un pont de matière entre la boule et la poignée, qui rompt avant la fin
   assert.ok(etatGeste(T[1], 0.4).some(f => f._k === 'pont') && !etatGeste(T[1], 0.95).some(f => f._k === 'pont'), 'pont qui rompt');
-  // les mains, des données : six formes au plus, des matières qui existent
+  // les mains, des données : neuf formes par main, des matières qui existent
   const M = MODELES.corps.mains;
-  for (const k of ['manche', 'paume', 'pouce']) assert.ok(['tissu', 'mat'].includes(M[k].matiere) || MATIERES.recettes[M[k].matiere], k);
+  for (const k of ['manche', 'avant_bras', 'paume', 'doigts', 'pouce']) assert.ok(['tissu', 'mat'].includes(M[k].matiere) || MATIERES.recettes[M[k].matiere], k);
   // sans tas ni masse multiple : un geste quand même (pétrir, ajouts venus de la main, tapoter)
   const T2 = gesteFaconnage(av, [...av.slice(0, 1), { f: 'boule', p: [0, 0.1, 0], taille: [0.3, 0.2, 0.3], couleur: '#5a3d22', matiere: 'pate-organique' }, { f: 'cylindre', p: [0, 0.3, 0], taille: [0.02, 0.3, 0.02], couleur: '#4e3a27', matiere: 'bois' }]);
   assert.deepEqual(T2.map(t => t.geste), ['petrir', 'diviser', 'rouler', 'poser', 'prendre', 'tapoter']);

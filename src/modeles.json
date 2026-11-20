@@ -3,12 +3,23 @@
  "corps": {
   "_doc": "Le corps du porteur dans le champ (docs/meneur-de-jeu.md §17) : deux avant-bras et deux mains, attachés à la caméra, en formes du vocabulaire (capsules, boules). Des données : mesures en mètres (coude : à côté, sous et devant la caméra ; repos : où les mains attendent), matières en recettes.",
   "mains": {
-   "coude": [0.24, -0.3, 0.06],
-   "manche": {"rayon": 0.038, "couleur": "#2b2f36", "matiere": "tissu"},
-   "paume": {"taille": [0.085, 0.17, 0.034], "couleur": "#c39577", "matiere": "peau"},
-   "pouce": {"rayon": 0.012, "long": 0.065, "couleur": "#bb8c6f", "matiere": "peau"},
+   "_doc2": "Chaque main : avant-bras (peau) qui sort d'une manche courte (dure, tissu), paume, pouce en deux phalanges, quatre doigts ; les formes de peau sont molles (lisse : elles se fondent : poignet, jointures). Repère de la main : d du poignet vers les doigts, n la normale de la paume (vers ce qu'elle touche). Poses clés, interpolées : doigts (flexion à la jointure, degrés, un nombre ou un par doigt de l'index à l'auriculaire), ecart (degrés entre deux doigts), pouce [ouverture, flexion] (degrés). 9 formes par main.",
+   "coude": [0.2, -0.34, -0.02],
+   "manche": {"rayon": 0.05, "long": 0.09, "couleur": "#2b2f36", "matiere": "tissu"},
+   "avant_bras": {"rayon": 0.026, "couleur": "#c29072", "matiere": "peau"},
+   "paume": {"taille": [0.082, 0.026, 0.088], "couleur": "#c39577", "matiere": "peau"},
+   "doigts": {"long": [0.074, 0.082, 0.077, 0.062], "rayon": 0.0092, "pas": 0.0205, "couleur": "#bf8f72", "matiere": "peau"},
+   "pouce": {"long": [0.042, 0.036], "rayon": 0.0115, "couleur": "#bb8c6f", "matiere": "peau"},
+   "lisse": 0.011,
    "poignet": 0.07,
-   "repos": [0.14, -0.26, 0.34]
+   "repos": [0.16, -0.3, 0.3],
+   "poses": {
+    "ouverte": {"doigts": 14, "ecart": 7, "pouce": [48, 8]},
+    "coupe": {"doigts": 42, "ecart": 2, "pouce": [32, 30]},
+    "pince": {"doigts": [52, 62, 96, 100], "ecart": 0, "pouce": [22, 52]},
+    "poing": {"doigts": 98, "ecart": 0, "pouce": [12, 62]},
+    "plat": {"doigts": 4, "ecart": 3, "pouce": [22, 2]}
+   }
   }
  },
  "exploit": {
