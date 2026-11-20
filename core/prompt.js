@@ -8,10 +8,9 @@
      author, horizon and cause are added here; a line that cannot be read is dropped and recorded, never guessed. Repairs of
      the content (bounds, enums, references) are the validator's (P8), as for any transaction.
    The wire format around this text (JSON for the host's model, the home node's routes) is each adapter's choice. */
-import { parseTokens } from './tokens.js';
+import { parseTokens, TONES } from './pdl.js';
 import { inScope } from './source.js';
 import { factOf } from './world.js';
-import { TONES } from './vocab.js';
 
 const MARK = { absolute: '!!', hard: '!', tendency: '~', open: '?' };
 const KIND_HORIZON = { act: 'now', effect: 'now', fact: 'story', rule: 'scene', cancel: 'now' };

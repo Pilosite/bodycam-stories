@@ -16,8 +16,7 @@
       D4 judgement (both orders) finds against an absolute are vetoed, and everything goes through submit like any
       transaction. The first `say` amends the now loop's last `say`. An answer to an older utterance is stale: journaled, dropped.
    A port served by code alone answers decide() with `tier: 'reflex'` and has no generate(): nothing is staged (P19). */
-import { INTENT_VERBS } from './vocab.js';
-import { parseTokens, serializeTokens } from './tokens.js';
+import { parseTokens, serializeTokens, INTENT_VERBS } from './pdl.js';
 import { judge, readAnswers, understandQuestions, readUnderstanding, absoluteQuestions, readAbsolutes } from './judge.js';
 import { stagePrompt, understandContext, parseModelTokens, openEndings } from './prompt.js';
 

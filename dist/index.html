@@ -8425,7 +8425,7 @@ return { exports: { LOOPS, MODEL_CALL_KEYS, createSession }, link: __link, reexp
 };
 M["judge"] = function (R) {
 let INTENT_VERBS;
-const __link = () => { ({ INTENT_VERBS } = R["vocab"] || {}); };
+const __link = () => { ({ INTENT_VERBS } = R["pdl"] || {}); };
 __link();
 /* Judgement (P22, docs/architecture.md "Where judgement happens"): the pure rules the core applies to a typed answer.
    A judgement is a typed answer with a probability; the confidence is played, never hidden:
@@ -8554,8 +8554,8 @@ function readAbsolutes(questions, res, n) {
 return { exports: { THRESHOLDS, judge, worse, reversed, checkAnswer, readAnswers, understandQuestions, readUnderstanding, absoluteQuestions, readAbsolutes }, link: __link, reexports: [] };
 };
 M["prompt"] = function (R) {
-let parseTokens, inScope, factOf, TONES;
-const __link = () => { ({ parseTokens } = R["tokens"] || {}); ({ inScope } = R["source"] || {}); ({ factOf } = R["world"] || {}); ({ TONES } = R["vocab"] || {}); };
+let parseTokens, TONES, inScope, factOf;
+const __link = () => { ({ parseTokens, TONES } = R["pdl"] || {}); ({ inScope } = R["source"] || {}); ({ factOf } = R["world"] || {}); };
 __link();
 /* What the core tells a model, and how it reads back what a model wrote (ADR 0009, P22). Pure: no model, no I/O.
    - stagePrompt(world, o) → { prefix, delta }: the invention of the scene loop (Sam's reaction, PDL token form). The prefix is
@@ -8567,7 +8567,6 @@ __link();
      author, horizon and cause are added here; a line that cannot be read is dropped and recorded, never guessed. Repairs of
      the content (bounds, enums, references) are the validator's (P8), as for any transaction.
    The wire format around this text (JSON for the host's model, the home node's routes) is each adapter's choice. */
-
 
 
 
@@ -8692,8 +8691,8 @@ function parseModelTokens(text, { author = { kind: 'model', id: 'stager', tier: 
 return { exports: { characterStatements, examplesOf, openEndings, stagePrompt, understandContext, parseModelTokens }, link: __link, reexports: [] };
 };
 M["clocks"] = function (R) {
-let INTENT_VERBS, parseTokens, serializeTokens, judge, readAnswers, understandQuestions, readUnderstanding, absoluteQuestions, readAbsolutes, stagePrompt, understandContext, parseModelTokens, openEndings;
-const __link = () => { ({ INTENT_VERBS } = R["vocab"] || {}); ({ parseTokens, serializeTokens } = R["tokens"] || {}); ({ judge, readAnswers, understandQuestions, readUnderstanding, absoluteQuestions, readAbsolutes } = R["judge"] || {}); ({ stagePrompt, understandContext, parseModelTokens, openEndings } = R["prompt"] || {}); };
+let parseTokens, serializeTokens, INTENT_VERBS, judge, readAnswers, understandQuestions, readUnderstanding, absoluteQuestions, readAbsolutes, stagePrompt, understandContext, parseModelTokens, openEndings;
+const __link = () => { ({ parseTokens, serializeTokens, INTENT_VERBS } = R["pdl"] || {}); ({ judge, readAnswers, understandQuestions, readUnderstanding, absoluteQuestions, readAbsolutes } = R["judge"] || {}); ({ stagePrompt, understandContext, parseModelTokens, openEndings } = R["prompt"] || {}); };
 __link();
 /* The three clocks (P20): now, scene, story loops around one session. They talk only through transactions and events.
    The now loop answers what the player just said with the fastest means (reflex code, then the leanest model) and never
@@ -8713,7 +8712,6 @@ __link();
       D4 judgement (both orders) finds against an absolute are vetoed, and everything goes through submit like any
       transaction. The first `say` amends the now loop's last `say`. An answer to an older utterance is stale: journaled, dropped.
    A port served by code alone answers decide() with `tier: 'reflex'` and has no generate(): nothing is staged (P19). */
-
 
 
 

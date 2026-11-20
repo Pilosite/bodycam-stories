@@ -5,7 +5,7 @@
    (ADR 0004: answers can flip when the option order changes). Thresholds are configuration; the defaults are 0.8 and 0.5.
    This module also states the questions of D1 to D3 (one call) and D4 (absolutes, both orders), and reads their answers
    back into typed values: a model's answer outside the options is no answer. No model, no I/O. */
-import { INTENT_VERBS } from './vocab.js';
+import { INTENT_VERBS } from './pdl.js';
 
 export const THRESHOLDS = { act_from: 0.8, ask_below: 0.5 };
 const num = (x, d) => typeof x === 'number' && isFinite(x) ? Math.max(0, Math.min(1, x)) : d;
