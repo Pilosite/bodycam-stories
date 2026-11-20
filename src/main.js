@@ -3677,23 +3677,23 @@ window.story={ start:(id,o)=>lancerStory(id,o), hear:t=>storyMode.hear(t), advan
    launch screen (« Trailer »), or ?trailer=1 (&lang=fr, &loop=1, &clean=1 for a screen recording, &pace=1.3). New code, English. */
 const qp=k=>(location.search.match(new RegExp("[?&]"+k+"=([\\w.-]+)"))||[])[1];
 const TRAILER_ON=!!(CFG.trailer||qp("trailer")==="1");
-var trailer=null;
+var trailerMode=null;                                          // not `trailer`: window.trailer is the test API below
 function trailerScript(){ return typeof TRAILER_SCRIPTS!=="undefined"?(TRAILER_SCRIPTS[CFG.trailerStory||"louis-round"]||Object.values(TRAILER_SCRIPTS)[0]||null):null; }
 function lancerTrailer(direct){
   const script=trailerScript(); if(!script) return null;
   fermerOutils(); const r=$("ouverture"); if(r){ r.hidden=true; r.remove(); document.body.classList.remove("ouverture-on"); } ouvRepos=false;
-  if(!trailer){ const lang=CFG.lang||qp("lang")||STORY_PAGE.storedLang()||"en";
-    trailer=TRAILER.createTrailer({ doc:document, win:window, script, lang:lang==="fr"?"fr":"en", clean:!!(CFG.clean||qp("clean")==="1"), loop:!!(CFG.loop||qp("loop")==="1"), pace:+(CFG.pace||qp("pace"))||0,
-      story:{ start:(id,o)=>storyMode.start(id,o), hear:t=>storyMode.hear(t), advance:n=>storyMode.advance(n), on:(e,h)=>storyMode.on(e,h) },
+  if(!trailerMode){ const lang=CFG.lang||qp("lang")||STORY_PAGE.storedLang()||"en";
+    trailerMode=TRAILER.createTrailer({ doc:document, win:window, script, lang:lang==="fr"?"fr":"en", clean:!!(CFG.clean||qp("clean")==="1"), loop:!!(CFG.loop||qp("loop")==="1"), pace:+(CFG.pace||qp("pace"))||0,
+      story:{ start:(id,o)=>storyMode.start(id,o), hear:t=>storyMode.hear(t), advance:n=>storyMode.advance(n), state:()=>storyMode.state(), on:(e,h)=>storyMode.on(e,h) },
       look, cam, showSaid:t=>montrerDit(t),
       thingPos:id=>{ const pk=STORY_PACKS[script.story], o=pk&&(pk.place.objets||[]).find(x=>x&&x.id===id); return o?posObjet(o):null; },
       gameUi:on=>document.body.classList.toggle("trailer-on",!on),
-      playStory:l=>{ trailer=null; lancerStory(script.story,{lang:l}); },
-      exit:()=>{ trailer=null; storyMode.stop(); } }); }
-  if(direct) trailer.start(); else trailer.ready();
-  return trailer;
+      playStory:l=>{ trailerMode=null; lancerStory(script.story,{lang:l}); },
+      exit:()=>{ trailerMode=null; storyMode.stop(); } }); }
+  if(direct) trailerMode.start(); else trailerMode.ready();
+  return trailerMode;
 }
-window.trailer={ open:d=>lancerTrailer(d), get:()=>trailer };
+window.trailer={ open:d=>lancerTrailer(d), get:()=>trailerMode };
 
 /* ------------------------------------------------------------------ ouverture de démo et arrivée dans un lieu
    Le code est dans src/ouverture.js (OUVERTURE) et ouvertures/*.json (OUVERTURES, journaux de préparation réels) ; ici, les

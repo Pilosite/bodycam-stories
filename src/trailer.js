@@ -19,7 +19,9 @@ const textMap = x => x && typeof x === 'object' && typeof x.en === 'string' && O
    A step has exactly one kind key, and `hold` (seconds after it starts, before the next step; times the pace):
      { say: {en, fr} }                         the player's words, typed then sent through the input port
      { time: seconds, speed: 1..16 }           world time passes, `speed` times faster than real time (the ×N mark shows)
-     { camera: 'look', at: thingId } | { camera: 'around' } | { camera: 'hold' }   where the player looks
+     { camera: 'look', at: thingId } | { camera: 'look', yaw: degrees } | { camera: 'around' } | { camera: 'hold' }
+                                               where the player looks, for the step's hold (then the look stays where it is);
+                                               yaw is relative to where she faces, negative to the left
      { caption: { kicker?: {en,fr}, text: {en,fr}, text_reflex?: {en,fr}, style?: 'title' } }   `*word*` is highlighted;
                                                text_reflex replaces text while no model has decided anything yet
      { show: ['strip'|'tally'|'promises'] }    reveals live read-outs (they stay)
@@ -45,8 +47,8 @@ export function loadTrailer(json) {
       out.seconds = s.time; out.speed = speed; if (out.hold === null) out.hold = s.time / speed;
     } else if (kind === 'camera') {
       if (!CAMERA.includes(s.camera)) return bad('camera must be ' + CAMERA.join(', '));
-      if (s.camera === 'look' && (typeof s.at !== 'string' || !s.at)) return bad('camera look needs at: a thing id');
-      out.camera = s.camera; if (s.at) out.at = s.at;
+      if (s.camera === 'look' && (typeof s.at !== 'string' || !s.at) && !num(s.yaw, -180, 180)) return bad('camera look needs at: a thing id, or yaw: degrees');
+      out.camera = s.camera; if (s.at) out.at = s.at; else if (s.camera === 'look') out.yaw = s.yaw;
     } else if (kind === 'caption') {
       const c = s.caption || {};
       if (!textMap(c.text)) return bad('caption needs text { en, fr? }');
@@ -141,8 +143,9 @@ const CSS = `
  linear-gradient(#f3f0e8,#f3f0e8) 0 100%/26px 2px no-repeat,linear-gradient(#f3f0e8,#f3f0e8) 0 100%/2px 26px no-repeat,linear-gradient(#f3f0e8,#f3f0e8) 100% 100%/26px 2px no-repeat,linear-gradient(#f3f0e8,#f3f0e8) 100% 100%/2px 26px no-repeat}
 #tr .tr-scrim{position:absolute;inset:0;opacity:0;transition:opacity .8s;background:linear-gradient(90deg,rgba(0,0,0,.72) 0%,rgba(0,0,0,.38) 45%,rgba(0,0,0,0) 75%),linear-gradient(0deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 45%)}
 #tr .tr-scrim.on{opacity:1}#tr .tr-scrim.title{opacity:1;background:linear-gradient(90deg,rgba(0,0,0,.85) 0%,rgba(0,0,0,.55) 55%,rgba(0,0,0,.25) 100%)}
-#tr .tr-cap{position:absolute;left:max(18px,5vw);right:max(18px,5vw);bottom:calc(env(safe-area-inset-bottom,0px) + 27%);opacity:0;transform:translateY(10px);transition:opacity .55s,transform .55s}
-#tr .tr-cap.on{opacity:1;transform:none}
+#tr .tr-cap{position:absolute;left:max(18px,5vw);right:max(18px,5vw);bottom:calc(env(safe-area-inset-bottom,0px) + 28%);opacity:0}
+#tr .tr-cap.on{opacity:1;animation:trCap .6s ease-out}
+@keyframes trCap{from{opacity:0;transform:translateY(10px)}}
 #tr .tr-kick{font-size:clamp(10px,1.25vw,15px);color:#ff4a3d;margin:0 0 .8em;text-shadow:0 1px 8px rgba(0,0,0,.8)}
 #tr .tr-text{margin:0;font-weight:600;font-size:clamp(23px,4.3vw,60px);line-height:1.1;letter-spacing:-.02em;max-width:14em;text-wrap:balance;text-shadow:0 2px 24px rgba(0,0,0,.65)}
 #tr .tr-text b{background:#ff3b30;color:#fff;padding:0 .22em .06em;border-radius:4px;font-weight:600;box-decoration-break:clone;-webkit-box-decoration-break:clone}
@@ -155,7 +158,7 @@ const CSS = `
 #tr .tr-strip i{width:8px;height:8px;border-radius:50%;background:rgba(243,240,232,.45);transition:background .25s,box-shadow .25s}
 #tr .tr-strip span.hot{opacity:1}#tr .tr-strip span.hot i{background:#ff3b30;box-shadow:0 0 12px #ff3b30}
 #tr .tr-fast{color:#ff4a3d;opacity:0;transition:opacity .3s}#tr .tr-fast.on{opacity:1}
-#tr .tr-side{position:absolute;left:max(16px,4vw);top:calc(env(safe-area-inset-top,0px) + 84px);display:flex;flex-direction:column;gap:7px;align-items:flex-start;max-width:min(62vw,420px)}
+#tr .tr-side{position:absolute;left:max(16px,4vw);top:calc(env(safe-area-inset-top,0px) + 84px);display:flex;flex-direction:column;gap:7px;align-items:flex-start;max-width:min(calc(100vw - 32px),620px)}
 #tr .tr-tally,#tr .tr-prom{opacity:0;transition:opacity .6s}
 #tr .on-panel{opacity:1!important}
 #tr .tr-row{display:flex;align-items:center;gap:8px;font-size:clamp(9.5px,1vw,12px);text-shadow:0 1px 6px rgba(0,0,0,.9)}
@@ -172,8 +175,8 @@ const CSS = `
 #tr .tr-p{display:flex;gap:8px;align-items:baseline;padding:5px 9px;background:rgba(8,8,8,.72);border:1px solid rgba(243,240,232,.22);border-radius:4px;font-size:clamp(9.5px,1vw,12px)}
 #tr .tr-p em{font-family:"DM Sans",sans-serif;font-style:italic;text-transform:none;letter-spacing:0;font-size:1.12em;color:rgba(243,240,232,.86)}
 #tr .tr-p u{text-decoration:none;color:#ff4a3d}#tr .tr-p.kept u{color:#f3f0e8}
-#tr .tr-flash{position:absolute;left:max(16px,4vw);right:max(16px,4vw);top:44%;display:flex;flex-direction:column;align-items:flex-start;gap:6px;opacity:0;transform:translateX(-8px);transition:opacity .35s,transform .35s}
-#tr .tr-flash.on{opacity:1;transform:none}
+#tr .tr-flash{display:flex;margin-top:4px;flex-direction:column;align-items:flex-start;gap:6px;opacity:0;transform:translateX(-8px);transition:opacity .35s,transform .35s}
+#tr .tr-flash{max-height:0;overflow:hidden}#tr .tr-flash.on{opacity:1;transform:none;max-height:16em}
 #tr .tr-flash .tr-fk{display:flex;align-items:center;gap:8px;font-size:clamp(9.5px,1vw,12px);text-shadow:0 1px 6px #000}
 #tr .tr-flash code{display:block;max-width:min(92vw,760px);padding:7px 11px;background:rgba(8,8,8,.8);border-left:2px solid #f3f0e8;font:400 clamp(10.5px,1.15vw,14.5px)/1.45 "DM Mono",ui-monospace,monospace;color:#f3f0e8;white-space:pre-wrap;word-break:break-word}
 #tr .tr-flash .tr-pat{color:#ff4a3d}
@@ -193,6 +196,7 @@ const CSS = `
 #tr .tr-exit{position:absolute;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);pointer-events:auto;padding:8px 13px;min-height:0;font:500 11px/1 "DM Mono",monospace;letter-spacing:.16em;text-transform:uppercase;
   background:rgba(8,8,8,.6);color:rgba(243,240,232,.8);border:1px solid rgba(243,240,232,.3);border-radius:0;cursor:pointer}
 #tr.clean button{display:none!important}
+#tr.ending .tr-side,#tr.ending .tr-strip,#tr.ending .tr-exit,#tr.ending .tr-cap{opacity:0!important;transition:opacity .6s}
 @media (prefers-reduced-motion:reduce){#tr *{transition:none!important;animation:none!important}}
 `;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -212,8 +216,8 @@ export function createTrailer(T) {
 <div class="tr-strip tr-m">${CLOCKS.map(c => `<span data-c="${c}"><i></i>${esc(l['clock_' + c] || c)}</span>`).join('')}<span class="tr-fast"></span></div>
 <div class="tr-side"><div class="tr-tally"><div class="tr-row tr-m"><i class="tr-o"></i><b data-n="dec">0</b><em data-n="declabel"></em></div>
 <div class="tr-row tr-m"><i class="tr-d"></i><b data-n="rules">0</b><em>${esc(l.rules || 'written rules')}</em></div><div class="tr-icons"></div></div>
-<div class="tr-prom tr-m"></div></div>
 <div class="tr-flash"><div class="tr-fk tr-m"></div><code></code><div class="tr-fk tr-m tr-pat"></div></div>
+<div class="tr-prom tr-m"></div></div>
 <div class="tr-cap"></div>
 <button type="button" class="tr-exit">${esc(l.exit || 'Exit')}</button>
 <div class="tr-card" hidden></div>`;
@@ -228,7 +232,7 @@ export function createTrailer(T) {
 
   /* ------------------------------------------------------------ read-outs, fed only by the journal */
   function decLabel() { const l = L(), n = st.decided; el.declabel.textContent = (l.decisions || 'live decisions') + ' · ' + (n.model ? (l.by_model || 'model') + (n.reflex ? ' + ' + (l.by_reflex || 'reflex (code)') : '') : (l.by_reflex || 'reflex (code)')); }
-  const pulse = c => { const s = el.strip.querySelector('[data-c="' + c + '"]'); if (!s) return; s.classList.add('hot'); clearTimeout(s._t); s._t = w.setTimeout(() => s.classList.remove('hot'), 900); };
+  const pulse = c => { const s = el.strip.querySelector('[data-c="' + c + '"]'); if (!s) return; s.classList.add('hot'); w.clearTimeout(s._t); s._t = w.setTimeout(() => s.classList.remove('hot'), 900); };
   function icon(cls) { const i = d.createElement('i'); i.className = cls; el.icons.appendChild(i); while (el.icons.children.length > 28) el.icons.firstChild.remove(); }
   function flash(sig) {
     const l = L(), k = el.flash.children;
@@ -236,7 +240,7 @@ export function createTrailer(T) {
     k[1].textContent = sig.text || sig.id;
     k[2].textContent = sig.pattern ? (l.pattern || 'pattern') + ' · ' + pick(sig.pattern.name, T.lang) : '';
     k[2].style.display = sig.pattern ? '' : 'none';
-    el.flash.classList.add('on'); clearTimeout(el.flash._t); el.flash._t = w.setTimeout(() => el.flash.classList.remove('on'), 4200);
+    el.flash.classList.add('on'); w.clearTimeout(el.flash._t); el.flash._t = w.setTimeout(() => el.flash.classList.remove('on'), 4200);
   }
   function promise(sig) {
     const l = L(); let p = el.prom.querySelector('[data-id="' + CSS_ID(sig.id) + '"]');
@@ -258,12 +262,12 @@ export function createTrailer(T) {
   /* ------------------------------------------------------------ the camera wish: where the player looks (rAF) */
   function camTick() {
     st.raf = w.requestAnimationFrame(camTick);
-    const now = w.performance.now(), dt = Math.min(0.1, (now - (st.real || now)) / 1000); st.real = now;
+    const now = w.performance.now(), dt = Math.min(0.5, (now - (st.real || now)) / 1000); st.real = now;
     const wish = st.wish; if (!wish || !T.look) return;
     const lk = T.look, wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
     if (wish.camera === 'look') {
-      const p = T.thingPos(wish.at); if (!p) return;
-      const want = wrap(Math.atan2(p.x - T.cam.x, p.z - T.cam.z) - T.cam.yaw);
+      const p = wish.at ? T.thingPos(wish.at) : null; if (wish.at && !p) return;
+      const want = p ? wrap(Math.atan2(p.x - T.cam.x, p.z - T.cam.z) - T.cam.yaw) : wish.yaw * Math.PI / 180;
       lk.yaw += wrap(want - lk.yaw) * Math.min(1, dt * 2.2);
       lk.pitch += (-0.1 - lk.pitch) * Math.min(1, dt * 1.5);
     } else if (wish.camera === 'around') {
@@ -277,39 +281,40 @@ export function createTrailer(T) {
   function caption(c) {
     const l = c.style === 'title', modelSeen = st.decided.model > 0;
     const text = pick(!modelSeen && c.text_reflex ? c.text_reflex : c.text, T.lang);
-    el.cap.classList.remove('on');
-    w.setTimeout(() => {
-      el.cap.className = 'tr-cap' + (l ? ' title' : '');
-      el.cap.innerHTML = (l ? `<h1 class="tr-h1">${esc(L().title_1 || 'Bodycam')}<span>${esc(L().title_2 || 'Stories')}</span></h1>` : '') +
-        (c.kicker ? `<p class="tr-kick tr-m">${esc(pick(c.kicker, T.lang))}</p>` : '') + `<p class="tr-text">${marks(text)}</p>`;
-      el.scrim.className = 'tr-scrim ' + (l ? 'title' : 'on');
-      el.cap.classList.add('on');
-    }, el.cap.innerHTML ? 450 : 0);
+    el.cap.className = 'tr-cap' + (l ? ' title' : '');                  // swapped at once (one idea at a time), faded in by CSS
+    el.cap.innerHTML = (l ? `<h1 class="tr-h1">${esc(L().title_1 || 'Bodycam')}<span>${esc(L().title_2 || 'Stories')}</span></h1>` : '') +
+      (c.kicker ? `<p class="tr-kick tr-m">${esc(pick(c.kicker, T.lang))}</p>` : '') + `<p class="tr-text">${marks(text)}</p>`;
+    el.scrim.className = 'tr-scrim ' + (l ? 'title' : 'on');
+    void el.cap.offsetWidth; el.cap.classList.add('on');
   }
   function typeThenSay(text, then) {
     const n = text.length, per = Math.min(0.05, 1.1 / Math.max(1, n));
     for (let k = 1; k <= n; k++) later(() => T.showSaid(text.slice(0, k)), k * per);
     later(() => { Promise.resolve(T.story.hear(text)).catch(e => console.warn('trailer: hear', e && e.message)); then && then(); }, n * per + 0.25);
   }
+  /* World time: the page's own clock gives one second a second; the rest is added, then topped up at the end so that
+     `seconds` of world time have passed whatever the frame rate (a slow machine delays the page's clock). */
   function fast(seconds, speed) {
-    if (speed <= 1) return;
-    el.fast.textContent = '×' + speed + ' ▸▸'; el.fast.classList.add('on');
-    const extra = speed - 1, real = seconds / speed, every = 1 / extra;          // the page's own clock gives 1 s a second; the rest is added
-    for (let t = every; t < real + 1e-6; t += every) later(() => { if (st.on) T.story.advance(1); }, t);
-    later(() => el.fast.classList.remove('on'), real);
+    const t0 = (T.story.state() || {}).t || 0, real = seconds / speed;
+    if (speed > 1) {
+      el.fast.textContent = '×' + speed + ' ▸▸'; el.fast.classList.add('on');
+      const every = 1 / (speed - 1);
+      for (let t = every; t < real - 1e-6; t += every) later(() => { if (st.on) T.story.advance(1); }, t);
+    }
+    later(() => { el.fast.classList.remove('on'); const t = (T.story.state() || {}).t || 0; if (st.on && t - t0 < seconds) T.story.advance(Math.round(seconds - (t - t0))); }, real);
   }
   function run(i) {
     if (!st.on) return;
     st.i = i;
     const s = script.steps[i];
+    st.wish = null;                                                        // a camera wish lasts its own step
     if (!s) return endCard();
     if (s.kind === 'say') typeThenSay(pick(s.text, T.lang));
     else if (s.kind === 'time') fast(s.seconds, s.speed);
-    else if (s.kind === 'camera') st.wish = { camera: s.camera, at: s.at, t0: w.performance.now(), y0: T.look ? T.look.yaw : 0 };
+    else if (s.kind === 'camera') st.wish = { camera: s.camera, at: s.at, yaw: s.yaw, t0: w.performance.now(), y0: T.look ? T.look.yaw : 0 };
     else if (s.kind === 'caption') caption(s.caption);
     else if (s.kind === 'show') for (const p of s.panels) (p === 'strip' ? el.strip : p === 'tally' ? el.tally : el.prom).classList.add('on-panel');
     else if (s.kind === 'end') return endCard();
-    if (s.kind !== 'camera') st.wish = s.kind === 'say' ? null : st.wish;
     later(() => run(i + 1), s.hold * (s.kind === 'time' ? 1 : pace()));
   }
 
@@ -330,7 +335,7 @@ export function createTrailer(T) {
     if (T.clean) el.card.onclick = () => start();
   }
   function endCard() {
-    st.wish = null; el.cap.classList.remove('on'); el.scrim.className = 'tr-scrim';
+    st.wish = null; root.classList.add('ending'); el.cap.classList.remove('on'); el.scrim.className = 'tr-scrim';
     const l = L(), n = st.decided, how = n.model ? (l.end_model || '') : (l.end_reflex || '');
     card(head() + `<p class="tr-kick tr-m">${esc(l.end_kicker || '')}</p><p>${esc(how)}</p>`,
       [{ label: l.play_story || 'Play the story', dot: true, go: () => { stop(); T.playStory(T.lang); } }, { label: l.again || 'Watch again', ghost: true, go: () => start() }]);
@@ -339,7 +344,7 @@ export function createTrailer(T) {
 
   function start() {
     build(); stop(true);
-    hideCard(); T.gameUi(false);
+    hideCard(); T.gameUi(false); root.classList.remove('ending');
     st.on = true; st.decided = { model: 0, reflex: 0 }; st.readout = createReadout({ patterns: script.patterns });
     el.dec.textContent = '0'; el.rules.textContent = '0'; el.icons.innerHTML = ''; el.prom.innerHTML = ''; el.cap.innerHTML = ''; el.cap.className = 'tr-cap'; decLabel();
     for (const k of ['strip', 'tally', 'prom']) el[k].classList.remove('on-panel');

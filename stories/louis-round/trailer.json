@@ -1,6 +1,6 @@
 {
   "version": 0,
-  "note": "The trailer of « Louis's Round » (src/trailer.js, briefs/trailer.md): a real session, nothing staged. Each step starts, then `hold` seconds pass (times the pace: ?pace=1.3 or `pace` here) before the next. `say` is sent through the story's input port as if typed; `time` lets world time pass, `speed` times faster (a ×N mark shows it); `camera` is where the player looks (the gaze is the real input: looking at a thing long enough is an observation); `caption` is one idea at a time (`*x*` is highlighted; `text_reflex` is shown instead while no model has decided anything); `show` reveals the live read-outs. Tune the holds on a real GPU: voices and transitions take longer there than lines on paper.",
+  "note": "The trailer of « Louis's Round » (src/trailer.js, briefs/trailer.md): a real session, nothing staged. Each step starts, then `hold` seconds pass (times the pace: ?pace=1.3 or `pace` here) before the next. `say` is sent through the story's input port as if typed; `time` lets world time pass, `speed` times faster (a ×N mark shows it); `camera` is where the player looks during its hold (the gaze is the real input: looking at a thing long enough is an observation; at the trailhead she looks away from the first mark so that the player asks for it); `caption` is one idea at a time (`*x*` is highlighted; `text_reflex` is shown instead while no model has decided anything); `show` reveals the live read-outs. Tune the holds on a real GPU: voices and transitions take longer there than lines on paper.",
   "story": "louis-round",
   "seed": 11,
   "transitions": "cut",
@@ -37,7 +37,8 @@
     }
   },
   "steps": [
-    { "caption": { "style": "title", "kicker": { "en": "An AI-driven procedural experience", "fr": "Une expérience procédurale pilotée par l'IA" }, "text": { "en": "This is the engine running, not a video.", "fr": "C'est le moteur qui tourne, pas une vidéo." } }, "hold": 5 },
+    { "caption": { "style": "title", "kicker": { "en": "An AI-driven procedural experience", "fr": "Une expérience procédurale pilotée par l'IA" }, "text": { "en": "This is the engine running, not a video.", "fr": "C'est le moteur qui tourne, pas une vidéo." } } },
+    { "camera": "look", "yaw": -55, "hold": 5 },
     { "say": { "en": "Hello? Can you hear me?", "fr": "Allô ? Tu m'entends ?" }, "hold": 4 },
 
     { "caption": { "kicker": { "en": "You never act", "fr": "Tu n'agis jamais" }, "text": { "en": "You talk. *She decides.*", "fr": "Tu parles. *Elle décide.*" } } },
