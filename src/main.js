@@ -755,7 +755,8 @@ function display(src,t,cible){
   bindTex(0,src.t,u.uTex); bindTex(1,bl1.t,u.uBloom);
   gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
   bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff||CFG.expoFixe>0?0:1);
-  gl.uniform1f(u.uExp,CFG.expoFixe>0?+CFG.expoFixe:exposure);   // mise au point : expoFixe impose l'exposition du capteur gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
+  gl.uniform1f(u.uExp,CFG.expoFixe>0?+CFG.expoFixe:exposure);   // mise au point : expoFixe impose l'exposition du capteur
+  gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
   gl.uniform1f(u.uFlare||null,QUAL.full&&S.atmo&&S.atmo[0]?(CFG.flare!==undefined?+CFG.flare:1):0);   // optique face au soleil : grand écran, modèle atmosphère
   gl.uniform1f(u.uGrainPx||null,QUAL.full?Math.max(1,canvas.height/620):1);                          // grain d'une vidéo, pas d'un écran
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
