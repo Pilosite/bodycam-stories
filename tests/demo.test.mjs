@@ -30,7 +30,7 @@ test('bibliothèque : des données valides, des matières qui existent, aucun no
     }
   }
   // ni le moteur (shaders, page) ni le meneur ne nomment un modèle (le lexique des mondes décrits parle de rochers, pas d'objets)
-  const code = ['src/main.js', 'src/meneur.js', 'src/shaders/monde.glsl', 'src/shaders/recette.glsl', 'src/shaders/v3_proches.frag', 'src/shaders/v3_ombrage.frag']
+  const code = ['src/main.js', 'src/meneur.js', 'src/son.js', 'src/shaders/monde.glsl', 'src/shaders/recette.glsl', 'src/shaders/v3_proches.frag', 'src/shaders/v3_ombrage.frag']
     .map(f => readFileSync(new URL('../' + f, import.meta.url), 'utf8')).join('\n').split('\n').filter(l => !/rochers=|SECOURS|EN_MAIN|pensee: |mots:|nom: '|quoi: '|crotte|\/\/|\/\*|\*\/|^\s*\*/.test(l)).join('\n');
   for (const id of ['bonhomme', 'caillou', 'baton']) assert.ok(!new RegExp('\\b' + id + '\\b').test(code), `le code ne connaît pas « ${id} »`);
   assert.equal(modeleDe(MODELES, 'fais une crotte sur le chemin').id, 'crotte');

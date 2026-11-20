@@ -36,11 +36,14 @@
    "facteur": { "normal": [0.5, 1.6], "gros": [1.6, 4], "demesure": [4, 7] },
    "paliers": {
     "normal": { "nombre": [2, 3], "duree_s": [0.15, 0.4], "hauteur_hz": [300, 180], "force": 0.32, "rates": 0, "fin": "sec", "vibrato": 0.15, "alea": 0.5,
-     "avant": { "duree_rapport": [0.5, 0.9], "hauteur_rapport": [1, 1.2], "force_rapport": [0.7, 1], "fin": "sec" } },
+     "prises": ["breve_aigue", "breve_ronde"], "prise_part": 0.8,
+     "avant": { "prises": ["breve_aigue", "breve_ronde"], "duree_rapport": [0.5, 0.9], "hauteur_rapport": [1, 1.2], "force_rapport": [0.7, 1], "fin": "sec" } },
     "gros": { "nombre": [2, 3], "duree_s": [0.7, 1.8], "hauteur_hz": [160, 95], "force": 0.6, "rates": 0.6, "fin": "bulle", "vibrato": 0.5,
-     "avant": { "duree_rapport": [0.2, 0.4], "hauteur_rapport": [1.2, 1.6], "force_rapport": [0.5, 0.7], "fin": "sec" } },
+     "prises": ["longue_chantante", "breve_ronde"], "prise_part": 0.65,
+     "avant": { "prises": ["breve_aigue", "breve_ronde"], "duree_rapport": [0.2, 0.4], "hauteur_rapport": [1.2, 1.6], "force_rapport": [0.5, 0.7], "fin": "sec" } },
     "demesure": { "nombre": [2, 3], "duree_s": [2.5, 5], "hauteur_hz": [90, 45], "force": 1, "rates": 1.2, "fin": "ridicule", "vibrato": 1,
-     "avant": { "duree_rapport": [0.06, 0.12], "hauteur_rapport": [1.8, 2.6], "force_rapport": [0.35, 0.5], "fin": "sec" } }
+     "prises": ["grondement", "longue_chantante"], "prise_part": 0.55,
+     "avant": { "prises": ["breve_aigue", "breve_ronde"], "duree_rapport": [0.06, 0.12], "hauteur_rapport": [1.8, 2.6], "force_rapport": [0.35, 0.5], "fin": "sec" } }
    }
   }
  },

@@ -61,7 +61,7 @@ export function planExploit(bruit, { palier = 'normal', facteur = 1 } = {}, rnd 
   const principal = {
     rang: n - 1, principal: true, duree: r1(lerp(d0, d1, m())), f0: r1(lerp(h0, h1, m())), force: r1(force),
     gain: r1(Math.min(gainMax, force * gainMax)), rates: num(P.rates, 0, 10, 0), fin: typeof P.fin === 'string' ? P.fin : 'sec',
-    vibrato: num(P.vibrato, 0, 2, 0.3), prise: choix(P.prises),
+    vibrato: num(P.vibrato, 0, 2, 0.3), prise: choix(P.prises), prise_part: num(P.prise_part, 0, 1, 0.5),
   };
   const A = isObj(P.avant) ? P.avant : {}, out = [];
   function choix(L) { L = liste(L).filter(x => typeof x === 'string'); return L.length ? L[Math.floor(rnd() * L.length)] : null; }
@@ -71,7 +71,7 @@ export function planExploit(bruit, { palier = 'normal', facteur = 1 } = {}, rnd 
       rang: i, principal: false, duree: r1(Math.max(0.06, principal.duree * entre(rnd, A.duree_rapport, [0.6, 1]))),
       f0: r1(principal.f0 * entre(rnd, A.hauteur_rapport, [1, 1.25])), force: r1(fo), gain: r1(Math.min(gainMax, fo * gainMax)),
       rates: num(A.rates, 0, 10, 0), fin: typeof A.fin === 'string' ? A.fin : 'sec', vibrato: num(A.vibrato, 0, 2, principal.vibrato * 0.5),
-      prise: choix(liste(A.prises).length ? A.prises : P.prises),
+      prise: choix(liste(A.prises).length ? A.prises : P.prises), prise_part: num(A.prise_part, 0, 1, num(P.prise_part, 0, 1, 0.5)),
     });
   }
   return [...out, principal];
@@ -268,6 +268,7 @@ export function synthese(rec, ev, sr = 44100, prises = {}) {
     const p = ev.prise && isObj(prises[ev.prise]) ? prises[ev.prise] : null, src = p && decoderPrise(p);   // la prise que le plan désigne, sinon rien
     if (src && src.length > 64) lue = lirePrise(src, num(p.sr, 4000, 48000, 11025), num(p.hz, 20, 2000, 120), P, sr, n - queueS, rnd, !!cp.boucle);
   }
+  const part = num(ev.prise_part, 0, 1, 0.5);
   for (let i = 0; i < n - queueS; i++) {
     const t = i / sr, fr = auTemps(P.f, P.sr, t), am = auTemps(P.a, P.sr, t);
     // les lèvres qui vibrent : une impulsion par période (ouverture douce, fermeture sèche), jitter, shimmer, ratés d'impulsion
@@ -279,7 +280,7 @@ export function synthese(rec, ev, sr = 44100, prises = {}) {
     const pulse = (skip ? 0.15 : 1) * shim * ((1 - deriv) * (g - oq * 0.5) + deriv * dg * 0.5);
     let y = 0;
     C.forEach((c, k) => {
-      const e = etats[k], gn = num(c.gain, 0, 4, 1);
+      const e = etats[k], gn = num(c.gain, 0, 4, 1) * (!lue ? 1 : c.source === 'prise' ? 2 * part : 2 * (1 - part));   // la prise et la synthèse, selon la part que dit le plan
       if (c.source === 'impulsions') y += gn * pulse;
       else if (c.source === 'onde') {
         e.ph += 2 * Math.PI * fr * num(c.rapport, 0.1, 8, 1) / sr;
