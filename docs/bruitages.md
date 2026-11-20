@@ -71,3 +71,7 @@ La couche `prise` lit l'enregistrement par grains de 60 ms (fenêtre de Hann, re
 - `node tools/demo.mjs` vérifie aussi les bruits de la petite et de l'énorme, leurs instants, la chute, et qu'aucune pensée n'est dite pendant le gros bruit (`out/demo/sons.json`).
 
 Pas vérifié : l'oreille (rien n'a été écouté ici : les WAV sont là pour ça), un vrai téléphone (latence, volume, haut-parleur qui perd le grave : sur un haut-parleur de téléphone l'énorme sera surtout ses harmoniques et sa saturation), Safari (`webkitAudioContext` est prévu, pas essayé).
+
+## Cri mourant (§24 de `docs/meneur-de-jeu.md`)
+
+Recette `cri_mourant` : deux ondes sinus (fondamentale 2,4 à 3,4 kHz et son octave), un peu de scie, un souffle filtré à 3 kHz ; glissando de −1,6 octave sur la durée (0,4 à 0,8 s), vibrato de 11 à 19 Hz qui grandit (croissance 2,5), ratés courts (ça cale), fin « cale » qui s'effondre. Le plan (hauteur, durée, force, ratés, vibrato) vient de `exploit.consequences[].son` du modèle, tiré par la graine de la partie : chaque chose a le sien. Joué par `jouerBruit`, donc soumis à « Sons ». Pas écouté.
