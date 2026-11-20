@@ -526,6 +526,7 @@ function reliefDetail(x,z,ax){
 const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1, elev:0, pied:null, perche:null, zoom:1, zoomCible:1 };   // zoom : zoom numérique du téléphone (cadrer une petite chose)
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
+let pauseQuand=null;                                            // essais : {type, t} (balade.pauseQuand)
 let frozen=false, hold=false, pauseTest=false, walkDist=0, walking=false;   // pauseTest : balade.pause (captures d'essai), le corps s'arrête net
 function pose(){
   const bob=walking?.022*Math.sin(walkDist*8.4):0;
@@ -632,6 +633,9 @@ function simulate(dt){
   if(Math.abs(cam.zoom/cam.zoomCible-1)>.005){                    // le zoom glisse en une seconde ; l'accumulation repart (comme un téléphone qui refait sa mise au point)
     cam.zoom*=Math.pow(cam.zoomCible/cam.zoom,Math.min(1,dt*3)); if(Math.abs(cam.zoom/cam.zoomCible-1)<.01) cam.zoom=cam.zoomCible; sceneDirty=true; }
   walking=false; if(frozen||hold||pauseTest) return;
+  if(pauseQuand&&queue[0]&&queue[0].type===pauseQuand.type){        // essais : figer le corps à un instant précis d'un geste (planche du façonnage)
+    const a=queue[0], t=a.type==="ramasser"?1-a.rest/a.duree:a.type==="faconner"&&a.G&&a.t0!==undefined?a.t-a.t0-.4:-1;
+    if(t>=pauseQuand.t){ pauseQuand=null; pauseTest=true; return; } }
   let v=0;
   if(!queue.length){ idle+=dt;
     if(immobile){}                                               // « arrête-toi » : il attend un autre ordre
@@ -2221,6 +2225,8 @@ function geste1(g,c,r,t,u=0){
 /* Les mains glissent vers leurs cibles (jamais de saut d'une transition à l'autre), puis l'objet des mains est refait. */
 function mainsVers(H,dt,quelles=[0,1]){                          // quelles : les mains dans le champ (0 gauche, 1 droite)
   if(!MAINS) return;
+  if(quelles.length===2){ const {r}=corpsAxes();                  // la main gauche va à la cible de gauche (les bras ne se croisent pas)
+    if((H[0][0]-H[1][0])*r[0]+(H[0][2]-H[1][2])*r[2]>0) H=[H[1],H[0]]; }
   if(!mainsEtat.H) mainsEtat.H=mainsRepos();
   const k=Math.min(1,dt*9);
   mainsEtat.H=mainsEtat.H.map((h,i)=>h.map((v,j)=>v+(H[i][j]-v)*k));
@@ -2233,7 +2239,7 @@ function objetMains(Hs,quelles=[0,1]){
   const axe=(f0,c,d,taille,couleur,matiere)=>{ let [dx,dy,dz]=nrm(d); if(dy<0){ dx=-dx; dy=-dy; dz=-dz; }
     const w=Math.acos(Math.min(1,dy)), Y=Math.atan2(dz,-dx), cap=((Y-R.yaw)*180/Math.PI%360+540)%360-180;
     return {f:f0,p:versLocal(R,c),taille,cap,penche:[0,w*180/Math.PI],couleur,matiere}; };
-  const ep=M.epaule||[.21,-.2,-.02], ma=M.manche||{}, pa=M.paume||{}, po=M.pouce||{}, pg=M.poignet||.07;
+  const ep=M.coude||[.24,-.3,.06], ma=M.manche||{}, pa=M.paume||{}, po=M.pouce||{}, pg=M.poignet||.07;
   Hs.forEach((H,i)=>{ if(!quelles.includes(i)) return; const s=i?1:-1, rac=[e[0]+r[0]*s*ep[0]+f[0]*ep[2],e[1]+ep[1],e[2]+r[2]*s*ep[0]+f[2]*ep[2]];
     const d=nrm(sub(H,rac)), Wr=add(H,d,-pg), rm=ma.rayon||.045, a=add(Wr,d,-.015), L=Math.max(.03,Math.hypot(...sub(a,rac)));
     o.formes.push(axe("capsule",add(rac,sub(a,rac),.5),d,[2*rm,Math.max(.01,L-2*rm),2*rm],ma.couleur||"#2b2f36",ma.matiere||"tissu"));
@@ -2652,6 +2658,8 @@ window.balade={
   obstacles:()=>obstaclesConnus().map(o=>({id:o.id,nom:o.nom,x:+o.x.toFixed(2),z:+o.z.toFixed(2),r:+o.r.toFixed(2)})),   // §16 : ce que le corps contourne
   lieuCherche:()=>dernierLieu,
   pause(v){ pauseTest=!!v; },
+  pauseQuand(type,t){ pauseQuand={type,t:+t}; },                 // figer quand le geste en tête de file (ramasser : part 0..1 ; faconner : secondes) atteint t
+  enPause:()=>pauseTest,
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?mainsObj.formes.length:0,
     file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4).toFixed(2):-1,

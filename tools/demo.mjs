@@ -147,8 +147,8 @@ await attendre(2500);
 const lieu = await page.evaluate(() => balade.lieuCherche());
 console.log(sec(), 'il va chercher', JSON.stringify(lieu));
 await capture('4-depart', 'il part chercher (' + (lieu && lieu.ou) + ')');
-await quand(() => balade.corps().file[0] === 'ramasser' && balade.faconnage().mains > 0);
-await attendre(1200);
+await page.evaluate(() => balade.pauseQuand('ramasser', 0.5));     // figé quand la main est au sol
+await quand(() => balade.enPause());
 const o4 = await objet(idE);
 verifier(o4 && o4.m > 2.5, `il s'est éloigné pour chercher : ${o4 && o4.m} m`);
 verifier((await page.evaluate(() => balade.faconnage().mains)) === 3, 'une main ramasse');
@@ -162,7 +162,8 @@ verifier(geste.total >= 8 && geste.total <= 12.5 && geste.n >= 8, `geste continu
 const NP = +(process.env.PLANCHE || 14), PP = +(process.env.PASSES_PLANCHE || 4), planche = [];
 for (let k = 0; k < NP; k++) {
   const tc = geste.total * (k + 0.5) / NP;
-  await quand(t => { const f = balade.faconnage().file[0]; return !f || f.t >= t; }, tc);
+  await page.evaluate(t => balade.pauseQuand('faconner', t), tc);   // figé à cet instant précis du geste
+  await quand(() => balade.enPause() || !balade.faconnage().file.length);
   const f = await page.evaluate(() => balade.faconnage());
   if (!f.file.length) break;
   await page.evaluate(([p, g]) => { balade.pause(true); balade.grains(g); balade.resolution(p); }, [Math.round(+pxCapture / 2), GRAINS]);
