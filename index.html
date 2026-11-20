@@ -16540,7 +16540,7 @@ function simulate(dt){
   if(a){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*(a.libre?1:gesteK())*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
-    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK(),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
+    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK()*(vitK()>1?1.5:1),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*gesteK()*dt); if(Math.abs(d)<.012) queue.shift(); }
     else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*gesteK()*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
     else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet,a.cadre);   // vers un objet : la page calcule cap et inclinaison
@@ -19036,8 +19036,9 @@ function planCorps(a){
   }
   if(a.type==="chercher"){                                          // aller chercher : un endroit plausible, il y va, se baisse, ramasse, se relève
     const L=supportsProches(), lieu=MENEUR.lieuChercher(a.quoi,{x:cam.x,z:cam.z,yaw:cam.yaw},L,z=>S.kit!==1?pathX(z):cam.x,S.traj[1]||1,MODELES);
+    if(vitK()>1){ const dx=lieu.x-cam.x, dz=lieu.z-cam.z, m=Math.hypot(dx,dz), M=2; if(m>M){ lieu.x=cam.x+dx/m*M; lieu.z=cam.z+dz/m*M; } }   // démo : il trouve tout près (2 m), l'aller-retour ne traîne pas
     dernierLieu=lieu;
-    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},...(k=>[{type:"ramasser",rest:1.6*k,duree:1.6*k},{type:"tourner",rest:.45},{type:"ramasser",rest:1.5*k,duree:1.5*k}])(vitK()>1?.5:1),
+    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},...(k=>[{type:"ramasser",rest:1.6*k,duree:1.6*k},{type:"tourner",rest:.45},{type:"ramasser",rest:1.5*k,duree:1.5*k}])(vitK()>1?.3:1),
       {type:"posture",h:1},{type:"regarder",pitch:-.1}];
   }
   const q=cibleMonde(a.objet); if(!q) return [];
