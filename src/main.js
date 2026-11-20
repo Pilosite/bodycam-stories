@@ -2253,14 +2253,95 @@ function obstaclesConnus(){
       if(h[0]>(sstep(.32,.68,mask)*.9+.08)*S.kitP[1]) continue;
       const R=.7+1.6*h[3]*h[3], ox=(h[1]-.5)*2*(.5*CC-.3-1.25*R), oz=(h[2]-.5)*2*(.5*CC-.3-1.25*R), wx=(i+.5)*CC+ox, wz=(j+.5)*CC+oz;
       if(Math.abs(wx-pathX(wz))<R*1.1+.5||degage(wx,wz)||loin(wx,wz)) continue;
-      L.push({id:"rocher:"+i+","+j,nom:"un rocher",x:wx,z:wz,r:R*Math.max(1+.25*fr32(h[1]*9),.8+.3*fr32(h[3]*11))+.1*R}); }
+      L.push({id:"rocher:"+i+","+j,nom:"un rocher",x:wx,z:wz,r:R*Math.max(1+.25*fr32(h[1]*9),.8+.3*fr32(h[3]*11))+.1*R,haut:R*.22+R*(.62+.3*fr32(h[2]*7))}); }
   }
   for(const o of (Array.isArray(fiche.objets)?fiche.objets:[])){ if(!o||o.visible===false||cacheObj.has(o.id)) continue;
     const q=posObjet(o), k2=clampN(o.echelle,.1,5,1), F=(o.formes||[]).filter(f=>f&&Array.isArray(f.p)&&Array.isArray(f.taille));
     if(!F.length||loin(q.x,q.z)) continue;
-    L.push({id:o.id,nom:o.nom||o.id,x:q.x,z:q.z,r:Math.max(.02,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2))*k2}); }
+    L.push({id:o.id,nom:o.nom||o.id,x:q.x,z:q.z,r:Math.max(.02,...F.map(f=>Math.hypot(f.p[0],f.p[2])+Math.max(f.taille[0],f.taille[2])/2))*k2,haut:mesureObjet(o).haut}); }
   obsCache={k,x:cam.x,z:cam.z,L};
   return L;
+}
+/* Les éléments de semis (cailloux, branches mortes, tombes, murs…) recopiés de semisGrille, semisElem, semisLocal et sdSemis
+   (monde.glsl) en flottants 32 bits, lus dans la même texture de formes (shapesData) : MÊMES FORMULES, à modifier des deux
+   côtés. Sert à ne jamais poser une chose dans ou derrière un élément du décor, et à cadrer une chose sans rien entre elle et la
+   caméra. Un élément reste dans sa cellule : seule la cellule sous le point compte. Rend une distance (m) au plus proche
+   élément, positive dehors ; 9 sans semis. Vérifiable avec la sonde du moteur (option v3sonde, balade.semis et balade.sonde). */
+const tx4=(row,col)=>{ const o=(row*4+col)*4; return [shapesData[o],shapesData[o+1],shapesData[o+2],shapesData[o+3]]; };
+function sdPrimJS(q,ty,s){
+  const L=v=>Math.hypot(v[0],v[1],v[2]);
+  if(ty<.5){ const d=[Math.abs(q[0])-s[0],Math.abs(q[1])-s[1],Math.abs(q[2])-s[2]]; return Math.min(Math.max(...d),0)+L(d.map(v=>Math.max(v,0))); }
+  if(ty<1.5) return (L([q[0]/s[0],q[1]/s[1],q[2]/s[2]])-1)*Math.min(...s);
+  if(ty<2.5){ const dx=Math.hypot(q[0],q[2])-s[0], dy=Math.abs(q[1])-s[1]; return Math.min(Math.max(dx,dy),0)+Math.hypot(Math.max(dx,0),Math.max(dy,0)); }
+  if(ty<3.5){ const r=s[0]*Math.min(1,Math.max(0,.5-q[1]/(2*s[1]))); return Math.max(Math.hypot(q[0],q[2])-r,Math.abs(q[1])-s[1])*.7; }
+  if(ty<4.5){ const y=q[1]-Math.min(s[1],Math.max(-s[1],q[1])); return Math.hypot(q[0],y,q[2])-s[0]; }
+  return Math.max(Math.abs(q[0])-s[0],Math.abs(q[1])-s[1],Math.abs(q[2])-s[2]);   // toit : sa boîte
+}
+function semisDist(x,y,z){
+  let best=9; const sx=F32(seed[0]), sy=F32(seed[1]);
+  for(let k=0;k<S.semN;k++){
+    const r0=SEM0+k*SEM_L, A=tx4(r0,0), B=tx4(r0,1), T=tx4(r0,2), K=tx4(r0+1,1), rg=B[3]>.5;
+    let side=1;
+    if(rg){ const u=x-pathX(z); side=u<0?-1:1; if(T[2]*side<-.5) continue; const gx=Math.abs(u)-T[0]; if(gx<0||gx-K[3]*A[0]>0) continue; }
+    const G=(px,pz)=>rg?[side*(px-pathX(pz))-T[0],pz]:[A[2]*px-A[3]*pz,A[3]*px+A[2]*pz];
+    const W=g=>rg?[pathX(g[1])+side*(g[0]+T[0]),g[1]]:[g[0]*A[2]+g[1]*A[3],-g[0]*A[3]+g[1]*A[2]];
+    const g=G(x,z), id=[Math.floor(g[0]/A[0]),Math.floor(g[1]/A[1])];
+    const h=h42(F32(F32(id[0]+sx)+F32(13.7*(k+1))+(side<0?41.3:0)),F32(F32(id[1]+sy)+F32(71.3*(k+1))+(side<0?7.9:0)));
+    let dens=B[0]; if(B[1]>0) dens*=1+(sstep(.3,.7,vnoise2(id[0]*B[2]+sx+k*17,id[1]*B[2]+sy+k*17))-1)*B[1];
+    if(h[0]>=dens) continue;
+    const J=tx4(r0+1,0), D=tx4(r0,3), E=tx4(r0+1,3);
+    const gc=[(id[0]+.5)*A[0]+(h[1]-.5)*2*J[0],(id[1]+.5)*A[1]+(h[2]-.5)*2*J[1]], w=W(gc);
+    let dx=0;
+    if(!rg){ dx=w[0]-pathX(w[1]); if(Math.abs(dx)<T[0]||Math.abs(dx)>T[1]||dx*T[2]<0) continue; }
+    if(degage(w[0],w[1])) continue;
+    const h2=h42(F32(id[0]*1.37+h[1]*91+k*3.1+side),F32(id[1]*1.37+h[2]*91+k*3.1+side));
+    let yaw=D[0];
+    if(T[3]<.5) yaw=h2[2]*6.2832;
+    else if(T[3]<1.5){ if(rg) yaw=-1.5708; else { const sg=dx<0?-1:1, zz=w[1], sl=S.traj[0]*(.1504*Math.cos(zz*.047+seed[2])+.1808*Math.cos(zz*.113+1.7+seed[2]*2)); yaw=Math.atan2(-sg,sg*sl)-Math.atan2(A[3],A[2]); } }
+    yaw+=(h2[3]-.5)*D[1];
+    const th0=terrainH(w[0],w[1]); let sl=[0,0];
+    if(E[3]>.5){ const w1=W([gc[0]+1,gc[1]]), w2=W([gc[0],gc[1]+1]); sl=[terrainH(w1[0],w1[1])-th0,terrainH(w2[0],w2[1])-th0]; }
+    const s=J[2]+(J[3]-J[2])*h2[0], syy=K[0]+(K[1]-K[0])*h2[1], sh=1/Math.sqrt(1+sl[0]*sl[0]+sl[1]*sl[1]);
+    // semisLocal
+    const gp=G(x,z); let lp=[gp[0]-gc[0],y-th0,gp[1]-gc[1]];
+    lp[1]-=sl[0]*lp[0]+sl[1]*lp[2];
+    { const c=Math.cos(yaw), sn=Math.sin(yaw); lp=[c*lp[0]-sn*lp[2],lp[1],sn*lp[0]+c*lp[2]]; }
+    if(rg&&side<0) lp[0]=-lp[0];
+    if(D[2]>0){ const pa=[(fr32(h2[2]*17.31)-.5)*2*D[2],(fr32(h2[3]*17.31)-.5)*2*D[2]], c1=Math.cos(pa[0]), s1=Math.sin(pa[0]), c2=Math.cos(pa[1]), s2=Math.sin(pa[1]);
+      lp=[c1*lp[0]+s1*lp[1],-s1*lp[0]+c1*lp[1],lp[2]]; lp=[lp[0],-s2*lp[2]+c2*lp[1],c2*lp[2]+s2*lp[1]]; }
+    lp=[lp[0]/s,lp[1]/s/syy,lp[2]/s];
+    let od=1e5;
+    for(let j=0;j<K[2];j++){ const row=r0+4+j, a=tx4(row,0), b=tx4(row,1), ee=tx4(row,3);
+      let q=[lp[0]-a[0],lp[1]-a[1],lp[2]-a[2]], c=Math.cos(b[3]), sn=Math.sin(b[3]);
+      q=[c*q[0]-sn*q[2],q[1],sn*q[0]+c*q[2]];
+      if(ee[3]!==0){ c=Math.cos(ee[3]); sn=Math.sin(ee[3]); q=[c*q[0]+sn*q[1],-sn*q[0]+c*q[1],q[2]]; }
+      if(ee[2]!==0){ c=Math.cos(ee[2]); sn=Math.sin(ee[2]); q=[q[0],c*q[1]+sn*q[2],-sn*q[1]+c*q[2]]; }
+      od=Math.min(od,sdPrimJS(q,a[3]%8,[b[0],b[1],b[2]])-ee[1]); }
+    best=Math.min(best,od*s*Math.min(1,syy)*sh);
+  }
+  return best;
+}
+/* Une chose ronde (centre x, z, rayon r, hauteur haut) posée là touche-t-elle un élément de semis (marge m) ? */
+function semisSous(x,z,r,haut,m=.03){
+  const y0=terrainH(x,z), H=Math.max(.02,haut||r);
+  for(const f of [0,.5,1]) for(let i=0;i<(f?8:1);i++){ const a=i*Math.PI/4, px=x+Math.sin(a)*r*f, pz=z+Math.cos(a)*r*f;
+    for(const yy of [.01,H*.5,H]) if(semisDist(px,terrainH(px,pz)+yy,pz)<m) return true; }
+  return y0!==y0;
+}
+/* La vue de l'œil (ex, ey, ez) vers une chose (centre x, z, rayon r, hauteur haut) est-elle dégagée ? Rien entre les deux : ni
+   élément de semis, ni tronc, ni rocher, ni autre chose (les obstacles connus, sauf la chose elle-même, id). Quatre visées :
+   le milieu, le dessus, les deux bords. */
+function vueDegagee(ex,ey,ez,x,z,r,haut,id){
+  const y0=terrainH(x,z), H=Math.max(.02,haut||r), dx=x-ex, dz=z-ez, l=Math.hypot(dx,dz)||1, px=-dz/l, pz=dx/l;
+  const cibles=[[x,y0+H*.5,z],[x,y0+H*.95,z],[x+px*r*.8,y0+H*.4,z+pz*r*.8],[x-px*r*.8,y0+H*.4,z-pz*r*.8]];
+  const obs=obstaclesConnus().filter(o=>o.id!==id);
+  for(const c of cibles){
+    const L=Math.hypot(c[0]-ex,c[1]-ey,c[2]-ez), n=Math.max(4,Math.ceil(L/.04));
+    for(let i=1;i<n;i++){ const t=i/n, qx=ex+(c[0]-ex)*t, qy=ey+(c[1]-ey)*t, qz=ez+(c[2]-ez)*t;
+      if(Math.hypot(qx-x,qz-z)<r+.02) break;                      // arrivé à la chose
+      if(semisDist(qx,qy,qz)<.005) return false;
+      if(obs.some(o=>Math.hypot(qx-o.x,qz-o.z)<o.r*.8&&qy<terrainH(o.x,o.z)+(o.haut||9))) return false; } }
+  return true;
 }
 function planCorps(a){
   const pre=cam.elev>.01&&a.type!=="monter"?[{type:"descendre"}]:[];
@@ -2439,7 +2520,10 @@ window.balade={
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1)}))}),
   resolution(px){ CFG.maxPx=+px||undefined; resize(); },        // pixels internes (essais : finesse d'une capture)
-  sonde:(x,y,z)=>probe(x,y,z)[0],                                // distance au décor en un point (vérifier la copie JS d'arbreA, blocGres)
+  sonde:(x,y,z)=>probe(x,y,z)[0],
+  semis:(x,y,z)=>semisDist(x,y,z),
+  semisSous:(x,z,r,h)=>semisSous(x,z,r,h),
+  placer(x,z,yaw){ queue.length=0; cam.x=+x; cam.z=+z; if(Number.isFinite(+yaw)) cam.yaw=+yaw; cam.elev=0; sceneDirty=true; },   // essais : poser le corps à un endroit précis                               // la copie JS des éléments de semis (comparer à la sonde, option v3sonde)
   jouer:id=>jouerHistoire(id),
   quitter:()=>quitterHistoire(false),
   partie:()=>meneur?meneur.partie():null,
