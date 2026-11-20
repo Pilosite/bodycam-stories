@@ -7,7 +7,7 @@
 // L'horloge de la page est tenue par l'outil (requestAnimationFrame remplacé) : chaque image avance de PAS ms (33 par défaut),
 // quelle que soit la lenteur du rendu logiciel. L'image est lue dans le canevas juste après son dessin.
 // Variables : PAGE (autre page, pour l'avant), N (images par séquence, 12), PAS (ms), CFG (options JSON ajoutées), IMAGES
-// (images accumulées à l'arrêt avant de partir, 8), Z (position sur le sentier, 22).
+// (images accumulées à l'arrêt avant de partir, 8), Z (position sur le sentier, 22), PC=1 (qualité complète, 640 × 400 paysage).
 import { chromium } from 'playwright';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -20,13 +20,14 @@ const ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignor
 const fiche = JSON.parse(readFileSync(join(root, 'scenes/09-champcueil-aube.json'), 'utf8'));
 const N = +(process.env.N || 12), PAS = +(process.env.PAS || 33), IMAGES = +(process.env.IMAGES || 8);
 const cfg = { still: true, nohud: true, nowalk: true, v3: true, full: false, mobile: true, z: +(process.env.Z || 22), scene: fiche,
+  ...(process.env.PC ? { full: true, mobile: false, bureau: false, w: 640, h: 400 } : {}),
   ...(process.env.CFG ? JSON.parse(process.env.CFG) : {}) };
 const MOUV = { marche: { v: 1.4, w: 0 }, rotation: { v: 0, w: 60 }, 'les-deux': { v: 1.4, w: 60 }, arret: null };
 
 async function sequence(nom) {
   const b = await chromium.launch({ headless: true, args: ARGS }), t0 = Date.now();
   try {
-    const p = await b.newPage({ viewport: { width: 360, height: 651 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+    const p = await b.newPage(process.env.PC ? { viewport: { width: 640, height: 400 }, deviceScaleFactor: 1 } : { viewport: { width: 360, height: 651 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
     const logs = []; p.on('pageerror', e => logs.push(e.message)); p.on('console', m => { if (m.type() === 'error') logs.push(m.text()); });
     await p.addInitScript(c => {
       window.__CFG = c; window.__rafQ = []; window.__manuel = false;
