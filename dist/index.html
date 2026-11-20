@@ -3840,12 +3840,16 @@ const ECHELLE=(function(){"use strict";
 //
 // Automate d'une variante complète, par signature (variante + empreinte du source) :
 //   (rien) --debut--> « en cours » --ok--> « ok » (avec la durée)
-//                                  --delai / erreur--> « echec »
-//   « en cours » trouvé au chargement de la page (plantage du navigateur, page rechargée pendant la compilation) --> « echec »
-// Une variante en échec n'est plus tentée sur cette machine : la page reste au socle, jusqu'à la remise à zéro.
+//                                  --delai--> « echec (délai) » : on reste au socle pour cette page, la compilation continue
+//                                             en fond et sert si elle finit ; au chargement suivant, la variante se retente
+//                                  --erreur--> « echec (erreur) »
+//   « en cours » trouvé au chargement de la page (plantage du navigateur ou du processus graphique) --> « echec (interrompu) »
+//   « en cours » à la fermeture normale de la page (rechargement, onglet fermé : pagehide) --> oublié (aux) : pas un plantage
+// Seuls un plantage (« interrompu ») et une erreur de compilation interdisent durablement la variante sur cette machine
+// (jusqu'à la remise à zéro). Un délai dépassé, y compris mémorisé par une ancienne version de la page, ne l'interdit pas.
 
 const CLE_OMBRAGE = 'bodycam-ombrage';
-const DELAI_OMBRAGE = 25000;          // ms : au-delà, la variante complète est abandonnée, on reste au socle
+const DELAI_OMBRAGE = 40000;          // ms de compilation RÉELLE (file d'attente et écran d'ouverture exclus) : au-delà, on reste au socle
 const MAX_ENTREES = 24;
 
 // Empreinte courte d'un texte (FNV-1a 32 bits, base 36) : un shader corrigé change de signature et se retente.
@@ -3871,7 +3875,16 @@ function auDemarrage(mem, now = 0) {
   return { mem: m, echecs };
 }
 
-const peutTenter = (mem, sig) => !(mem[sig] && mem[sig].etat === 'echec');
+const peutTenter = (mem, sig) => !(mem[sig] && mem[sig].etat === 'echec' && mem[sig].cause !== 'délai');
+
+// Fermeture normale de la page (pagehide) : une compilation encore « en cours » n'a pas planté, on l'oublie.
+function aLaFermeture(mem) {
+  const m = { ...mem };
+  for (const [k, v] of Object.entries(m)) if (v && v.etat === 'en cours') delete m[k];
+  return m;
+}
+// Contexte WebGL perdu : ce qui compilait est noté « interrompu » tout de suite (la fermeture qui suivra ne l'effacera pas).
+function auPlantage(mem, now = 0) { return auDemarrage(mem, now).mem; }
 
 // Un événement sur une variante : 'debut', 'ok' (ms : durée), 'delai' (ms), 'erreur'. Rend une nouvelle mémoire.
 function noter(mem, sig, evt, { now = 0, ms } = {}) {
@@ -3886,7 +3899,7 @@ function noter(mem, sig, evt, { now = 0, ms } = {}) {
   return m;
 }
 
-const echecs = mem => Object.keys(mem).filter(k => mem[k] && mem[k].etat === 'echec');
+const echecs = mem => Object.keys(mem).filter(k => mem[k] && mem[k].etat === 'echec' && mem[k].cause !== 'délai');   // ceux qui interdisent
 function remettreAZero() { return {}; }
 
 /* Quel ombrage dessine cette image, et faut-il lancer la variante complète ?
@@ -3906,7 +3919,7 @@ function resumer(mem) {
   return Object.entries(mem).map(([k, v]) => k + ' : ' + (v.etat === 'ok' ? 'ok en ' + (v.ms / 1000).toFixed(1) + ' s' : v.etat === 'echec' ? 'échec (' + (v.cause || '?') + (v.ms ? ', ' + (v.ms / 1000).toFixed(0) + ' s' : '') + ')' : v.etat));
 }
 
-return {CLE_OMBRAGE,DELAI_OMBRAGE,empreinte,signature,lireMemoire,auDemarrage,peutTenter,noter,echecs,remettreAZero,choisir,resumer};
+return {CLE_OMBRAGE,DELAI_OMBRAGE,empreinte,signature,lireMemoire,auDemarrage,peutTenter,aLaFermeture,auPlantage,noter,echecs,remettreAZero,choisir,resumer};
 })();
 const OUVERTURE=(function(){"use strict";
 // Ouverture de démo : « Quel monde veux-tu filmer ? ». Une demande qui correspond à une préparation enregistrée
@@ -14305,6 +14318,7 @@ function diag(){ const m=CARTE;
   return "\n\n— Diagnostic à copier —\nCarte : "+m+"\nÉcran : "+canvas.width+" × "+canvas.height+", qualité "+(typeof QUAL==="object"&&QUAL.full?"complète":"mobile")+o+"\nDernières étapes :\n"+ETAPES.join("\n"); }
 canvas.addEventListener("webglcontextlost",e=>{ e.preventDefault(); const el=$("err"); el.style.display="flex"; el.style.userSelect="text"; el.style.webkitUserSelect="text";
   try{ localStorage.setItem("bodycam-chute",ETAPES[ETAPES.length-1]||""); }catch(_){}
+  try{ if(typeof OMB==="object"){ OMB.mem=ECHELLE.auPlantage(OMB.mem,Date.now()); OMB.perdu=true; localStorage.setItem(ECHELLE.CLE_OMBRAGE,JSON.stringify(OMB.mem)); } }catch(_){}   // ce qui compilait est noté « interrompu »
   el.textContent="La carte graphique a abandonné (contexte WebGL perdu)."+diag(); });
 try{ const d=gl&&gl.getExtension("WEBGL_debug_renderer_info"); if(d) CARTE=gl.getParameter(d.UNMASKED_RENDERER_WEBGL); }catch(_){}
 if(!gl) fail("Ce navigateur ne propose pas WebGL2, nécessaire pour le rendu.\nEssaie avec une version récente de Chrome, Safari ou Firefox.");
@@ -15250,13 +15264,17 @@ const V3={ on:!!CFG.v3, grains:CFG.grains||(QUAL.full?2500000:300000), ombre:CFG
    tailles : le socle (#define SOCLE : soleil, carte d'ombres, ambiance, matière réduite), qui se compile partout, et la variante
    complète voulue par la fiche et la qualité (tapis, semis, atmosphère, rais). La page compile d'abord le socle et dessine dès
    qu'il est prêt ; ensuite seulement, sans bloquer, elle compile la variante complète et la met en service quand elle est prête.
-   Une variante complète qui n'est pas prête en DELAI_OMBRAGE, ou pendant la compilation de laquelle la page est tombée, est
-   notée en échec dans localStorage (bodycam-ombrage) et n'est plus tentée sur cette machine : on reste au socle.
+   Le délai (DELAI_OMBRAGE, 40 s au moins) ne court que pendant la compilation RÉELLE de la variante : ni pendant qu'une autre
+   compilation est encore en vol, ni pendant l'écran d'ouverture, ni page cachée. Dépassé, on reste au socle, mais la
+   compilation continue en fond et sert si elle finit ; la variante se retente au chargement suivant. Seuls un plantage
+   pendant sa compilation (« interrompu ») ou une erreur de compilation l'interdisent durablement sur cette machine
+   (localStorage bodycam-ombrage). Hors ouverture, elle ne se lance qu'au calme : OMB.calme ms après la première image.
    CFG.ombrage : "socle" (rester au socle), "plein" (attendre la variante complète avant la première image : comportement
    d'avant, par défaut quand window.__CFG existe, pour que les captures de référence ne changent pas), "echelle" (défaut).
    Essais (tools/ombrage-essai.mjs) : CFG.ombrageJamais (la variante complète n'est jamais prête : échec simulé),
    CFG.ombrageDelai (délai d'abandon en ms, au lieu de DELAI_OMBRAGE). */
-const OMB={ mode:CFG.ombrage||(window.__CFG?"plein":"echelle"), delai:CFG.ombrageDelai||ECHELLE.DELAI_OMBRAGE, e:{}, mem:{}, empr:ECHELLE.empreinte(FS_V3OMBRAGE), sig:"", tSocle:0 };
+const OMB={ mode:CFG.ombrage||(window.__CFG?"plein":"echelle"), delai:CFG.ombrageDelai||ECHELLE.DELAI_OMBRAGE, calme:CFG.ombrageCalme!==undefined?CFG.ombrageCalme:12000, e:{}, mem:{}, empr:ECHELLE.empreinte(FS_V3OMBRAGE), sig:"", tSocle:0 };
+addEventListener("pagehide",()=>{ if(OMB.perdu) return; try{ OMB.mem=ECHELLE.aLaFermeture(OMB.mem); localStorage.setItem(ECHELLE.CLE_OMBRAGE,JSON.stringify(OMB.mem)); }catch(_){} });   // fermeture normale : pas un plantage
 try{ const r=ECHELLE.auDemarrage(ECHELLE.lireMemoire(localStorage.getItem(ECHELLE.CLE_OMBRAGE)),Date.now()); OMB.mem=r.mem;
   if(r.echecs.length){ localStorage.setItem(ECHELLE.CLE_OMBRAGE,JSON.stringify(OMB.mem)); r.echecs.forEach(k=>etapeGL("ombrage "+k+" : interrompu au chargement précédent, noté en échec")); } }catch(_){}
 function ombMemoire(sig,evt,ms){ if(OMB.mode!=="echelle") return; OMB.mem=ECHELLE.noter(OMB.mem,sig,evt,{now:Date.now(),ms}); try{ localStorage.setItem(ECHELLE.CLE_OMBRAGE,JSON.stringify(OMB.mem)); }catch(_){} ombBouton(); }
@@ -15266,33 +15284,35 @@ function ombVoulue(){                                          // la variante co
   v.sig=ECHELLE.signature(v,OMB.empr); return v; }
 function ombLancer(sig,defs,tapis,rais){                            // une variante, compilée sans attendre
   etapeGL("compilation : ombrage "+sig);
-  const e={ sig, l:lancer(FS_V3OMBRAGE.replace("\n","\n"+defs+"\n"),VS,"ombrage "+(sig==="socle"?"socle":"complet")), t0:performance.now(), tapis, rais:rais||0, p:null, echec:"", ms:0 };
+  const e={ sig, l:lancer(FS_V3OMBRAGE.replace("\n","\n"+defs+"\n"),VS,"ombrage "+(sig==="socle"?"socle":"complet")), t0:performance.now(), tv:performance.now(), cours:0, tapis, rais:rais||0, p:null, echec:"", ms:0 };
   return OMB.e[sig]=e; }                                       // le tapis du sol (qualité mobile) se compile après elle (ombAvancer)
-function ombAvancer(e,socle){                                  // rend vrai quand la variante est prête ; abandonne une complète trop lente
-  if(e.p) return true; if(e.echec) return false;
+function ombAvancer(e,socle){                                  // rend vrai quand la variante est prête ; au délai, reste au socle (la compilation continue)
+  if(e.p) return true; if(e.echec&&e.echec!=="délai") return false;
+  { const t=performance.now(), d=t-e.tv; e.tv=t;               // le délai ne court que pendant la compilation réelle de cette variante
+    if(!ouvRepos&&!document.hidden&&!COMP.envol.some(x=>x!==e.l&&!x.note)) e.cours+=d; }
   let pret=(socle||!CFG.ombrageJamais)&&fini(e.l);
   if(pret&&e.tapis&&!V3.tapP){                                 // le tapis du sol va avec la variante qui le lit : lancé après elle, une compilation à la fois
     if(!V3.tapL){ if(compLibre(true)){ V3.tapL=lancer(v3Rel(FS_V3TAPIS),VS,"tapis du sol"); V3.tapRel=!!S.relOn; } pret=false; }
     else if(!fini(V3.tapL)) pret=false; }
   if(!pret){
-    if(!socle&&OMB.mode==="echelle"&&performance.now()-e.t0>OMB.delai){
-      e.echec="délai"; ombMemoire(e.sig,"delai",performance.now()-e.t0); etapeGL("  ombrage "+e.sig+" : pas prêt en "+(OMB.delai/1000)+" s, on reste au socle");
-      try{ gl.deleteProgram(e.l.p); }catch(_){} }
+    if(!socle&&!e.echec&&OMB.mode==="echelle"&&e.cours>OMB.delai){
+      e.echec="délai"; ombMemoire(e.sig,"delai",e.cours); etapeGL("  ombrage "+e.sig+" : pas prêt en "+(OMB.delai/1000)+" s de compilation, on reste au socle (elle continue en fond)");
+      if(!e.l.note){ e.l.nom+=" (délai)"; compNote(e.l); } }   // libère la file : la suite peut se compiler, on revient voir celle-ci à chaque image
     return false; }
   const fin=()=>{ e.p=finir(e.l); if(e.tapis&&!V3.tapP&&V3.tapL){ V3.tapP=finir(V3.tapL); V3.tapL=null; } };
   if(socle) fin();                                             // le socle (ou le mode plein) qui ne compile pas : l'erreur s'affiche, comme avant
   else try{ fin(); }
-  catch(err){ e.echec="erreur"; e.p=null; ombMemoire(e.sig,"erreur"); etapeGL("  ombrage "+e.sig+" : erreur de compilation, on reste au socle");
+  catch(err){ e.echec="erreur"; e.p=null; e.tard=false; ombMemoire(e.sig,"erreur"); etapeGL("  ombrage "+e.sig+" : erreur de compilation, on reste au socle");
     const el=$("err"); if(!gl.isContextLost()){ el.style.display="none"; el.textContent=""; } return false; }
-  e.ms=performance.now()-e.t0; if(!socle) ombMemoire(e.sig,"ok",e.ms);
+  e.tard=e.echec==="délai"; e.echec=""; e.ms=performance.now()-e.t0; if(!socle) ombMemoire(e.sig,"ok",e.ms);
   etapeGL("  compilé : ombrage "+e.sig+" en "+(e.ms/1000).toFixed(1)+" s"); return true; }
 function v3Ombrage(){                                          // choisit le programme d'ombrage de cette image (V3.omb) ; faux : rien de prêt
   const v=ombVoulue(); OMB.sig=v.sig;
-  for(const k in OMB.e){ const e=OMB.e[k]; if(!e.p&&!e.echec&&k!=="socle") ombAvancer(e,false); }   // celles qui compilent encore (fiche quittée comprise)
+  for(const k in OMB.e){ const e=OMB.e[k]; if(!e.p&&(!e.echec||e.echec==="délai")&&k!=="socle") ombAvancer(e,false); }   // celles qui compilent encore (fiche quittée comprise)
   let P=OMB.e[v.sig]; const pleinePrete=!!(P&&P.p);
   let So=OMB.e.socle; const soclePret=!!(So&&So.p);
   // La variante complète se lance après la première image, ou pendant l'ouverture (le moteur s'y repose), une fois les formes compilées.
-  const c=ECHELLE.choisir({ mode:OMB.mode, pleinePrete, soclePret, mem:OMB.mem, sig:v.sig, imageFaite:V3.nImg>0||ouvRepos });
+  const c=ECHELLE.choisir({ mode:OMB.mode, pleinePrete, soclePret, mem:OMB.mem, sig:v.sig, imageFaite:ouvRepos||(V3.nImg>0&&performance.now()-(V3.tImg1||1e12)>OMB.calme) });   // hors ouverture : au calme, pas dans les secondes qui suivent la première image
   if(c.socle&&!So&&compLibre(true)) So=ombLancer("socle","#define SOCLE 1\n#define TAPIS 0\n#define SEMO 0\n#define ATMO 0\n#define RAIS 0",false);
   if(c.socle&&So&&!soclePret&&ombAvancer(So,true)){ OMB.tSocle=So.ms; return v3Ombrage(); }
   if(c.tenter&&!P&&(OMB.mode==="plein"||v3Formes())&&compLibre(true)){ P=ombLancer(v.sig,"#define TAPIS "+(v.tapis?1:0)+"\n#define SEMO "+(v.semis?1:0)+"\n#define ATMO "+v.atmo+"\n#define RAIS "+v.rais,v.tapis,v.rais); if(OMB.mode==="echelle") ombMemoire(v.sig,"debut"); }
@@ -15307,7 +15327,7 @@ function ombDiag(){                                           // pour le diagnos
   const L=[], e=V3.omb, So=OMB.e.socle, P=OMB.e[OMB.sig], f=ms=>(ms/1000).toFixed(1)+" s";
   L.push("Ombrage v3 ("+OMB.mode+") : "+(!e?"rien de prêt":e===So?"SOCLE":"complet "+e.sig));
   if(So) L.push("  socle : "+(So.p?"compilé en "+f(So.ms):"compilation depuis "+f(performance.now()-So.t0)));
-  if(OMB.sig&&OMB.mode!=="socle") L.push("  voulu "+OMB.sig+" : "+(P?P.p?"compilé en "+f(P.ms):P.echec?"échec ("+P.echec+")":"compilation depuis "+f(performance.now()-P.t0):!ECHELLE.peutTenter(OMB.mem,OMB.sig)?"échec mémorisé, pas retenté":"pas encore lancé"));
+  if(OMB.sig&&OMB.mode!=="socle") L.push("  voulu "+OMB.sig+" : "+(P?P.p?"compilé en "+f(P.ms)+(P.tard?" (après le délai)":""):P.echec==="délai"?"délai dépassé ("+f(P.cours)+" de compilation), continue en fond":P.echec?"échec ("+P.echec+")":"compilation depuis "+f(performance.now()-P.t0)+" ("+f(P.cours)+" comptées)":!ECHELLE.peutTenter(OMB.mem,OMB.sig)?"échec mémorisé, pas retenté":"pas encore lancé"));
   const m=ECHELLE.resumer(OMB.mem); if(m.length) L.push("  mémoire : "+m.join(" ; "));
   // Lancement (docs/moteur-v3.md, « Lancement sans gel ») : durée de chaque compilation, plus longue image des 10 premières secondes
   L.push("Compilations ("+COMP.lances+") : "+COMP.journal.map(j=>j.nom+" "+(j.ms/1000).toFixed(1)+" s").join(" · ")+(COMP.envol.some(x=>!x.note)?" · en cours : "+COMP.envol.filter(x=>!x.note).map(x=>x.nom).join(", "):""));
@@ -15317,6 +15337,7 @@ function ombDiag(){                                           // pour le diagnos
   const deux=Object.keys(GT.nImg).filter(k=>GT.nImg[k]>1); if(deux.length) L.push("  passes doublées : "+deux.map(k=>k+" ×"+GT.nImg[k]).join(", "));
   const r=regEtat(); L.push("Régulateur "+(REG.on?"":"(coupé) ")+": niveau "+REG.niveau+"/"+(REG_N.length-1)+", "+Math.round(REG.ms)+" ms pour "+regCible()+" · grains ×"+r.g+", feuilles ×"+r.fG+" ≤ "+r.fMax+" px, rais ×"+r.rais+", résolution ×"+r.res);
   return L.join("\n"); }
+const ombPrepa=()=>{ const P=OMB.e[OMB.sig]; return !!(P&&!P.p&&!P.echec&&V3.omb===OMB.e.socle); };   // discret : la variante complète se compile (un léger à-coup est possible)
 function ombBouton(){ const b=$("ombrage-raz"); if(b) b.hidden=!ECHELLE.echecs(OMB.mem).length; }
 function ombRaz(){ try{ localStorage.removeItem(ECHELLE.CLE_OMBRAGE); }catch(_){} location.reload(); }   // remise à zéro de la mémoire : tout se retente
 /* Variantes du semeur voulues par la fiche : RELIEF (bosses et buttes : terrainH) dans le semeur, le sol, les proches et le tapis ;
@@ -15797,7 +15818,7 @@ function v3Image(p){
   // Plus d'attente de la puce à chaque image (option v3sync pour la remettre) : elle empêchait le processeur de préparer
   // l'image suivante pendant que la puce finit celle-ci. Sans elle, V3.ms est l'intervalle entre deux images v3.
   if(V3.detail||OPT.v3sync){ v3Sync(dst); V3.ms=performance.now()-t0; }
-  else { V3.ms=V3.tPrec&&t0-V3.tPrec<250?t0-V3.tPrec:performance.now()-t0; V3.tPrec=t0; } V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; V3.nImg++;
+  else { V3.ms=V3.tPrec&&t0-V3.tPrec<250?t0-V3.tPrec:performance.now()-t0; V3.tPrec=t0; } V3.msMoy=V3.nImg?V3.msMoy*.8+V3.ms*.2:V3.ms; if(!V3.nImg) V3.tImg1=performance.now(); V3.nImg++;
   V3.hist=dst; V3.histPose=p; V3.n++;
 }
 function v3Frame(p,dt){
@@ -15897,7 +15918,7 @@ function hud(now){
   $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
   $("camid").textContent="CAM 07 · GRAINE "+seedN;
   if(dbgOn&&!meneur) dbgEl.textContent=V3.on?ombDiag():"";
-  $("stat").textContent=V3.on&&!(V3.gp&&V3.omb)?"V3 · PRÉPARATION…":!V3.on&&ptEnCours()?"PRÉPARATION…":V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS":V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
+  $("stat").textContent=V3.on&&!(V3.gp&&V3.omb)?"V3 · PRÉPARATION…":!V3.on&&ptEnCours()?"PRÉPARATION…":V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS"+(ombPrepa()?" · IMAGE COMPLÈTE…":""):V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
   window.__state={n:CFG.auto?frames:V2.on?v2Prets():V3.on?V3.n:n,
     v3:V3.on?{ombrage:V3.omb?(V3.omb===OMB.e.socle?"socle":"plein"):"",ombrageSig:OMB.sig,ms:+V3.ms.toFixed(1),msMoy:+V3.msMoy.toFixed(1),images:V3.nImg,grains:V3.parts,grainsOmbre:V3.ombre||Math.round(V3.grains*.6),tapis:V3.tap.lv.map(l=>l.pret?1:0).join(''),passes:Object.fromEntries(Object.entries(V3.passes).map(([k,v])=>[k,+v.toFixed(1)]))}:undefined,
