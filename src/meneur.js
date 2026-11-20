@@ -1086,6 +1086,110 @@ export function etapesFaconnage(avant, apres, n = 5) {
   etats.push(B);
   return etats.slice(Math.max(0, etats.length - Math.max(2, n))).map(L => L.slice(0, REGLAGES.FORMES_PAR_OBJET));
 }
+/* Le geste du façonnage, en continu (§17) : non plus cinq états qui se remplacent, mais une suite de transitions qu'on voit se
+   faire, à la main, image par image. Générique : la matière dominante de la chose (sa « masse ») est pétrie en une boule,
+   divisée en autant de masses que le résultat en compte, roulées au sol, puis empilées une à une à leur place ; chaque
+   ajout (une autre matière) est pris dans le tas rapporté (même matière, sinon il vient de la main) et posé. Puis il tapote.
+   avant, apres : formes dans le repère de la chose ; tas : les formes du tas rapporté, dans ce même repère.
+   Rend [{geste, de, a, duree, cle, pile}] : de et a sont des listes de formes portant une clé (_k) ; une forme de « de » sans
+   pareille dans « a » se résorbe vers « vers », une forme de « a » sans pareille naît de « depuis ». geste : petrir, diviser,
+   rouler, poser, prendre, tapoter (ce que font les mains). Le dernier « a » est « apres ». */
+export function gesteFaconnage(avant, apres, tas = [], { duree = 11 } = {}) {
+  const A = liste(avant).filter(f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille)), B = liste(apres).filter(f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille));
+  if (!B.length) return [];
+  const r3 = v => Math.round(v * 10000) / 10000, cle = (f, k) => Object.assign({}, f, { _k: k });
+  const dom = dominante(A.length ? A : B), corps = A.filter(f => !plate(f));
+  const platB = B.filter(plate), plates = (platB.length ? platB : A.filter(plate)).map((f, i) => cle(f, 'p' + i));
+  const BP = B.filter(f => !plate(f));
+  const masse = BP.filter(f => f.matiere === dom.matiere).sort((a, b) => a.p[1] - b.p[1]).map((f, i) => cle(f, 'm' + i));
+  const ajouts = BP.filter(f => f.matiere !== dom.matiere).map((f, i) => cle(f, 'j' + i));
+  // l'ordre des ajouts : une matière après l'autre, dans l'ordre où elles viennent ; de bas en haut dans une matière
+  const mats = [...new Set(ajouts.map(f => f.matiere))];
+  ajouts.sort((a, b) => mats.indexOf(a.matiere) - mats.indexOf(b.matiere) || a.p[1] - b.p[1] || a.p[0] - b.p[0]);
+  const T = [], ajoute = (geste, de, a, d, extra = {}) => T.push(Object.assign({ geste, de, a, duree: d }, extra));
+  let cur = A.map((f, i) => cle(f, plate(f) ? 'p' + i : 'a' + i));
+  if (platB.length) cur = cur.filter(f => !plate(f)).concat(plates);
+  const cx = corps.length ? corps.reduce((s, f) => s + f.p[0], 0) / corps.length : 0, cz = corps.length ? corps.reduce((s, f) => s + f.p[2], 0) / corps.length : 0;
+  if (masse.length) {
+    // pétrie : toute la matière en une boule, à son volume
+    const V = Math.max(1e-6, volumeFormes(corps.length ? corps : masse)), D = Math.cbrt(V * 8 / Math.PI);
+    const boule = { f: 'boule', p: [r3(cx), r3(0.36 * D), r3(cz)], taille: [r3(D), r3(0.75 * D), r3(D)], couleur: dom.couleur, matiere: dom.matiere, _k: 'm0' };
+    const K1 = [...plates, boule];
+    ajoute('petrir', cur, K1, 1.8, { vers: boule.p });
+    cur = K1;
+    if (masse.length > 1) {
+      // divisée : autant de boules que de masses, posées en rang au sol, plus petites ; puis roulées, elles grossissent
+      const w = masse.map(f => Math.max(f.taille[0], f.taille[2])), large = w.reduce((s, v) => s + v, 0) + 0.04 * masse.length;
+      let x = cx - large / 2;
+      const rang = masse.map((f, i) => { const xi = x + w[i] / 2 + 0.02; x += w[i] + 0.04; return [xi, cz]; });
+      const K2 = [...plates, ...masse.map((f, i) => Object.assign({}, f, { f: 'boule', p: [r3(rang[i][0] * 0.8 + cx * 0.2), r3(f.taille[1] * 0.3), r3(rang[i][1])], taille: f.taille.map(v => r3(v * 0.6)), penche: [0, 0] }))];
+      ajoute('diviser', cur, K2, 1.0, { depuis: boule.p });
+      const K3 = [...plates, ...masse.map((f, i) => Object.assign({}, f, { f: 'boule', p: i === 0 ? [f.p[0], r3(f.taille[1] / 2), f.p[2]] : [r3(rang[i][0]), r3(f.taille[1] / 2), r3(rang[i][1] + 0.6 * w[0])], penche: [70, 0] }))];
+      ajoute('rouler', K2, K3, 1.5);
+      cur = K3;
+      for (let i = 0; i < masse.length; i++) {               // empilées une à une, de bas en haut
+        const K = cur.map(f => f._k === masse[i]._k ? masse[i] : f);
+        ajoute('poser', cur, K, i ? 1.0 : 0.6, { cle: masse[i]._k });
+        cur = K;
+      }
+    } else { ajoute('petrir', cur, [...plates, masse[0]], 1.2, { cle: 'm0' }); cur = [...plates, masse[0]]; }
+  } else if (corps.length) {                                   // rien de la matière d'avant ne reste : elle se résorbe
+    ajoute('petrir', cur, [...plates], 1.2, { vers: [cx, 0, cz] }); cur = [...plates];
+  }
+  // les ajouts, pris dans le tas (même matière, le plus gros d'abord) ou venus de la main
+  const libres = liste(tas).map((f, i) => ({ f, i })).filter(x => isObj(x.f) && Array.isArray(x.f.p) && Array.isArray(x.f.taille));
+  for (const j of ajouts) {
+    const pris = libres.filter(x => x.f.matiere === j.matiere).sort((a, b) => Math.max(...b.f.taille) - Math.max(...a.f.taille))[0];
+    if (pris) libres.splice(libres.indexOf(pris), 1);
+    const de = pris ? [...cur, Object.assign({}, pris.f, { _k: j._k })] : cur, K = [...cur, j];
+    ajoute('prendre', de, K, 1.2, { cle: j._k, pile: pris ? pris.i : null, depuis: pris ? null : [j.p[0], j.p[1] + 0.1, j.p[2]] });
+    cur = K;
+  }
+  const fin = [...plates, ...masse, ...ajouts];
+  ajoute('tapoter', cur, fin, 1.0, { cle: masse.length ? masse[masse.length - 1]._k : null });
+  // la durée totale : 8 à 12 s (le geste se voit, sans traîner)
+  const tot = T.reduce((s, t) => s + t.duree, 0), k = Math.min(Math.max(1, 8 / tot), duree / tot);
+  for (const t of T) t.duree = Math.round(t.duree * k * 100) / 100;
+  return T;
+}
+const lerp = (a, b, u) => a + (b - a) * u;
+const lerpAng = (a, b, u) => { const d = ((b - a) % 360 + 540) % 360 - 180; return a + d * u; };
+function hexMix(a, b, u) {
+  const c = h => /^#[0-9a-f]{6}$/i.test(h || '') ? [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)) : null, x = c(a), y = c(b);
+  if (!x || !y) return u < 0.5 ? a : b;
+  return '#' + x.map((v, i) => Math.round(lerp(v, y[i], u)).toString(16).padStart(2, '0')).join('');
+}
+/* L'état d'une transition du geste à u (0..1, déjà adouci) : les formes interpolées (positions, tailles, angles, couleurs), la
+   forme qu'on déplace (cle) passe en arc ; ce qui naît grossit, ce qui se résorbe rapetisse. Les formes plus petites que 6 mm
+   ne sont pas rendues. Rend une liste de formes (avec _k). */
+export function etatGeste(tr, u) {
+  u = Math.min(1, Math.max(0, u));
+  const A = new Map(liste(tr.de).map(f => [f._k, f])), B = new Map(liste(tr.a).map(f => [f._k, f])), out = [];
+  const porte = tr.geste === 'prendre' ? Math.min(1, Math.max(0, (u - 0.4) / 0.6)) : u, pu = porte * porte * (3 - 2 * porte);
+  for (const [k, b] of B) {
+    const a = A.get(k);
+    if (a) {
+      const v = k === tr.cle ? pu : u, f = Object.assign({}, v < 0.5 ? a : b);
+      f.p = a.p.map((x, i) => lerp(x, b.p[i], v)); f.taille = a.taille.map((x, i) => lerp(x, b.taille[i], v));
+      if (k === tr.cle && (tr.geste === 'poser' || tr.geste === 'prendre')) f.p[1] += Math.sin(Math.PI * v) * (0.06 + 0.5 * Math.max(...b.taille));   // en arc
+      f.cap = lerpAng(a.cap || 0, b.cap || 0, v);
+      const pa = Array.isArray(a.penche) ? a.penche : [0, 0], pb = Array.isArray(b.penche) ? b.penche : [0, 0];
+      f.penche = [lerp(pa[0], pb[0], v), lerp(pa[1], pb[1], v)];
+      f.couleur = hexMix(a.couleur, b.couleur, v);
+      out.push(f);
+    } else {                                                   // naît (d'un point, ou de la main)
+      const d = tr.depuis || b.p, f = Object.assign({}, b);
+      f.p = b.p.map((x, i) => lerp(d[i], x, u)); f.taille = b.taille.map(x => x * u);
+      out.push(f);
+    }
+  }
+  for (const [k, a] of A) if (!B.has(k)) {                     // se résorbe dans la masse
+    const d = tr.vers || a.p, f = Object.assign({}, a), w = 1 - u;
+    f.p = a.p.map((x, i) => lerp(x, d[i], u)); f.taille = a.taille.map(x => x * w);
+    out.push(f);
+  }
+  return out.filter(f => Math.min(...f.taille) >= 0.006 || plate(f) && Math.max(...f.taille) >= 0.006).map(f => Object.assign(f, { p: f.p.map(v => Math.round(v * 10000) / 10000), taille: f.taille.map(v => Math.round(Math.max(0.006, v) * 10000) / 10000) }));
+}
 /* Ce qu'on ramasse (« des bâtons et des cailloux ») : les modèles ramassables que nomme la phrase, deux de chaque, en un petit tas. */
 export function ramassage(bib, texte) {
   const t = ' ' + sansAccents(texte || '').replace(/[^a-z0-9]+/g, ' ') + ' ', formes = [], noms = [];

@@ -262,6 +262,10 @@ const FORMES={boite:0,boule:1,cylindre:2,cone:3,capsule:4,toit:5};
 const dentsDe=fo=>Math.round(clampN(fo.dents,0,60,0));       // découpe en peigne le long de x (sdPrim, monde.glsl)
 const MATIERES={mat:0,bois:1,pierre:2,metal:3,verre:4,pelage:5,tissu:5,tuile:6,lumineux:7};
 const SEM0=72, SEM_L=10, SH_ROWS=SEM0+4*SEM_L, shapesData=new Float32Array(4*4*SH_ROWS), cacheObj=new Set();
+// les mains du porteur (§17) : leur description est une donnée (src/modeles.json, « corps ») ; l'objet n'est pas dans la fiche
+// (ni obstacle, ni perçu par le meneur), buildShapes le range après les objets quand elles sont dans le champ
+const MAINS=typeof MODELES!=="undefined"&&MODELES&&MODELES.corps&&MODELES.corps.mains&&typeof MODELES.corps.mains==="object"?MODELES.corps.mains:null;
+let mainsObj=null;
 const shapesT=gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,4,SH_ROWS);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
@@ -271,18 +275,27 @@ function couleur(c){                                           // "#rrggbb" ou [
   else if(Array.isArray(c)&&c.length>=3) v=c.slice(0,3).map(x=>clampN(x,0,1,.4));
   return v.map(x=>Math.pow(x,2.2));
 }
-function buildShapes(f){
-  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; S.objVer=(S.objVer||0)+1; let row=8;
-  // seuls les objets visibles prennent une des 8 places (le meneur compte de même : un accessoire caché ne coûte rien)
-  for(const o of (Array.isArray(f.objets)?f.objets:[]).filter(o=>o&&!(o.visible===false||cacheObj.has(o.id))).slice(0,8)){
+/* Le repère d'un objet de la fiche : position au sol, cap (radians), échelle. Le même pour buildShapes, les mains et le geste. */
+function repereObjet(o){
+  const dv=clampN(o.devant,-60,400,12), ct=clampN(o.cote,-120,120,3), ech=clampN(o.echelle,.1,5,1);
+  let x,z,yaw;
+  if(S.kit!==1){ z=dv; x=pathX(z)+ct; yaw=Math.atan2(pathX(z-4)-x,-4); }          // par défaut, la face avant regarde celui qui arrive
+  else { const a=1.15; x=Math.sin(a)*dv+Math.cos(a)*ct; z=Math.cos(a)*dv-Math.sin(a)*ct; yaw=a+Math.PI; }
+  if(o.cap!==undefined) yaw+=clampN(o.cap,-360,360,0)*Math.PI/180;
+  return {x,z,y:terrainH(x,z),yaw,ech};
+}
+function versMonde(R,p){ const c=Math.cos(R.yaw), s=Math.sin(R.yaw); return [R.x+(c*p[0]+s*p[2])*R.ech, R.y+p[1]*R.ech, R.z+(-s*p[0]+c*p[2])*R.ech]; }
+function versLocal(R,w){ const dx=w[0]-R.x, dz=w[2]-R.z, c=Math.cos(R.yaw), s=Math.sin(R.yaw); return [(c*dx-s*dz)/R.ech,(w[1]-R.y)/R.ech,(s*dx+c*dz)/R.ech]; }
+function buildShapes(f,seulsGestes){                            // seulsGestes : les mains ou une chose façonnée bougent (rien de nouveau pour les obstacles)
+  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; if(!seulsGestes) S.objVer=(S.objVer||0)+1; let row=8;
+  // seuls les objets visibles prennent une des 8 places (le meneur compte de même : un accessoire caché ne coûte rien) ; les
+  // mains du porteur (§17), quand elles sont dans le champ, prennent la dernière
+  const vis=(Array.isArray(f.objets)?f.objets:[]).filter(o=>o&&!(o.visible===false||cacheObj.has(o.id)));
+  for(const o of mainsObj?[...vis.slice(0,7),mainsObj]:vis.slice(0,8)){
     const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
-    if(!formes.length || row+formes.length>SH_ROWS) continue;
-    const dv=clampN(o.devant,-60,400,12), ct=clampN(o.cote,-120,120,3), ech=clampN(o.echelle,.1,5,1);
-    let x,z,yaw;
-    if(S.kit!==1){ z=dv; x=pathX(z)+ct; yaw=Math.atan2(pathX(z-4)-x,-4); }          // par défaut, la face avant regarde celui qui arrive
-    else { const a=1.15; x=Math.sin(a)*dv+Math.cos(a)*ct; z=Math.cos(a)*dv-Math.sin(a)*ct; yaw=a+Math.PI; }
-    if(o.cap!==undefined) yaw+=clampN(o.cap,-360,360,0)*Math.PI/180;
-    const y=terrainH(x,z), c=Math.cos(yaw), sn=Math.sin(yaw), i=S.objN; let rad=.1;
+    if(!formes.length || row+formes.length>SEM0) continue;
+    const R=repereObjet(o), {x,z,yaw,ech}=R;
+    const y=R.y, c=Math.cos(yaw), sn=Math.sin(yaw), i=S.objN; let rad=.1;
     formes.forEach((fo,k)=>{
       const p=(Array.isArray(fo.p)?fo.p:[0,0,0]).map(v=>clampN(v,-30,30,0)*ech);
       const t=(Array.isArray(fo.taille)?fo.taille:[1,1,1]).map(v=>clampN(v,.01,40,1)*ech*.5);
@@ -468,6 +481,7 @@ function buildMats(f){
   S.surfP=[clampN(ar.part,0,1,.45),clampN(pe.part,0,1,.5),kitDe(f)===0&&isObj(f.foret)?clampN(f.foret.variete,0,1,0):0,0];   // variété des troncs (troncVar, recette.glsl)
   for(const o of [...(Array.isArray(f.objets)?f.objets:[]),...(Array.isArray(f.semis)?f.semis:[])]) for(const fo of (o&&Array.isArray(o.formes))?o.formes:[])   // formes qui nomment une recette
     if(fo&&typeof fo.matiere==="string"&&isObj(lib[fo.matiere])) use(fo.matiere);
+  if(MAINS) for(const k of ["manche","paume","pouce"]) if(isObj(MAINS[k])&&typeof MAINS[k].matiere==="string"&&isObj(lib[MAINS[k].matiere])) use(MAINS[k].matiere);   // les mains du porteur (§17)
   const rs=resoudre(sf.sol,lib)||resoudre(d.sol,lib);            // couleur du sol vue par la lumière indirecte
   S.solAlb=kitDe(f)===0?[.24,.15,.07]:couleur(rs&&rs.couleur||"#555555").map(v=>v*.9);
   gl.bindTexture(gl.TEXTURE_2D,matT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,RT_W,RT_MAX,gl.RGBA,gl.FLOAT,matData);
@@ -635,6 +649,7 @@ function simulate(dt){
       else if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
     else if(a.type==="rejoindre"||a.type==="cadrer"||a.type==="monter"||a.type==="chercher"){ queue.shift(); queue.unshift(...planCorps(a)); }   // trajet calculé au moment de partir
     else if(a.type==="faconner") faconnerPas(a,dt);
+    else if(a.type==="ramasser") ramasserPas(a,dt);
     else if(a.type==="bloque"){ queue.shift(); if(!a.muet) say(a.texte||"Je passe pas, là. C'est bouché.",true); }   // il s'arrête devant, et il le dit
     else if(a.type==="elever"||a.type==="descendre") elever(a,dt);
     else if(a.type==="zoom"){ cam.zoomCible=clampN(a.z,1,8,1); queue.shift(); }
@@ -2134,14 +2149,115 @@ function faconnerPas(a,dt){
   if(!a.vise){ a.vise=true; const v=viserObjet(a.objet); if(v){ queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:Math.max(-1.05,v.pitch)}); return; } }
   const op=faconnages.get(a.objet);
   if(!a.base) a.base={yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut};
-  a.t+=dt; const t=a.t, B=a.base;                                // les mains travaillent : la caméra suit un peu les gestes
-  cam.pitch=B.pitch+.04*Math.sin(t*2.1)-.035*Math.abs(Math.sin(t*3.7)); cam.yaw=B.yaw+.035*Math.sin(t*1.3+.5)+.012*Math.sin(t*4.3); cam.haut=B.haut+.015*Math.sin(t*2.9);
-  const fin=()=>{ cam.yaw=B.yaw; cam.pitch=B.pitch; cam.haut=B.haut; queue.shift(); };
-  if(!op){ a.attente+=dt; if(a.attente>30) fin(); return; }      // l'accessoiriste n'a pas encore répondu : il continue de pétrir
-  if(a.i<0){ reveler(a.objet); tournerVers(a.objet); a.i=0; a.t0=t; return; }
-  const n=op.etapes.length, k=Math.floor((t-a.t0-.9)/1.1);       // un état toutes les 1,1 s, après un temps pour poser ce qu'il a rapporté
-  while(a.i<=k&&a.i<n){ objetMeneur({type:"objet",op:"remplacer",id:a.objet,formes:op.etapes[a.i],nom:a.i===n-1?op.nom:undefined,echelle:a.i===0?op.echelle:undefined}); a.i++; }
-  if(a.i>=n&&t-a.t0>.9+n*1.1+.5){ for(const c of op.consomme||[]) objetMeneur({type:"objet",op:"retirer",id:c}); faconnages.delete(a.objet); fin(); }
+  a.t+=dt; const t=a.t, B=a.base;
+  const fin=()=>{ cam.yaw=B.yaw; cam.pitch=B.pitch; cam.haut=B.haut; mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); queue.shift(); };
+  const objet=()=>(Array.isArray(fiche.objets)?fiche.objets:[]).find(x=>x&&x.id===a.objet);
+  if(!op){ a.attente+=dt; const o=objet();                        // l'accessoiriste n'a pas encore répondu : il pétrit déjà
+    if(o){ const R=repereObjet(o), F=o.formes||[], g=F.reduce((m,f)=>Math.max(m,Math.max(...f.taille)),.05);
+      const c=versMonde(R,[0,Math.max(...F.map(f=>f.p[1]),.03),0]); mainsVers(geste1("petrir",c,g*R.ech/2,t),dt); bougerCamera(a,c,t); buildShapes(fiche,true); }
+    if(a.attente>30) fin(); return; }
+  if(a.i<0){ reveler(a.objet); tournerVers(a.objet); a.G=preparerGeste(a.objet,op); a.i=0; a.t0=t; a.k=-1; return; }
+  const G=a.G; let tt=t-a.t0-.4, k=0;                             // un temps pour poser ce qu'il a rapporté
+  while(G&&k<G.T.length&&tt>G.T[k].duree){ tt-=G.T[k].duree; k++; }
+  if(!G||k>=G.T.length){                                          // fini : l'état final exact, ce qui a servi disparaît
+    objetMeneur({type:"objet",op:"remplacer",id:a.objet,formes:op.etapes[op.etapes.length-1],nom:op.nom,echelle:op.echelle});
+    for(const c of op.consomme||[]) objetMeneur({type:"objet",op:"retirer",id:c});
+    faconnages.delete(a.objet); fin(); return; }
+  const tr=G.T[k], u=Math.min(1,Math.max(0,tt/tr.duree)), ue=u*u*(3-2*u);
+  if(k!==a.k){ a.k=k; a.i=k; if(tr.pile!==null&&tr.pile!==undefined&&G.tas) G.pris.add(tr.pile); }   // la main prend dans le tas : il quitte le tas
+  let F=MENEUR.etatGeste(tr,ue);
+  if(F.length>G.place) F=F.slice().sort((p,q)=>Math.max(...q.taille)-Math.max(...p.taille)).slice(0,G.place);   // le budget fixe (64 formes) : les miettes d'abord
+  const L=fiche.objets.slice(), i=L.findIndex(x=>x&&x.id===a.objet); if(i<0){ fin(); return; }
+  L[i]=Object.assign({},L[i],{formes:F,echelle:G.E});
+  if(G.tas){ const j=L.findIndex(x=>x&&x.id===G.tas); if(j>=0){ const reste=G.tasF.filter((f,n)=>!G.pris.has(n)); L[j]=Object.assign({},L[j],{formes:reste.length?reste:[Object.assign({},G.tasF[0],{taille:[.01,.01,.01]})]}); } }
+  fiche=Object.assign({},fiche,{objets:L});
+  const R=G.R, W=p=>versMonde(R,p);
+  const act=F.find(f=>f._k===tr.cle)||F.filter(f=>f.matiere===G.dom).sort((p,q)=>Math.max(...q.taille)-Math.max(...p.taille))[0]||F[0];
+  const cible=W(act.p), r=Math.max(...act.taille)/2*R.ech;
+  let H;
+  if(tr.geste==="prendre"&&u<.4&&tr.pile!==null&&tr.pile!==undefined){ const de=tr.de.find(f=>f._k===tr.cle); H=geste1("prendre",W(de.p),Math.max(...de.taille)/2*R.ech,t,u/.4); }
+  else if(tr.geste==="diviser"||tr.geste==="rouler"){ const bs=F.filter(f=>f.matiere===G.dom&&!(f.taille[1]<.12*Math.max(f.taille[0],f.taille[2]))).sort((p,q)=>p.p[0]-q.p[0]);
+    const b0=bs[0]||act, b1=bs[bs.length-1]||act; H=[W(b0.p),W(b1.p)].map((c,s)=>{ const rr=Math.max(...(s?b1:b0).taille)/2*R.ech, w=t*9+s*1.7;
+      return [c[0]+.03*Math.cos(w),c[1]+rr+.035+.012*Math.sin(w*1.3),c[2]+.03*Math.sin(w)]; }); }
+  else H=geste1(tr.geste==="prendre"?"poser":tr.geste,cible,r,t,u);   // prendre, 2e temps : la main porte ce qu'elle a pris
+  mainsVers(H,dt); bougerCamera(a,cible,t);
+  buildShapes(fiche,true);
+}
+/* Le façonnage préparé une fois (§17) : la chose et ce qu'il a rapporté, dans le repère de la chose, puis la suite des
+   transitions (MENEUR.gesteFaconnage) ; place : combien de formes elle peut prendre sans sortir du budget fixe (64). */
+function preparerGeste(id,op){
+  const L=Array.isArray(fiche.objets)?fiche.objets:[], o=L.find(x=>x&&x.id===id); if(!o) return null;
+  const e0=clampN(o.echelle,.1,5,1), E=op.echelle!==undefined?clampN(op.echelle,.1,5,1):e0;
+  const avant=(o.formes||[]).map(f=>Object.assign({},f,{p:f.p.map(v=>v*e0/E),taille:f.taille.map(v=>v*e0/E)}));
+  const R=repereObjet(Object.assign({},o,{echelle:E})), tas=(op.consomme||[]).map(c=>L.find(x=>x&&x.id===c)).find(Boolean)||null;
+  let tasL=[], tasF=[];
+  if(tas){ const Rp=repereObjet(tas); tasF=(tas.formes||[]).slice();
+    tasL=tasF.map(f=>Object.assign({},f,{p:versLocal(R,versMonde(Rp,f.p)),taille:f.taille.map(v=>v*Rp.ech/E),cap:(f.cap||0)+(Rp.yaw-R.yaw)*180/Math.PI})); }
+  const apres=op.etapes[op.etapes.length-1], T=MENEUR.gesteFaconnage(avant,apres,tasL);
+  const autres=L.filter(x=>x&&x.id!==id&&!(x.visible===false||cacheObj.has(x.id))).reduce((n,x)=>n+Math.min(24,(x.formes||[]).length),0);
+  const dom=(T[0]&&T[0].a.find(f=>/^m/.test(f._k))||{}).matiere;
+  return {T,R,E,dom,tas:tas&&tas.id,tasF,pris:new Set(),place:Math.max(8,Math.min(24,64-autres-(MAINS?6:0)))};
+}
+/* ---- Les mains à l'ouvrage (§17). Deux avant-bras (manche) et deux mains (paume, pouce) en formes, attachés au corps sous
+   la caméra, qui vont où le geste les mène : presser des deux côtés (petrir), rouler sur le dessus (diviser, rouler), porter ce
+   qu'on pose (poser), saisir dans le tas puis porter (prendre), tapoter (tapoter). Jamais figées : un peu de tremblé toujours. */
+const mainsEtat={H:null};
+function corpsAxes(){ const y=cam.yaw; return {e:[cam.x,terrainH(cam.x,cam.z)+S.eye*cam.haut+cam.elev,cam.z],f:[Math.sin(y),0,Math.cos(y)],r:[Math.cos(y),0,-Math.sin(y)]}; }
+function mainsRepos(){ const {e,f,r}=corpsAxes(), q=(MAINS&&MAINS.repos)||[.14,-.26,.34];
+  return [-1,1].map(s=>[e[0]+r[0]*s*q[0]+f[0]*q[2],e[1]+q[1],e[2]+r[2]*s*q[0]+f[2]*q[2]]); }
+/* Où vont les deux mains pour un geste autour d'un point c (monde), d'une chose de rayon r : [gauche, droite]. */
+function geste1(g,c,r,t,u=0){
+  const {e}=corpsAxes(), dx=e[0]-c[0], dz=e[2]-c[2], l=Math.hypot(dx,dz)||1, vx=dx/l, vz=dz/l, sx=-vz, sz=vx;   // v : vers lui ; s : sur le côté
+  const tr=(k,a)=>.004*Math.sin(t*k+a);                           // jamais figées
+  if(g==="prendre"){ const rep=mainsRepos(), k=u*u*(3-2*u), cible=[c[0]+vx*r*.5,c[1]+r*.6+.025,c[2]+vz*r*.5];
+    return [rep[0],[rep[1][0]+(cible[0]-rep[1][0])*k,rep[1][1]+(cible[1]-rep[1][1])*k+tr(11,0),rep[1][2]+(cible[2]-rep[1][2])*k]]; }
+  return [-1,1].map(s=>{
+    if(g==="poser"||g==="prendre2") return s>0?[c[0]+vx*(r+.03),c[1]+.01+tr(9,s),c[2]+vz*(r+.03)]:[c[0]+sx*s*(r+.05)+vx*.06,c[1]-r*.4+tr(7,s),c[2]+sz*s*(r+.05)+vz*.06];
+    if(g==="tapoter"){ const h=Math.abs(Math.sin(t*7.5+s*1.6)); return [c[0]+sx*s*r*.75+vx*r*.35,c[1]+r*.45+.05*h,c[2]+sz*s*r*.75+vz*r*.35]; }
+    const p=.018*Math.sin(t*6.5+(s>0?0:2.1));                     // pétrir : presser des deux côtés, en rythme
+    return [c[0]+sx*s*(r*.92+.03+p)+vx*r*.35,c[1]+.012*Math.sin(t*4.1+s)+tr(13,s),c[2]+sz*s*(r*.92+.03+p)+vz*r*.35];
+  });
+}
+/* Les mains glissent vers leurs cibles (jamais de saut d'une transition à l'autre), puis l'objet des mains est refait. */
+function mainsVers(H,dt){
+  if(!MAINS) return;
+  if(!mainsEtat.H) mainsEtat.H=mainsRepos();
+  const k=Math.min(1,dt*9);
+  mainsEtat.H=mainsEtat.H.map((h,i)=>h.map((v,j)=>v+(H[i][j]-v)*k));
+  mainsObj=objetMains(mainsEtat.H);
+}
+function objetMains(Hs){
+  const M=MAINS, {e,f,r}=corpsAxes(), q=versFiche(cam.x,cam.z), o={id:"·mains",nom:"",devant:q.devant,cote:q.cote,formes:[]}, R=repereObjet(o);
+  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], add=(a,b,k=1)=>[a[0]+b[0]*k,a[1]+b[1]*k,a[2]+b[2]*k], nrm=a=>{ const l=Math.hypot(...a)||1; return a.map(v=>v/l); };
+  // une forme dont l'axe (y) suit d dans le monde : cap et penche (même repère que sdPrim, voir dansForme dans meneur.js)
+  const axe=(f0,c,d,taille,couleur,matiere)=>{ let [dx,dy,dz]=nrm(d); if(dy<0){ dx=-dx; dy=-dy; dz=-dz; }
+    const w=Math.acos(Math.min(1,dy)), Y=Math.atan2(dz,-dx), cap=((Y-R.yaw)*180/Math.PI%360+540)%360-180;
+    return {f:f0,p:versLocal(R,c),taille,cap,penche:[0,w*180/Math.PI],couleur,matiere}; };
+  const ep=M.epaule||[.21,-.2,-.02], ma=M.manche||{}, pa=M.paume||{}, po=M.pouce||{}, pg=M.poignet||.07;
+  Hs.forEach((H,i)=>{ const s=i?1:-1, rac=[e[0]+r[0]*s*ep[0]+f[0]*ep[2],e[1]+ep[1],e[2]+r[2]*s*ep[0]+f[2]*ep[2]];
+    const d=nrm(sub(H,rac)), Wr=add(H,d,-pg), rm=ma.rayon||.045, a=add(Wr,d,-.015), L=Math.max(.03,Math.hypot(...sub(a,rac)));
+    o.formes.push(axe("capsule",add(rac,sub(a,rac),.5),d,[2*rm,Math.max(.01,L-2*rm),2*rm],ma.couleur||"#2b2f36",ma.matiere||"tissu"));
+    o.formes.push(axe("boule",add(H,d,-.01),d,(pa.taille||[.085,.17,.034]).slice(),pa.couleur||"#c39577",pa.matiere||"mat"));
+    const autre=Hs[1-i], dedans=nrm([autre[0]-H[0],0,autre[2]-H[2]]), b=add(Wr,dedans,.03), bout=add(add(b,d,po.long||.065),dedans,.015), rp=po.rayon||.012;
+    o.formes.push(axe("capsule",add(b,sub(bout,b),.5),sub(bout,b),[2*rp,Math.max(.01,Math.hypot(...sub(bout,b))-2*rp),2*rp],po.couleur||"#bb8c6f",po.matiere||"mat")); });
+  return o;
+}
+/* Pendant qu'il travaille, la caméra (sur sa poitrine) suit un peu ses mains : elle se penche vers l'ouvrage, bouge avec les gestes. */
+function bougerCamera(a,c,t){
+  const B=a.base, {e}=corpsAxes(), yv=Math.atan2(c[0]-e[0],c[2]-e[2]), pv=Math.atan2(c[1]-e[1],Math.hypot(c[0]-e[0],c[2]-e[2]));
+  const dy=wrapA(yv-B.yaw);
+  cam.yaw=B.yaw+.3*dy+.03*Math.sin(t*1.3+.5)+.01*Math.sin(t*4.3);
+  cam.pitch=Math.max(-1.1,B.pitch*.65+pv*.35+.035*Math.sin(t*2.1)-.03*Math.abs(Math.sin(t*3.7)));
+  cam.haut=B.haut+.015*Math.sin(t*2.9);
+}
+/* Aller chercher : accroupi, la main droite va au sol, ramasse, revient (§17). */
+function ramasserPas(a,dt){
+  a.rest-=dt; const u=1-Math.max(0,a.rest)/a.duree, {e,f,r}=corpsAxes(), rep=mainsRepos();
+  if(!a.sol){ const x=e[0]+f[0]*.45+r[0]*.06, z=e[2]+f[2]*.45+r[2]*.06; a.sol=[x,terrainH(x,z)+.035,z]; }
+  const k=u<.45?(u/.45)**2*(3-2*u/.45):u<.62?1:1-((u-.62)/.38)**2*(3-2*(u-.62)/.38);
+  const H=[[rep[0][0],rep[0][1]-.05,rep[0][2]],rep[1].map((v,i)=>v+(a.sol[i]-v)*k+(i===1&&u>.45&&u<.62?.01*Math.sin(u*80):0))];
+  mainsVers(H,dt); buildShapes(fiche,true);
+  if(a.rest<=0){ queue.shift(); mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); }
 }
 function viserObjet(id,cadre){                                 // cap (relatif au corps) et inclinaison vers un objet de la fiche ou un support
   const q=cibleMonde(id); if(!q) return null;
@@ -2360,7 +2476,7 @@ function planCorps(a){
   if(a.type==="chercher"){                                          // aller chercher : un endroit plausible, il y va, se baisse, ramasse, se relève
     const L=supportsProches(), lieu=MENEUR.lieuChercher(a.quoi,{x:cam.x,z:cam.z,yaw:cam.yaw},L,z=>S.kit!==1?pathX(z):cam.x,S.traj[1]||1,MODELES);
     dernierLieu=lieu;
-    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},{type:"attendre",rest:1.2},{type:"tourner",rest:.45},{type:"attendre",rest:1.1},
+    return [...pre,...versPoint(lieu.x,lieu.z,0),{type:"posture",h:.42},{type:"regarder",pitch:-.8},{type:"ramasser",rest:1.6,duree:1.6},{type:"tourner",rest:.45},{type:"ramasser",rest:1.5,duree:1.5},
       {type:"posture",h:1},{type:"regarder",pitch:-.1}];
   }
   const q=cibleMonde(a.objet); if(!q) return [];
@@ -2373,7 +2489,7 @@ function planCorps(a){
   return [...pre,...versPoint(q.x,q.z,pl.m,q.sorte==="objet"?q.id:null),{type:"posture",h:pl.hauteur},{type:"viser",objet:a.objet,cadre:true},{type:"zoom",z:pl.zoom}];
 }
 /* D'où cadrer une chose (planCadrage : distance, hauteur des yeux) sans RIEN entre elle et la caméra : un élément de semis
-   (caillou, branche morte), un tronc, un rocher, une autre chose (cas réel : un éclat de grès entre la caméra accroupie et la
+   (un éclat de pierre, une branche morte), un tronc, un rocher, une autre chose (cas réel : un éclat de grès entre la caméra accroupie et la
    crotte, grossi par le zoom, remplissait l'image). D'abord du côté où il est, puis en tournant autour d'elle ; null si rien
    n'est dégagé (il cadre d'où il peut). da : de combien il s'est décalé autour d'elle (radians). */
 function pointDeVue(q,pl){

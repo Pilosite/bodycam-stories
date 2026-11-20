@@ -2081,6 +2081,41 @@
     ]
    },
    "brillance": 0.45
+  },
+  "peau": {
+   "nom": "peau de main, rosée aux jointures, pores fins, un peu luisante",
+   "espace": "volume",
+   "couleur": "forme",
+   "variation": {
+    "echelle": 30,
+    "force": 0.18
+   },
+   "nuance": {
+    "couleur": "#b06a5a",
+    "force": 0.35,
+    "echelle": 40,
+    "seuils": [
+     0.5,
+     0.85
+    ],
+    "fbm": true,
+    "decalage": 4
+   },
+   "grain": {
+    "echelle": 900,
+    "force": 0.12
+   },
+   "relief": {
+    "bosses": [
+     {
+      "echelle": 120,
+      "fbm": true,
+      "decalage": 3,
+      "force": 0.0006
+     }
+    ]
+   },
+   "brillance": 0.3
   }
  },
  "surfaces": {

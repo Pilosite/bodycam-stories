@@ -1,5 +1,16 @@
 {
  "_doc": "Bibliothèque de modèles de référence (docs/meneur-de-jeu.md §15). Des DONNÉES, pas du code : formes du vocabulaire de creerMonde, matières en recettes (src/matieres.json), envergure de référence et règle d échelle. L accessoiriste les reçoit comme exemples ; la page les prend comme base sûre quand la demande y correspond, mise à l échelle demandée. Le moteur ne connaît aucun de ces noms.",
+ "corps": {
+  "_doc": "Le corps du porteur dans le champ (docs/meneur-de-jeu.md §17) : deux avant-bras et deux mains, attachés à la caméra, en formes du vocabulaire (capsules, boules). Des données : mesures en mètres, matières en recettes.",
+  "mains": {
+   "epaule": [0.21, -0.2, -0.02],
+   "manche": {"rayon": 0.045, "couleur": "#2b2f36", "matiere": "tissu"},
+   "paume": {"taille": [0.085, 0.17, 0.034], "couleur": "#c39577", "matiere": "peau"},
+   "pouce": {"rayon": 0.012, "long": 0.065, "couleur": "#bb8c6f", "matiere": "peau"},
+   "poignet": 0.07,
+   "repos": [0.14, -0.26, 0.34]
+  }
+ },
  "modeles": {
   "crotte": {
    "nom": "crotte",
