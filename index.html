@@ -4884,6 +4884,7 @@ const REGLAGES_VOIX = {
   langue: 'fr',
   max: 2000,         // limite de speak()
   doublon_s: 30,     // même texte relu dans ce délai : ignoré
+  file: false,       // true : une phrase en cours n'est pas coupée, la suivante attend (la page) ; false : la nouvelle remplace
   geste_s: 20,       // une pensée refusée faute de geste se rejoue au geste suivant, si elle a moins de cet âge
 };
 const VOIX_TTS = ['buttery', 'airy', 'glassy', 'rounded'];
@@ -4915,7 +4916,10 @@ function creerVoix({ tts = null, locale = null, reglages = {}, maintenant = () =
   const sec = () => maintenant() / 1000;
   let T = null, ttsAttendu = !!(tts && typeof tts.then === 'function'), refus = false, sansTts = false;
   let on = false, n = 0, courant = null, attente = null, dernier = null, parle = false;
-  const signaler = p => { if (p !== parle) { parle = p; try { onParle(p); } catch (_) {} } };
+  const file = [];                                                // pensées en attente : une phrase en cours n'est plus coupée par la suivante
+  let tFile = 0;
+  const signaler = p => { if (p !== parle) { parle = p; try { onParle(p); } catch (_) {} }
+    if (!p && file.length) { clearTimeout(tFile); tFile = setTimeout(() => { if (!parle && file.length && on && !refus) lancer(file.shift()); }, 120); } };
 
   function brancher(t) {
     T = t && typeof t.speak === 'function' ? t : null;
@@ -4981,7 +4985,7 @@ function creerVoix({ tts = null, locale = null, reglages = {}, maintenant = () =
   }
 
   function taire() {
-    attente = null;
+    attente = null; file.length = 0; clearTimeout(tFile);
     const c = courant; courant = null;
     if (c && c.moteur === 'tts' && T) { try { T.stop().catch(() => {}); } catch (_) {} }
     if (locale) try { locale.cancel(); } catch (_) {}
@@ -4996,6 +5000,8 @@ function creerVoix({ tts = null, locale = null, reglages = {}, maintenant = () =
     dernier = { texte: t, t: sec() };
     attente = null;
     if (ttsAttendu) { taire(); attente = { texte: t, t: sec() }; return true; }   // la capacité répond encore : on lira à sa réponse
+    if (R.file && /^[\shmnrgaeo….!'’-]+$/i.test(t) && t.length < 28) return false;      // un souffle d'effort (« Hhhnn… ») : les bruitages s'en chargent
+    if (R.file && (parle || courant)) { if (file.length >= 2) file.shift(); file.push(t); return true; }   // elle finit sa phrase d'abord
     if (!ttsUtilisable() && !locale) return false;
     lancer(t);
     return true;
@@ -18087,7 +18093,7 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
 
 /* ------------------------------------------------------------------ voix du personnage (src/voix.js) : ses pensées lues à voix haute
    Capacité « tts » de l'artefact, sinon la voix du navigateur. Éteinte par défaut (« Voix » dans « Plus »), allumée par CFG.demo. */
-const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal},
+const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal,file:CFG.voixFile!==false},
   onParle:p=>{ $("taire").hidden=!p; } });
 function penser(t){ say(t); direVoix(t); notePensee(t,"meneur"); }
 const journalPensees=[]; window.balPensees=journalPensees;   // essais (tools/demo.mjs) : chaque pensée et son instant
@@ -19384,11 +19390,11 @@ window.balActivite=activite;   // essais : balActivite.lignes()
 const regie=(()=>{
   if(window.__CFG&&!CFG.regie) return null;
   const el=document.createElement("div"); el.id="regie"; el.setAttribute("aria-hidden","true");
-  const L=[["ciel","Ciel · lumière"],["monde","Monde · terrain"],["histoire","Histoire"],["evenements","Événements"],["corps","Comportement"],["son","Son · voix"]];
-  el.innerHTML='<p class="rg-t">Agents · régie</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
+  const L=[["ciel","Sky · light"],["monde","World · terrain"],["histoire","Story"],["evenements","Events"],["corps","Behavior"],["son","Audio · voice"]];
+  el.innerHTML='<p class="rg-t">Agents · live</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
   document.body.appendChild(el);
   const N={}; for(const p of el.querySelectorAll(".rg-l")) N[p.dataset.k]={p,b:p.querySelector("b"),n:0,t:0};
-  const etats={ciel:["veille","exposition","brume"],monde:["veille","sème","relief"],histoire:["écoute","écrit","décide"],evenements:["veille","prépare","déclenche"],corps:["repos","planifie","agit"],son:["silence","mixe","joue"]};
+  const etats={ciel:["idle","exposure","haze"],monde:["idle","seeding","terrain"],histoire:["listening","writing","deciding"],evenements:["idle","staging","firing"],corps:["rest","planning","acting"],son:["silent","mixing","playing"]};
   let i=0;
   setInterval(()=>{ i++;
     const jeu=!(ouverture&&ouverture.ouvert())&&!document.hidden&&innerWidth>=760&&activite.on()&&!CFG.nohud;
