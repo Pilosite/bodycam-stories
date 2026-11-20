@@ -3405,7 +3405,8 @@ function journal(){
   items.sort((a,b)=>a.min-b.min||a.o-b.o).forEach(i=>L.push(i.l));
   const p=t.final||{};
   L.push("ÉTAT · "+f(p.horloge?p.horloge.minutes:0)+" min · tours "+(p.horloge?p.horloge.tours:0)+" · temps passés "+((p.trame&&p.trame.passes)||[]).map(x=>x.id+"("+x.cause+")").join(", ")+" · fin "+((p.trame&&p.trame.fin)||"—")+" · peur "+(p.porteur?p.porteur.peur:"")+" confiance "+(p.porteur?p.porteur.confiance:"")+" agacement "+(p.porteur?p.porteur.agacement:""));
-  return dernierJournal=L.join("\n");
+  dernierJournal=L.join("\n"); harvestLegacy(t,dernierJournal);   // harvest block (ADR 0011), after the story mode
+  return dernierJournal;
 }
 function montrerJournal(){ $("mesure-txt").textContent=journal()||"Aucune partie jouée."; $("mesure").hidden=false; $("mesure-copier").disabled=false; }
 { const b=document.createElement("button"); b.type="button"; b.id="journal"; b.className="ghost"; b.textContent="Journal"; b.hidden=true; $("parler").after(b); b.onclick=montrerJournal;
@@ -3660,6 +3661,32 @@ const STORY_PAGE={
   labels:T=>storyLabels(T),
 };
 storyMode=STORY.createStoryMode(STORY_PAGE);
+/* ---- harvest (ADR 0011, src/harvest.js, core/harvest.js) ------------------------------------------------------------
+   One record per session, in every mode: the story mode calls STORY_PAGE.harvest.story at its end and on « Copy journal »;
+   the legacy path calls harvestLegacy where its French journal is produced (journal(): « Journal », end of a story, leaving
+   the free walk). Kept after a one-line notice, in the shared store (the scene bank's capacite("db"), collection `harvest`,
+   sentences stripped) and in this browser; « Harvest » (tools menu, story debug panel) lists and copies them. */
+const harvest=HARVEST.createHarvest({ core:CORE, db:capacite("db"), storage:(()=>{ try{ return localStorage; }catch(_){ return null; } })(), doc:document,
+  onError:(where,e)=>console.warn("harvest "+where+":",e&&(e.code||e.message)) });
+function harvestDevice(){ try{ const d=gl.getExtension("WEBGL_debug_renderer_info"); return d?String(gl.getParameter(d.UNMASKED_RENDERER_WEBGL)):""; }catch(_){ return ""; } }
+STORY_PAGE.harvest={
+  story(o){ return harvest.collect(o.journal,{ gaps:o.gaps, meta:{ id:o.id, mode:typeof TRAILER_ON!=="undefined"&&TRAILER_ON?"trailer":"story", device:harvestDevice(), lang:o.lang, pack:o.pack,
+    versions:Object.assign({ engine_build:typeof ENGINE_BUILD!=="undefined"?ENGINE_BUILD:null },o.versions) } }); },
+  panel:()=>harvest.panel(),
+};
+const harvestLegacyIds=new WeakMap();
+function harvestLegacy(t,text){
+  try{
+    if(!meneur||!text) return;
+    if(!harvestLegacyIds.has(meneur)) harvestLegacyIds.set(meneur,HARVEST.recordId([meneurLibre?"free":"legacy",t.histoire,t.graine]));
+    const R=meneur.reglages||{};
+    harvest.collect(text,{ meta:{ id:harvestLegacyIds.get(meneur), mode:meneurLibre?"free":"story", lang:"fr", pack:{ id:t.histoire, version:t.empreinte||null, legacy:true },
+      versions:{ engine_build:typeof ENGINE_BUILD!=="undefined"?ENGINE_BUILD:null, contract:t.empreinte||null, models_library:t.modeles||null, settings:CORE.hashString(CORE.canonicalJSON(R)),
+        settings_overrides:t.reglages||null, model:{ adapter:sampler?"host":"lexicon", tier:"quick" } } } });
+  }catch(e){ console.warn("harvest:",e&&e.message); }
+}
+{ const b=document.createElement("button"); b.type="button"; b.className="ghost"; b.id="harvest"; b.textContent="Harvest"; b.onclick=()=>{ fermerOutils(); harvest.panel(); }; $("outils").appendChild(b); }
+/* ---- end of the harvest block ---- */
 function lancerStory(id,o){ fermerOutils(); const r=$("ouverture"); if(r){ r.hidden=true; r.remove(); document.body.classList.remove("ouverture-on"); } ouvRepos=false;
   return storyMode.start(id||"louis-round",Object.assign({lang:CFG.lang},o||{})); }
 function storyChoice(){                                           // the launch screen: a second choice beside the demo

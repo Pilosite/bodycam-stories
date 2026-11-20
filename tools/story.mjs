@@ -15,6 +15,7 @@
 //   node tools/story.mjs sketch  "<sentence>" --place <place file> [--answer <model answer>] [--answers <json>] [--out dir] [--prompt]
 //                                                               conception before play (core/sketch.js): a story sketch as a pack folder;
 //                                                               --prompt prints what the large tier is asked; with no answer, the code fallback
+//   node tools/story.mjs harvest <files or folders…> [--out f] [--strip]   harvest records or journals → the merged report and its proposals (tools/harvest.mjs)
 //
 // The pure functions are exported (tests/story.test.mjs); the I/O is in the loaders and in main() at the bottom.
 // tools/pack-check.mjs is an alias of `check`.
@@ -1107,6 +1108,10 @@ export async function main(argv, { print = console.log } = {}) {
           `  ${files.length} files; check: ${check.errors.length} error(s), ${check.warnings.length} warning(s)`, ...check.errors.map(e => '  error: ' + e),
           `next: node tools/story.mjs check ${relative(process.cwd(), dir)}`].join('\n'));
       return check.errors.length ? 1 : 0;
+    }
+    case 'harvest': {                                            // alias of tools/harvest.mjs (ADR 0011)
+      const H = await import('./harvest.mjs');
+      return H.main(json ? [...args, '--json'] : args, { print });
     }
     case 'new': {
       const author = opt(args, '--author'), id = args[0]; if (!id) break;

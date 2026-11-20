@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { bundleCore } from './bundle-core.mjs';
 import { loadPack, loadLibrary } from './pack-check.mjs';
 import { compilePack, parseSource } from '../core/source.js';
+import { canonicalJSON, hashString } from '../core/world.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = p => readFileSync(join(root, p), 'utf8');
@@ -84,7 +85,8 @@ function storyPack(id) {
   if (c.errors.length) throw new Error('stories/' + id + ': ' + JSON.stringify(c.errors.slice(0, 3)));
   const M = pack.manifest, speakers = {};
   for (const [f, t] of Object.entries(pack.texts)) if (f.startsWith('characters/')) { const d = parseSource(t, { file: f }); if (d.meta && d.meta.name) speakers[d.meta.id || d.id] = d.meta.name; }
-  return { id, title: M.title, langs: M.languages, carrier: M.carrier, scene: c.scene, principles: c.principles, place: pack.place, stations: pack.stations.stations,
+  const version = hashString(canonicalJSON({ manifest: M, texts: pack.texts, place: pack.place, stations: pack.stations, beats: pack.beats, lines: pack.lines }));   // the harvest records it (ADR 0011 §4)
+  return { id, version, title: M.title, langs: M.languages, carrier: M.carrier, scene: c.scene, principles: c.principles, place: pack.place, stations: pack.stations.stations,
     anchors: M.anchors ? JSON.parse(read(join('stories', id, M.anchors))) : {}, endings: (pack.beats && pack.beats.endings) || [], speakers };
 }
 const storyIds = readdirSync(join(root, 'stories')).filter(d => !d.startsWith('_') && !d.startsWith('.') && existsSync(join(root, 'stories', d, 'pack.json'))).sort();
@@ -100,12 +102,14 @@ for (const id of storyIds) {
   TRAILER_SCRIPTS[id] = script;
 }
 const storyJs = bundleCore(root) + '\n' + embarquer('ADAPTER', 'src/adaptateur-core.js') + '\n' + embarquer('REFLEX', 'src/reflex-model.js') + '\n' + embarquer('MODELPORT', 'src/model-port.js') + '\n' + embarquer('STORY', 'src/story.js')
-  + '\n' + embarquer('TRAILER', 'src/trailer.js')
+  + '\n' + embarquer('TRAILER', 'src/trailer.js') + '\n' + embarquer('HARVEST', 'src/harvest.js')
   // conception before play (src/conception.js, core/sketch.js): the panel, the pattern library a sketch binds, the base bank
   + '\n' + embarquer('CONCEPTION', 'src/conception.js') + `\nconst PATTERN_LIBRARY=${esc(loadLibrary(join(root, 'patterns')))};\nconst SKETCH_BASE=${esc(JSON.parse(read('src/sketch-base.json')))};`
   + `\nconst REFLEXES=${esc(JSON.parse(read('src/reflexes.json')))};\nconst STORY_PACKS=${esc(STORY_PACKS)};\nconst TRAILER_SCRIPTS=${esc(TRAILER_SCRIPTS)};`;
 if (/<\/script/i.test(storyJs.replace(/<\\\//g, ''))) throw new Error('story mode: </script> in the embedded code');
-const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n' + constructeurJs + '\n' + ouvertureJs + '\n' + storyJs + '\n</script>\n<script>\n' + js);
+// The engine build: a hash of everything the page runs, recorded by the harvest with each session (ADR 0011 §4).
+const ENGINE_BUILD = hashString(meneurJs + constructeurJs + ouvertureJs + storyJs + js);
+const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n' + constructeurJs + '\n' + ouvertureJs + '\n' + storyJs + `\nconst ENGINE_BUILD=${JSON.stringify(ENGINE_BUILD)};` + '\n</script>\n<script>\n' + js);
 mkdirSync(join(root, 'dist'), { recursive: true });
 writeFileSync(join(root, 'dist/index.html'), html);
 // Variante pour un artefact claude.ai : la page y est enveloppée à la publication, donc sans doctype, html, head ni body.

@@ -24,6 +24,7 @@ Four slash commands in `.claude/commands/` wrap the loop for Claude Code: `/stor
 | `journal <journal> [--all] [--lang l]` | a journal, one readable line per entry; her lines in the asked language | works |
 | `new <pack-id> [--author id]` | a new pack from `stories/_template/` | works |
 | `sketch "<sentence>" --place <place file> [--answer <file>] [--answers <json>] [--out dir] [--prompt]` | conception before play (`core/sketch.js`, ADR 0011): a story sketch written as a pack folder (model layer `base`, creator's answers in layer `creator`). `--prompt` prints what the large tier is asked, so an assistant can write the answer to a file for `--answer`; without an answer, the code fallback, said so | works |
+| `harvest <files or folders…> [--out f] [--strip] [--json]` | alias of `node tools/harvest.mjs`: harvest records or raw journals (both formats) → the merged report and its proposals, written as Markdown under `harvest/` (see "The harvest" below) | works |
 | `node tools/pack-check.mjs <pack> [--json]` | alias of `check`, kept for habits and scripts | works |
 
 ### Play scripts
@@ -204,6 +205,61 @@ final hash: 04839b198109b2 → 1a7ed820c003aa   (recorded before stations carrie
 ```
 
 What to tell the creator: the same session ends with 48 % of battery instead of 33 %; `battery-clock.half` still fires at the end (transitions cost their `cost_s` on top of time); the low notice will come at 20 % instead of 25 % (this session does not reach it either way). If the creator wants no clock at all, propose the swap of `docs/patterns.md` (ticking-clock → slow-light) and report the warning `check` then gives: the `battery-dies` ending is no longer triggered by anything.
+
+## The harvest: what sessions propose (ADR 0011, P17, P23)
+
+Every session, in every mode (story, trailer, the legacy free walk and legacy stories), produces one **harvest record**: who played what on which versions, and three lists that say what to build next. The page keeps it; the coordinator pulls it; `tools/harvest.mjs` turns a set of records into a report that ends in proposals, one section per layer, each accepted or dropped by a person. Nothing is applied automatically.
+
+### The record (`core/harvest.js`, `harvestRecord`)
+
+```
+{ type: "harvest", v: 1, id, created, source: "core" | "legacy", mode: "story" | "trailer" | "free",
+  pack: { id, version, legacy? }, device, lang, seed, with_model, duration_s, turns,
+  versions: { pdl, vocab, budgets: { loops_ms, tx }, harvest, engine_build, pack, thresholds: { act_from, ask_below },
+              reflexes, model: { judge, invent, home, host_tiers, limits_ms } }            // story mode
+          | { harvest, engine_build, contract, models_library, settings, settings_overrides, model: { adapter, tier } },  // legacy
+  summary: { calls, first_reaction_ms, full_reaction_ms, …, latency: { "<adapter>/<instrument>/<purpose>": { n, p50, p95, budget, ms } } },
+  asked_not_doable: [ { seq, kind, what, missing, said, … } ],   // engine_gap, rejected_missing, dropped_missing, not_understood; legacy: refused, legacy_<event>
+  improvised:       [ { seq, kind, text, said, by, … } ],        // fact, thing, rule, line
+  slow_or_doubtful: [ { seq, kind, what, said, … } ],            // over_budget, held, failed, stale, late, unsure, repaired, rejected, dropped_lines; legacy: no_first_reaction, adapted, invalid
+  stripped, journal: { format: "jsonl" | "legacy-text", text, cut } }
+```
+
+`seq` is the journal entry it comes from (for the legacy text journal: the block's rank, the header being 0). `said` is the player's sentence that led to it; with `strip` every player sentence is replaced by `[player: <class>]` (the intent's class or verb; `voice` in the legacy path), in the lists and in the journal. Each list keeps 80 items at most (then one `cut` item). The journal is kept when it fits 150 000 bytes; else a lean form without derived events, principles in scope and principle records (not replayable as is: the pack at `versions.pack` holds them), else none, and `journal.cut` says which.
+
+`versions` names everything that steers behaviour (ADR 0011 §4): the PDL version and a hash of the closed vocabulary, the loop budgets and the transaction budget, the engine build (`ENGINE_BUILD`, a hash of the page's code written by `tools/build.mjs`), the pack's source hash (`version` of each compiled pack), the reflex thresholds and a hash of `src/reflexes.json`, which adapter served judgement and invention, the host's tiers and the time limits; in the legacy path the contract's and the model library's fingerprints and a hash of the meneur's settings.
+
+### In the page (`src/harvest.js`)
+
+At a session's end and on « Copy journal » (story mode), and wherever the legacy path produces its journal (« Journal », the end of a story, leaving the free walk), the page builds the record. The first time, a one-line notice asks: "This session's journal is kept to improve the game. [Keep] [Don't keep]"; the answer is remembered (`bodycam-harvest-consent`), and nothing is kept before it or after a "Don't keep". Kept records go:
+
+- to **the artifact's shared store**, when the page has one (the `db` capability, the same `capacite("db")` the scene bank uses): **collection `harvest`, one document per session, document id = the record's `id`** (`[a-z0-9-]`, e.g. `louis-round-123456789-lx3k9q`, `free-libre-217113628-lx3k9q`), **document body = the record built with `strip`** (the player's sentences replaced by their class), because with the artifact's default rules every signed-in viewer can read shared documents. To keep full sentences in the shared store, the artifact would first need rules that hide the collection from other players (a `harvest/{self}` subtree read by `admin`), which is a later decision.
+- to **this browser** (`localStorage` `bodycam-harvest`, the full record, 20 records and 1.5 MB at most, oldest dropped).
+
+« Harvest » (the tools menu, and the story debug panel) lists the kept records with « Copy all », which copies the browser's records as one JSON array. Nothing is sent anywhere else.
+
+### Pulling the records (the coordinator)
+
+From a Claude Code session that can reach the artifact: the `ArtifactData` tool, `action: "list"`, `url: <the artifact's link>`, `collection: "harvest"` (page through it; `get` with `doc_id` for one record). Each document's data is one record as above. Save the documents as one JSON array (or one file per record) under `harvest/records/`, then:
+
+```
+node tools/harvest.mjs harvest/records --out harvest/<date>-report.md
+```
+
+A player can also paste « Copy all » (a JSON array), a story journal (« Copy journal », JSON lines) or a legacy journal (the French text that begins `JOURNAL · `) into a file: the tool reads all three, from files or folders, and `--strip` strips the sentences of what it reads.
+
+### The report
+
+Sessions (with their versions) · what was asked and not doable, grouped by what was missing, with the sentences · everything improvised · the latency table by adapter, instrument and purpose (n, p50, p95, budget, over budget) · **proposals**, one section per layer, each with where it came from (record and `seq`), how often it was seen across the records, and who decides:
+
+1. engine and vocabulary (the engine's owner): a draft sound plan for `src/bruitages.json` (a cue with no recipe), a draft model for `src/modeles.json` (a thing refused or failed), else a line for the engine's vocabulary wishlist (an op, a field, a material, `reserved_v2`);
+2. story (the story's author): improvised facts, things and rules as PDL source lines (`~<certainty>` when the model gave one, else `? … -- note`), each under a `//` line naming the session and `seq`;
+3. characters (the story's author): invented lines as examples (`>`), turned-down lines as counter-examples (`x … | why:`), refusals as open questions (`?`);
+4. framework (the engine's owner): sentences the reflex could not place (an anchor or intent class), turns with no visible reaction within the now budget (a prepared option), slow, held or failed calls (a budget or a time limit), unsure judgements (a threshold), repeated repairs and rejections (a compiled rule or a prompt note).
+
+The first two reports are `harvest/2026-11-20-free-session-phone.md` (Toine's free session on his phone; its journal is **reconstructed** from `docs/field/2026-11-20-free-session-phone.md` in `harvest/journals/`, the raw text not being in the repository) and `harvest/golden-journals.md` (the core's golden journals).
+
+What the legacy journal cannot tell: that people were asked for and could not be shown (the free mode has no executor gaps; "Parle à ta femme" played as an empty chair is not recorded as a gap). Converging the free mode onto the core (the conception lot) brings its gaps into the record.
 
 ## Not yet
 

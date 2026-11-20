@@ -1,0 +1,35 @@
+# RECONSTRUCTED, not the raw journal. The raw text Toine pasted is not in the repository; this file rebuilds its shape from
+# docs/field/2026-11-20-free-session-phone.md and from the entry forms the coordinator quoted. Real: the header, the six
+# sentences, the answer times, the statuses, the one immediate gesture, the walk of 12 m, the one recorded fact (its
+# content). Reconstructed: the minutes (spread over 1.9 min), the sas wording, the thoughts (paraphrased in brackets
+# from the note), the exact wording of the fact. Lines starting with # are ignored by the parser.
+JOURNAL · libre · graine 217113628 · avec Claude · Mali-G77 · 2026-11-20T23:27
+[0,1 min] VOIX · joueur : "T'es qui dans l'histoire ?" · recue en 6,0 s
+    sas : refuse · hors du monde : la voix demande qui il est dans l'histoire
+    (hesite) « [reconstructed: he deflects in character, as a father by the fire, without answering the question] »
+[0,1 min] sas · verdict refuse · regle null · motif hors du monde : la voix demande qui il est dans l'histoire · voix T'es qui dans l'histoire ?
+[0,4 min] VOIX · joueur : "Ok va près du feu avec ta famille" · recue en 4,0 s
+    sas : recevable · aller près du feu
+    (suit) « [reconstructed: he goes to the fire, to his family] »
+    actions : marcher 12
+[0,4 min] geste_immediat · actions ["posture"]
+[0,4 min] sas · verdict recevable · regle null · motif aller près du feu · voix Ok va près du feu avec ta famille
+[0,7 min] VOIX · joueur : "Parle à ta femme" · recue en 5,0 s
+    sas : recevable · parler à sa femme
+    (suit) « [reconstructed: her chair is empty; the children are cold] »
+[0,7 min] sas · verdict recevable · regle null · motif parler à sa femme · voix Parle à ta femme
+[1,0 min] VOIX · joueur : "Comment s'appellent tes mômes ?" · recue en 7,5 s
+    sas : recevable · nommer les enfants
+    (suit) « [reconstructed: Léo, four, and Manon, seven] »
+    faits : ["Les enfants s'appellent Léo (4 ans) et Manon (7 ans)"]
+[1,0 min] sas · verdict recevable · regle null · motif nommer les enfants · voix Comment s'appellent tes mômes ?
+[1,4 min] VOIX · joueur : "Va voir Manon" · recue en 4,5 s
+    sas : recevable · aller voir Manon
+    (suit) « [reconstructed: he walks to the small chairs] »
+    actions : marcher 4
+[1,4 min] sas · verdict recevable · regle null · motif aller voir Manon · voix Va voir Manon
+[1,7 min] VOIX · joueur : "Demande-lui si ça va" · recue en 5,5 s
+    sas : recevable · parler à Manon
+    (suit) « [reconstructed: he asks Manon if she is all right; nobody answers] »
+[1,7 min] sas · verdict recevable · regle null · motif parler à Manon · voix Demande-lui si ça va
+ÉTAT · 1,9 min · tours 6 · temps passés  · fin — · peur 0 confiance 0 agacement 0

@@ -75,6 +75,8 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 
 **P17. What happened can be read, and it feeds everything.** The engine and the stories grow from what players and narrators actually do: what was asked and could not be done, what was improvised, what was slow or doubtful is collected from the first day (ADR 0011). Those who keep a story alive must be able to see what players did, how the world and its principles reacted, and why, in order to refine them.
 
+**P23. The game grows from play, and everything can be steered.** Because nothing here is deterministic, what people actually do in the game, players, narrators and ourselves, is the material the game is made from. Every session feeds every layer: the things and sounds that can be shown and heard, the characters, the stories and their subtleties, and the engine itself. Nothing harvested changes anything on its own: it becomes a proposal, a person accepts it, and it enters as data with its author (P12). And every layer can be steered from the outside: vocabulary, models and their tiers, prompts, thresholds, budgets, principles and packs are data that can be read, changed, versioned and rolled back, never behaviour buried in code. *Check: for any behaviour seen in a session, one can point to the data that produced it and change it without touching the engine's code; and any request the game could not serve shows up, counted, in the next harvest.*
+
 ## D. How we go
 
 **P18. Crescendo.** Each version shows less than we imagine and does it for real. What is too hard is written down as later, not faked. Dynamism (movement, initiative, range, persistence) is introduced step by step.

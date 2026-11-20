@@ -4,7 +4,7 @@ POC documents first (English, binding), then the legacy French docs of the engin
 
 ## POC (English)
 
-- `principles.md` — the founding principles (P1 to P22), the constitution; read first
+- `principles.md` — the founding principles (P1 to P23), the constitution; read first
 - `architecture.md`: the contract. Nine pillars, transactions, rules, vocabulary, story pack, journal, repo layout.
 - `scope.md`: the scope ledger. What is v1, v2 and target; the station-based frame.
 - `sdlc.md`: how we build. Principles, ADRs, test levels, flow, working with agents, milestones.
