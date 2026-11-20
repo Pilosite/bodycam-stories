@@ -1230,6 +1230,50 @@ export function formesTransformees(m, source) {
     matiere: f.matiere === '@' ? dom.matiere : f.matiere, couleur: f.couleur === '@' ? dom.couleur : f.couleur }))).filter(Boolean);
   return formes.length ? { formes: formes.slice(0, REGLAGES.FORMES_PAR_OBJET), unite: r3(D) } : null;
 }
+/* Un ajout DUR (sans fondu : caillou, bouton, clou) planté dans une matière MOLLE (formes à fondu) reste saillant : enfoncé
+   d'un tiers au plus, mesuré le long de la normale de la surface molle qui le porte. Sinon la pâte, ses bosses et le bourrelet
+   qui remonte autour de lui le recouvrent et on ne le voit plus (cas réel : deux cailloux noyés dans la tête). Seuls les ajouts
+   dont le centre est dans la matière molle bougent ; ils sortent dans l'axe de la normale. Générique : aucune partie nommée. */
+export function saillants(formes, part = 1 / 3) {
+  const F = liste(formes), ok = f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille) && f.p.length === 3 && f.taille.length === 3;
+  const molles = F.filter(f => ok(f) && num(f.lisse, 0, 0.5, 0) > 0 && !plate(f));
+  if (!molles.length) return F;
+  const dedans = (x, y, z) => molles.some(m => dansForme(m, x, y, z)), r4 = v => Math.round(v * 10000) / 10000;
+  return F.map(f => {
+    if (!ok(f) || num(f.lisse, 0, 0.5, 0) > 0 || f.creux > 0 || plate(f)) return f;
+    const m = molles.find(g => dansForme(g, f.p[0], f.p[1], f.p[2])); if (!m) return f;
+    let d = f.p.map((v, i) => (v - m.p[i]) / Math.max(1e-6, (m.taille[i] / 2) ** 2));   // normale de l'ellipsoïde porteur
+    const l = Math.hypot(...d); d = l > 1e-9 ? d.map(v => v / l) : [0, 1, 0];
+    const r = 1 / Math.hypot(...d.map((v, i) => v / Math.max(1e-6, f.taille[i] / 2)));   // demi-épaisseur de l'ajout le long de d
+    const enfonce = s => { let n = 0; for (let k = 0; k < 24; k++) { const t = -r + 2 * r * (k + 0.5) / 24; if (dedans(f.p[0] + d[0] * (s + t), f.p[1] + d[1] * (s + t), f.p[2] + d[2] * (s + t))) n++; } return n / 24; };
+    let s = 0;
+    while (s < 2 * r && enfonce(s) > part) s += r / 16;
+    return s > 0 ? Object.assign({}, f, { p: f.p.map((v, i) => r4(v + d[i] * s)) }) : f;
+  });
+}
+/* Ce qu'un œil (repère de la chose, mêmes unités que ses formes) voit de ses petits ajouts durs posés sur une matière molle :
+   pour chacun, l'indice de la forme, sa largeur apparente (rad), sa saillie (part hors de la matière molle, le long de la
+   normale), s'il est du côté de l'œil (face) et si rien de la chose ne le cache (occulte : la visée de l'œil vers son point le
+   plus saillant traverse une autre forme). Sert aux essais (tests, tools/demo.mjs) : les yeux d'un bonhomme se voient-ils ? */
+export function ajoutsVus(formes, oeil) {
+  const F = liste(formes), ok = f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille) && f.p.length === 3 && f.taille.length === 3;
+  const molles = F.filter(f => ok(f) && num(f.lisse, 0, 0.5, 0) > 0 && !plate(f)), out = [];
+  F.forEach((f, i) => {
+    if (!ok(f) || num(f.lisse, 0, 0.5, 0) > 0 || f.creux > 0 || plate(f)) return;
+    const m = molles.find(g => Math.max(...f.taille) < 0.4 * Math.max(...g.taille) && dansForme(Object.assign({}, g, { taille: g.taille.map(v => v * 1.25) }), f.p[0], f.p[1], f.p[2]));
+    if (!m) return;
+    let d = f.p.map((v, k) => (v - m.p[k]) / Math.max(1e-6, (m.taille[k] / 2) ** 2));
+    const l = Math.hypot(...d); d = l > 1e-9 ? d.map(v => v / l) : [0, 1, 0];
+    const r = 1 / Math.hypot(...d.map((v, k) => v / Math.max(1e-6, f.taille[k] / 2)));
+    let dedans = 0; for (let k = 0; k < 24; k++) { const t = -r + 2 * r * (k + 0.5) / 24; if (molles.some(g => dansForme(g, f.p[0] + d[0] * t, f.p[1] + d[1] * t, f.p[2] + d[2] * t))) dedans++; }
+    const P = f.p.map((v, k) => v + d[k] * r * 0.8), v = oeil.map((x, k) => x - P[k]), dist = Math.hypot(...v), u = v.map(x => x / dist);
+    let occulte = false;
+    for (let k = 1; k <= 96 && !occulte; k++) { const s = 0.004 + (dist - 0.004) * k / 96, q = P.map((x, j) => x + u[j] * s);
+      occulte = F.some((g, j) => j !== i && ok(g) && !plate(g) && !(g.creux > 0) && dansForme(g, q[0], q[1], q[2])); }
+    out.push({ i, angle: 2 * Math.atan(Math.min(f.taille[0], f.taille[1]) / 2 / Math.max(dist, 1e-3)), saillie: 1 - dedans / 24, face: d[0] * u[0] + d[1] * u[1] + d[2] * u[2] > 0.3, occulte, distance: dist });
+  });
+  return out;
+}
 /* Les états intermédiaires d'un façonnage (avant -> après), pour qu'on le voie se faire : la chose pétrie, la première masse
    et le reste de la pâte, la masse façonnée, puis les ajouts, une matière après l'autre. Le dernier état est « après ». */
 export function etapesFaconnage(avant, apres, n = 5) {
@@ -2373,6 +2417,7 @@ export function creerMeneur(o) {
       if (a) a.statut = res || suite ? statut : statut === 'delai' ? 'delai' : 'invalide';
       if (partie.trame.fin) return;
       if (!res || !vivant(cib.id) && !ficheObjets.some(x => x.id === cib.id)) { log('modif_ratee', { id: cib.id }); return; }
+      res.formes = saillants(res.formes);                         // un ajout dur planté dans la pâte reste saillant (d'où qu'il vienne)
       if (dem.modifie.faconner) {                               // les états intermédiaires (Claude, sinon calculés) et ce qu'il a ramassé
         const avant = res.entier ? aEchelle(cib.formes, cib.echelle || 1) : cib.formes;
         const ia = isObj(r) ? liste(r.etapes).slice(0, 4).map(L => liste(L).map(validerForme).filter(Boolean).slice(0, R.FORMES_PAR_OBJET)).filter(L => L.length) : [];
