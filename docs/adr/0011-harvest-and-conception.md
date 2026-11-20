@@ -26,6 +26,19 @@ Toine prompted a world (a family around a camp fire at night), played it on his 
 
 Records are kept where the page runs (the artifact's shared store when there is one, else the browser, always copyable), pulled into the repository by a tool, and summarised by another. A player's words are personal: a record is collected only after a clear notice in the page, and the harvest tool can strip the sentences and keep only their classes.
 
+**3. From harvest to growth: propose, accept, enter (P23).** What is harvested is turned into proposals, each addressed to the layer it would enrich and to the person who owns that layer:
+
+| Proposal | Becomes | Accepted by |
+|---|---|---|
+| a thing or a sound players asked for and the engine lacked | an entry of the model library or a sound recipe; when that is not enough, a line on the engine's vocabulary wishlist | the engine's owner |
+| a person, a name, a fact, a place a model improvised | statements in a pack (character, fact, open question), with the session as their source | the story's author |
+| a way of speaking or reacting that worked, or grated | a tendency, an example or a counter-example on a character sheet | the story's author |
+| a judgement that was often unsure, a call that was often slow | a prepared option, a compiled rule, a threshold or a budget | the engine's owner |
+
+Nothing is applied without a person's yes. Accepted proposals enter as data, with their provenance.
+
+**4. Everything is steerable.** All that tunes behaviour is data in the repository and visible in the tools: vocabulary, model tiers and adapters, prompts, confidence thresholds, latency budgets, principles, packs. A change is a commit; a session records the versions it ran on, so any behaviour can be traced to the data that produced it and replayed against a change.
+
 ## Consequences
 
 - P17 grows: what happened can be read, and it feeds the engine and the stories.
