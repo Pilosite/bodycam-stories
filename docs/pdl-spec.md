@@ -10,7 +10,7 @@ PDL has three written forms of one thing:
 | **JSON** (canonical) | the code | the machine: validation, execution, journal, replay | §3 to §9 |
 | **Tokens** | models during play | the wire between models and the core: compact, line-oriented | §10 |
 
-The JSON form is the canonical form. Tokens round-trip to it exactly. Source compiles to it (some statements by code, some by a model at pack build time, see §2.6).
+The JSON form is the canonical form. Tokens round-trip to it exactly. Source compiles to it (some statements by code, some by a model at pack build time, see §2.7).
 
 ## Contents
 
@@ -22,7 +22,7 @@ The JSON form is the canonical form. Tokens round-trip to it exactly. Source com
 6. The closed vocabulary: kinds and bodies
 7. Rules: events, conditions, effects, limits, loop guards
 8. Validation and repair
-9. Session, executor interface, journal, replay, determinism
+9. Ports, three clocks, session, journal, replay, determinism
 10. The token form
 11. Ten worked examples: « Louis's Round »
 12. Mapping to the existing engine
@@ -35,174 +35,185 @@ The JSON form is the canonical form. Tokens round-trip to it exactly. Source com
 - **Permissive by default** (P8). The validator accepts; else repairs toward what the player asked; rejects only for a vocabulary or physical bound or an absolute principle, and always says which.
 - **Deterministic execution.** Same journal and same seed give the same world state (hash). Models decide; code validates, executes and replays.
 - **Everything has an author.** Every transaction, fact, rule, principle and gauge keeps author, layer and the id of the transaction that made it.
+- **Hexagonal** (P21). `core/` imports nothing from the engine, the DOM, the models, the input or storage; it reaches them through four ports (§9.1).
+- **Three clocks** (P20). `now`, `scene` and `story` loops with their own latency budgets, talking only through transactions and events; a slower loop adds to, amends or cancels what a faster one did, never makes it wait (§9.3).
 
 ---
 
 ## 2. PDL source: one text, a spectrum from soft to hard
 
-A source file (`*.pdl`, UTF-8) is read line by line. It holds **statements**, each with a **strength**, plus **directives** that set metadata for the statements that follow.
+A source file (`*.pdl`, UTF-8) holds **statements**, each with a **strength**. The grammar below is the one the story pack and the pattern library are written in (`stories/louis-round/`, `patterns/`): the pack's de facto draft is adopted, with the differences listed in §2.10. `core/source.js` parses it (`parseSource`, `serializeSource`, `compilePack`); `tools/pack-check.mjs` checks references across a pack.
 
 ### 2.1 Lines
 
 ```
-line        := blank | comment | directive | statement | attachment | continuation
-blank       := spaces only
-comment     := '#' anything            (a '#' at line start; inside a statement, '#' is plain text)
-directive   := '@' name SP value
-statement   := [id ':' SP] mark SP text [SP meta]
-attachment  := [SP SP] ('>' | 'x') SP text           example / counter-example of the last statement
-continuation:= SP SP text                              (two or more spaces) continues the last statement's text
-meta        := '{' key '=' value (SP key '=' value)* '}'   at the very end of the line
-id          := [a-z][a-z0-9_.-]*   (lowercase, at most 60 chars)
+file        := header meta* (section | statement | comment | blank)*
+header      := '# ' doc-id [ ' — ' title ]                 first content line (also '–' or '-')
+meta        := '@' key SP value ( SP SP '@' key SP value )*  several on one line; before the first section
+section     := '## ' name                                    groups statements (identity, voice, rules, examples…)
+comment     := '//' anything
+statement   := body [ SP '{' id '}' ]                        the id ends the line
+body        := '!!' SP text                                  absolute
+             | '!' SP text                                   hard (prose)
+             | '~' [weight] SP text                          tendency, weight 0..1
+             | '?' SP question [ ' -- ' note ]               open; the note guides the model (required)
+             | '>' SP example                                example
+             | 'x' SP example ' | why: ' text                counter-example (the why is required)
+             | rule                                          hard, explicit (§2.4)
+             | 'gauge' SP gauge                              a gauge (§2.5)
+             | ('role'|'need'|'param'|'bind'|'set'|'hint'|'variation') SP text     patterns (§2.6)
+example     := [ '[' context ']' SP ] lang ':' SP text ( ' | ' lang ':' SP text )*
+id          := [A-Za-z0-9_.-]+
 ```
 
-A continuation is joined to the previous statement text with one space. An attachment line attaches to the closest statement above it (any strength). `x` must be followed by a space to be a counter-example (so a sentence starting with "x" in a continuation stays text).
+A statement without `{id}` gets `<doc-id>.<section>.<n>` (stable while the file's order does not change); ids are required for anything another file or a rule refers to.
 
-### 2.2 Directives (metadata defaults)
+### 2.2 Metadata
 
-| Directive | Value | Default | Meaning |
-|---|---|---|---|
-| `@pack` | id | file name | pack the file belongs to |
-| `@author` | `kind:id` (kind: creator, model, engine) | `creator:unknown` | author of the following statements |
-| `@layer` | id | `base` | collaboration layer |
-| `@scope` | `story` · `place` · `character:<id>` · `scene:<id>` | `story` | what the statement is about; drives when soft statements are in a model's context |
-| `@horizon` | `scene` · `story` | `story` (or `scene` when scope is `scene:<id>`) | lifetime of what the statement compiles to |
-| `@lang` | language code | `en` | language of the prose and examples |
-
-A directive applies to every following statement until the next directive of the same name. Each statement can override any of them in its trailing `{…}` meta (`{scope=character:sam horizon=scene weight=0.6 id=sam.dry}`).
+| Key | Values | Meaning |
+|---|---|---|
+| `@id` | id | the document (the header carries it too) |
+| `@kind` | `character`, `rules`, `principles`, `facts`, `pattern`, `pattern-instance` | what the file is |
+| `@layer` | id | collaboration layer; must match the layer that lists the file in `pack.json` |
+| `@author` | creator id | default: the layer's author |
+| `@lang` | language code | of the prose (`fr` for Sam's voice examples, `en` for rules) |
+| `@scope` | `story`, `place`, `scene`, `character` | `character` means `character:<doc-id>` |
+| `@horizon` | `scene`, `story` | of what the statements compile to |
+| `@strength`, `@name`, `@presence` | character files | `strong`/`light`/`role`, a light character's name, `absent` |
+| `@pattern` | pattern id | in a pattern instance |
 
 ### 2.3 Strengths
 
 | Mark | Strength | `form` | Enforced by | Compiles to |
 |---|---|---|---|---|
 | `!!` | `absolute` | `prose` | the validator | a **constraint** (§8.4), written by a model at pack build, approved by the creator |
-| `!! never …` | `absolute` | `explicit` | the validator | a constraint, compiled by code (§2.5) |
+| `!! never …` | `absolute` | `explicit` | the validator | a constraint, compiled by code (§2.4) |
 | `!` | `hard` | `prose` | code | a **rule** (§7), written by a model at pack build, approved by the creator |
 | `when … -> …` | `hard` | `explicit` | code | a rule, compiled by code (§2.4) |
-| `~` or `~w` | `tendency` (weight `w` in 0..1, default 0.5) | `prose` | models, in context; audited | nothing: stays a principle |
-| `?` | `open` | `prose` | models decide, guided by the note | nothing: stays a principle |
-| `>` / `x` | example / counter-example | — | calibrate the statement above; double as audit test cases | attached to the statement |
+| `~` / `~w` | `tendency`, weight (none = unweighted) | `prose` | models, in context; audited | stays a principle |
+| `?` | `open` | `prose` | models decide, guided by the note | stays a principle |
+| `>` / `x` | `example` / `counter` | — | calibrate the document's soft statements; double as audit cases | stays a principle (context, lines per language, why) |
+| `gauge` | `gauge` | `explicit` | code | a gauge (§5.6) |
 
-Every statement becomes a **principle record** (§2.7), whatever its strength. The id is the leading `id:` or `{id=…}`; without one, the id is `p-` + 8 hex digits of a hash of the scope and the normalised text (stable while the text does not change).
+In a `facts` file, `!!` is canon nothing may contradict, `!` a fact that is true and can be revealed (`reveal(f.x)`), `?` left open on purpose.
 
-### 2.4 Explicit rules: `when … -> …`
-
-```
-rule      := 'when' SP event [SP 'if' SP cond (SP 'and' SP cond)*] SP '->' SP call (',' SP? call)* [SP limit]*
-event     := EVENT [SP test (SP 'and' SP test)*]          an event name from §7.1 with tests on its fields
-           | PATH SP op SP value                          shorthand: a state path; becomes its change event (below)
-test      := field SP op SP value
-op        := '<' | '<=' | '>' | '>=' | '=' | '!=' | 'contains'
-cond      := 'not' SP cond
-           | REF SP 'within' SP number 'm' SP 'of' SP REF     → { near: { a, b, within_m } }
-           | 'fact' SP id SP id [SP '=' SP value]             → { fact: { subject, predicate, value? } }
-           | 'scene' SP '=' SP id                             → { scene: { id } }
-           | PATH SP op SP value                              → { state: { path, <op>: value } }
-call      := name '(' [arg (',' SP? arg)*] ')'
-arg       := value | key '=' value                    a bare value fills the op's primary field (§6, "primary")
-limit     := 'once' | 'max' SP int | 'cooldown' SP number 's'
-value     := number | number '%' | number 'm' | number 's' | 'true' | 'false' | bare | '"' json-string '"'
-```
-
-- **State-path shorthand.** `camera.battery < 10%` means event `camera.changed` with test `battery < 0.1`. Paths: `camera.battery`, `camera.degrade`, `place.fog`, `place.lamp`, `place.sun_height`, `clock.t`, `clock.scene_t` (event `clock.tick`). `clock.battery` is accepted as an alias of `camera.battery`.
-- **Units.** `10%` → 0.1; `20m` → 20 (metres); `30s` → 30 (seconds). Numbers are plain decimals.
-- **Calls.** `name` is an act or effect op of §6 (`say`, `stop`, `look`, `sound.play`, `camera.set`, …) or `fact`. Aliases: `image.degrade(x)` → `camera.set(degrade=x)`; `image.shake(x)` → `camera.set(shake=x)`; `say(id)` with a bare id → `say(ref=id)` (a line of the pack's line bank); `say("…")` → a line in the file's `@lang`. `fact(subject, predicate, value)` is positional. A call may end with `horizon=scene` / `horizon=story` / `ttl=…`.
-- **Limits.** `once` = `max_fires 1`. Default when absent: `max_fires 1`, `cooldown_s 0` (rules must ask to fire more than once).
-- **Horizon** of the rule: the statement's horizon (story or scene).
-
-Example (the architecture's): `when clock.battery < 10% once -> say(battery_low), image.degrade(0.3)` compiles to
-
-```json
-{ "id": "battery.low", "when": { "event": "camera.changed", "match": { "battery": { "lt": 0.1 } } },
-  "then": [ { "horizon": "now", "kind": "act", "body": { "op": "say", "ref": "battery_low" } },
-            { "horizon": "now", "kind": "effect", "body": { "op": "camera.set", "degrade": 0.3 } } ],
-  "limits": { "max_fires": 1, "cooldown_s": 0 } }
-```
-
-### 2.5 Explicit absolutes: `!! never …`
+### 2.4 Explicit rules and absolutes: the call grammar
 
 ```
+rule     := 'when' SP call [SP limit]* [SP 'if' SP cond (SP 'and' SP cond)*] SP '->' SP call (',' SP call)*
+limit    := 'once' | 'max' SP int | 'cooldown' SP int 's'          (default: max 1, cooldown 0)
+cond     := ['not' SP] call
+call     := name [ '(' arg (',' SP? arg)* ')' ]                     args are ids, numbers or "quoted text"
 absolute := '!!' SP 'never' SP call [SP 'if' SP cond (SP 'and' SP cond)*]
 ```
 
-The call is a **pattern**: its op and the arguments given must all match a transaction for the constraint to apply; arguments not given match anything. `!! never go(station:hide) if not scene = platiere` rejects any `act go` to the hide station while the current scene is not `platiere`.
+Every name compiles to the canonical JSON of §6 and §7 (`compileEvent`, `compileCond`, `compileAction`). A bare id argument that names a thing of `place.json` becomes `thing:<id>`, otherwise `station:<id>`.
 
-### 2.5 bis Gauges: `gauge id "label": …`
+| Events (`when …`) | Canonical |
+|---|---|
+| `session.start` | `session.started` |
+| `station.entered(s)`, `station.left(s)` | same event, `match { id: s }` |
+| `station.dwell(s, n)` | `clock.tick`, `match { station: s, dwell_s: { ge: n } }` |
+| `clock.below(c, x)` | the clock's change event: `battery` → `camera.changed`, `match { battery: { lt: x } }` (`le` when x = 0) |
+| `clock.every(n)` | `clock.tick`, `t ≥ n`, cooldown n, max 20 unless given |
+| `time.elapsed(n)` | `clock.tick`, `match { t: { ge: n } }` |
+| `look.at(x[, n])` | `look.at`, `match { target: thing:x, s: { ge: n } }` |
+| `said.matches(class)`, `said.loud` | `intent.heard`, `match { class }` / `{ loud: true }` (what the player said, classified by the translation tier) |
+| `voice.silent(n)` | `clock.tick`, `match { silent_s: { ge: n } }` |
+| `beat.enter(b)` | `beat.entered`, `match { id: b }` |
+| `fact.established(f)` | `fact.added`, `match { subject: f, predicate: established }` |
+| `sound(cue)` | `sound.played`, `match { cue }` |
+| `gauge(g[, word])` | `gauge.changed`, `match { id: g, word }` |
 
-A gauge (§5.6) is declared in source; it compiles by code.
+| Conditions (`if …`) | Canonical |
+|---|---|
+| `fact(f)` | `{ fact: { subject: f, predicate: established } }` |
+| `beat(b)`, `at(s)`, `scene(id)` | `{ beat: { id } }`, `{ station: { id } }`, `{ scene: { id } }` |
+| `within_reach(x)` | `{ reach: { target: thing:x } }` |
+| `ending.any`, `ending(e)` | `{ ending: {} }`, `{ ending: { id } }` |
+| `clock.below(c, x)` | `{ state: { path: camera.battery, lt: x } }` |
+| `promised(class)` | `{ promised: { class } }`: a commitment of that class is accepted, amended or due |
+| `gauge(g, word)` | `{ gauge: { id, word } }` |
+| `near(a, b, m)` | `{ near: { a, b, within_m } }` |
+| `not c` | `{ not: c }` |
+
+| Actions (`-> …`) | Canonical template (horizon) |
+|---|---|
+| `say(line)` | act `say { ref }` (now) |
+| `reveal(f)` | fact `{ subject: f, predicate: established, value: true }` (story) |
+| `beat(b)`, `ending(e)` | effect `beat.set` / `story.end { id }` (story) |
+| `go(s)` | act `go { to: station:s }` (now) |
+| `sound(cue[, at])` | effect `sound.play { cue, at? }` (now) |
+| `light.raise(n)` | effect `light.raise { degrees }` (story) |
+| `image.degrade(x)`, `camera.off` | effect `camera.set { degrade }` / `{ off: true }` (story) |
+| `speech.volume(level)`, `speech.shorten(x)` | effect `speech.set { volume }` (scene) / `{ shorten }` (story) |
+| `body.posture(h)`, `body.stop` | act `posture { height }` / `stop` (now) |
+| `fact(s, p, v)` | fact `{ subject, predicate, value }` (story) |
+| any op of §6 | that op, the argument filling its primary field (`stop()`, `posture(0.5)`, `sound.play(jay.alarm)`) |
+
+The pack's examples: `when station.entered(approach) once -> sound(jay.alarm), reveal(f.jay-heard), say(jay.alarm) {r.jay-first}`; `when clock.below(battery, 0.10) once -> say(battery.critical), image.degrade(0.35), speech.shorten(0.5)` (from the `ticking-clock` pattern). An absolute in the explicit form: `!! never go(hide) if not scene(platiere) {sam.hide-early}` rejects any `act go` to the hide outside that scene.
+
+### 2.5 Gauges
 
 ```
-gauge    := 'gauge' SP id SP '"' label '"' ':' SP clause (';' SP clause)*
-clause   := 'rises' SP event SP 'by' SP number [SP 'if' SP cond (SP 'and' SP cond)*]
-          | 'fades' SP number '/min'
-          | 'words' SP number SP number            thresholds of "medium" and "high" (defaults 0.34 0.67)
+gauge := 'gauge' SP id SP '"' label '"' ':' SP clause (';' SP clause)* [SP '{' id '}']
+clause:= 'rises' SP event-call SP 'by' SP number [SP 'if' SP cond (SP 'and' SP cond)*]
+       | 'fades' SP number '/min'
+       | 'words' SP number SP number            thresholds of medium and high (default 0.34 0.67)
 ```
 
-Rules and conditions read gauges by word or value: `when gauge.disturbance is high -> …`, `if gauge.trust < 0.3`.
+`gauge disturbance "how much the animals near the hide have been disturbed": rises sound(branch_snap) by 0.5; rises said.loud by 0.3 if near(body, hide, 30); fades 0.1/min; words 0.3 0.6`. Rules test it by word (`when gauge(disturbance, high) -> …`, `if gauge(disturbance, low)`); a soft statement that mentions it (by id or label) gets its value and word in every model call's principles-in-scope record (§9.2).
 
-```pdl
-gauge disturbance "how much the animals near the hide have been disturbed": rises said by 0.2 if body within 30m of thing:hide; rises sound.played cue = branch_snap by 0.5; fades 0.1/min; words 0.3 0.6
-hide.quiet: when gauge.disturbance is high -> say(jay_stop), posture(0.5)
-```
+### 2.6 Patterns
 
-### 2.6 Compilation and approval
+A pattern (`patterns/<id>.pdl`, `@kind pattern`) declares `role name[*] : type : description` (`*`: several bindings), `need name : type : description`, `param name = value : description`, its principles and rules with `$role`, `$role.attr` and `$param`, `hint` and `variation` lines. An instance (`@kind pattern-instance @pattern <id>`) binds roles (`bind role = value [attr=value …]`) and overrides params (`set param = value`). Instantiation substitutes, repeats a statement once per binding of a many-role it mentions, and ids become `<instance>.<statement-id>[.<n>]`. Principles and rules from an instance carry `pattern` and `instance` in their provenance.
 
-| Statement | Compiled by | When | Record |
-|---|---|---|---|
-| `when … -> …`, `!! never …` | code (`core/source.js`), deterministic | at load | `compiled.status = "compiled"` |
-| `!` prose, `!!` prose | a model (compiler) | at pack build, never during play | stub `compiled.status = "to_compile"`, then `"proposed"` with the model's rule / constraint (validated like any rule), then `"approved"` by a creator |
-| `~`, `?`, `>`, `x` | nobody | — | principle only; fed to model prompts, audited |
+### 2.7 Compilation, layers and approval
 
-A stub keeps the prose. Only `compiled` and `approved` compiled forms are loaded into a session; a `!` or `!!` still `to_compile` or `proposed` is loaded as a principle and reported by the pack check, never enforced half-way. The compiled form is cached under `build/` and versioned with the source.
+`compilePack(pack, library)` (pure; the store adapter reads the files): parses every file of every layer in `pack.json` order, instantiates patterns, compiles explicit rules, absolutes and gauges by code, and merges by id: **the same id in a later layer replaces the earlier one and records it in `overrides`** (layer, author, source). Prose `!` and `!!` become stubs `compiled.status = "to_compile"`; at pack build a model proposes a rule or constraint (`attachCompiled`, validated like any rule: `"proposed"`), and a creator approves it (`approve`: `"approved"`, `approved_by`). Only `compiled` and `approved` forms are enforced; a stub is reported, never half-enforced. `loadPrinciples` installs constraints and gauges and submits the compiled rules as creator transactions carrying `principle: <id>`.
 
-### 2.7 The principle record
+### 2.8 The principle record
 
 ```
 principle {
-  id, strength: absolute | hard | tendency | open | gauge, form: prose | explicit,
-  weight?            // tendency only, 0..1
-  scope              // story | place | character:<id> | scene:<id>
-  horizon            // scene | story
-  text, lang
-  examples: [ { text, counter: bool } ]
-  author { kind, id }, layer, pack, source { file, line }
-  compiled?: { kind: rule | constraint | gauge, status: to_compile | proposed | compiled | approved | error, body?, by?, approved_by? }
+  id, strength: absolute | hard | tendency | open | example | counter | gauge, form: prose | explicit,
+  weight?, text?, note?, context?, lines? { <lang>: text }, why?
+  scope: story | place | scene | scene:<id> | character:<id>, horizon: scene | story, section, lang
+  author { kind, id }, layer, pack, doc, doc_kind, source { file, line }, overrides?, pattern?, instance?
+  compiled?: { kind: rule | constraint | gauge, status: to_compile | proposed | compiled | approved | error, body?, by?, approved_by?, error? }
 }
 ```
 
-A principle is **in scope** for a model call when its scope is `story`, `place`, the speaking character (`character:<id>`), or the current scene (`scene:<id>`). Each model call is journaled with the ids of the soft principles (tendency, open) in scope (§9.2), so the audit can tell what the model was asked to respect.
+**In scope** for a model call: tendencies and open questions whose scope is `story`, `place`, `scene`, the current `scene:<id>`, or the speaking `character:<id>`.
 
-### 2.8 Audit
+### 2.9 Audit
 
-The judging is a model call made elsewhere; the core defines its interface and aggregates.
+The judging is a model call made elsewhere (`ModelPort.decide`); the core defines the record and aggregates.
 
 ```
-judge(input) -> audit[]          // interface only (core/source.js documents it)
-input  { principle, entries: [journal entries], examples }
-audit  { type: "audit", principle, ref_seq, relevant: bool, respected: bool | null, note?, judge { kind, id, tier? } }
+judge({ principle, entries, examples }) → [ audit ]
+audit { type: "audit", principle, ref_seq, relevant: bool, respected: bool | null, note?, judge { kind, id, tier? } }
 ```
 
-`ref_seq` is the journal entry the verdict refers to (a `say`, a model call, an act). `relevant: false` means the principle did not apply there (then `respected` is null). `auditSummary(journal)` (pure) returns, per principle: `relevant`, `respected`, `broken`, `rate` (= respected / relevant), and the seqs of breaks.
+`ref_seq` is the journal entry the verdict is about. `auditSummary(journal)` returns per principle `{ relevant, respected, broken, rate, breaks: [ref_seq] }`.
 
-### 2.9 A sample file
+### 2.10 Differences from the pack's draft grammar, and how they were resolved
 
-```pdl
-@pack louis-round
-@author creator:toine
-@layer base
-@scope character:sam
-@lang en
-
-sam.dry: ~0.8 Dry, funny when uneasy. Short sentences.
-  > "C'est un pin sylvestre. Malade, celui-là."
-  x "Oh my god, I am so scared, what should I do?"
-sam.climb: ? Would she climb? Yes if asked twice, and she complains.
-sam.no-harm: !! Sam never harms an animal.
-sam.hide-quiet: ! She does not shout within 30 m of the hide.
-sam.hide-early: !! never go(station:hide) if not scene = platiere
-battery.low: when camera.battery < 10% once -> say(battery_low), image.degrade(0.3)
-jay.stop: when sound.played cue = jay_alarm if body within 20m of thing:hide -> stop(), say(jay_stop) {scope=scene:platiere horizon=scene}
-```
+| # | Point | Pack draft (`tools/pack-check.mjs`) | Canonical (this spec, `core/source.js`) | Why |
+|---|---|---|---|---|
+| 1 | Line grammar, header, `@meta`, `## sections`, `{id}` at end, `? … -- note`, `> [ctx] fr: … \| en: …`, `x … \| why:` | as written | **adopted unchanged** | readable, already used by ~200 statements; my first draft (`id:` prefix, `@scope` directives mid-file, indented examples) dropped |
+| 2 | Rule surface `when ev(args) [limits] [if …] -> act(args)`, limits before `if` | as written | **adopted unchanged** | one grammar for creators and models |
+| 3 | Event, condition and action names (`station.dwell`, `said.matches`, `reveal`, `speech.volume`…) | its own closed tables, not tied to PDL | **kept as the source vocabulary**, each compiled to a canonical PDL event, condition or template (§2.4 tables); the core gained what they needed: `look.at`, `beat.entered`, `story.ended`, `session.started`, `speech.changed` events; `beat`, `reach`, `ending`, `promised` conditions; `beat.set`, `story.end`, `light.raise`, `speech.set`, `camera.set off` effects; `class` and `loud` on intents; `station`, `dwell_s`, `silent_s` on `clock.tick` | the source stays the creators' words; the machine form stays one closed vocabulary |
+| 4 | My shorthand `camera.battery < 10%` and `x = y` tests | — | **dropped** in favour of calls (`clock.below(battery, 0.10)`) | one way to write it |
+| 5 | Default limits | none (fires every time) | **max 1, cooldown 0** unless `max N` / `cooldown` | P8-safe default: a rule that should repeat says so; the pack's rules all say `once` or `cooldown` where it matters |
+| 6 | Facts revealed by id (`reveal(f.x)`, `fact(f.x)`) | statement ids | a fact `{ subject: f.x, predicate: established, value: true }` | facts of the pack and facts written in play share one store |
+| 7 | Commitment classes (`promised(silence)`) | `pack.json commit_classes` | `intent.class` of a `commit` intent becomes the commitment's `class` | the translation tier classifies; the condition reads the commitment |
+| 8 | Stations (`stations.json`: `along_m`, `side_m`, `connects { to, cost_s, via?, establishes? }`, `within_reach`, `beat`, `posture`) | data | read by `sceneOf`: position `[side_m, along_m]`, adjacency from `connects`, reach = the `within_reach` list, a transition drains `cost_s` of battery and reveals `establishes`, entering a station enters its beat, `go` takes `via` | v1 is station-based (ADR 0003) |
+| 9 | Line bank (`lines/<lang>.json`, variants, `{ speaker, text }`) | data | `say { ref }` draws one variant with the seeded generator (same index in every language) | deterministic replay |
+| 10 | Absolutes in prose only | — | **added** the explicit `!! never call [if …]` form, compiled by code | lets a creator write an absolute that holds today, without a compile step |
+| 11 | Gauges | — | **added** `gauge id "label": …` (§2.5) | architecture "Gauges" (P10) |
+| 12 | Counter-example why, open-question note | required | required (parse error otherwise) | as the pack |
+| 13 | Parser | `tools/pack-check.mjs` has its own | `core/source.js` is the reference; both parse the pack identically today | follow-up: pack-check should import the parser from core (not done: outside this lot) |
 
 ---
 
@@ -244,19 +255,19 @@ A transaction with a horizon its kind does not admit is repaired to the kind's f
 
 `core/world.js`. Pure data, hashed for replay (§9.4).
 
-**5.1 Stations** (v1 is station-based, ADR 0003). `station { id, pos [x, z] m, heading deg, reach_m, next [ids] }`. Adjacency is the union of both directions of `next`. The body is always at a station (`body.station`); `go` moves to an adjacent one as a transition the engine plays. Free movement (`move`, `approach`, `frame`, `climb`, `descend`, `search`) is **reserved for v2**: those ops exist in the engine today and are rejected with `reserved_v2`.
+**5.1 Stations** (v1 is station-based, ADR 0003). `station { id, pos [x, z] m, heading deg, reach_m, next [ids], edges? [{ to, cost_s, via?, establishes? }], within? [thing ids], beat?, posture? }`, read from the pack's `stations.json` (§2.10 row 8). Adjacency is the union of both directions of `next` (from `edges` when given). A transition drains `cost_s` of battery, reveals the edge's `establishes` fact, sets the arrival posture, and entering a station of another beat emits `beat.entered`. The body is always at a station (`body.station`); `go` moves to an adjacent one as a transition the engine plays. Free movement (`move`, `approach`, `frame`, `climb`, `descend`, `search`) is **reserved for v2**: those ops exist in the engine today and are rejected with `reserved_v2`.
 
 **5.2 Body.** `{ station, yaw, pitch, height (share of standing eye height), held [thing ids] }`. The engine owns the body: the core mirrors what the executor reports (`station.entered`, `body.pose`, `body.held`).
 
-**5.3 Things.** `{ id, name, shapes, mass_kg, pos, size_m, fixed, horizon, expires, scene, tx, author }`. Pack things are `fixed` (story horizon). A thing is **within reach** when its distance to the current station is at most `reach_m + size_m / 2`, or it is held.
+**5.3 Things.** `{ id, name, shapes, mass_kg, pos, size_m, fixed, horizon, expires, scene, tx, author }`. Pack things (`place.json objets`) are `fixed` (story horizon). A thing is **within reach** when it is in the station's `within` list (when the station has one), else when its distance to the station is at most `reach_m + size_m / 2`; a held thing is always within reach.
 
 **5.4 Place and camera.** `place { fog, lamp, sun_height, weather }`, `camera { battery, drain_per_s, degrade, shake }`. Effective value = base, overridden by live overlays (now/scene effects) in order. The battery drains `drain_per_s` per second on `advance` and emits `camera.changed`.
 
-**5.5 Clock and scene.** `clock { t, scene, scene_t0 }`. Time only moves by `advance(dt)` (an input); nothing reads a wall clock.
+**5.5 Clock, scene, story.** `clock { t, scene, scene_t0, station_t0, voice_t }` (dwell and silence are derived from the last two); `story { beat, ending, beats, endings }`; `body.speech { volume, shorten }`; `camera.off`. Time only moves by `advance(dt)` (an input); nothing reads a wall clock.
 
 **5.6 Gauges** (P10). `gauge { id, label, value 0..1, rises [ { on: { event, match }, by, if? } ], fades { per_minute }, words { medium, high }, author, layer }`. On every event, each gauge whose `rises` match (and whose `if` holds) gains `by` (clamped to 1) and emits `gauge.changed { id, value, word, was }`; a gauge never rises on its own `gauge.changed`. On `advance` it fades; `gauge.changed` is emitted when its word changes. The word is `low` below `medium`, `high` from `high`. The engine knows no gauge name.
 
-**5.7 Facts, rules, constraints, principles, commitments.** Facts `{ subject, predicate, value, certainty, source?, commit?, tx, t, author, horizon, scene }` (newest live one answers a query); rules §7; constraints §8.4; principles §2.7; commitments §8.6.
+**5.7 Facts, rules, constraints, principles, commitments.** Facts `{ subject, predicate, value, certainty, source?, commit?, tx, t, author, horizon, scene }` (newest live one answers a query); rules §7; constraints §8.4; principles §2.8; commitments §8.6.
 
 ## 6. The closed vocabulary: kinds and bodies
 
@@ -271,6 +282,8 @@ Bounds are inclusive. A number outside them is clamped (repair). "intent" names 
 | `verb` | `look turn posture touch take shape make wait stop say go commit ask other`, required | |
 | `target` | ref (thing, dir, station, body) | |
 | `params` | `{ degrees, height, seconds, size_m 0.01..50, mass_kg, what }` | what the player quantified |
+| `class` | id | the pack's intent or commit class (`shout`, `bare_order`, `jay`…) as the translation tier classified it |
+| `loud` | bool | the player spoke loudly |
 | `condition`, `behaviour` | text ≤ 200 | required when `verb = commit` (§8.6) |
 | `commit` | id | the commitment's id (default `c<seq>`) |
 
@@ -278,7 +291,7 @@ Bounds are inclusive. A number outside them is clamped (repair). "intent" names 
 
 | op | Fields | Engine today |
 |---|---|---|
-| `go` | `to` station ref, required (intent: target) | transition (new in v1) |
+| `go` | `to` station ref, required (intent: target); `via` id (which edge, when two lead there) | transition (new in v1) |
 | `look` | one of `target` (thing, dir, station), `pitch` −60..75, `yaw` −180..180 | `viser`, `regarder` |
 | `turn` | `degrees` −180..180, required | `tourner` |
 | `posture` | `height` 0.35..1, required | `posture` |
@@ -298,8 +311,12 @@ Bounds are inclusive. A number outside them is clamped (repair). "intent" names 
 | `thing.remove` | `target` required | `objet retirer` |
 | `sound.play` | `cue` (a cue of the pack, required), `at` (thing, body, station; default body), `gain` 0..0.9 (default 0.5) | `jouerBruit` with a recipe |
 | `place.set` | one of `fog` 0..0.06, `lamp`, `sun_height` −20..90, `weather` (`clear`, `veil`) | `patchScene` (ambiance) |
-| `camera.set` | one of `battery`, `degrade`, `shake` (0..1) | capteur (new) |
+| `camera.set` | one of `battery`, `degrade`, `shake` (0..1), `off` | capteur (new) |
+| `light.raise` | `degrees` −30..30, required (relative sun height) | `patchScene` soleil |
+| `speech.set` | one of `volume` (`whisper`, `low`, `normal`), `shorten` 0..1 | voice (new) |
 | `scene.start` | `id` required | — (new) |
+| `beat.set` | `id` required | — (story state) |
+| `story.end` | `id` (an ending family) required | écran de fin |
 
 ### 6.4 Shapes (the engine's vocabulary, English keys)
 
@@ -323,7 +340,9 @@ Bounds are inclusive. A number outside them is clamped (repair). "intent" names 
 
 | Event | Fields | Emitted by |
 |---|---|---|
-| `intent.heard` | verb, target, text | intent |
+| `session.started` | — | `start()` |
+| `intent.heard` | verb, target, text, class, loud | intent |
+| `look.at` | target, s (seconds the gaze rests) | act look (s = 0); engine observation |
 | `act.done` | op, target, to | every act |
 | `said` | text, lang, ref | act say |
 | `sound.played` | cue, at | effect sound.play |
@@ -333,7 +352,9 @@ Bounds are inclusive. A number outside them is clamped (repair). "intent" names 
 | `place.changed` | fog, lamp, sun_height, weather | place.set, overlay expiry |
 | `station.entered` / `station.left` | id | executor, on go |
 | `scene.started` | id | scene.start |
-| `clock.tick` | t, scene_t | advance |
+| `clock.tick` | t, scene_t, station, dwell_s, silent_s | advance |
+| `beat.entered` / `story.ended` | id | station of another beat, beat.set / story.end |
+| `speech.changed` | volume, shorten | speech.set |
 | `commitment.due` | commit, rule | a tendency rule firing |
 | `gauge.changed` | id, value, word | gauges |
 
@@ -343,7 +364,7 @@ Engine observations `body.pose`, `body.held` and bookkeeping events (`rule.regis
 
 ### 7.2 Conditions (`if`, all must hold)
 
-`{ near: { a, b, within_m } }` (refs; body = its station's position) · `{ fact: { subject, predicate, value?, min_certainty? } }` · `{ state: { path, eq|ne|lt|le|gt|ge } }` with path in `camera.battery camera.degrade camera.shake place.fog place.lamp place.sun_height clock.t clock.scene_t body.station body.height` · `{ scene: { id } }` · `{ station: { id } }` · `{ gauge: { id, word? , gt?, lt? } }` · `{ not: cond }`.
+`{ near: { a, b, within_m } }` (refs; body = its station's position) · `{ fact: { subject, predicate, value?, min_certainty? } }` · `{ state: { path, eq|ne|lt|le|gt|ge } }` with path in `camera.battery camera.degrade camera.shake place.fog place.lamp place.sun_height clock.t clock.scene_t body.station body.height` · `{ scene: { id } }` · `{ station: { id } }` · `{ beat: { id } }` · `{ reach: { target } }` · `{ ending: { id? } }` · `{ promised: { class } }` · `{ gauge: { id, word? , gt?, lt? } }` · `{ not: cond }`.
 
 ### 7.3 Firing
 
@@ -389,7 +410,7 @@ A `scene` rule only fires in the scene it was registered in. A `tendency` rule d
 
 ### 8.4 Absolute constraints
 
-`constraint { id, forbid { kind, op?, fields? }, if? [cond], author, layer }`, compiled from `!!` (§2.5). A transaction matching `forbid` (same kind, same op, every given field equal) while all `if` conditions hold is rejected with `{ why: constraint, value: <id> }`, whoever wrote it, including rule-fired transactions.
+`constraint { id, forbid { kind, op?, fields? }, if? [cond], author, layer }`, compiled from `!!` (§2.4, §2.7). A transaction matching `forbid` (same kind, same op, every given field equal) while all `if` conditions hold is rejected with `{ why: constraint, value: <id> }`, whoever wrote it, including rule-fired transactions.
 
 ### 8.5 Budget
 
@@ -406,46 +427,68 @@ A `scene` rule only fires in the scene it was registered in. A `tendency` rule d
 
 ### 8.6 Commitments (pillar 9, P6)
 
-1. The translation tier emits `intent { verb: commit, condition, behaviour, commit: <id> }` → commitment `proposed`.
+1. The translation tier emits `intent { verb: commit, class?, condition, behaviour, commit: <id> }` → commitment `proposed` (its `class` is what `promised(class)` tests).
 2. The character answers in character (`act say`), then a **fact** authored by the player, with `commit { id, party: <character>, status: accepted | amended | refused, strength: hard | tendency }` (the promise and its wording).
 3. If accepted or amended, a **rule** authored by the player with `commit: <id>`, horizon scene or story, `strength` as promised.
 4. When the rule fires: the commitment becomes `due`. **hard**: the templates run (linked by `cause.commit`) and the session records an engine fact `kept` (or `broke` if one was rejected) with `commit.status`. **tendency**: `commitment.due` is emitted and a model tier resolves it by submitting acts and a fact with status `kept` or `broken` (cause: the firing).
 5. Lifecycle (validated): `proposed → accepted | amended | refused`; `accepted | amended → due → kept | broken`; a `cancel commit:<id>` breaks it.
 
-## 9. Session, executor, journal, replay
+## 9. Ports, three clocks, session, journal, replay
 
-### 9.1 The executor interface (`core/world.js`, `EXECUTOR`)
+### 9.1 Ports (P21, `core/ports.js`)
 
-The engine implements: `go, look, turn, posture, touch, take, shape, wait, stop, say, placeThing, changeThing, removeThing, playSound, setPlace, setCamera, startScene`. Each call is `(args, ctx)` with `ctx { world (read-only), seq, seed, rng }` and returns events (`station.left/entered`, `body.pose`, `body.held`, …). Calls never change the core world; the session applies the reported events. Asynchronous observations come back through `session.observe(event)`, which is an input. `core/paper-world.js` implements it in memory; `tests/core-executor.contract.mjs` is the contract suite both implementations run.
+| Port | Interface | Adapters |
+|---|---|---|
+| engine | the executor below | `core/paper-world.js` (tests); the page (M2, §12) |
+| model | `embed(texts)`, `decide({ tier, question, options?, state? }) → { answer, p?, uncertain? }`, `generate({ tier, purpose, context }) → { tokens }` (ADR 0004; tiers are roles, models are configuration) | `core/canned-model.js` (tests); artifact and proxy adapters (later lot) |
+| input | `subscribe(handler)`; events `{ kind: speech, text, lang, loud? }`, `{ kind: look, target, s }` | the page (later) |
+| store | `readPack`, `readLibrary`, `appendJournal`, `readJournal` | `tools/pack-check.mjs` `loadPack` / `loadLibrary` (files) |
 
-### 9.2 The journal (`core/journal.js`)
+`missing(port, impl)` lists what an adapter lacks. Whatever a model returns goes through `validate`; the core never trusts a port.
+
+### 9.2 The executor interface (`core/world.js`, `EXECUTOR`)
+
+The engine implements: `go, look, turn, posture, touch, take, shape, wait, stop, say, placeThing, changeThing, removeThing, playSound, setPlace, setCamera, setSpeech, startScene, endStory`. Each call is `(args, ctx)` with `ctx { world (read-only), seq, seed, rng }` and returns events (`station.left/entered`, `body.pose`, `body.held`, …). Calls never change the core world; the session applies the reported events. Asynchronous observations come back through `session.observe(event)`, which is an input. `core/paper-world.js` implements it in memory; `tests/core-executor.contract.mjs` is the contract suite both implementations run.
+
+### 9.3 Three clocks (P20, `core/clocks.js`, `LOOPS` in `core/session.js`)
+
+| Loop | Budget (first visible effect) | Who | Job |
+|---|---|---|---|
+| `now` | 500 ms | reflex code, then `decide` at the translation tier | the intent and the immediate reaction |
+| `scene` | 8 s | `generate` at the staging tier | the full reaction: lines, things, facts |
+| `story` | 120 s, continuous | the background tier | rules, the frontier, arcs |
+
+`createClocks({ session, model, clock })`: `hear(utterance)` runs the now loop (decide the intent, submit it; decide the reaction, submit it) and returns as soon as that is done; it opens a `scene` model call (journaled `status: pending`) whose answer lands later (`status: landed`, `ref_seq`) and is submitted with `cause { tx: <the call>, amends?: <a now transaction> }`. Nothing in the now loop awaits a slower loop. Every transaction entry records `loop`, `latency_ms`, `budget_ms` and `late`; a late present shows up in the journal as a defect. Rule-fired transactions inherit the loop of their cause.
+
+### 9.4 The journal (`core/journal.js`)
 
 JSON lines, English keys, append-only. Every entry has `seq`, `t`, `type`.
 
 | type | Keys | Input (replayed) |
 |---|---|---|
 | `session` | v, seed, scene, budget | header |
-| `tx` | author, tier, horizon, kind, status, repair, reasons, cause, depth, body, ttl, timings, input, proposed | yes when `input: true` (the `proposed` form is re-submitted); rule-fired ones are derived |
+| `tx` | loop, latency_ms, budget_ms, late, author, tier, horizon, kind, status, repair, reasons, cause, depth, body, ttl, timings, input, proposed | yes when `input: true` (the `proposed` form is re-submitted); rule-fired ones are derived |
 | `event` | event, data, cause (seq) | no |
 | `rule` | rule, status (fired, blocked), reason, event, cause, author, layer | no |
 | `advance` | dt | yes |
 | `observe` | event, data | yes |
 | `principles` | records | yes |
-| `model_call` | tier, purpose, character, principles (ids of soft principles in scope), timings | yes |
+| `model_call` | loop, status (done, pending, landed), ref_seq, tier, purpose, character, principles (ids of soft principles in scope), gauges ([{ id, value, word, mentioned_by }] for gauges those principles mention), latency_ms, timings | yes |
+| `start` | — | yes (emits `session.started`) |
 | `audit` | principle, ref_seq, relevant, respected, note, judge | yes |
 | `hash` | hash | yes (re-computed) |
 
 `timings` (`model_ms`, …) are wall-clock measurements: kept, never compared.
 
-### 9.3 Session loop (`core/session.js`)
+### 9.5 Session loop (`core/session.js`)
 
-`submit(tx)` → id and time assigned → `validate` → journal → apply (core state + executor call) → events (journaled) → gauges → rules → their transactions queued, processed breadth-first through the same path. Other inputs: `advance(dt)`, `observe(ev)`, `loadPrinciples(records)` (constraints and gauges installed; compiled rules submitted as creator transactions with `principle`), `modelCall({ tier, purpose, character, timings })`, `audit(records)`, `checkpoint()`.
+`submit(tx)` → id and time assigned → `validate` → journal → apply (core state + executor call) → events (journaled) → gauges → rules → their transactions queued, processed breadth-first through the same path. Other inputs: `start()`, `advance(dt)`, `observe(ev)`, `loadPrinciples(records)` (constraints and gauges installed; compiled rules submitted as creator transactions with `principle`), `modelCall({ tier, purpose, character, timings })`, `audit(records)`, `checkpoint()`.
 
-### 9.4 Determinism and replay
+### 9.6 Determinism and replay
 
 The state hash is a 53-bit hash of the canonical JSON of the world (sorted keys, numbers to 1e-6). Randomness comes only from `rngFor(seed, seq)`. `replay(journal, executor, seed?, { edit })` re-runs the inputs in a fresh session and returns `{ session, hash, journal }`; with the same executor and seed it reproduces every entry and the hash. `edit(entry)` returns a replacement input (what-if: the creator edits a rule and replays). `diff(a, b)` compares entry by entry (timings ignored) and lists the rules fired on each side and the checkpoint hashes.
 
-**Golden journals** (ADR 0007): `tests/golden/<pillar>.jsonl`, one per pillar (p1 transactions, p2 horizons, p3 model rule, p8 principles, p9 commitment), written by `node tools/core-golden.mjs` from `tests/core-fixture.mjs` and replayed by `tests/core-golden.test.mjs`.
+**Golden journals** (ADR 0007): `tests/golden/<name>.jsonl`, four journals: `p1-transactions`, `p2-horizons`, `p3-model-rule` (plus a gauge and an absolute from source), and `p8-louis-pack` (the real pack: two layers, pattern rules, a compiled absolute, the jay commitment made at the third station and kept at the fifth, battery clock, audit, loops). Written by `node tools/core-golden.mjs` from `tests/core-fixture.mjs`, replayed by `tests/core-golden.test.mjs`. A journal is JSON lines; the first line is the `session` header with the scene; inputs carry `input: true`.
 
 ## 10. The token form
 
@@ -455,7 +498,7 @@ For models: one transaction per line, compact, line-oriented, exact round trip t
 tx        := head (SP field)* NL (SP SP cont NL)*
 head      := ['#' int SP] ['@' number SP] author SP horizon SP kind ['.' op] [SP '^' cause] [SP '~' ttl]
 author    := ('p' | 'c' | 'm' | 'e') ':' id ['/' tier] ['+' layer]       player, creator, model, engine
-cause     := [int] ['/' rule-id] ['!' commit-id]
+cause     := [int] ['/' rule-id] ['!' commit-id] ['=' amended-seq]
 field     := key '=' value
 key       := segment ('.' segment)*            dotted keys build nested objects
 value     := number | 'true' | 'false' | 'null' | bare | json-string | json-array | json-object
@@ -473,7 +516,7 @@ comment   := '//' anything                     on its own line, ignored
 
 ## 11. Ten worked examples: « Louis's Round »
 
-Sam walks her missing brother Louis's forest round wearing his bodycam; the player is the voice on the feed. The place is `tests/core-fixture.mjs` (`LOUIS`): six stations `trailhead → path → pines → platiere → hide-edge → hide`, things `pine-mark`, `pine-3`, `hide`, `jay-oak`, cues `jay_alarm`, `branch_snap`, `steps_leaves`, and a line bank in French and English. The examples run **in order in one session** starting with Sam at `path`; `tests/core-pdl.test.mjs` checks that each token block parses to the JSON beside it, serializes back to the same text, and gets the statuses in its `// expect` line.
+Sam walks her missing brother Louis's forest round wearing his bodycam; the player is the voice on the feed. The place is `tests/core-fixture.mjs` (`LOUIS`): six stations `trailhead → path → pines → platiere → hide-edge → hide`, things `pine-mark`, `pine-3`, `hide`, `jay-oak`, cues `jay_alarm`, `branch_snap`, `steps_leaves`, and a line bank in French and English (a simplified paper place; the real pack's stations are used by the golden `p8-louis-pack`). The examples run **in order in one session** starting with Sam at `path`; `tests/core-pdl.test.mjs` checks that each token block parses to the JSON beside it, serializes back to the same text, and gets the statuses in its `// expect` line.
 
 **1. The player speaks (intent, now).** "Regarde la marque sur ce pin." The translation tier writes the intent.
 
@@ -562,7 +605,7 @@ m:stager/stage scene effect.thing.place id=cairn name="small cairn" shapes=[{"sh
 [{"author":{"kind":"model","id":"translator","tier":"translate"},"horizon":"now","kind":"intent","body":{"text":"fais un petit cairn, à hauteur de genou","lang":"fr","verb":"make","params":{"size_m":0.5}}},{"author":{"kind":"model","id":"stager","tier":"stage"},"horizon":"scene","kind":"effect","body":{"op":"thing.place","id":"cairn","name":"small cairn","shapes":[{"shape":"ball","p":[0,0.3,0],"size":[1.4,0.6,1.2],"material":"gres"},{"shape":"ball","p":[0,0.9,0],"size":[0.9,0.6,0.8],"material":"gres"}],"mass_kg":12}}]
 ```
 
-**9. A commitment (intent commit → say → fact + rule by the player).** "Si tu entends le geai, arrête-toi et baisse-toi." She amends it: she will stop and crouch, not lie in the mud. Made here at `path`, it fires two stations later at `platiere` (golden p9), where the journal links `stop`, `posture`, `say commit_recall` and the `kept` fact to `c.jay`.
+**9. A commitment (intent commit → say → fact + rule by the player).** "Si tu entends le geai, arrête-toi et baisse-toi." She amends it: she will stop and crouch, not lie in the mud. Made here at `path`, it would fire two stations later. The same commitment on the real pack (golden `p8-louis-pack`) is made at `fallen-pine` and kept at `approach`, where the journal links `stop`, `posture`, `say commit.keeping` and the `kept` fact to `c.jay`.
 
 ```pdl-tx
 // expect accepted accepted accepted accepted
@@ -612,12 +655,16 @@ How the page would implement the executor by calling what exists (`src/main.js`,
 | `setPlace` | `patchScene({ambiance:{brume, lampe, soleil:{hauteur}, meteo}})` | fog→brume, lamp→lampe, weather clear/veil → clair/voile | — |
 | `setCamera` | none (capteur in `camera.frag` has no degrade uniform) | | **new**: degrade/shake uniforms |
 | `startScene` | `applyFiche` / `patchScene` of the pack's scene | | scene table in the pack |
+| `setSpeech` | `voixP` (rate, volume) and the pensée length | whisper → low volume; shorten → `couperPensee` budget | **new** |
+| `endStory` | `executer({type:'fin', id, titre, replique})` | ending family → title and line from the pack | — |
 | observations | `window.balade.corps()`, `percevoir()` | → `session.observe({event:'body.pose'})` | — |
 
 ## 13. Reserved, deviations, open questions
 
 **Reserved for v2**: free movement acts (§5.1), time-based rules beyond `clock.tick` matching, shaping steps in PDL, tone driving the voice, a compact shape sub-notation in tokens (shapes are JSON literals today).
 
-**Deviations from `docs/architecture.md`**: `cause` is an object `{ tx, rule, commit }` rather than one id (a rule-fired transaction needs both the firing and the rule); transaction ids are journal sequence numbers; event names differ from the architecture's examples (`body.near` is a condition `near`, `clock.below` is a `camera.changed`/`clock.tick` match, `said.matches` is `said` with `contains`); `station.entered/left`, `commitment.due` and `gauge.changed` are added; the `place` and `camera` vocabularies are limited to what the engine has (fog, lamp, sun height, weather; battery, degrade, shake).
+**Deviations from `docs/architecture.md`**: `cause` is an object `{ tx, rule, commit, amends }` rather than one id (a rule-fired transaction needs both the firing and the rule); transaction ids are journal sequence numbers; event names differ from the architecture's examples (`body.near` is a condition `near`, `clock.below` is a `camera.changed`/`clock.tick` match, `said.matches` is `said` with `contains`); `station.entered/left`, `commitment.due` and `gauge.changed` are added; the `place` and `camera` vocabularies are limited to what the engine has (fog, lamp, sun height, weather; battery, degrade, shake).
+
+**Beats and scenes.** The pack's beats (path, platiere, hide) are story state (`story.beat`), not PDL scenes: a scene change expires scene-horizon items, and the pack's `@horizon scene` rules are meant to hold across beats. Whether a beat change should also start a scene is open.
 
 **Open**: whether `!` prose compilation needs the creator's approval per firing context or once per pack version (once, here); whether a `refused` commitment should also produce a principle for the audit; the judge tier (ADR 0004).
