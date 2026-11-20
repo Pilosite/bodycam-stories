@@ -161,13 +161,13 @@ await page.evaluate(() => balade.pauseQuand('ramasser', 0.5));     // figé quan
 await quand(() => balade.enPause());
 const o4 = await objet(idE);
 verifier(o4 && o4.m > 2.5, `il s'est éloigné pour chercher : ${o4 && o4.m} m`);
-verifier((await page.evaluate(() => balade.faconnage().mains)) === 3, 'une main ramasse');
+verifier((await page.evaluate(() => balade.faconnage().mains)) === 9, 'une main ramasse');
 await capture('5-ramassage', 'il ramasse : la main au sol');
 await quand(() => balade.faconnage().file.some(f => f.i >= 0 && f.total > 0));
 const ram = await page.evaluate(() => balade.objets().find(o => /ramass/.test(o.nom || '')));
 verifier(ram, 'ce qu\'il a rapporté est posé près de la crotte : ' + (ram && ram.nom));
 const geste = await page.evaluate(() => balade.faconnage().file[0]);
-verifier(geste.total >= 8 && geste.total <= 12.5 && geste.n >= 8, `geste continu : ${geste.total} s, ${geste.n} transitions`);
+verifier(geste.total >= 12 && geste.total <= 16.5 && geste.n >= 8, `geste continu : ${geste.total} s, ${geste.n} transitions`);
 // la planche : PLANCHE images réparties sur le geste, le corps figé à chaque fois (l'image s'affine), les mains dans le champ
 const NP = +(process.env.PLANCHE || 14), PP = +(process.env.PASSES_PLANCHE || 4), planche = [];
 for (let k = 0; k < NP; k++) {
@@ -185,7 +185,7 @@ for (let k = 0; k < NP; k++) {
   await page.evaluate(([p, g]) => { balade.grains(g); balade.resolution(p); balade.pause(false); }, [+px, GESTES]);
 }
 verifier(planche.length >= 12, `planche du façonnage : ${planche.length} images`);
-verifier(planche.filter(p => p.mains === 6).length >= planche.length - 1, 'les deux mains dans le champ pendant le geste');
+verifier(planche.filter(p => p.mains === 18).length >= planche.length - 1, 'les deux mains dans le champ pendant le geste');
 verifier(new Set(planche.map(p => p.geste)).size >= 5, 'gestes vus : ' + [...new Set(planche.map(p => p.geste))].join(', '));
 writeFileSync(join(out, 'planche.html'), `<!doctype html><meta charset=utf-8><style>body{margin:0;background:#111;color:#ddd;font:12px sans-serif;display:grid;grid-template-columns:repeat(${PC ? 4 : 7},1fr);gap:4px;padding:4px}img{width:100%;display:block}</style>`
   + planche.map(p => `<figure style="margin:0"><img src="${p.nom}.jpg"><figcaption>${p.t.toFixed(1)} s · ${p.geste}</figcaption></figure>`).join(''));

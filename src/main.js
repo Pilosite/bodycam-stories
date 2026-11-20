@@ -542,6 +542,8 @@ function packRecette(r,row){
   put(40,[N(rg.echelle,0,300,30),0,0,0]);
   (Array.isArray(re.bosses)?re.bosses:[]).filter(isObj).slice(0,2).forEach((b,k)=>{
     put(41+k*2,[...ech(b.echelle,4),N(b.force,0,.05,0)]); put(42+k*2,[b.fbm?1:0,N(b.decalage,-100,100,0),0,0]); });
+  const tb=(Array.isArray(r.taches)?r.taches:[]).filter(isObj).slice(0,4).map(t=>t.brillance!==undefined?N(t.brillance,0,1,0)+1:0);
+  while(tb.length<4) tb.push(0); put(46,tb);                       // brillance propre à une tache : humide par plaques, mate ailleurs
 }
 /* Chaque surface pointe vers une recette. Les kits fixent les surfaces par défaut ; la fiche peut les remplacer (champ "surfaces"). */
 function buildMats(f){
@@ -2576,7 +2578,7 @@ function preparerGeste(id,op){
   let tasL=[], tasF=[];
   if(tas){ const Rp=repereObjet(tas); tasF=(tas.formes||[]).slice();
     tasL=tasF.map(f=>Object.assign({},f,{p:versLocal(R,versMonde(Rp,f.p)),taille:f.taille.map(v=>v*Rp.ech/E),cap:(f.cap||0)+(Rp.yaw-R.yaw)*180/Math.PI})); }
-  const apres=op.etapes[op.etapes.length-1], T=MENEUR.gesteFaconnage(avant,apres,tasL);
+  const apres=op.etapes[op.etapes.length-1], T=MENEUR.gesteFaconnage(avant,apres,tasL,{echelle:R.ech});
   const autres=L.filter(x=>x&&x.id!==id&&!(x.visible===false||cacheObj.has(x.id))).reduce((n,x)=>n+Math.min(24,(x.formes||[]).length),0);
   const dom=(T[0]&&T[0].a.find(f=>/^m/.test(f._k))||{}).matiere;
   return {T,R,E,dom,tas:tas&&tas.id,tasF,pris:new Set(),emp:[],place:Math.max(8,Math.min(22,64-autres-2*MAINS_N-2))};   // 2 : les empreintes
@@ -2615,6 +2617,16 @@ function mainsGeste(tr,u,t,F,G){
   if(op==="petrir"){ const c=W(masse.p), r=rayon(masse), m=mainsPetrir(c,r,t);   // la masse s'écrase entre les paumes
     const sq=(m.pr[0]+m.pr[1])/2; masse.taille=[masse.taille[0]*(1-.1*sq),masse.taille[1]*(1+.05*sq),masse.taille[2]*(1+.05*sq)];
     return {H:m.H,appui:m.appui,vise:c}; }
+  if(tr.sol&&(op==="diviser"||op==="rouler"||op==="poser")){   // une grosse boule : arrachée à deux mains, roulée au sol, portée à deux mains
+    const r=rayon(X), hX=haut(X), w=t*5.5;
+    if(op==="rouler"){ const H=[-1,1].map((s,i)=>{ const pr=.5+.5*Math.sin(w+(s>0?0:Math.PI)), n=v3n(v3a(v3a([0,0,0],v,-.75),[0,-1,0],.65));
+        const c=v3a(v3a(Xc,v,(r+e)*.72),up,(hX+e)*.62+pr*.01); return main(v3a(c,sx,s*r*.38),n,"plat",v3a(v3a([0,0,0],v,-.6),up,.8)); });
+      return {H,tenu:{cle:tr.cle,mains:[0,1]},appui:H.map((h,i)=>({i,p:h.p,n:h.n,k:.5})),vise:Xc}; }
+    const dessus=op==="poser"&&u>.62, pr=dessus?Math.sin(Math.PI*Math.min(1,(u-.62)/.38)):0;
+    const H=[-1,1].map(s=>dessus?main(v3a(v3a(Xc,up,hX+e-pr*.015),sx,s*r*.4),[0,-1,0],"plat",v3a(v,[0,0,0],-1))
+      :main(v3a(v3a(Xc,sx,s*(r*.92+e)),v,r*.25),v3a([0,0,0],sx,-s),"coupe",v3a(up,v,-.4)));
+    if(op==="diviser"&&u<.25){ const M=W(masse.p), rM=rayon(masse); H.forEach((h,i)=>{ const s=i?1:-1, g=v3a(v3a(M,sx,s*rM*.7),v,rM*.5); h.p=v3a(g,v3s(h.p,g),u/.25); }); }
+    return {H,tenu:(op==="diviser"&&u>.2)||(op==="poser"&&u<.85)?{cle:tr.cle,mains:[0,1]}:null,appui:H.map((h,i)=>({i,p:h.p,n:h.n,k:dessus?pr:.4})),vise:v3a(Xc,up,-r*.3)}; }
   if(op==="diviser"){ const M=W(masse.p), rM=rayon(masse), rX=rayon(X), w=Math.min(1,u/.25);
     const top=v3a(Xc,up,haut(X)+e), saisie=v3a(v3a(M,up,haut(masse)*.6+e),v,rM*.2);   // la main droite saisit dans la boule, puis tire
     const pd=u<.25?v3a(saisie,v3s(top,saisie),0):top;
@@ -2673,18 +2685,22 @@ function mainsVers(H,dt,quelles=[0,1]){                          // quelles : le
 }
 function objetMains(Hs,quelles=[0,1]){
   const M=MAINS, {e,f,r}=corpsAxes(), q=versFiche(cam.x,cam.z), rad=Math.PI/180;
-  const ep=M.coude||[.2,-.34,-.02], ma=M.manche||{}, ab=M.avant_bras||{}, pa=M.paume||{}, dg=M.doigts||{}, po=M.pouce||{}, li=+M.lisse||.011;
+  const ep=M.epaule||[.19,-.13,-.08], ma=M.manche||{}, ab=M.avant_bras||{}, pa=M.paume||{}, dg=M.doigts||{}, po=M.pouce||{}, li=+M.lisse||.011;
   const pt=pa.taille||[.082,.026,.088], DL=dg.long||[.074,.082,.077,.062], dr=dg.rayon||.0092, pas=dg.pas||.0205, PL=po.long||[.042,.036], pr=po.rayon||.0115;
   const objs=[];
   Hs.forEach((H,i)=>{ if(!quelles.includes(i)) return;
     const o={id:"·main"+i,nom:"",devant:q.devant,cote:q.cote,formes:[]}, R=repereObjet(o), s=i?1:-1;
     const peau=(f0,c,d,t,col,mat)=>o.formes.push(axeForme(R,f0,c,d,t,col||pa.couleur||"#c39577",mat||pa.matiere||"peau",{lisse:li}));
-    const E=[e[0]+r[0]*s*ep[0]+f[0]*ep[2],e[1]+ep[1],e[2]+r[2]*s*ep[0]+f[2]*ep[2]], n=H.n, P=H.p;
-    let d0=H.d||v3s(P,E); d0=v3s(d0,v3a([0,0,0],n,v3d(d0,n))); const d=v3n(v3d(d0,d0)>1e-6?d0:f), sl=v3x(n,d), uT=i?sl:v3s([0,0,0],sl);
-    const Wr=v3a(P,d,-(pt[2]/2+.004)), fa=v3s(Wr,E), La=Math.hypot(...fa), da=v3n(fa), ra=ab.rayon||.026;
-    // manche (dure), avant-bras, paume
-    const lm=ma.long||.09, rm=ma.rayon||.05;
-    o.formes.push(axeForme(R,"capsule",v3a(E,da,lm/2-.03),da,[2*rm,Math.max(.01,lm-2*rm),2*rm],ma.couleur||"#2b2f36",ma.matiere||"tissu"));
+    const Sh=[e[0]+r[0]*s*ep[0]+f[0]*ep[2],e[1]+ep[1],e[2]+r[2]*s*ep[0]+f[2]*ep[2]], n=H.n, P=H.p;
+    let d0=H.d||v3s(P,Sh); d0=v3s(d0,v3a([0,0,0],n,v3d(d0,n))); const d=v3n(v3d(d0,d0)>1e-6?d0:f), sl=v3x(n,d), uT=i?sl:v3s([0,0,0],sl);
+    const Wr=v3a(P,d,-(pt[2]/2+.004)), ra=ab.rayon||.026, lm=ma.long||.3, rm=ma.rayon||.045, lb=ab.long||.25;
+    // le coude : bras et avant-bras de longueurs données, plié vers le dehors et le bas (au-delà de la portée : tendu)
+    const sw=v3s(Wr,Sh), dw=Math.hypot(...sw)||1, uw=sw.map(x=>x/dw), xe=Math.min(lm,(lm*lm-lb*lb+dw*dw)/(2*dw)), he=Math.sqrt(Math.max(0,lm*lm-xe*xe));
+    let pl=v3a(v3a([0,0,0],r,s),[0,-1,0],.8); pl=v3n(v3s(pl,v3a([0,0,0],uw,v3d(pl,uw))));
+    const E=dw>=lm+lb?v3a(Sh,uw,dw*lm/(lm+lb)):v3a(v3a(Sh,uw,xe),pl,he);
+    const fa=v3s(Wr,E), La=Math.hypot(...fa), da=v3n(fa), ub=v3s(E,Sh), Lb=Math.hypot(...ub);
+    // bras dans sa manche (dure), avant-bras, paume
+    o.formes.push(axeForme(R,"capsule",v3a(Sh,ub,.5),ub,[2*rm,Math.max(.01,Lb-2*rm+.03),2*rm],ma.couleur||"#2b2f36",ma.matiere||"tissu"));
     peau("capsule",v3a(E,fa,.5),da,[2*ra,Math.max(.01,La-2*ra),2*ra],ab.couleur,ab.matiere);
     peau("boule",P,n,[pt[0],pt[1],pt[2]]);
     // quatre doigts : de l'index (côté pouce) à l'auriculaire, fléchis à la jointure vers la paume
@@ -3167,6 +3183,7 @@ window.balade={
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },
   remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },   // fragments des grains de la caméra sur la prochaine image (v3Compter)
   regulateur(){ return { niveau:REG.niveau, ms:REG.ms, cible:regCible(), etat:regEtat(), puce:GT.ms, total:GT.total||0 }; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
+  mainsP:()=>mainsEtat.H?mainsEtat.H.map(h=>h.p.map(v=>+v.toFixed(3))):null,   // essais : centres des paumes
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,
     file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4).toFixed(2):-1,
       total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0}))}),

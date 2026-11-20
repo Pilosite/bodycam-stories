@@ -2030,7 +2030,7 @@
    }
   },
   "pate-organique": {
-   "nom": "pâte organique humide (excrément, boue grasse, terre mouillée pétrie) : brun sombre, marbré, luisant, finement bosselé",
+   "nom": "pâte organique humide (excrément, boue grasse, terre mouillée pétrie) : brun sombre, marbré, mate, humide et luisante par plaques, finement bosselée",
    "espace": "volume",
    "couleur": "forme",
    "variation": {
@@ -2061,7 +2061,20 @@
       0.62,
       0.78
      ],
-     "decalage": 7
+     "decalage": 7,
+     "brillance": 0.03
+    },
+    {
+     "couleur": "#24170c",
+     "force": 0.3,
+     "echelle": 9,
+     "seuils": [
+      0.56,
+      0.7
+     ],
+     "fbm": true,
+     "decalage": 13,
+     "brillance": 0.62
     }
    ],
    "relief": {
@@ -2080,7 +2093,7 @@
      }
     ]
    },
-   "brillance": 0.45
+   "brillance": 0.1
   },
   "peau": {
    "nom": "peau de main, rosée aux jointures, pores fins, un peu luisante",

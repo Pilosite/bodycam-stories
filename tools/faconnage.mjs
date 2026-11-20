@@ -26,12 +26,13 @@ await page.goto('file://' + join(root, 'dist/index.html'));
 await page.waitForFunction(() => window.__state && window.__state.n >= 2, null, { timeout: 600000 });
 console.log(sec(), 'page prête');
 const ids = await page.evaluate(([chose, vers, ram]) => {
+  { const c = balade.corps(); balade.placer(c.x, c.z, c.yaw + Math.PI); }   // dos au soleil levant : l'ouvrage éclairé
   const B = MODELES, md = MENEUR.modeleDe(B, chose), fm = MENEUR.formesModele(md.modele, chose);
   balade.objet({ type: 'objet', op: 'creer', ou: 'devant', distance: 0.9, objet: { id: 'f-1', nom: md.modele.nom, formes: fm.formes, degage: 0 } });
   const tas = MENEUR.ramassage(B, ram);
   balade.objet({ type: 'objet', op: 'creer', differe: 'f-1', objet: { id: 'f-2', nom: tas.nom, formes: tas.formes, degage: 0 } });
   const mt = MENEUR.modeleDe(B, vers, { transforme: true }), ap = MENEUR.formesTransformees(mt.modele, fm.formes);
-  balade.agir([{ type: 'posture', hauteur: 0.5 }, { type: 'faconner', objet: 'f-1' }, { type: 'posture', hauteur: 1 }]);
+  balade.agir([{ type: 'rejoindre', objet: 'f-1' }, { type: 'posture', hauteur: 0.5 }, { type: 'faconner', objet: 'f-1' }, { type: 'posture', hauteur: 1 }]);
   balade.objet({ type: 'objet', op: 'faconner', id: 'f-1', etapes: [ap.formes], nom: mt.modele.nom, consomme: ['f-2'] });
   return { avant: fm.formes.length, apres: ap.formes.length };
 }, [CHOSE, VERS, RAMASSE]);
@@ -40,7 +41,9 @@ await page.waitForFunction(() => balade.faconnage().file.some(f => f.total > 0),
 const geste = await page.evaluate(() => balade.faconnage().file[0]);
 console.log(sec(), `geste : ${geste.total} s, ${geste.n} transitions`);
 const planche = [];
-const lire = () => page.evaluate(() => document.querySelector('canvas').toDataURL('image/jpeg', 0.92));
+const lire = () => page.evaluate(() => new Promise(ok => requestAnimationFrame(() => {   // dans la même image que le rendu
+  const cv = document.querySelector('canvas'), c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height;
+  c.getContext('2d').drawImage(cv, 0, 0); ok(c.toDataURL('image/jpeg', 0.92)); })));
 for (let k = 0; k < NP; k++) {
   const tc = geste.total * (k + 0.5) / NP;
   await page.evaluate(t => balade.pauseQuand('faconner', t), tc);
@@ -54,7 +57,7 @@ for (let k = 0; k < NP; k++) {
   const url = await lire(), nom = `g-${String(k + 1).padStart(2, '0')}`;
   writeFileSync(join(out, nom + '.jpg'), Buffer.from(url.split(',')[1], 'base64'));
   planche.push({ nom, t: f.file[0].t, geste: f.file[0].geste, mains: f.mains });
-  console.log(sec(), nom, `t ${f.file[0].t} s`, f.file[0].geste, 'mains', f.mains, 'proches', await page.evaluate(() => window.__v3 && window.__v3.gp && window.__v3.gp.prochesM ? 'PATE' : 'sans fondu'));
+  console.log(sec(), nom, `t ${f.file[0].t} s`, f.file[0].geste, 'mains', f.mains, JSON.stringify(await page.evaluate(() => [balade.mainsP(), balade.corps().x, balade.corps().z, balade.corps().haut])), 'proches', await page.evaluate(() => window.__v3 && window.__v3.gp && window.__v3.gp.prochesM ? 'PATE' : 'sans fondu'));
   await page.evaluate(() => { balade.grains(40000); balade.resolution(30000); balade.pause(false); });
 }
 writeFileSync(join(out, 'planche.html'), `<!doctype html><meta charset=utf-8><style>body{margin:0;background:#111;color:#ddd;font:12px sans-serif;display:grid;grid-template-columns:repeat(${TEL ? 8 : 4},1fr);gap:4px;padding:4px}img{width:100%;display:block}</style>`

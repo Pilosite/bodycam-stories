@@ -1174,7 +1174,7 @@ export function etapesFaconnage(avant, apres, n = 5) {
    font les mains (petrir, diviser, rouler, poser, planter, presser, lisser) ; tenu : la clé de ce que les mains portent ; masse :
    la clé de la boule de matière d'où l'on tire. La matière façonnée est molle pendant tout le geste (lisse : rayon de fondu,
    celui du résultat, sinon 12 % de la taille d'une masse). Le dernier « a » est « apres ». 12 à 16 s. */
-export function gesteFaconnage(avant, apres, tas = [], { duree = 15 } = {}) {
+export function gesteFaconnage(avant, apres, tas = [], { duree = 15, echelle = 1, enMain = 0.18 } = {}) {
   const A = liste(avant).filter(f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille)), B = liste(apres).filter(f => isObj(f) && Array.isArray(f.p) && Array.isArray(f.taille));
   if (!B.length) return [];
   const r3 = v => Math.round(v * 10000) / 10000, cle = (f, k) => Object.assign({}, f, { _k: k });
@@ -1207,20 +1207,24 @@ export function gesteFaconnage(avant, apres, tas = [], { duree = 15 } = {}) {
     ordre.forEach((f, n) => {
       const der = n === ordre.length - 1, part = der ? reste : V * vol(f) / Vm;
       reste = Math.max(0, reste - part);
-      const D = Math.cbrt(part * 6 / Math.PI), h = r3(Math.max(0.03, 0.9 * D)), main = [r3(M.p[0] - cote * 0.6 * M.taille[0]), h + r3(0.5 * D), r3(M.p[2] + 0.6 * M.taille[2])];
+      // une poignée qui tient dans les mains se roule en l'air, entre les paumes ; une grosse boule se roule au sol, poussée
+      const D = Math.cbrt(part * 6 / Math.PI), sol = D * echelle > enMain, h = r3(Math.max(0.03, 0.9 * D));
+      const main = sol ? [r3(M.p[0] - cote * (0.5 * M.taille[0] + 0.6 * D)), r3(0.45 * D), r3(M.p[2] + 0.45 * M.taille[2] + 0.3 * D)] : [r3(M.p[0] - cote * 0.6 * M.taille[0]), h + r3(0.5 * D), r3(M.p[2] + 0.6 * M.taille[2])];
       // diviser : une poignée tirée de la boule (la dernière : toute la boule)
       const poig = { f: 'boule', p: main, taille: [r3(D * 1.08), r3(D * 0.82), r3(D * 1.1)], couleur: f.couleur, matiere: f.matiere, lisse: kS, bosse: 0.3, cap: 0, penche: [0, 0], _k: f._k };
       const M2 = der ? null : Object.assign(boule(reste, cote0), { cap: (M.cap || 0) + 40 });
-      ajoute('diviser', 'diviser', cur, [...cur.filter(g => g._k !== 'mm'), ...(M2 ? [M2] : []), poig], 0.9, { cle: f._k, tenu: f._k, depuis: M.p.slice(), vers: main, masse: 'mm', lisse: kS });
+      ajoute('diviser', 'diviser', cur, [...cur.filter(g => g._k !== 'mm'), ...(M2 ? [M2] : []), poig], 0.9, { cle: f._k, tenu: f._k, depuis: M.p.slice(), vers: main, masse: 'mm', lisse: kS, sol });
       cur = [...cur.filter(g => g._k !== 'mm'), ...(M2 ? [M2] : []), poig];
       if (M2) M = M2;
       // rouler : entre les paumes, en l'air ; elle s'arrondit (le volume reste), ses bosses tournent avec elle
-      const roulee = Object.assign({}, poig, { taille: f.taille.map(r3), cap: 720, penche: [0, 0], bosse: 0.18 });
-      ajoute('rouler', 'rouler', cur, cur.map(g => g._k === f._k ? roulee : g), 1.2, { cle: f._k, tenu: f._k, lisse: kS });
+      const vers = sol ? [0, 2].map(i => main[i] + (f.p[i] - main[i]) * 0.6) : null;
+      const roulee = Object.assign({}, poig, { taille: f.taille.map(r3), cap: sol ? r3(Math.hypot(vers[0] - main[0], vers[1] - main[2]) / (D / 2) * 57.3 + 180) : 720, penche: [0, 0], bosse: 0.18 },
+        sol ? { p: [r3(vers[0]), r3(f.taille[1] / 2), r3(vers[1])] } : {});
+      ajoute('rouler', 'rouler', cur, cur.map(g => g._k === f._k ? roulee : g), sol ? 1.4 : 1.2, { cle: f._k, tenu: f._k, lisse: kS, sol });
       cur = cur.map(g => g._k === f._k ? roulee : g);
       // poser : portée à sa place, appuyée
       const posee = Object.assign({}, mol(f), { bosse: num(f.bosse, 0, 0.4, 0) > 0 ? Math.min(0.4, f.bosse * 1.6) : 0.14, cap: f.cap || 0 });
-      ajoute('poser', 'poser', cur, cur.map(g => g._k === f._k ? posee : g), 1.0, { cle: f._k, tenu: f._k, lisse: kS });
+      ajoute('poser', 'poser', cur, cur.map(g => g._k === f._k ? posee : g), 1.0, { cle: f._k, tenu: f._k, lisse: kS, sol });
       cur = cur.map(g => g._k === f._k ? posee : g);
     });
   } else if (corps.length) {                                   // rien de la matière d'avant ne reste : elle se résorbe
@@ -1280,7 +1284,7 @@ export function etatGeste(tr, u) {
       const v = k === tr.cle ? pu : u, f = Object.assign({}, v < 0.5 ? a : b);
       f.p = a.p.map((x, i) => lerp(x, b.p[i], v)); f.taille = a.taille.map((x, i) => lerp(x, b.taille[i], v));
       if (k === tr.cle && (op === 'poser' || tr.geste === 'prendre') && op !== 'planter' && op !== 'presser') f.p[1] += Math.sin(Math.PI * v) * (0.06 + 0.5 * Math.max(...b.taille));   // en arc
-      f.cap = op === 'rouler' && k === tr.cle ? lerp(a.cap || 0, b.cap || 0, v) : lerpAng(a.cap || 0, b.cap || 0, v);
+      f.cap = op === 'rouler' && k === tr.cle ? ((lerp(a.cap || 0, b.cap || 0, v) % 360) + 540) % 360 - 180 : lerpAng(a.cap || 0, b.cap || 0, v);
       const pa = Array.isArray(a.penche) ? a.penche : [0, 0], pb = Array.isArray(b.penche) ? b.penche : [0, 0];
       f.penche = [lerp(pa[0], pb[0], v), lerp(pa[1], pb[1], v)];
       f.couleur = hexMix(a.couleur, b.couleur, v);

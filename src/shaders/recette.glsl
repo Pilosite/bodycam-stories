@@ -229,7 +229,9 @@ void recette(int r, vec3 q, vec3 n, float hs, mat2 rot, out vec3 alb, out vec3 t
 #endif
   vec4 va=rT(r,1); if(va.w>0.) alb*=1.-.5*va.w+va.w*N[8];
   vec4 gr=rT(r,2); if(gr.w>0.) alb*=1.-.5*gr.w+gr.w*N[9];
-  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)) alb=mix(alb,t0.rgb,t0.w*tacheM(r,k,N[1+k],hs)*(pl>1.5?mm:1.)); }
+  vec4 tbr=rT(r,46);                                         // brillance propre à chaque tache (+1 ; 0 : celle de la recette)
+  for(int k=0;k<NTACHES+uZ;k++){ vec4 t0=rT(r,17+k*4); float pl=rT(r,20+k*4).w; if(t0.w>0. && (pl<.5 || pl>1.5)){ float tm=tacheM(r,k,N[1+k],hs)*(pl>1.5?mm:1.);
+    alb=mix(alb,t0.rgb,t0.w*tm); if(tbr[k]>0.) spec=mix(spec,tbr[k]-1.,tm); } }
   if(rel.w>0.)                                               // grain du relief : petites facettes
     tilt+=sol?vec3(N[13]-.5,0.,N[14]-.5)*rel.w:(vec3(N[13],N[14],N[15])-.5)*rel.w;
 #ifndef SOCLE                                                 // ombrage socle : sans relief de matière (le grain reste)

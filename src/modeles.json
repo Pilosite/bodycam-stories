@@ -3,10 +3,10 @@
  "corps": {
   "_doc": "Le corps du porteur dans le champ (docs/meneur-de-jeu.md §17) : deux avant-bras et deux mains, attachés à la caméra, en formes du vocabulaire (capsules, boules). Des données : mesures en mètres (coude : à côté, sous et devant la caméra ; repos : où les mains attendent), matières en recettes.",
   "mains": {
-   "_doc2": "Chaque main : avant-bras (peau) qui sort d'une manche courte (dure, tissu), paume, pouce en deux phalanges, quatre doigts ; les formes de peau sont molles (lisse : elles se fondent : poignet, jointures). Repère de la main : d du poignet vers les doigts, n la normale de la paume (vers ce qu'elle touche). Poses clés, interpolées : doigts (flexion à la jointure, degrés, un nombre ou un par doigt de l'index à l'auriculaire), ecart (degrés entre deux doigts), pouce [ouverture, flexion] (degrés). 9 formes par main.",
-   "coude": [0.2, -0.34, -0.02],
-   "manche": {"rayon": 0.05, "long": 0.09, "couleur": "#2b2f36", "matiere": "tissu"},
-   "avant_bras": {"rayon": 0.026, "couleur": "#c29072", "matiere": "peau"},
+   "_doc2": "Chaque bras : l'épaule sous la caméra (côté, haut, avant), le bras dans sa manche courte (dure, tissu, long : longueur du bras), le coude placé pour que l'avant-bras (peau, long) atteigne la main ; puis la main, paume, pouce en deux phalanges, quatre doigts ; les formes de peau sont molles (lisse : elles se fondent : poignet, jointures). Repère de la main : d du poignet vers les doigts, n la normale de la paume (vers ce qu'elle touche). Poses clés, interpolées : doigts (flexion à la jointure, degrés, un nombre ou un par doigt de l'index à l'auriculaire), ecart (degrés entre deux doigts), pouce [ouverture, flexion] (degrés). 9 formes par main.",
+   "epaule": [0.22, -0.2, -0.1],
+   "manche": {"rayon": 0.04, "long": 0.3, "couleur": "#2b2f36", "matiere": "tissu"},
+   "avant_bras": {"rayon": 0.026, "long": 0.25, "couleur": "#c29072", "matiere": "peau"},
    "paume": {"taille": [0.082, 0.026, 0.088], "couleur": "#c39577", "matiere": "peau"},
    "doigts": {"long": [0.074, 0.082, 0.077, 0.062], "rayon": 0.0092, "pas": 0.0205, "couleur": "#bf8f72", "matiere": "peau"},
    "pouce": {"long": [0.042, 0.036], "rayon": 0.0115, "couleur": "#bb8c6f", "matiere": "peau"},
