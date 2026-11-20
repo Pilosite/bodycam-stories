@@ -596,6 +596,7 @@ function reliefDetail(x,z,ax){
 const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1, elev:0, pied:null, perche:null, zoom:1, zoomCible:1 };   // zoom : zoom numérique du téléphone (cadrer une petite chose)
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
+let sons=null, compteurSons=0;                    // les bruitages (src/son.js), créés plus bas ; compteur : deux gestes, deux tirages
 let pauseQuand=null;                                            // essais : {type, t} (balade.pauseQuand)
 let frozen=false, hold=false, pauseTest=false, walkDist=0, walking=false;   // pauseTest : balade.pause (captures d'essai), le corps s'arrête net
 function pose(){
@@ -604,6 +605,8 @@ function pose(){
   if(ef){ const t=performance.now()/1000, k=.35+.65*ef.force;   // §20 : il pousse ; le téléphone sur la poitrine tremble et s'enfonce un peu par à-coups
     ty=k*(.006*Math.sin(t*31.7)+.004*Math.sin(t*53.1+1.3)); tp=k*(.008*Math.sin(t*27.3+.7)+.005*Math.sin(t*61.9)-.02*(.5+.5*Math.sin(t*2.1)));
     bob+=k*.012*Math.sin(t*2.1); }
+  const env=sons?sons.enveloppe():0;               // le bruit de l'effort secoue le téléphone (son enveloppe, force comprise), même sans son
+  if(env>.01){ const t=performance.now()/1000; ty+=env*(.007*Math.sin(t*71.3)+.004*Math.sin(t*113.7+.4)); tp+=env*(.01*Math.sin(t*83.1+1.1)+.005*Math.sin(t*131.9)); bob+=env*.008*Math.sin(t*97.3); }
   const yw=cam.yaw+look.yaw+ty, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch+tp));
   const cy=Math.cos(yw),sy=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
   const f=[sy*cp,sp,cy*cp], r=[cy,0,-sy], u=[f[1]*r[2]-f[2]*r[1],f[2]*r[0]-f[0]*r[2],f[0]*r[1]-f[1]*r[0]];
@@ -708,8 +711,9 @@ function simulate(dt){
   if(Math.abs(cam.zoom/cam.zoomCible-1)>.005){                    // le zoom glisse en une seconde ; l'accumulation repart (comme un téléphone qui refait sa mise au point)
     cam.zoom*=Math.pow(cam.zoomCible/cam.zoom,Math.min(1,dt*3)); if(Math.abs(cam.zoom/cam.zoomCible-1)<.01) cam.zoom=cam.zoomCible; sceneDirty=true; }
   walking=false; if(frozen||hold||pauseTest) return;
+  depuisPensee+=dt;
   if(pauseQuand&&queue[0]&&queue[0].type===pauseQuand.type){        // essais : figer le corps à un instant précis d'un geste (planche du façonnage)
-    const a=queue[0], t=a.type==="ramasser"?1-a.rest/a.duree:a.type==="faconner"&&a.G&&a.t0!==undefined?a.t-a.t0-.4:-1;
+    const a=queue[0], t=a.type==="ramasser"?1-a.rest/a.duree:a.type==="faconner"&&a.G&&a.t0!==undefined&&!a.nau?a.t-a.t0-.4-(a.pause||0):-1;   // temps du geste (la nausée le suspend, §22.2)
     if(t>=pauseQuand.t){ pauseQuand=null; pauseTest=true; return; } }
   let v=0;
   if(!queue.length){ idle+=dt;
@@ -734,7 +738,12 @@ function simulate(dt){
     else if(a.type==="faconner") faconnerPas(a,dt);
     else if(a.type==="ramasser") ramasserPas(a,dt);
     else if(a.type==="finMarche"){ queue.shift(); finMarche(a); }
-    else if(a.type==="penser"){ queue.shift(); say(a.texte,a.bref); voixP.dire(a.texte); notePensee(a.texte,"file"); }
+    else if(a.type==="penser"){ if(!a.espace||pensePeut(a.espace,a)){ queue.shift(); say(a.texte,a.bref); direVoix(a.texte); notePensee(a.texte,"file"); } }
+    else if(a.type==="hesiter") hesiterPas(a,dt);
+    else if(a.type==="essuyer") essuyerPas(a,dt);
+    else if(a.type==="effort"){ a.ecoule=(a.ecoule||0)+dt;   // §20 : il pousse ; les bruits calés sur cet effort tombent à leur instant (src/son.js)
+      if(a.bruits) for(const b of a.bruits) if(!b.joue&&a.ecoule>=b.t){ b.joue=true; jouerBruit(b); }
+      a.rest-=dt; if(a.rest<=0){ queue.shift(); if(a.chute) chuteGeste(a.chute.masse); } }
     else if(a.type==="bloque"){ queue.shift(); if(!a.muet) say(a.texte||"Je passe pas, là. C'est bouché.",true); }   // il s'arrête devant, et il le dit
     else if(a.type==="elever"||a.type==="descendre") elever(a,dt);
     else if(a.type==="zoom"){ cam.zoomCible=clampN(a.z,1,8,1); queue.shift(); }
@@ -1816,6 +1825,11 @@ function perception(){
 }
 const clampN=(v,a,b,d)=>{ v=Number(v); return Number.isFinite(v)?Math.min(b,Math.max(a,v)):d; };
 function enqueue(actions){
+  if(Array.isArray(actions)&&actions.some(a=>a&&a.type==="effort"&&a.exploit)&&MODELES.exploit&&MODELES.exploit.bruit){   // les bruits de l'effort, calés entre les souffles (docs/bruitages.md)
+    try{ const r=SON.caler(actions,MODELES.exploit.bruit,{graine:seedN,compteur:++compteurSons}); actions=r.actions;
+      const fe=actions.filter(a=>a&&a.type==="effort"&&a.exploit).pop(); if(fe&&fe.exploit.masse) fe.chute={masse:clampN(fe.exploit.masse,.01,500,1)};   // elle tombe à la fin de l'effort : on l'entend à ce moment, arrivée ou pas
+      if(sons) sons.preparer(r.plan.bruits); journalSons.push({t:+(performance.now()/1000).toFixed(2),plan:r.plan.bruits.map(b=>({t:b.t_abs,duree:b.duree,f0:b.f0,force:b.force,principal:b.principal})),souffles:r.plan.souffles,pose_t:r.plan.pose_t}); }
+    catch(e){ console.warn("sons :",e&&e.message); } }
   for(const a of (Array.isArray(actions)?actions:[]).slice(0,12)){   // 8 gestes au plus, plus les marqueurs de la page (poser, attendreObjet, §19)
     if(!a||typeof a!=="object") continue;
     if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});
@@ -1828,12 +1842,13 @@ function enqueue(actions){
     else if(a.type==="monter") queue.push({type:"monter",sur:typeof a.sur==="string"?a.sur.slice(0,30):""});
     else if(a.type==="descendre") queue.push({type:"descendre"});
     else if(a.type==="chercher"&&typeof a.quoi==="string") queue.push({type:"chercher",quoi:a.quoi.slice(0,60)});
-    else if(a.type==="faconner"&&typeof a.objet==="string") queue.push({type:"faconner",objet:a.objet.slice(0,30),t:0,i:-1,attente:0});
+    else if(a.type==="faconner"&&typeof a.objet==="string") queue.push({type:"faconner",objet:a.objet.slice(0,30),t:0,i:-1,attente:0,degout:degoutSur(a.degout)});
+    else if(a.type==="hesiter"||a.type==="essuyer") queue.push({type:a.type,rest:clampN(a.secondes,.3,6,2),duree:clampN(a.secondes,.3,6,2),force:clampN(a.force,0,1,.5)});   // §22 : il hésite avant, il s'essuie les mains après
     else if(a.type==="poser"&&typeof a.ref==="string") queue.push({type:"poser",ref:a.ref.slice(0,12)});   // §19 : la place de la chose se prend ici, au geste
     else if(a.type==="attendreObjet"&&typeof a.ref==="string") queue.push({type:"attendreObjet",ref:a.ref.slice(0,12),rest:clampN(a.secondes,0,30,20)});
     else if(a.type==="deplacer") queue.push({type:"deplacer",metres:clampN(a.metres,1,30,4),rayon:clampN(a.rayon,0,3,.3)});
-    else if(a.type==="effort") queue.push({type:"effort",rest:clampN(a.secondes,0,12,3),force:clampN(a.force,0,1,.3)});   // §20 : accroupi, il pousse ; la caméra force et tremble
-    else if(a.type==="penser"&&typeof a.texte==="string") queue.push({type:"penser",texte:a.texte.slice(0,240),bref:a.bref===true});   // une pensée dite quand la file l'atteint (souffle, réaction après avoir vu)
+    else if(a.type==="effort") queue.push({type:"effort",rest:clampN(a.secondes,0,12,3),force:clampN(a.force,0,1,.3),bruits:Array.isArray(a.bruits)?a.bruits.slice(0,6):null,chute:a.chute||null});   // §20 : accroupi, il pousse ; la caméra force et tremble
+    else if(a.type==="penser"&&typeof a.texte==="string") queue.push({type:"penser",texte:a.texte.slice(0,240),bref:a.bref===true,espace:clampN(a.espace,0,10,0)});   // une pensée dite quand la file l'atteint (souffle, réaction après avoir vu)
   }
 }
 function patchScene(sc){                                      // ce qu'il imagine peut changer le monde
@@ -2085,17 +2100,53 @@ function ecouter(){                                           // appelé directe
   dictBase=(dictEl||$("msg")).value.trim();
   dict.start().catch(e=>{ if(e&&e.code==="not_granted"){ dict=null; $("mic").hidden=true; } });
 }
-$("mic").onclick=()=>{ if(listening) dict.stop().catch(()=>{}); else ecouter(); };
-function setFrozen(v,m){
+$("mic").onclick=()=>{ if(appui.avaleMic){ appui.avaleMic=false; return; } if(listening) dict.stop().catch(()=>{}); else ecouter(); };
+function setFrozen(v,m,sansClavier){
   if(!v && listening && dict) dict.stop().catch(()=>{});
-  frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v;
+  frozen=v; mode=v?(m||"parler"):"parler"; $("dire").hidden=!v; if(sons) sons.baisser(v);   // le joueur parle : le bruit baisse
   $("parler").textContent=v&&mode==="parler"?"Reprendre":"Lui parler";
   $("msg").placeholder=mode==="monde"?"Décris le monde que tu veux…":"Dis-lui quoi faire…";
   $("envoi").textContent=mode==="monde"?"Générer":"Dire";
-  if(v){ $("msg").value=""; $("hint").classList.add("off"); setTimeout(()=>$("msg").focus(),50); }
+  if(v){ $("msg").value=""; $("hint").classList.add("off"); if(!sansClavier) setTimeout(()=>$("msg").focus(),50); }
 }
 // Le texte d'abord : le micro ne s'ouvre que si l'on touche « Micro » (une dictée ouverte d'office captait des bribes de conversation).
-$("parler").onclick=()=>{ const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+$("parler").onclick=()=>{ if(appui.avale){ appui.avale=false; return; } const on=!(frozen&&mode==="parler"); setFrozen(on,"parler"); };
+/* Appuyer pour parler : tant qu'on garde le doigt (ou la souris) sur « Lui parler » ou sur « Micro », il écoute ; au relâcher, la phrase
+   part aussitôt. Un appui bref garde l'ancien comportement (ouvrir la barre, ou basculer le micro). La dictée démarre dès l'appui, dans
+   le geste même, pour que le navigateur l'accepte ; un appui bref la referme sans rien garder. */
+const appui={bouton:null,t0:0,tenu:false,minuterie:0,avale:false,ecoute:false};
+const APPUI_MS=280;
+function appuiDebut(b,e){
+  if(e.button!==undefined&&e.button!==0) return;
+  if(!dict||mode==="monde"&&frozen) return;                     // sans dictée, ou pendant « Décrire un monde » : le bouton reste un bouton
+  appui.bouton=b; appui.t0=performance.now(); appui.tenu=false;
+  try{ b.setPointerCapture(e.pointerId); }catch(_){}
+  appui.entendu=false;
+  clearTimeout(appui.minuterie);
+  appui.minuterie=setTimeout(()=>{ if(appui.bouton!==b) return; appui.tenu=true;
+    if(!frozen) setFrozen(true,"parler",true);
+    if(!listening&&dict) ecouter();                               // la souris garde son geste pendant ce court délai ; au doigt, voir appuiFin
+    b.classList.add("tenu"); $("parler").textContent="Relâche pour envoyer"; $("msg").placeholder="Je t'écoute…"; },APPUI_MS);
+}
+async function appuiFin(b,annule){
+  if(appui.bouton!==b) return; clearTimeout(appui.minuterie); appui.bouton=null; b.classList.remove("tenu");
+  if(!appui.tenu) return;                                         // appui bref : le clic qui suit fait son travail habituel
+  appui.tenu=false; appui.avale=b.id==="parler"; appui.avaleMic=b.id==="mic"; setTimeout(()=>{ appui.avale=false; appui.avaleMic=false; },400);
+  if(!annule&&dict&&!listening&&!$("msg").value.trim()){          // la dictée n'a pas pu partir pendant l'appui (au doigt, certains navigateurs
+    $("parler").textContent="Reprendre"; $("msg").placeholder="Dis-lui quoi faire…"; ecouter(); return; }   // n'acceptent le micro qu'au relâcher) : elle part ici, on touche « Dire » ou « Micro » pour finir
+  if(dict){ try{ await dict.stop(); }catch(_){} }                 // même si l'état « écoute » n'est pas remonté : on veut la phrase entière
+  for(let i=0;i<12&&listening;i++) await new Promise(r=>setTimeout(r,60));   // la fin de phrase arrive juste après l'arrêt
+  await new Promise(r=>setTimeout(r,120));
+  $("parler").textContent=frozen&&mode==="parler"?"Reprendre":"Lui parler"; $("msg").placeholder="Dis-lui quoi faire…";
+  if(annule) return;
+  if($("msg").value.trim()) $("dire").requestSubmit();            // relâché : la phrase part
+  else setTimeout(()=>$("msg").focus(),50);                       // rien entendu : la barre reste ouverte, on peut taper
+}
+for(const id of ["parler","mic"]){ const b=$(id);
+  b.addEventListener("pointerdown",e=>appuiDebut(b,e));
+  b.addEventListener("pointerup",()=>appuiFin(b,false));
+  b.addEventListener("pointercancel",()=>appuiFin(b,true));
+  b.addEventListener("contextmenu",e=>{ if(appui.bouton===b||appui.tenu) e.preventDefault(); }); }
 $("monde").onclick=()=>{ fermerOutils(); if(frozen) setFrozen(false); atelier.ouvrir({nouvelle:true}); };   // la description se tape dans la banque de scènes
 $("dire").addEventListener("submit",async e=>{ e.preventDefault();
   if(listening && dict){ try{ await dict.stop(); }catch(_){} }
@@ -2107,13 +2158,38 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
    Capacité « tts » de l'artefact, sinon la voix du navigateur. Éteinte par défaut (« Voix » dans « Plus »), allumée par CFG.demo. */
 const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal},
   onParle:p=>{ $("taire").hidden=!p; } });
-function penser(t){ say(t); voixP.dire(t); notePensee(t,"meneur"); }
+function penser(t){ say(t); direVoix(t); notePensee(t,"meneur"); }
 const journalPensees=[]; window.balPensees=journalPensees;   // essais (tools/demo.mjs) : chaque pensée et son instant
-function notePensee(t,source){ journalPensees.push({t:+(performance.now()/1000).toFixed(2),texte:String(t||""),source,file:queue.map(a=>a.type).slice(0,4)}); if(journalPensees.length>80) journalPensees.shift(); }                  // une pensée du personnage : affichée, et dite si la voix est allumée
+let depuisPensee=1e9;                                          // secondes de jeu depuis la dernière pensée (§22 : au plus une toutes les ~3 s)
+/* §22 : une pensée qui demande de l'espace attend qu'il y ait eu « espace » secondes depuis la précédente, et qu'aucun gros
+   bruitage ne joue (si la page en a : test « quelque chose joue », sinon ignoré) ; elle n'attend jamais plus de 2 s pour le son. */
+function sonOccupe(){ try{ return !!(sons&&sons.occupe()>0); }catch(_){ return false; } }   // un gros bruit (docs/bruitages.md) joue encore
+function pensePeut(espace,a){ if(depuisPensee<espace) return false; if(sonOccupe()&&(a.attSon=(a.attSon||0)+1/60)<2) return false; return true; }
+function notePensee(t,source,phase){ depuisPensee=0; journalPensees.push({t:+(performance.now()/1000).toFixed(2),texte:String(t||""),source,phase:phase||undefined,file:queue.map(a=>a.type).slice(0,4)}); if(journalPensees.length>80) journalPensees.shift(); }                  // une pensée du personnage : affichée, et dite si la voix est allumée
 function voixInter(on){ voixP.actif(on); $("voix-inter").setAttribute("aria-pressed",String(on)); $("voix-inter").textContent=on?"Voix : oui":"Voix : non"; return on; }
 voixInter(!!CFG.demo||(()=>{ try{ return localStorage.getItem("bodycam-voix")==="1"; }catch(_){ return false; } })());
 $("voix-inter").onclick=()=>{ const on=voixInter(!voixP.actif()); try{ localStorage.setItem("bodycam-voix",on?"1":"0"); }catch(_){} };
 $("taire").onclick=()=>voixP.taire();
+/* ------------------------------------------------------------------ les bruitages (src/son.js, src/bruitages.json, docs/bruitages.md)
+   Le contexte audio naît au premier geste du joueur ; « Sons » dans « Plus », allumé par défaut, mémorisé ; coupé quand la page
+   est cachée ; plus bas quand le joueur parle ; une pensée n'est pas dite par-dessus un gros bruit (elle attend qu'il finisse). */
+const journalSons=[]; window.balSons=journalSons;   // essais (tools/demo.mjs, tools/son.mjs) : chaque plan et chaque bruit, avec son instant
+sons=SON.creerSons({ bruitages:BRUITAGES, maintenant:()=>performance.now()/1000, journal:m=>console.warn(m),
+  fabriquer:()=>{ const C=window.AudioContext||window.webkitAudioContext; return C?new C({latencyHint:"interactive"}):null; } });
+function jouerBruit(b){ const x=sons.jouer(b); journalSons.push({t:+(performance.now()/1000).toFixed(2),recette:b.recette,rang:b.rang,principal:!!b.principal,duree:b.duree,f0:b.f0,force:b.force,gain:b.gain,masse:b.masse,audio:!!(x&&x.audio)}); if(journalSons.length>80) journalSons.shift(); }
+let chuteRecente=0;
+function chuteGeste(masse){ chuteRecente=performance.now(); try{ jouerBruit(Object.assign(SON.planChute(BRUITAGES.recettes.chute,{masse,distance:.8,graine:seedN,cle:++compteurSons}),{recette:"chute"})); }catch(e){ console.warn("chute :",e&&e.message); } }
+function chuteSon(ob){ try{ const F=(ob.formes||[]).filter(f=>f&&Array.isArray(f.taille)), e=ob.echelle||1, w=posObjet(ob);
+  const masse=Math.max(.01,Math.min(500,MENEUR.volumeFormes(F)*e*e*e*500));   // une chose pleine à moitié d'eau : un ordre de grandeur suffit au son
+  jouerBruit(Object.assign(SON.planChute(BRUITAGES.recettes.chute,{masse,distance:Math.hypot(w.x-cam.x,w.z-cam.z),graine:seedN,cle:++compteurSons}),{recette:"chute"})); }catch(e){ console.warn("chute :",e&&e.message); } }
+function direVoix(t){ const r=sons.occupe(); if(r>0){ setTimeout(()=>voixP.dire(t),r*1000+200); journalSons.push({t:+(performance.now()/1000).toFixed(2),voix_differee_s:+r.toFixed(2),texte:String(t).slice(0,40)}); } else voixP.dire(t); }
+function sonsInter(on,geste){ sons.actif(on); $("sons-inter").setAttribute("aria-pressed",String(on)); $("sons-inter").textContent=on?"Sons : oui":"Sons : non"; if(on&&geste) sons.geste(); return on; }   // le contexte ne naît que dans un geste
+sonsInter(CFG.sons!==undefined?!!CFG.sons:(()=>{ try{ return localStorage.getItem("bodycam-sons")!=="0"; }catch(_){ return true; } })());
+$("sons-inter").onclick=()=>{ const on=sonsInter(!sons.actif(),true); try{ localStorage.setItem("bodycam-sons",on?"1":"0"); }catch(_){} };
+addEventListener("pointerdown",()=>sons.geste(),true); addEventListener("keydown",()=>sons.geste(),true); $("dire").addEventListener("submit",()=>sons.geste());
+document.addEventListener("visibilitychange",()=>sons.masquer(document.hidden));
+{ const c=BRUITAGES.prises_credit; if(c&&$("sons-credit")) $("sons-credit").textContent="Sons : synthèse par code, et des prises de « "+c.titre+" », "+c.auteur+", "+c.licence+" (transformées)."; }   // crédit des prises (docs/bruitages.md)
+window.sons={ etat:()=>sons.etat(), actif:v=>v===undefined?sons.actif():sonsInter(!!v), journal:journalSons };
 for(const id of ["parler","mic","banque-dicter"]) if($(id)) $(id).addEventListener("click",()=>voixP.taire());   // le joueur prend la parole : il se tait
 $("msg").addEventListener("input",()=>voixP.taire());
 capacite("dictation").then(d=>{ if(d&&typeof d.onState==="function") d.onState(({state})=>{ if(state==="listening") voixP.taire(); }); });
@@ -2436,7 +2512,7 @@ function versFiche(x,z){ if(S.kit!==1) return {devant:z,cote:x-pathX(z)}; const 
    (la chose arrivée trop tôt, posée au marqueur)}. Sans marqueur dans la file (ancien ordre, file vidée), la place se prend
    tout de suite. Une place prise reste la sienne s'il bouge ensuite sans qu'on le lui demande. */
 const reserves=new Map();
-const differes=new Map(), faconnages=new Map();               // façonnage (§15.3) : ce qu'il rapporte (posé à son retour) ; les états à jouer
+const differes=new Map(), faconnages=new Map(), retenus=new Map();               // façonnage (§15.3) : ce qu'il rapporte (posé à son retour) ; les états à jouer
 let dernierLieu=null;                                          // où il est allé chercher (tests, démo)
 const marquePose=ref=>queue.some(a=>a.type==="poser"&&a.ref===ref);
 function poserIci(ref){                                          // la file atteint le geste : la place se prend ici ; la chose arrivée trop tôt y est posée
@@ -2451,6 +2527,7 @@ function objetMeneur(o){
   const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], id=o.id||(o.objet&&o.objet.id), i=L.findIndex(x=>x&&x.id===id);
   if(o.op==="reserver"){ reserves.set(o.ref,o.au_geste&&marquePose(o.ref)?{ou:o.ou,distance:o.distance,pos:null}:{pos:placeGeste(o)}); if(reserves.size>8) reserves.delete(reserves.keys().next().value); return; }
   if(o.op==="abandon"){ reserves.delete(o.ref); return; }          // l'accessoiriste n'a rien donné : il n'attend plus
+  if(o.op==="creer"&&o.retenu){ retenus.set(o.retenu,Object.assign({},o,{retenu:undefined})); return; }   // §22.2 : ce qu'il laisse en vomissant, posé à ce moment-là
   if(o.op==="creer"&&o.differe){ differes.set(o.differe,[...(differes.get(o.differe)||[]),o]); return; }   // ramassé : posé près de la chose quand il revient
   if(o.op==="faconner"){ faconnages.set(id,o); if(!queue.some(a=>a.type==="faconner"&&a.objet===id)) faconnerTout(id); return; }
   if(o.op==="creer"){
@@ -2482,6 +2559,8 @@ function objetMeneur(o){
     const v=validerFiche({kit:"foret",objets:[Object.assign({},o.objet,pos)]}).objets;   // borné comme un objet de fiche décrite
     if(!v||!v[0]) return;
     v[0].id=String(id).slice(0,30); v[0].devant=pos.devant; v[0].cote=pos.cote; L.push(v[0]);
+    if(o.reserve&&!(chuteRecente&&performance.now()-chuteRecente<30000)) chuteSon(v[0]);   // une chose demandée arrive au sol : on l'entend tomber (sauf si son geste l'a déjà fait entendre)
+    chuteRecente=0;
   } else if(i<0) return;
   else if(o.op==="retirer") L.splice(i,1);
   else if(o.op==="remplacer"){                                    // retouchée sur place : mêmes id, place et cap ; d'autres formes
@@ -2531,14 +2610,22 @@ function faconnerPas(a,dt){
     if(o){ const R=repereObjet(o), F=o.formes||[], g=F.reduce((m,f)=>Math.max(m,Math.max(...f.taille)),.05);
       const c=versMonde(R,[0,Math.max(...F.map(f=>f.p[1]),.03)*.6,0]); mainsVers(mainsPetrir(c,g*R.ech/2,t).H,dt); bougerCamera(a,c,t); buildShapes(fiche,true); }
     if(a.attente>30) fin(); return; }
-  if(a.i<0){ reveler(a.objet); tournerVers(a.objet); a.G=preparerGeste(a.objet,op); a.i=0; a.t0=t; a.k=-1; return; }
-  const G=a.G; let tt=t-a.t0-.4, k=0;                             // un temps pour poser ce qu'il a rapporté
+  if(a.i<0){ reveler(a.objet); tournerVers(a.objet); a.G=preparerGeste(a.objet,op,a); a.i=0; a.t0=t; a.k=-1; return; }
+  const G=a.G;
+  // §22.2 : la nausée, une fois, à la fin de la dernière phase de contact (par son nom) : le geste est suspendu (la chose reste
+  // dans l'état atteint), il se détourne, vomit, s'essuie la bouche, revient ; puis le geste reprend au même point
+  if(G&&G.D&&G.D.nausee&&(a.nau||!a.nauFait&&t-a.t0-.4-(a.pause||0)>=G.D.nausee.t)){
+    if(!a.nau){ a.nau={t:0,e:-1,p:0,base:{yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut}}; a.nauFait=true; mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); }
+    a.pause=(a.pause||0)+dt; if(nauseePas(a.nau,G.D.nausee,dt,a.objet,a.degout)) a.nau=null; return; }
+  let tt=t-a.t0-.4-(a.pause||0), k=0;                             // un temps pour poser ce qu'il a rapporté
   while(G&&k<G.T.length&&tt>G.T[k].duree){ tt-=G.T[k].duree; k++; }
   if(!G||k>=G.T.length){                                          // fini : l'état final exact, ce qui a servi disparaît
     objetMeneur({type:"objet",op:"remplacer",id:a.objet,formes:op.etapes[op.etapes.length-1],nom:op.nom,echelle:op.echelle});
     for(const c of op.consomme||[]) objetMeneur({type:"objet",op:"retirer",id:c});
     faconnages.delete(a.objet); fin(); return; }
   const tr=G.T[k], u=Math.min(1,Math.max(0,tt/tr.duree)), ue=u*u*(3-2*u);
+  if(G.D){ const tg=t-a.t0-.4-(a.pause||0);                                     // §22 : les pensées de dégoût, à leurs instants (au plus une toutes les ~3 s)
+    while(G.dites<G.D.pensees.length&&tg>=G.D.pensees[G.dites].t&&pensePeut(3,G)){ const q=G.D.pensees[G.dites++]; say(q.texte); direVoix(q.texte); notePensee(q.texte,"degout",q.phase); } }
   if(k!==a.k){ a.k=k; a.i=k; if(tr.pile!==null&&tr.pile!==undefined&&G.tas) G.pris.add(tr.pile); }   // la main prend dans le tas : il quitte le tas
   let F=MENEUR.etatGeste(tr,ue);
   if(F.length>G.place) F=F.slice().sort((p,q)=>Math.max(...q.taille)-Math.max(...p.taille)).slice(0,G.place);   // le budget fixe (64 formes) : les miettes d'abord
@@ -2555,12 +2642,12 @@ function faconnerPas(a,dt){
   F=F.concat(empreintes(G,M.appui||[],t));
   L[i]=Object.assign({},L[i],{formes:F,echelle:G.E});
   fiche=Object.assign({},fiche,{objets:L});
-  bougerCamera(a,M.vise||versMonde(G.R,[0,.3,0]),t);
+  bougerCamera(a,M.vise||versMonde(G.R,[0,.3,0]),t,G.D?MENEUR.detourneA(G.D,t-a.t0-.4-(a.pause||0)):null);
   buildShapes(fiche,true);
 }
 /* Le façonnage préparé une fois (§17) : la chose et ce qu'il a rapporté, dans le repère de la chose, puis la suite des
    transitions (MENEUR.gesteFaconnage) ; place : combien de formes elle peut prendre sans sortir du budget fixe (64). */
-function preparerGeste(id,op){
+function preparerGeste(id,op,a={}){
   const L=Array.isArray(fiche.objets)?fiche.objets:[], o=L.find(x=>x&&x.id===id); if(!o) return null;
   const e0=clampN(o.echelle,.1,5,1), E=op.echelle!==undefined?clampN(op.echelle,.1,5,1):e0;
   const avant=(o.formes||[]).map(f=>Object.assign({},f,{p:f.p.map(v=>v*e0/E),taille:f.taille.map(v=>v*e0/E)}));
@@ -2571,9 +2658,10 @@ function preparerGeste(id,op){
   const apres=op.etapes[op.etapes.length-1], T=MENEUR.gesteFaconnage(avant,apres,tasL,{echelle:R.ech});
   const autres=L.filter(x=>x&&x.id!==id&&!(x.visible===false||cacheObj.has(x.id))).reduce((n,x)=>n+Math.min(24,(x.formes||[]).length),0);
   const dom=(T[0]&&T[0].a.find(f=>/^m/.test(f._k))||{}).matiere;
-  return {T,R,E,dom,tas:tas&&tas.id,tasF,pris:new Set(),emp:[],place:Math.max(8,Math.min(22,64-autres-2*MAINS_N-2))};   // 2 : les empreintes
+  const D=a.degout?MENEUR.planDegout(T,a.degout,typeof MODELES!=="undefined"&&MODELES?MODELES.degout:null):null;   // §22 : pensées et regards détournés, datés sur les phases
+  return {T,R,E,dom,tas:tas&&tas.id,tasF,pris:new Set(),emp:[],place:Math.max(8,Math.min(22,64-autres-2*MAINS_N-2)),D,dites:0};   // 2 : les empreintes
 }
-/* ---- Les mains à l'ouvrage (§17, §22). Deux mains en formes fondues (src/modeles.json, corps.mains : avant-bras sortant d'une
+/* ---- Les mains à l'ouvrage (§17, §23). Deux mains en formes fondues (src/modeles.json, corps.mains : avant-bras sortant d'une
    manche, paume, pouce, quatre doigts ; poses clés interpolées), attachées au corps sous la caméra, chacune un objet (sa boîte :
    variante PATE des proches). Une main se décrit par sa paume : p (centre), n (normale, vers ce qu'elle touche), d (vers les
    doigts, sinon dans le prolongement de l'avant-bras) et sa pose. Jamais figées : un peu de tremblé toujours. */
@@ -2714,12 +2802,71 @@ function objetMains(Hs,quelles=[0,1]){
   return objs;
 }
 /* Pendant qu'il travaille, la caméra (sur sa poitrine) suit un peu ses mains : elle se penche vers l'ouvrage, bouge avec les gestes. */
-function bougerCamera(a,c,t){
+function bougerCamera(a,c,t,dg){
   const B=a.base, {e}=corpsAxes(), yv=Math.atan2(c[0]-e[0],c[2]-e[2]), pv=Math.atan2(c[1]-e[1],Math.hypot(c[0]-e[0],c[2]-e[2]));
   const dy=wrapA(yv-B.yaw);
   cam.yaw=B.yaw+.4*dy+.03*Math.sin(t*1.3+.5)+.01*Math.sin(t*4.3);
   cam.pitch=Math.max(-1.1,B.pitch*.65+pv*.35+.035*Math.sin(t*2.1)-.03*Math.abs(Math.sin(t*3.7)));
   cam.haut=B.haut+.015*Math.sin(t*2.9);
+  if(dg){ cam.yaw+=dg.yaw; cam.pitch=Math.min(.4,cam.pitch+dg.pitch); }   // §22 : il détourne la tête par à-coups (dégoût)
+}
+/* §22 : ce que le meneur dit du dégoût d'un façonnage, borné (pensées courtes, intensité 0..1). */
+function degoutSur(d){
+  if(!d||typeof d!=="object") return null; const T=x=>typeof x==="string"&&x.trim()?x.slice(0,200):null;
+  return {intensite:clampN(d.intensite,0,1,.5),palier:d.palier==="fort"?"fort":"leger",contact:T(d.contact),autre:T(d.autre),pendant:(Array.isArray(d.pendant)?d.pendant:[]).map(T).filter(Boolean).slice(0,3),
+    nausee:d.nausee&&typeof d.nausee==="object"?d.nausee:null};
+}
+/* §22 : avant de toucher une chose répugnante, il marque un temps : la caméra recule un peu, le regard fuit vers le haut et de
+   côté, puis revient à l'ouvrage. */
+function hesiterPas(a,dt){
+  if(!a.base) a.base={yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut};
+  a.rest-=dt; const u=Math.min(1,1-Math.max(0,a.rest)/a.duree), k=.5+.5*a.force;
+  const w=Math.sin(Math.PI*u);                                    // aller et retour
+  cam.pitch=a.base.pitch+(.55-a.base.pitch*.3)*w*k+.02*Math.sin(u*23); cam.yaw=a.base.yaw+.22*k*w*Math.sin(u*2.4+.4); cam.haut=a.base.haut+.05*w;
+  if(u<.3) moveBy(-.12*dt/(.3*a.duree));                          // il recule un peu
+  if(a.rest<=0){ cam.yaw=a.base.yaw; cam.pitch=a.base.pitch; cam.haut=a.base.haut; queue.shift(); }
+}
+/* §22.2 : la nausée. N (MENEUR.planDegout) : étapes datées (lâcher, se détourner, se pencher, vomir, souffler, s'essuyer la
+   bouche, revenir), pensées datées, angle. Il se tourne du côté le plus dégagé, à l'opposé de l'ouvrage, fait un petit pas, se
+   penche (la caméra plonge, à-coups), et ce qu'il laisse (gardé par la page, `retenus`) est posé devant lui à ce moment ; un
+   événement « nausee » est exposé pour le bruitage. Rend true quand il est revenu face à l'ouvrage. */
+function evenementSon(nom,detail){                               // l'accroche des bruitages (le lot des sons s'y branche) ; essais : balSons
+  const d=Object.assign({evenement:nom,t:+(performance.now()/1000).toFixed(2)},detail||{}); journalSons.push(d); if(journalSons.length>40) journalSons.shift();
+  try{ const s=window.balSon||window.SON; if(s&&typeof s.evenement==="function") s.evenement(nom,d); }catch(_){}
+  try{ dispatchEvent(new CustomEvent("balade-son",{detail:d})); }catch(_){}
+}
+function nauseePas(n,N,dt,idOuvrage,dg){
+  n.t+=dt; const B=n.base, et=N.etapes;
+  while(n.e+1<et.length&&n.t>=et[n.e+1].t0){ const e=et[++n.e];
+    if(e.quoi==="detourner"){ const A=N.angle*Math.PI/180, o=(fiche.objets||[]).find(x=>x&&x.id===idOuvrage), q=o?posObjet(o):null;
+      const libre=s=>{ const y=B.yaw+s*A, px=cam.x+Math.sin(y)*.8, pz=cam.z+Math.cos(y)*.8; let m=9; for(const b of obstaclesConnus()) m=Math.min(m,Math.hypot(b.x-px,b.z-pz)-b.r); return m-(semisSous(px,pz,.2,.1)?1:0); };
+      n.cote=libre(1)>=libre(-1)?1:-1; if(q){ const a=wrapA(Math.atan2(q.x-cam.x,q.z-cam.z)-B.yaw); if(Math.abs(a)>.25) n.cote=a>0?-1:1; } n.A=A; }
+    if(e.quoi==="vomir"){ const fl=retenus.get(idOuvrage); if(fl){ retenus.delete(idOuvrage); objetMeneur(fl); }
+      evenementSon("nausee",{intensite:dg?dg.intensite:.8,duree:e.duree,instants:et.map(x=>({quoi:x.quoi,t0:x.t0,duree:x.duree}))}); } }
+  while(n.p<N.pensees.length&&n.t>=N.pensees[n.p].t){ const q=N.pensees[n.p++]; say(q.texte); direVoix(q.texte); notePensee(q.texte,"nausee",q.phase); }
+  const e=et[Math.max(0,n.e)], u=Math.min(1,Math.max(0,(n.t-e.t0)/e.duree)), sm=u*u*(3-2*u), A=(n.cote||1)*(n.A||1.5);
+  const j=(k,f)=>k*Math.sin(n.t*f), pv=-.95;
+  if(e.quoi==="lacher"){ cam.pitch=B.pitch+.05*sm+j(.01,17); }
+  else if(e.quoi==="detourner"){ cam.yaw=B.yaw+A*sm; cam.pitch=B.pitch+(.1-B.pitch*.5)*sm; if(u>.6&&!n.pas){ n.pas=true; moveBy(.15); } }
+  else if(e.quoi==="pencher"){ cam.yaw=B.yaw+A; cam.pitch=B.pitch*.5+.1+(pv-(B.pitch*.5+.1))*sm+j(.03,9); cam.haut=B.haut-.06*sm; }
+  else if(e.quoi==="vomir"){ cam.yaw=B.yaw+A+j(.03,7); cam.pitch=pv+.09*Math.abs(Math.sin(n.t*5.5))-.04*Math.sin(n.t*13); cam.haut=B.haut-.06-.02*Math.abs(Math.sin(n.t*5.5)); }
+  else if(e.quoi==="souffler"){ cam.yaw=B.yaw+A; cam.pitch=pv+.25*sm+j(.02,2.6); cam.haut=B.haut-.06+.03*sm; }
+  else if(e.quoi==="essuyer"){ cam.yaw=B.yaw+A; cam.pitch=pv+.25+j(.015,3);               // le revers de la manche passe devant la caméra
+    const {e:o,f,r}=corpsAxes(), rep=mainsRepos(), x=.18-.36*sm, H=[rep[0],[o[0]+f[0]*.13+r[0]*x,o[1]-.05,o[2]+f[2]*.13+r[2]*x]];
+    mainsVers(H,dt,[1]); buildShapes(fiche,true); }
+  else if(e.quoi==="revenir"){ if(mainsObj){ mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); } if(!n.retour){ n.retour=true; if(n.pas) moveBy(-.15); }
+    cam.yaw=B.yaw+A*(1-sm); cam.pitch=(pv+.25)+(B.pitch-(pv+.25))*sm; cam.haut=B.haut-.03*(1-sm); }
+  if(n.t>=N.duree){ cam.yaw=B.yaw; cam.pitch=B.pitch; cam.haut=B.haut; mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); return true; }
+  return false;
+}
+/* §22 : après, il s'essuie les mains : elles descendent hors du champ (l'herbe, le pantalon) et frottent, la tête un peu tournée. */
+function essuyerPas(a,dt){
+  if(!a.base) a.base={yaw:cam.yaw,pitch:cam.pitch};
+  a.rest-=dt; const u=Math.min(1,1-Math.max(0,a.rest)/a.duree), {e,f,r}=corpsAxes(), w=Math.sin(Math.PI*u);
+  const H=[-1,1].map(s=>{ const fr=.06*Math.sin(u*a.duree*11+(s>0?0:Math.PI)); return main([e[0]+r[0]*s*.2+f[0]*(.22+fr),e[1]-.62-.08*w,e[2]+r[2]*s*.2+f[2]*(.22+fr)],[-r[0]*s,-.3,-r[2]*s],"plat",f); });
+  mainsVers(H,dt); buildShapes(fiche,true);
+  cam.pitch=a.base.pitch-.25*w; cam.yaw=a.base.yaw+.18*a.force*w;
+  if(a.rest<=0){ cam.yaw=a.base.yaw; cam.pitch=a.base.pitch; mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); queue.shift(); }
 }
 /* Aller chercher : accroupi, la main droite va au sol, ramasse, revient (§17). */
 function ramasserPas(a,dt){
@@ -3180,7 +3327,7 @@ window.balade={
   regulateur(){ return { niveau:REG.niveau, ms:REG.ms, cible:regCible(), etat:regEtat(), puce:GT.ms, total:GT.total||0 }; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
   mainsP:()=>mainsEtat.H?mainsEtat.H.map(h=>h.p.map(v=>+v.toFixed(3))):null,   // essais : centres des paumes
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,
-    file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4).toFixed(2):-1,
+    file:queue.filter(a=>a.type==="faconner").map(a=>({objet:a.objet,i:a.i,attente:+a.attente.toFixed(1),t:a.G&&a.t0!==undefined?+(a.t-a.t0-.4-(a.pause||0)).toFixed(2):-1,nausee:!!a.nau,pause:+(a.pause||0).toFixed(2),
       total:a.G?+a.G.T.reduce((s,x)=>s+x.duree,0).toFixed(2):0,geste:a.G&&a.k>=0&&a.G.T[a.k]?a.G.T[a.k].geste:"",n:a.G?a.G.T.length:0,dbg:a.dbg}))}),
   vue(id){ const q=cibleMonde(id); if(!q) return null; const c=corpsAxes().e; return vueDegagee(c[0],c[1],c[2],q.x,q.z,q.taille/2,q.haut,id); },   // rien entre la caméra et la chose ?
   resolution(px){ CFG.maxPx=+px||undefined; resize(); },        // pixels internes (essais : finesse d'une capture)

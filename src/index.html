@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Bodycam procédurale</title>
+<title>Bodycam Stories</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -43,6 +43,8 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
   font-size:15px;line-height:1.35;font-style:italic;color:var(--ink-dim);text-shadow:0 0 4px rgba(0,0,0,.95),0 1px 8px rgba(0,0,0,.8);opacity:0;transition:opacity .4s;
   text-wrap:balance;pointer-events:none;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .dit.on{opacity:1}
+#parler,#mic{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#parler.tenu,#mic.tenu{outline:2px solid var(--rec);outline-offset:2px}
 .dit{font-size:clamp(18px,2.7vw,30px)}.pensee{font-size:clamp(17px,2.3vw,26px)}
 @media (min-width:700px){.dit,.pensee{max-width:40em}}
 .dire{display:flex;gap:8px;width:100%;max-width:30em;pointer-events:auto}
@@ -142,6 +144,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .outils[hidden]{display:none}
 .outils{pointer-events:auto;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:30em;padding:10px;border-radius:18px;
   background:rgba(14,17,13,.82);border:1px solid var(--line);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.credit-sons{flex-basis:100%;text-align:center;font-size:11px;opacity:.7}
 .outils button{padding:11px 14px;font-size:14px;min-height:44px}
 #plus[aria-expanded="true"]{color:var(--ink);border-color:var(--ink)}
 .banque-liste .groupe{font:500 11.5px/1 var(--f-mono);color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;padding:10px 2px 2px}
@@ -150,12 +153,18 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   transition:opacity 2.2s ease,background-color .6s;padding:calc(18px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))}
 .ouv[hidden]{display:none}
 .ouv.ouv-fondu{opacity:0;pointer-events:none}
-.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(8vh,calc(50vh - 260px));transition:padding-top .7s ease}
+.ouv-cadre{width:100%;max-width:620px;display:flex;flex-direction:column;min-height:0;padding-top:max(5vh,calc(50vh - 340px));transition:padding-top .7s ease}
 .ouv-travail .ouv-cadre{padding-top:28px}
+.ouv-marque{margin:0 0 30px;transition:opacity .5s ease,margin .6s ease,max-height .6s ease;max-height:320px;overflow:hidden}
+.ouv-nom{margin:0 0 8px;font:600 clamp(38px,9vw,68px)/1 var(--f-ui);letter-spacing:-.025em;text-wrap:balance}
+.ouv-concept{margin:0 0 12px;font:500 clamp(11.5px,1.5vw,14px)/1.35 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--rec)}
+.ouv-expl{margin:0;max-width:34em;font:400 clamp(14.5px,1.7vw,17px)/1.5 var(--f-ui);color:var(--ink-dim);text-wrap:pretty}
+.ouv-travail .ouv-marque{max-height:0;margin:0;opacity:0}
+@media (max-height:640px){.ouv-expl{display:none}.ouv-marque{margin-bottom:18px}}
 .ouv-sur{margin:0 0 14px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);display:flex;align-items:center;gap:9px}
 .ouv-pt{width:7px;height:7px;border-radius:50%;background:var(--rec);box-shadow:0 0 10px var(--rec)}
-.ouv-q{margin:0 0 22px;font:600 32px/1.08 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
-@media (min-width:760px){.ouv-q{font-size:44px}}
+.ouv-q{margin:0 0 18px;font:600 24px/1.12 var(--f-ui);letter-spacing:-.01em;text-wrap:balance;transition:font-size .6s ease,margin .6s ease,color .6s}
+@media (min-width:760px){.ouv-q{font-size:30px}}
 .ouv-travail .ouv-q{font-size:15px;margin:0 0 10px;color:var(--ink-dim);font-weight:500}
 .ouv-form{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:18px;padding:12px;background:rgba(243,240,232,.045)}
 .ouv-form:focus-within{border-color:rgba(243,240,232,.55)}
@@ -188,12 +197,50 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .ouv-constat{display:flex;flex-direction:column;gap:2px}
 .ouv-c{font:500 14px/1.4 var(--f-ui)}
 .ouv-r{color:var(--ink-dim);font-size:12px}
+.ouv-photos{margin-left:-24px;overflow:hidden}
+.ouv-bande{overflow:hidden;padding:8px 2px 4px;min-height:142px}
+@media (min-width:760px){.ouv-bande{min-height:157px}}
+.ouv-rail{display:flex;gap:10px;align-items:flex-start;transition:transform .45s cubic-bezier(.2,.7,.2,1);will-change:transform}
+.ouv-vg{flex:none;width:112px;margin:0;transform:rotate(var(--r,0deg));animation:ouvVg .22s ease-out both}
+@media (min-width:760px){.ouv-vg{width:132px}}
+.ouv-vg-img{position:relative;overflow:hidden;aspect-ratio:4/3;border-radius:4px;background:#1b2018;outline:1px solid rgba(243,240,232,.18);outline-offset:2px}
+.ouv-vg-img img{display:block;width:100%;height:100%;object-fit:cover}
+.ouv-vg-img::after{content:"";position:absolute;left:0;right:0;top:0;height:34%;background:linear-gradient(to bottom,transparent,rgba(243,240,232,.38),transparent);transform:translateY(-110%);opacity:0}
+.ouv-vg.lecture .ouv-vg-img{outline-color:var(--ink)}
+.ouv-vg.lecture .ouv-vg-img::after{opacity:1;animation:ouvBalaye .5s linear infinite}
+.ouv-vg figcaption{margin-top:6px;font:400 10.5px/1.35 var(--f-mono);color:var(--ink);min-height:2.7em;overflow-wrap:anywhere}
+.ouv-vg.ecartee .ouv-vg-img{opacity:.38;filter:grayscale(1)}
+.ouv-vg.ecartee figcaption{color:var(--ink-dim)}
+.ouv-vg.epinglee .ouv-vg-img{outline-color:var(--rec)}
+.ouv-credit{margin:4px 0 0 2px;font:400 10px/1.4 var(--f-mono);color:var(--ink-dim)}
+.ouv-constat.avec-photo{position:relative;padding-left:48px;min-height:38px}
+.ouv-epingle{position:absolute;left:0;top:2px;width:40px;height:30px;object-fit:cover;border-radius:3px;outline:1px solid var(--rec);outline-offset:1px;transform:rotate(-3deg);animation:ouvEpingle .35s ease-out both}
+.ouv-credits details{font:400 10.5px/1.45 var(--f-mono);color:var(--ink-dim)}
+.ouv-credits summary{cursor:pointer}
+.ouv-credits ul{margin:4px 0 0;padding-left:16px}
+.ouv-credits a{color:var(--ink-dim)}
+@keyframes ouvVg{from{opacity:0;transform:translateY(10px) rotate(var(--r,0deg)) scale(.92)}to{opacity:1;transform:rotate(var(--r,0deg))}}
+@keyframes ouvBalaye{to{transform:translateY(310%)}}
+@keyframes ouvEpingle{from{opacity:0;transform:translateY(-6px) rotate(-8deg) scale(1.3)}to{opacity:1;transform:rotate(-3deg)}}
+/* fenêtre large (démo sur PC) : le journal à gauche, la planche de photos à droite, vignettes plus grandes en mosaïque */
+.ouv-large .ouv-cadre{max-width:1480px;display:grid;grid-template-columns:minmax(0,540px) minmax(0,1fr);grid-template-rows:auto auto auto auto auto minmax(0,1fr) auto;column-gap:44px;align-content:stretch}
+.ouv-large .ouv-cadre>*{grid-column:1}
+.ouv-large .ouv-log{grid-row:6}
+.ouv-large .ouv-planche{grid-column:2;grid-row:1/-1;align-self:start;min-width:0;padding-top:2px;animation:ouvApparait .4s ease both}
+.ouv-planche-t{margin:0 0 6px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim)}
+.ouv-planche .ouv-bande{min-height:0;padding:10px 8px 6px}
+.ouv-planche .ouv-rail{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 14px;transform:none;transition:none}
+.ouv-planche .ouv-vg{width:auto}
+.ouv-planche .ouv-vg figcaption{font-size:11.5px;min-height:2.8em}
+.ouv-planche .ouv-credit{font-size:11px;margin-top:8px}
+.ouv-planche .ouv-credits{margin-top:6px}
+.ouv-planche .ouv-credits details{font-size:11px}
 .ouv-mention{margin:10px 0 0;font:400 11px/1.4 var(--f-mono);letter-spacing:.04em;color:var(--ink-dim)}
 .ouv-passer{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:14px;min-height:36px;padding:0 14px;font-size:13px}
 .ouv-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @keyframes ouvTourne{to{transform:rotate(360deg)}}
 @keyframes ouvApparait{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.ouv-roue,.ouv-etape,.ouv-it{animation:none}.ouv{transition:opacity .4s}}
+@media (prefers-reduced-motion:reduce){.ouv-roue,.ouv-etape,.ouv-it,.ouv-vg,.ouv-epingle,.ouv-vg-img::after{animation:none}.ouv-rail{transition:none}.ouv{transition:opacity .4s}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 @media (prefers-reduced-motion:reduce){button.pulse{animation:none}}
 </style>
@@ -219,11 +266,13 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
     <button id="mesurer" type="button" class="ghost">Mesurer</button>
     <button id="banc" type="button" class="ghost" title="Environ 15 s, caméra figée : ce que coûte chaque partie de l'image sur cet appareil">Banc d'essai</button>
     <button id="voix-inter" type="button" class="ghost" aria-pressed="false" title="Ses pensées lues à voix haute">Voix : non</button>
+    <button id="sons-inter" type="button" class="ghost" aria-pressed="true" title="Bruitages (crédits des prises : docs/bruitages.md)">Sons : oui</button>
     <button id="suivi" type="button" class="ghost" aria-pressed="true" hidden>Suivi du téléphone : oui</button>
     <button id="qualite" type="button" class="ghost" aria-pressed="false" title="Mobile : téléphone moyen. Complète : ordinateur, pleine résolution.">Qualité : mobile</button>
     <button id="v2" type="button" class="ghost" aria-pressed="false" hidden title="Essai : tourner des panoramiques, puis les projeter">Moteur v2</button>
     <button id="v3" type="button" class="ghost" aria-pressed="false" title="Essai : semer des grains au lieu de lancer des rayons">Moteur v3</button>
     <button id="ombrage-raz" type="button" class="ghost" hidden title="Une version plus riche de l'image n'a pas pu se préparer sur cet appareil : la retenter (la page se recharge)">Image complète : réessayer</button>
+    <small id="sons-credit" class="credit-sons"></small>
   </div>
   <div class="row commandes" id="commandes">
     <button id="parler" type="button">Lui parler</button>

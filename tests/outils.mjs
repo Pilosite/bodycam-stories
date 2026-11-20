@@ -1,6 +1,6 @@
 // Outils de test du meneur : un monde de papier, de faux Claude, de faux joueurs, et une partie simulée en accéléré.
 import { readFileSync } from 'node:fs';
-import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour, planTrajet, planTrajetSouple, planMarche, planDeplacement, texteMarche, enjambable, lieuChercher, horsDuCorps, placeLibre } from '../src/meneur.js';
+import { creerMeneur, normaliserHistoire, ficheDe, REGLAGES, envergure, distanceArret, planCadrage, hauteurPerchee, placePose, zoomPour, planTrajet, planTrajetSouple, planMarche, planDeplacement, texteMarche, enjambable, lieuChercher, horsDuCorps, placeLibre, gesteFaconnage, planDegout, degoutDe } from '../src/meneur.js';
 
 export const MODELES = JSON.parse(readFileSync(new URL('../src/modeles.json', import.meta.url), 'utf8'));
 
@@ -79,7 +79,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
   w.executer = o => {
     w.ordres.push(o);
     if (o.type === 'actions' && o.vider) w.zoom = 1;
-    if (o.type === 'pensee') w.pensees.push(Object.assign({ t: w.t }, o));
+    if (o.type === 'pensee') { w.pensees.push(Object.assign({ t: w.t }, o)); w.dernierePensee = w.t; }
     if (o.type === 'apercu') w.pensees.push({ type: 'apercu', texte: o.texte, t: w.t });
     else if (o.type === 'fin') w.fin = o;
     else if (o.type === 'arret') { w.flaner = false; w.file.length = 0; libererPoses(); }
@@ -98,6 +98,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
       const marque = ref => w.file.some(a => a.type === 'poser' && a.ref === ref);
       if (o.op === 'reserver') { w.reserves[o.ref] = o.au_geste && marque(o.ref) ? { ou: o.ou, distance: o.distance, pos: null } : { pos: place() }; return; }
       if (o.op === 'abandon') { delete w.reserves[o.ref]; return; }
+      if (o.op === 'creer' && o.retenu) { (w.retenus = w.retenus || {})[o.retenu] = Object.assign({}, o, { retenu: undefined }); noter('retenu', { id: o.objet.id, pour: o.retenu }); return; }   // §22.2 : posé quand il vomit
       if (o.op === 'creer') {
         if (objets.filter(x => !caches.has(x.id)).length >= 8) return;
         const rs = o.reserve && w.reserves[o.reserve];
@@ -129,12 +130,13 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
         else if (a.type === 'marcher') w.file.push({ type: 'marche', metres: a.metres });   // le trajet au moment de partir (§18)
         else if (a.type === 'attendre') w.file.push({ type: 'attendre', rest: a.secondes });
         else if (a.type === 'chercher') w.file.push({ type: 'chercher', quoi: a.quoi });
-        else if (a.type === 'faconner') w.file.push({ type: 'faconner', objet: a.objet, rest: 30 });
+        else if (a.type === 'faconner') w.file.push({ type: 'faconner', objet: a.objet, rest: 30, degout: a.degout || null });
+        else if (a.type === 'hesiter' || a.type === 'essuyer') w.file.push({ type: a.type, rest: a.secondes, duree: a.secondes, force: a.force });   // §22
         else if (a.type === 'poser') w.file.push({ type: 'poser', ref: a.ref });
         else if (a.type === 'attendreObjet') w.file.push({ type: 'attendreObjet', ref: a.ref, rest: a.secondes || 20 });
         else if (a.type === 'deplacer') w.file.push({ type: 'deplacer', metres: a.metres, rayon: a.rayon });
         else if (a.type === 'effort') w.file.push({ type: 'effort', rest: a.secondes, force: a.force, duree: a.secondes });
-        else if (a.type === 'penser') w.file.push({ type: 'penser', texte: a.texte, bref: a.bref });
+        else if (a.type === 'penser') w.file.push({ type: 'penser', texte: a.texte, bref: a.bref, espace: a.espace || 0 });
       }
     }
   };
@@ -160,11 +162,41 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
       return;
     }
     if (a.type === 'faconner') {                                 // il attend, accroupi, que l'accessoiriste ait décrit les états ; puis il les joue
+      if (w.faconnages[a.objet] && a.degout) {                   // §22 : comme main.js, le geste dure, et les pensées de dégoût tombent à leurs instants
+        const op = w.faconnages[a.objet];
+        if (!a.plan) { const ob = objets.find(x => x.id === a.objet), e0 = ob ? ob.echelle || 1 : 1, E = op.echelle !== undefined ? op.echelle : e0;
+          const avant = (ob ? ob.formesL : []).map(f => Object.assign({}, f, { p: f.p.map(v => v * e0 / E), taille: f.taille.map(v => v * e0 / E) }));
+          a.plan = planDegout(gesteFaconnage(avant, op.etapes[op.etapes.length - 1], []), a.degout, degoutDe(MODELES)); a.tt = -0.4; a.dites = 0;
+          noter('faconner_debut', { id: a.objet, total: a.plan.total, palier: a.degout.palier, intensite: a.degout.intensite }); w.degouts = (w.degouts || []).concat([{ id: a.objet, t0: w.t + 0.4, plan: a.plan }]); }
+        const N = a.plan.nausee;
+        if (N && (a.nau || !a.nauFait && a.tt >= N.t)) {              // §22.2 : le geste est suspendu, il vomit, il revient, le geste reprend au même point
+          if (!a.nau) { a.nau = { t: 0, e: -1, p: 0, yaw0: w.yaw }; a.nauFait = true; }
+          const n = a.nau; n.t += dt;
+          while (n.e + 1 < N.etapes.length && n.t >= N.etapes[n.e + 1].t0) { const e = N.etapes[++n.e];
+            if (e.quoi === 'detourner') { const ob = objets.find(x => x.id === a.objet), cote = ob && Math.sin(Math.atan2(ob.x - w.x, ob.z - w.z) - w.yaw) > 0 ? -1 : 1; w.yaw += cote * N.angle * Math.PI / 180; }
+            if (e.quoi === 'revenir') w.yaw = n.yaw0;
+            const fl = e.quoi === 'vomir' && w.retenus && w.retenus[a.objet];
+            if (fl) { delete w.retenus[a.objet]; w.executer(fl); const ob = objets.find(x => x.id === fl.objet.id); noter('flaque', { id: fl.objet.id, x: ob && ob.x, z: ob && ob.z }); }
+            noter('nausee_' + e.quoi, { tt: Math.round(a.tt * 100) / 100, yaw: w.yaw });
+            if (e.quoi === 'vomir') noter('son', { evenement: 'nausee', intensite: a.degout.intensite, duree: e.duree }); }
+          while (n.p < N.pensees.length && n.t >= N.pensees[n.p].t) { const q = N.pensees[n.p++];
+            w.pensees.push({ type: 'pensee', texte: q.texte, source: 'nausee', phase: q.phase, t: w.t }); w.dernierePensee = w.t; noter('penser', { texte: q.texte, phase: q.phase }); }
+          if (n.t >= N.duree) { a.nau = null; noter('reprend', { tt: Math.round(a.tt * 100) / 100 }); }
+          return;
+        }
+        a.tt += dt;
+        while (a.dites < a.plan.pensees.length && a.tt >= a.plan.pensees[a.dites].t) { const q = a.plan.pensees[a.dites++];
+          w.pensees.push({ type: 'pensee', texte: q.texte, source: 'degout', phase: q.phase, t: w.t }); w.dernierePensee = w.t; noter('penser', { texte: q.texte, phase: q.phase }); }
+        if (a.tt >= a.plan.total) { faconner(op); noter('faconner_fin', { id: a.objet }); w.file.shift(); }
+        return;
+      }
       if (w.faconnages[a.objet]) { faconner(w.faconnages[a.objet]); w.file.shift(); return; }
       a.rest -= dt; if (a.rest <= 0) w.file.shift(); return;
     }
     if (a.type === 'bloque') { w.bloques.push(a.devant); w.file.shift(); return; }
-    if (a.type === 'penser') { w.file.shift(); w.pensees.push({ type: 'pensee', texte: a.texte, source: 'file', t: w.t }); noter('penser', { texte: a.texte, bref: !!a.bref }); return; }   // comme main.js : dite quand la file l'atteint
+    if (a.type === 'penser' && a.espace && w.t - (w.dernierePensee ?? -1e9) < a.espace) return;   // au plus une pensée toutes les ~3 s (§22)
+    if (a.type === 'hesiter' || a.type === 'essuyer') { if (a.rest === a.duree) noter(a.type, { secondes: a.duree, force: a.force, haut: w.haut }); a.rest -= dt; if (a.rest <= 0) w.file.shift(); return; }
+    if (a.type === 'penser') { w.dernierePensee = w.t; w.file.shift(); w.pensees.push({ type: 'pensee', texte: a.texte, source: 'file', t: w.t }); noter('penser', { texte: a.texte, bref: !!a.bref }); return; }   // comme main.js : dite quand la file l'atteint
     if (a.type === 'effort') { if (a.rest === a.duree) noter('effort', { secondes: a.duree, force: a.force, haut: w.haut }); a.rest -= dt; if (a.rest <= 0) w.file.shift(); return; }
     if (a.type === 'poser') {                                    // la place de la chose : ici, maintenant (§19)
       w.file.shift(); const rs = w.reserves[a.ref]; noter('poser', { ref: a.ref });

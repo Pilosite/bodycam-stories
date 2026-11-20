@@ -68,25 +68,53 @@ export function programme(r, f, hasard = Math.random, controle = null) {
   t = jit(r.comprendre.duree, .2);
   etape('recherche', 'Recherche', r.recherche.duree, r.recherche.requetes, q => ({ genre: 'requete', texte: q }));
   etape('lecture', 'Lecture des sources', r.lecture.duree, r.lecture.sources, s => ({ genre: 'source', texte: s.titre, domaine: s.domaine, etat: s.etat, pourquoi: s.pourquoi || '' }));
-  etape('constats', 'Ce que j\'en retiens', r.constats.duree, r.constats.liste, c => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage }));
+  const V = r.vignettes && Array.isArray(r.vignettes.photos) && r.vignettes.photos.length ? r.vignettes : null;
+  if (V) {
+    // Photos du lieu (Wikimedia Commons) : les vignettes arrivent par rafales, 80 à 200 ms d'écart, chacune « en lecture » un
+    // court instant avant que son observation (ou « hors sujet ») ne s'écrive. Environ 3 s en tout.
+    ev.push({ t, type: 'etape', id: 'photos', titre: 'Photos du lieu' });
+    t += jit(.25, .5);
+    const rq = V.requetes || [], nm = Math.min(rq.length, V.requetesMontrees ?? rq.length);
+    rq.slice(0, nm).forEach(q => { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: q, ou: 'Commons' }); t += jit(.16, .4); });
+    if (rq.length > nm) { ev.push({ t, type: 'ligne', etape: 'photos', genre: 'requete', texte: `… et ${rq.length - nm} autres`, ou: 'Commons' }); t += jit(.15, .4); }
+    let fin = t;
+    V.photos.forEach((p, i) => {
+      ev.push({ t, type: 'ligne', etape: 'photos', genre: 'photo', photo: p.id, garde: !p.ecartee });
+      const lu = t + jit(p.ecartee ? .3 : .48, .35);
+      ev.push({ t: lu, type: 'photo-lue', etape: 'photos', photo: p.id, garde: !p.ecartee });
+      fin = Math.max(fin, lu + (p.ecartee ? .15 : .4));
+      t += .08 + .12 * hasard();
+      if (i % 4 === 3) t += jit(.22, .4);                  // une petite pause entre deux rafales
+    });
+    t = Math.max(t, fin);
+    ev.push({ t, type: 'fin-etape', id: 'photos' }); t += jit(.15, .5);
+  }
+  etape('constats', 'Ce que j\'en retiens', r.constats.duree, r.constats.liste, c => ({ genre: 'constat', texte: c.texte, source: c.source, reglage: c.reglage, photo: c.photo || null }));
   etape('traduction', 'Traduction en vocabulaire du moteur', r.traduction.duree, traduction(f), ([k, x]) => ({ genre: 'valeur', cle: k, texte: x }));
   const lignes = controle ? (controle.lignes.length ? controle.lignes.filter(l => l.niveau !== 'info').slice(0, 3).map(l => (l.niveau === 'erreur' ? 'erreur : ' : 'à noter : ') + l.texte) : []) : [];
   etape('controle', 'Contrôle', r.controle.duree, [r.controle.texte, ...lignes, controle ? (controle.ok ? 'passage libre, rien de bloquant' : 'des erreurs : voir le constat') : 'contrôle indisponible'], x => ({ genre: 'controle', texte: x }));
+  if (V) ev.push({ t, type: 'credits' });                  // le détail des crédits des photos, en fin de rejeu
   ev.push({ t, type: 'monde' });
   t += r.fondu.duree;
   ev.push({ t, type: 'fin' });
-  return ev;
+  return ev.sort((a, b) => a.t - b.t);                     // les lectures de photos se chevauchent : tri stable par date
 }
 
 /* ------------------------------------------------------------------ interface (DOM)
    deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
             construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
             surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard } */
+const LARGE = '(min-width: 1000px) and (min-aspect-ratio: 5/4)';   // démo sur PC : planche de photos à côté du journal
 export function creerOuverture(deps) {
   const d = document, $ = id => d.getElementById(id);
   const racine = d.createElement('section');
   racine.id = 'ouverture'; racine.className = 'ouv'; racine.setAttribute('aria-labelledby', 'ouv-q'); racine.hidden = true;
   racine.innerHTML = `<div class="ouv-cadre">
+  <header class="ouv-marque">
+    <p class="ouv-nom">Bodycam Stories</p>
+    <p class="ouv-concept">Génération procédurale complète par intelligence artificielle</p>
+    <p class="ouv-expl">Tu décris un monde. Une IA l'écrit, le moteur le fabrique entièrement par code, sans image ni modèle 3D, et le filme comme une caméra-piéton. Puis tu parles à celui qui la porte.</p>
+  </header>
   <p class="ouv-sur"><span class="ouv-pt"></span>CAM 07 · nouveau tournage</p>
   <h1 id="ouv-q" class="ouv-q">Quel monde veux-tu filmer ?</h1>
   <form id="ouv-form" class="ouv-form" autocomplete="off">
@@ -150,6 +178,19 @@ export function creerOuverture(deps) {
     try { controle = deps.C ? deps.C.controler(f, null, { recettes: deps.recettes }) : null; } catch (_) { controle = null; }
     const ev = programme(r, f, deps.hasard || Math.random, controle);
     const blocs = {};
+    // Les vignettes sont décodées tout de suite (img.decode), bien avant leur passage : rien ne se décode pendant la rafale.
+    const V = r.vignettes && Array.isArray(r.vignettes.photos) ? r.vignettes : null;
+    if (V) {
+      blocs.vg = {};
+      for (const p of V.photos) {
+        const im = new Image(); im.alt = p.titre || ''; im.decoding = 'async'; im.src = p.donnees || '';
+        if (im.decode) im.decode().catch(() => {});
+        blocs.vg[p.id] = { p, im };
+      }
+      blocs.V = V;
+      blocs.large = !!(window.matchMedia && matchMedia(LARGE).matches);
+      if (blocs.large) racine.classList.add('ouv-large');   // colonne des photos réservée dès le début : pas de saut de mise en page
+    }
     for (const e of ev) timers.push(setTimeout(() => jouer(e, blocs), e.t * 1000));
   }
 
@@ -162,15 +203,24 @@ export function creerOuverture(deps) {
       return;
     }
     const b = blocs[e.etape || e.id];
+    if (e.type === 'ligne' && e.genre === 'photo' && b) { vignette(e, b, blocs); return; }
+    if (e.type === 'photo-lue') { vignetteLue(e, blocs); return; }
+    if (e.type === 'credits') { credits(blocs); return; }
     if (e.type === 'ligne' && b) {
       const it = d.createElement('li'); it.className = 'ouv-it ouv-' + e.genre;
-      if (e.genre === 'requete') it.innerHTML = `<span class="ouv-k">cherche</span> ${esc(e.texte)}`;
+      if (e.genre === 'requete') it.innerHTML = `<span class="ouv-k">cherche${e.ou ? ' · ' + esc(e.ou) : ''}</span> ${esc(e.texte)}`;
       else if (e.genre === 'source') it.innerHTML = `<span class="ouv-dom">${esc(e.domaine)}</span> <span class="ouv-src">${esc(e.texte)}</span> <span class="ouv-etat ouv-${esc(e.etat)}">${esc(ETAT[e.etat] || e.etat)}${e.pourquoi ? ' · ' + esc(e.pourquoi) : ''}</span>`;
       else if (e.genre === 'constat') it.innerHTML = `<span class="ouv-c">${esc(e.texte)}</span><span class="ouv-r">→ ${esc(e.reglage)}</span>`;
       else if (e.genre === 'valeur') it.innerHTML = `<span class="ouv-k">${esc(e.cle)}</span> ${esc(e.texte)}`;
       else it.textContent = e.texte;
+      const ph = e.genre === 'constat' && e.photo && blocs.vg && blocs.vg[e.photo];
+      if (ph && !ph.p.ecartee) {                         // la photo qui appuie ce constat y reste épinglée
+        const pin = ph.im.cloneNode(); pin.className = 'ouv-epingle'; pin.title = creditDe(ph.p); pin.alt = '';
+        it.classList.add('avec-photo'); it.prepend(pin);
+        if (ph.carte) ph.carte.classList.add('epinglee');
+      }
       b.ul.appendChild(it); b.n++;
-      const c = b.x.querySelector('.ouv-compte'); if (e.genre === 'requete' || e.genre === 'source') c.textContent = b.n;
+      const c = b.x.querySelector('.ouv-compte'); if ((e.genre === 'requete' || e.genre === 'source') && e.etape !== 'photos') c.textContent = b.n;
       it.scrollIntoView({ block: 'end', behavior: 'smooth' });
       return;
     }
@@ -185,6 +235,54 @@ export function creerOuverture(deps) {
         timers.push(setTimeout(() => terminer(e.fiche), 2400)); });
       return;
     }
+  }
+
+  /* Vignettes de photos (ouvertures/photos/*.json) : une bande qui défile en transform, chaque carte un peu de travers,
+     « en lecture » (cadre et balayage) puis son observation, ou grisée « hors sujet ». Animations en transform et opacity. */
+  const creditDe = p => `${p.titre} · ${p.auteur} · ${p.licence} · Wikimedia Commons · recadrée et réduite`;
+  function vignette(e, b, blocs) {
+    const ph = blocs.vg && blocs.vg[e.photo]; if (!ph) return;
+    if (!b.bande) {
+      // Fenêtre large et couchée (démo sur PC) : une planche à côté du journal, vignettes plus grandes en mosaïque ;
+      // sinon (téléphone), une bande qui défile dans le journal.
+      b.large = !!blocs.large;
+      const it = d.createElement(b.large ? 'aside' : 'li'); it.className = b.large ? 'ouv-planche' : 'ouv-it ouv-photos';
+      if (b.large) it.setAttribute('aria-label', 'Photos du lieu');
+      const V = blocs.V, uniq = a => [...new Set(a)];
+      it.innerHTML = `${b.large ? '<p class="ouv-planche-t">Photos du lieu · Wikimedia Commons</p>' : ''}<div class="ouv-bande"><div class="ouv-rail"></div></div><p class="ouv-credit">Photos : Wikimedia Commons, ${esc(uniq(V.photos.map(p => p.auteur.replace(/ \(.*$/, ''))).join(', '))} · ${esc(uniq(V.photos.map(p => p.licence)).join(', '))} · recadrées et réduites, détail en fin de rejeu</p>`;
+      if (b.large) { racine.querySelector('.ouv-cadre').appendChild(it); blocs.planche = it; }
+      else b.ul.appendChild(it);
+      b.bande = it.querySelector('.ouv-bande'); b.rail = it.querySelector('.ouv-rail'); b.nv = 0; b.largeur = 0;
+      if (!b.large) it.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }
+    const c = d.createElement('figure'); c.className = 'ouv-vg lecture';
+    c.style.setProperty('--r', ((e.garde ? 1 : -1) * (0.6 + 2.2 * ((b.nv * 0.618) % 1)) * (b.nv % 2 ? 1 : -1)).toFixed(2) + 'deg');
+    c.title = creditDe(ph.p);
+    c.innerHTML = '<div class="ouv-vg-img"></div><figcaption></figcaption>';
+    c.firstChild.appendChild(ph.im);
+    b.rail.appendChild(c); ph.carte = c; b.nv++;
+    b.x.querySelector('.ouv-compte').textContent = b.nv + ' photo' + (b.nv > 1 ? 's' : '');
+    if (b.large) return;                                // la mosaïque ne défile pas
+    if (!b.pas) { b.pas = c.offsetWidth + 10; b.largeur = b.bande.clientWidth; }   // une seule lecture de mise en page
+    const dx = Math.max(0, b.nv * b.pas - 10 - b.largeur);
+    b.rail.style.transform = `translate3d(${-dx}px,0,0)`;
+  }
+  function vignetteLue(e, blocs) {
+    const ph = blocs.vg && blocs.vg[e.photo]; if (!ph || !ph.carte) return;
+    const c = ph.carte, cap = c.querySelector('figcaption');
+    c.classList.remove('lecture'); c.classList.add(e.garde ? 'lue' : 'ecartee');
+    const texte = e.garde ? ph.p.observation : 'hors sujet · ' + (ph.p.pourquoi || '');
+    let i = 0; const pas = () => { if (fini) return; i = Math.min(texte.length, i + 3); cap.textContent = texte.slice(0, i); if (i < texte.length) timers.push(setTimeout(pas, 24)); };
+    pas();
+  }
+  function credits(blocs) {
+    if (!blocs.V) return;
+    const it = d.createElement('li'); it.className = 'ouv-it ouv-credits';
+    it.innerHTML = `<details><summary>Crédits des photos (${blocs.V.photos.length})</summary><ul>${blocs.V.photos.map(p =>
+      `<li><a href="${esc(p.page)}" target="_blank" rel="noopener">${esc(p.titre)}</a> · ${esc(p.auteur)} · ${esc(p.licence)}, recadrée et réduite</li>`).join('')}</ul></details>`;
+    const blocP = Object.values(blocs).find(x => x && x.bande);
+    if (blocs.planche) { const p = d.createElement('div'); p.className = 'ouv-credits'; p.innerHTML = it.innerHTML; blocs.planche.appendChild(p); return; }
+    (blocP ? blocP.ul : log).appendChild(it);
   }
 
   function terminer(fiche, passe, constructeur) {

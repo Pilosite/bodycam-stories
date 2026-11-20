@@ -99,6 +99,7 @@ const derriere = o => o && Math.abs(o.angle) > 90;                  // perçue d
 async function vueLibre(id, quoi) { const v = await page.evaluate(i => balade.vue(i), id); verifier(v, `${quoi} : rien entre la caméra et elle (semis, troncs, rochers, choses)`); }
 // 1. une petite crotte : posée derrière lui (Claude dit « devant, 1,2 m »), puis cadrée de près
 await attendre(1500);
+const tVoix1 = await page.evaluate(() => performance.now() / 1000);
 await dire(PH[0]);
 await quand(() => balade.objets().some(o => o.id === 'fab-1'));
 const o1a = await objet('fab-1');
@@ -107,6 +108,12 @@ await auRepos();
 const o1 = await objet('fab-1');
 verifier(o1 && o1.taille >= 0.08 && o1.taille <= 0.16, `petite crotte : ${o1 && o1.taille} m`);
 verifier(o1 && Math.abs(o1.angle) < 10 && o1.m < 1, `cadrée de près : ${o1 && o1.m} m, ${o1 && o1.angle}°, zoom ${(await corps()).zoom.toFixed(1)}`);
+{ // les bruits de la petite (docs/bruitages.md) : deux ou trois, brefs, aigus, pendant l'effort, puis la chute
+  const J = (await page.evaluate(() => window.balSons)).filter(e => e.t >= tVoix1), B = J.filter(e => e.recette === 'flatulence');
+  for (const e of J) console.log(sec(), '  son', JSON.stringify(e));
+  verifier(B.length >= 2 && B.length <= 3 && B.every(b => b.duree <= 0.4 && b.f0 >= 180), `petite : ${B.length} petits bruits (${B.map(b => b.duree + ' s, ' + Math.round(b.f0) + ' Hz').join(' ; ')})`);
+  verifier(J.some(e => e.recette === 'chute'), 'on l\'entend tomber (chute)');
+}
 await vueLibre('fab-1', 'petite');
 await capture('1-petite', 'la petite crotte, cadrée de près');
 
@@ -147,10 +154,26 @@ verifier(!/terre/.test(await page.textContent('#pensee')), 'sa pensée ne parle 
   verifier(souffles.length >= 1, `souffles pendant l'effort : ${souffles.map(p => '+' + p.t + ' s').join(', ')}`);
   verifier(reac.length === 1 && reac[0].t > Math.max(0, ...souffles.map(p => p.t)), `une réaction, après l'effort et le cadrage : ${reac.map(p => '+' + p.t + ' s « ' + p.texte + ' »').join(' ; ')}`);
 }
+{ // les bruits de l'énorme et leurs instants (balSons) : le gros pendant l'effort, après les souffles, juste avant la pose ; aucune pensée dite pendant
+  const J = (await page.evaluate(() => window.balSons)).filter(e => e.t >= tVoix3).map(e => Object.assign({}, e, { t: +(e.t - tVoix3).toFixed(2) }));
+  const P = (await page.evaluate(() => window.balPensees)).filter(p => p.t >= tVoix3).map(p => Object.assign({}, p, { t: +(p.t - tVoix3).toFixed(2) }));
+  writeFileSync(join(out, 'sons.json'), JSON.stringify(J, null, 1));
+  for (const e of J) console.log(sec(), '  son', JSON.stringify(e));
+  const B = J.filter(e => e.recette === 'flatulence'), G = B.find(e => e.principal), ch = J.find(e => e.recette === 'chute');
+  verifier(G && G.duree >= 2.5 && G.f0 <= 90, `énorme : le gros bruit, ${G && G.duree} s, ${G && Math.round(G.f0)} Hz, à +${G && G.t} s`);
+  const souffles = P.filter(p => p.source === 'file' && p.file[0] === 'effort');
+  verifier(G && souffles.every(p => p.t < G.t), 'les souffles avant le gros bruit');
+  // le temps du corps avance par pas bornés (dtMax) : en rendu logiciel, une image lente l'étire par rapport à l'horloge du journal ;
+  // on vérifie l'ordre (la chute après le gros bruit, rien entre les deux) et on rapporte l'écart
+  verifier(G && ch && ch.t >= G.t + G.duree - 0.3 && !B.some(b => b.t > G.t), `la chose tombe après le gros bruit, rien entre : chute à +${ch && ch.t} s (fin du bruit +${G && (G.t + G.duree).toFixed(2)} s, horloge murale)`);
+  const pendant = G ? P.filter(p => p.t > G.t && p.t < G.t + G.duree) : [];
+  verifier(pendant.every(p => J.some(e => e.voix_differee_s && Math.abs(e.t - p.t) < 0.2)), `aucune pensée dite pendant le gros bruit (${pendant.length} affichée(s), voix différée)`);
+}
 await vueLibre(idE, 'énorme');
 await capture('3-enorme', 'l\'énorme crotte, entière');
 
 // 4. « fais comme un bonhomme de neige avec » : il va chercher bâtons et cailloux, ramasse (la main), revient, façonne, cadre en pied
+const tVoix4 = await page.evaluate(() => performance.now() / 1000);
 await dire(PH[3]);
 await quand(() => balade.corps().file.includes('marcher') && balade.lieuCherche());
 await attendre(2500);
@@ -202,6 +225,16 @@ verifier(ob && Math.abs(ob.angle) < 10 && enPied, `bonhomme cadré en pied, enti
 await vueLibre(idE, 'bonhomme');
 await capture('8-bonhomme', 'le bonhomme fini, cadré en pied');
 
+{ // §22 : le dégoût (et la nausée) du bonhomme fait avec l'énorme : le journal des pensées et leurs instants, depuis la phrase
+  const P = (await page.evaluate(() => window.balPensees)).filter(p => p.t >= tVoix4).map(p => ({ t: +(p.t - tVoix4).toFixed(1), source: p.source, phase: p.phase, texte: p.texte }));
+  writeFileSync(join(out, 'pensees-bonhomme.json'), JSON.stringify(P, null, 1));
+  for (const p of P) console.log('   ', String(p.t).padStart(6), p.source + (p.phase ? '/' + p.phase : ''), '«', p.texte, '»');
+  const sons = await page.evaluate(() => window.balSons || []), ev2 = await page.evaluate(() => balade.trace().evenements.filter(e => /degout/.test(e.type)));
+  console.log(sec(), 'dégoût', JSON.stringify(ev2), 'sons', JSON.stringify(sons.map(x => x.evenement)));
+  verifier(P.some(p => p.source === 'degout' && p.phase === 'contact'), 'une pensée de dégoût au premier contact');
+  verifier(P.some(p => p.source === 'nausee'), 'l\'énorme : la nausée');
+  verifier(ev2.some(e => e.type === 'degout_fin'), 'la réaction finale, dégoût et fierté');
+}
 const ev = (await page.evaluate(() => balade.trace().evenements)).filter(e => /modele|faconnage|objet_|cadrage|docile|consomme/.test(e.type));
 console.log(sec(), 'événements', JSON.stringify(ev.map(e => e.type + (e.id ? ':' + e.id : '') + (e.raison ? ' (' + e.raison + ')' : ''))));
 writeFileSync(join(out, 'trace.json'), JSON.stringify(await page.evaluate(() => balade.trace())));
