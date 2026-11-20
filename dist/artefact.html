@@ -13914,6 +13914,12 @@ precision highp float; precision highp int; precision highp sampler2D;
 #ifndef PATE
 #define PATE 0
 #endif
+/* PRXCOMPTE (essais seulement, balade.prochesCompte) : chaque fragment écrit, au lieu du tampon G, 1, le nombre de formes
+   évaluées (sdPrim, ou un pas de bloc ou de tronc), 1 s'il touche, et le nombre de tests de boîte ; la page les additionne
+   sur l'écran (mélange additif, sans profondeur). */
+#ifndef PRXCOMPTE
+#define PRXCOMPTE 0
+#endif
 // Le monde, partagé par le lanceur de rayons (pathtrace.frag) et le semeur (moteur v3, v3_*.vert / v3_ombrage.frag).
 // Inséré par le build (#include) : chaque fichier qui l'inclut déclare d'abord sa version et ses précisions.
 // Ici : aléa, relief, familles d'objets en grilles (un objet par cellule), objets de la fiche, canopée, ciel, lointain.
@@ -14643,6 +14649,12 @@ vec3 shadeLeafT(vec3 p, vec3 n, vec3 alb, vec3 rd, vec3 sd, float T){   // sd : 
   return col;
 }
 uniform vec2 uJitPx;
+#if PRXCOMPTE
+int NEV=0, NFR=0;
+#define JETER { g0=vec4(1.,float(NEV),0.,float(NFR)); g1=vec4(0.); return; }
+#else
+#define JETER discard;
+#endif
 #if PATE
 /* Objets mous (variante PATE, voir v3_proches.vert). Vocabulaire des formes, des données (docs/fiche-de-lieu.md) :
    - lisse > 0 : la forme est MOLLE et se fond dans les formes molles de l'objet (union adoucie de ce rayon, m) : deux boules
@@ -14663,6 +14675,9 @@ float sdMou(vec3 p, int st, int cn, bool mou, out float brow){
     int row=st+j;
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
     vec3 q=primLocal(p,row);
+#if PRXCOMPTE
+    NEV++;
+#endif
     float dd=sdPrim(q,a.w,b.xyz)-max(e.y,0.);
     float bo=mou?fract(texelFetch(uShapes,ivec2(2,row),0).w):0.;
     if(bo>.001){ float sz=max(min(b.x,min(b.y,b.z)),.004); dd+=bo*sz*bosseP(q*(2.2/sz)+float(row)*1.7); }
@@ -14682,17 +14697,17 @@ flat in ivec4 vK; flat in vec2 vId; flat in vec2 vPrx; in vec3 vW;
 layout(location=0) out vec4 g0;
 layout(location=1) out vec4 g1;
 void main(){
-  if(vK.x<0) discard;
+  if(vK.x<0) JETER
   vec2 uv=(gl_FragCoord.xy+uJitPx-.5*uRes)/uRes.y;
   float rr=length(uv), ang=rr*uFish;
   vec3 rd=normalize(uCam*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang)));
   int row=vK.y; ElemS e; Bloc B; float sc=1.;
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), ee=texelFetch(uShapes,ivec2(3,row),0);
 #if (PF==0 || PF==1) && !PATE
-  if(vK.x==1){ semisTete(vK.z,float(vK.w),e); if(!semisElem(vK.z,vId,e)) discard; sc=.85*e.s*min(1.,e.sy)*e.sh; }
+  if(vK.x==1){ semisTete(vK.z,float(vK.w),e); if(!semisElem(vK.z,vId,e)) JETER sc=.85*e.s*min(1.,e.sy)*e.sh; }
 #endif
 #if PF==0 || PF==2
-  if(vK.x==2){ if(!blocGres(vId,B)) discard; }
+  if(vK.x==2){ if(!blocGres(vId,B)) JETER }
 #endif
   float t0=length(vW-uCamPos), t=vPrx.x>.5?.02:max(.02,t0-.05), tmax=t0+vPrx.y, d=1.;
   bool touche=false; vec4 gv=vec4(0.); const vec2 k=vec2(1.,-1.);
@@ -14702,6 +14717,9 @@ void main(){
     vec3 o=touche?(nn==0?k.xyy:nn==1?k.yyx:nn==2?k.yxy:k.xxx)*(.0005*t+.0005):vec3(0.);
     vec3 p=uCamPos+rd*t+o;
     float dd=1.;
+#if PRXCOMPTE && !PATE
+    NEV++;
+#endif
 #if PATE
     if(vK.x==0 || vK.x==5){ float br; dd=sdMou(p,row,vK.x==5?vK.z:1,vK.x==5,br)*(vK.x==5?.7:.8); if(!touche) brow=br; }   // un seul appel de sdMou
 #elif PF==0 || PF==1
@@ -14717,7 +14735,7 @@ void main(){
     else if(dd<.0006*t+.0004 || (i>=19 && dd<.01*t+.004)) touche=true;   // au dernier pas, tout près de la surface (rayon rasant) : touché, pas de trou
     else { t+=dd; if(t>tmax || i>=19) break; }
   }
-  if(!touche || nn<4) discard;
+  if(!touche || nn<4) JETER
   vec3 p=uCamPos+rd*t;
   vec3 n=normalize(k.xyy*gv.x+k.yyx*gv.y+k.yxy*gv.z+k.xxx*gv.w);
   vec3 q=p; float code=0.;
@@ -14736,6 +14754,9 @@ void main(){
 #endif
   gl_FragDepth=clamp(t/400.,0.,1.);
   g0=vec4(q,code); g1=vec4(n,t);
+#if PRXCOMPTE
+  g0=vec4(1.,float(NEV),1.,float(NFR));
+#endif
 }`;
 const FICHES = [{"version":0,"id":"grands-avaux-sentier","titre":"Sentier entre les grès, fin d'automne","inspiration":"Forêt départementale des Grands Avaux, Champcueil : chaos de grès, pins, chênes, perches de châtaignier et bouleaux","graine":4821,"kit":"foret","ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":-33,"hauteur":21},"brume":0.011},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[]},{"version":0,"id":"grands-avaux-nuit","titre":"Le même sentier, de nuit, à la lampe du téléphone","inspiration":"Forêt des Grands Avaux, Champcueil, après la tombée du jour","graine":4821,"kit":"foret","ambiance":{"saison":"automne","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.012},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"histoire":{"pitch":"Sam est revenu chercher ses clés tombées sur le sentier cet après-midi. Il n'aime pas la forêt la nuit.","protagonistes":[{"id":"sam","role":"porteur de la caméra","trait":"prudent, se parle pour se rassurer"}],"temps":[{"id":"bruit","quand":"après quelques dizaines de mètres ou si la voix parle d'un bruit","ce_qui_se_passe":"un craquement sur la gauche, Sam se fige","scene":{"brume":0.03}},{"id":"panne","quand":"plus tard, si Sam s'éloigne du sentier","ce_qui_se_passe":"la lampe faiblit puis s'éteint","scene":{"lampe":false}}]}},{"version":0,"id":"sous-bois-voile","titre":"Sous-bois d'été, ciel voilé, brume épaisse","inspiration":"Futaie dense par temps laiteux, sans ombres nettes","graine":7313,"kit":"foret","foret":{"densite":0.85,"rochers":0.5,"feuillage":1.3},"ambiance":{"saison":"ete","meteo":"voile","soleil":{"azimut":40,"hauteur":34},"brume":0.028},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"dunes-soir","titre":"Dunes en fin de journée","inspiration":"Erg saharien, soleil rasant, rides de vent sur le sable","graine":2207,"kit":"dunes","ambiance":{"soleil":{"azimut":-60,"hauteur":11},"brume":0.0025},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"maison-lapin","titre":"Une maison dans les bois, un lapin devant","inspiration":"Exemple d'objets décrits en formes : rien de cette maison ni de ce lapin n'existe dans le moteur","graine":3170,"kit":"foret","foret":{"densite":0.7,"rochers":0.6,"feuillage":1},"ambiance":{"saison":"automne","soleil":{"azimut":-33,"hauteur":24},"brume":0.009},"objets":[{"id":"maison","nom":"petite maison en bois","devant":14,"cote":5.5,"degage":4.5,"formes":[{"f":"boite","p":[0,1.15,0],"taille":[4,2.6,3],"couleur":"#8a765f","matiere":"bois"},{"f":"toit","p":[0,2.95,0],"taille":[4.5,1.3,3.7],"couleur":"#4a4440","matiere":"tuile"},{"f":"boite","p":[1.2,3.4,0.4],"taille":[0.4,1,0.4],"couleur":"#8b4a38","matiere":"pierre"},{"f":"boite","p":[-0.5,0.98,1.51],"taille":[0.9,1.95,0.04],"couleur":"#3c2f25","matiere":"bois"},{"f":"boite","p":[1.05,1.35,1.51],"taille":[0.8,0.7,0.04],"couleur":"#2a3038","matiere":"verre"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.86,0.05,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[1.05,1.35,1.52],"taille":[0.05,0.76,0.03],"couleur":"#b9b3a8","matiere":"mat"},{"f":"boite","p":[-0.5,0.06,1.8],"taille":[1.2,0.12,0.6],"couleur":"#7d7a74","matiere":"pierre"}]},{"id":"lapin","nom":"lapin de garenne assis","devant":10.5,"cote":2.2,"cap":70,"formes":[{"f":"boule","p":[0,0.11,0],"taille":[0.18,0.22,0.3],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.09,-0.09],"taille":[0.2,0.2,0.2],"couleur":"#8a7560","matiere":"pelage","lisse":0.04},{"f":"boule","p":[0,0.21,0.13],"taille":[0.11,0.12,0.13],"couleur":"#8f7a64","matiere":"pelage","lisse":0.04},{"f":"capsule","p":[0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,6],"couleur":"#7d6955","matiere":"pelage"},{"f":"capsule","p":[-0.025,0.32,0.1],"taille":[0.03,0.1,0.03],"penche":[-12,-6],"couleur":"#7d6955","matiere":"pelage"},{"f":"boule","p":[0,0.1,-0.19],"taille":[0.07,0.07,0.07],"couleur":"#e6e1d8","matiere":"pelage"}]}],"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125}},{"version":0,"id":"essai-san-francisco","titre":"Rue en pente, San Francisco, fin d'après-midi","inspiration":"Une rue raide de Russian Hill qui descend vers la baie, bordée de maisons victoriennes colorées et mitoyennes","graine":1906,"kit":"nu","relief":{"amplitude":2.5,"echelle":260,"pente":-0.28,"niveler":true},"trajet":{"sinuosite":0,"largeur":9,"creux":0.16,"bord":"net"},"matieres":{"victorienne":{"base":"facade","couleur":"forme","motif":{"type":"fenetres","largeur":0.95,"hauteur":1.9,"pas":2.1,"etage":3.3,"allege":0.75,"cadre":0.11,"rdc":2.9,"allumees":0.3,"couleur":"#1d2328","cadre_couleur":"#eee9dc","lumiere":"#ffcf8a","opacite":1},"taches":[{"couleur":"#000000","force":0.2,"echelle":[0.5,9,0.5],"seuils":[0.4,0.75]}],"salissure":{"force":0.3,"hauteur":0.6}},"chaussee-sf":{"base":"chaussee","couleur":"#55524e","motif":{"type":"marquage","axe":"double","largeur":0.12,"couleur":"#c7a83c","bords":4.2}}},"surfaces":{"sol":"dalles","trajet":"chaussee-sf"},"ambiance":{"saison":"ete","meteo":"clair","soleil":{"azimut":-115,"hauteur":13},"brume":0.008},"lointain":{"hauteur":3,"decoupe":0.25,"neige":0,"couleur":"#7f8c86","couleur_bas":"#5d6b5e","eau":"#2f4b57"},"semis":[{"id":"maisons","nom":"maisons victoriennes mitoyennes","cellule":[6.6,12],"trajet":{"rangee":true,"min":6,"cote":"deux"},"densite":1,"hauteur":[0.85,1.3],"teinte":0.12,"palette":["#d8bf72","#94b2c6","#c4826f","#e6dfcc","#8ea585","#a98fb8"],"formes":[{"f":"boite","p":[0,4.6,-0.65],"taille":[6.4,9.2,10.5],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[1.1,5.7,5],"taille":[2.4,5.6,1],"couleur":"palette","matiere":"victorienne"},{"f":"boite","p":[0,9.45,-0.4],"taille":[6.5,0.5,11],"couleur":"#ebe6da","matiere":"mat"},{"f":"boite","p":[-1.5,1.15,4.66],"taille":[2.6,2.3,0.1],"couleur":"#4a4038","matiere":"planches"},{"f":"boite","p":[1.7,0.45,5.25],"taille":[1.6,0.9,1.2],"couleur":"#8c877c","matiere":"beton"}]},{"id":"voitures","nom":"voitures garées le long du trottoir","cellule":[5.8,2.6],"trajet":{"rangee":true,"min":2.15},"densite":0.7,"pose":"pente","tourne":3,"teinte":0.1,"palette":["#9a9fa5","#c8c8c2","#e3e3df","#7a2a26","#3b5274","#8a8676","#2e3136"],"formes":[{"f":"boite","p":[0,0.68,0],"taille":[4.4,0.78,1.78],"couleur":"palette","matiere":"metal","arrondi":0.12},{"f":"boite","p":[-0.25,1.35,0],"taille":[2.3,0.62,1.58],"couleur":"#1b1e22","matiere":"verre","arrondi":0.14},{"f":"cylindre","p":[1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"},{"f":"cylindre","p":[-1.35,0.33,0],"taille":[0.66,1.84,0.66],"penche":[90,0],"couleur":"#151515","matiere":"mat"}]},{"id":"reverberes","nom":"réverbères au bord du trottoir","cellule":[21,3.8],"trajet":{"rangee":true,"min":3.1},"densite":1,"formes":[{"f":"cylindre","p":[0,3.6,0.1],"taille":[0.16,7.2,0.16],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,7.05,0.85],"taille":[0.1,0.1,1.5],"couleur":"#3d4044","matiere":"metal"},{"f":"boite","p":[0,6.95,1.55],"taille":[0.3,0.16,0.45],"couleur":"#fff1d0","matiere":"lumineux"}]}],"histoire":{"pitch":"Sam descend la rue vers la baie en cherchant le numéro d'une maison bleue.","temps":[]}},{"version":0,"id":"essai-village-nuit","titre":"Rue de village, la nuit","inspiration":"La grand-rue pavée d'un village français, tard, quelques fenêtres encore allumées","graine":5120,"kit":"nu","relief":{"amplitude":1.2,"echelle":160,"pente":0.04},"trajet":{"sinuosite":0.35,"largeur":5.5,"creux":0.1,"bord":"net"},"surfaces":{"sol":"dalles","trajet":"paves"},"matieres":{"maison":{"base":"crepi","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":2.3,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.3,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}},"volets":{"base":"maison","couleur":"forme","motif":{"type":"fenetres","largeur":0.9,"hauteur":1.25,"pas":6,"etage":2.8,"allege":0.95,"cadre":0.07,"allumees":0.45,"couleur":"#15181c","cadre_couleur":"#cfc8b8","lumiere":"#ffbb66"}}},"ambiance":{"saison":"hiver","soleil":{"azimut":120,"hauteur":-10},"lampe":true,"brume":0.016},"lointain":{"hauteur":4,"decoupe":0.3,"couleur":"#2a2d2a","couleur_bas":"#1d211c"},"semis":[{"id":"maisons","nom":"maisons de village mitoyennes","cellule":[7.5,9],"trajet":{"rangee":true,"min":3.9,"cote":"deux"},"densite":0.92,"hauteur":[0.85,1.25],"teinte":0.1,"palette":["#c9bba3","#b9ad9a","#d4c6aa","#a8a090","#c4ae8c","#bdb6a6"],"formes":[{"f":"boite","p":[0,2.9,-0.2],"taille":[7.3,5.8,8.2],"couleur":"palette","matiere":"maison"},{"f":"toit","p":[0,6.6,-0.2],"taille":[7.34,1.6,8.7],"couleur":"#5f4034","matiere":"tuile"},{"f":"boite","p":[-1.15,1.05,3.92],"taille":[1.1,2.1,0.08],"couleur":"#3b2e24","matiere":"planches"},{"f":"boite","p":[2.3,1.6,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[-2.3,4.4,3.91],"taille":[2,1.5,0.05],"couleur":"#4d5f52","matiere":"volets"},{"f":"boite","p":[2.4,7,-1.5],"taille":[0.55,1.4,0.55],"couleur":"#7a4a3a","matiere":"brique"}]},{"id":"lampadaires","nom":"lanternes murales","cellule":[16,2],"trajet":{"rangee":true,"min":2.15,"cote":"gauche"},"densite":1,"formes":[{"f":"cylindre","p":[0,2,0],"taille":[0.1,4,0.1],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.95,0.3],"taille":[0.06,0.06,0.6],"couleur":"#26282a","matiere":"metal"},{"f":"boite","p":[0,3.75,0.6],"taille":[0.24,0.32,0.24],"couleur":"#ffcf8a","matiere":"lumineux"}]},{"id":"bornes","nom":"bornes de pierre au bord du trottoir","cellule":[4.5,1.5],"trajet":{"rangee":true,"min":2.35},"densite":0.5,"teinte":0.15,"formes":[{"f":"cylindre","p":[0,0.35,0],"taille":[0.3,0.7,0.3],"couleur":"#8a857a","matiere":"pierre","arrondi":0.04}]}],"objets":[{"id":"eglise","nom":"clocher au bout de la rue","devant":46,"cote":0,"degage":6,"formes":[{"f":"boite","p":[0,7,0],"taille":[4.5,14,4.5],"couleur":"#a39a88","matiere":"pierre"},{"f":"cone","p":[0,16.5,0],"taille":[5.2,5,5.2],"couleur":"#3a3d42","matiere":"tuile"},{"f":"boite","p":[0,11.5,2.26],"taille":[1,2,0.05],"couleur":"#15171a","matiere":"mat"},{"f":"boule","p":[0,8,2.27],"taille":[1.1,1.1,0.06],"couleur":"#e8dcc0","matiere":"lumineux"}]}]},{"version":0,"id":"essai-cimetiere","titre":"Cimetière de campagne, au crépuscule","inspiration":"Un cimetière de village sur un coteau, allée de gravier, cyprès, mur de pierre, brume du soir","graine":731,"kit":"nu","relief":{"amplitude":1.4,"echelle":110,"pente":0.05},"trajet":{"sinuosite":0.15,"largeur":2.6,"creux":0.04,"bord":"net"},"surfaces":{"sol":"herbe","trajet":"gravier"},"matieres":{"granit":{"base":"beton","couleur":"forme","grain":{"echelle":160,"force":0.4},"brillance":0.2,"taches":[{"couleur":"#3b4630","force":0.5,"echelle":[3,1,3],"seuils":[0.6,0.8],"fbm":true,"hauteur":[0.6,0],"biais":0.3}]},"moellons":{"base":"brique","couleur":"#8b8577","motif":{"type":"paves","echelle":[2.2,4,2.2],"joint":0.12,"decalage_rangs":0.5,"eclat":0.6,"bombe":0.8,"couleur":"#4d4a42"},"mousse":{"couleur":"#3e4a2a","force":0.7,"echelle":1.5,"seuils":[0.5,0.7],"fbm":true,"dessus":[0.3,0.8]}}},"ambiance":{"saison":"automne","meteo":"voile","soleil":{"azimut":-80,"hauteur":4},"brume":0.03},"lointain":{"hauteur":3,"decoupe":0.2,"couleur":"#4a4f4a","couleur_bas":"#3a4236"},"semis":[{"id":"tombes","nom":"tombes en rangs serrés","cellule":[2.3,3],"rotation":0,"trajet":{"min":2.6,"max":13},"densite":0.85,"oriente":"fixe","cap":180,"tourne":5,"penche":3,"teinte":0.35,"desordre":0.12,"groupes":0.3,"groupes_echelle":25,"palette":["#8e8b84","#6f6c66","#a39f95","#4d4c4a","#7d766a"],"formes":[{"f":"boite","p":[0,0.5,-1],"taille":[0.8,1,0.16],"couleur":"palette","matiere":"granit","arrondi":0.03},{"f":"boite","p":[0,0.13,0],"taille":[0.95,0.26,1.9],"couleur":"palette","matiere":"granit"},{"f":"boite","p":[0,1.2,-1],"taille":[0.1,0.5,0.08],"couleur":"#3f3d3a","matiere":"metal"},{"f":"boite","p":[0,1.3,-1],"taille":[0.34,0.08,0.08],"couleur":"#3f3d3a","matiere":"metal"}]},{"id":"cypres","nom":"cyprès sombres","cellule":[7,7],"rotation":20,"trajet":{"min":4},"densite":0.25,"groupes":0.7,"groupes_echelle":30,"hauteur":[0.8,1.4],"teinte":0.2,"penche":2,"formes":[{"f":"cylindre","p":[0,0.6,0],"taille":[0.3,1.2,0.3],"couleur":"#3a2e24","matiere":"bois"},{"f":"capsule","p":[0,3.4,0],"taille":[1.7,4.2,1.7],"couleur":"#142016","matiere":"tissu"},{"f":"cone","p":[0,7.2,0],"taille":[1.5,3.2,1.5],"couleur":"#142016","matiere":"tissu"}]},{"id":"mur","nom":"mur d'enceinte en pierre sèche","cellule":[5,1.5],"trajet":{"rangee":true,"min":14,"cote":"deux"},"densite":1,"teinte":0.1,"formes":[{"f":"boite","p":[0,0.8,0],"taille":[4.84,1.6,0.6],"couleur":"#8b8577","matiere":"moellons"}]}]},{"version":0,"id":"champcueil-aube","titre":"Grands Avaux, le soleil se lève entre les pins","inspiration":"Forêt départementale des Grands Avaux, Champcueil (Essonne), début novembre, une quarantaine de minutes après le lever du soleil : lumière rasante entre les troncs, brume basse sur le sentier","graine":4821,"kit":"foret","foret":{"densite":0.7,"rochers":1,"feuillage":0.2,"variete":1,"houppiers":{"arbres":{"a":{"nom":"pin sylvestre","hauteur":[0.68,0.97],"largeur":2.6,"aplati":0.6,"branches":8,"montee":0.3,"retombe":0.15,"rameaux":3,"masse":0.75,"feuilles":0.8,"inegal":0.2,"taille":0.1,"couleurs":["#34482a","#40552f","#26351f"]},"b":{"nom":"chêne sessile, début novembre","hauteur":[0.36,0.92],"largeur":3.4,"aplati":0.25,"branches":8,"montee":0.55,"retombe":0.1,"rameaux":3,"masse":0.6,"feuilles":0.68,"inegal":0.85,"taille":0.06,"couleurs":["#a8692a","#c08a3c","#7a5528"]}},"perches":{"a":{"nom":"bouleau verruqueux","hauteur":[0.45,0.98],"largeur":1.3,"aplati":0,"branches":6,"montee":0.75,"retombe":0.85,"rameaux":3,"masse":0.42,"feuilles":0.36,"inegal":0.9,"taille":0.05,"couleurs":["#cfa83a","#b8902c","#8f7f3c"]},"b":{"nom":"jeune hêtre marcescent","hauteur":[0.08,0.72],"largeur":1.2,"aplati":0.2,"branches":7,"montee":0.3,"retombe":0.25,"rameaux":2,"masse":0.5,"feuilles":0.62,"inegal":0.5,"taille":0.07,"couleurs":["#b5733a","#c58e4c","#8c5a30"]}}}},"ambiance":{"saison":"automne","meteo":"clair","soleil":{"azimut":35,"hauteur":8},"brume":0.005,"atmosphere":{"trouble":0.35},"brume_basse":{"densite":0.035,"hauteur":2.5}},"camera":{"profil":"bodycam-poitrine","hauteur":1.36,"champ":125},"parcours":{"type":"sentier","pas":5.5},"evenements":[],"surfaces":{"sol":"litiere-automne","trajet":"sable-blanc","rochers":"gres-fontainebleau","arbres":{"a":"ecorce-pin-sylvestre","b":"ecorce-chene","part":0.45},"perches":{"a":"ecorce-bouleau-verruqueux","b":"ecorce-chataignier","part":0.55}},"semis":[{"id":"bois-mort","nom":"branches mortes tombées","cellule":[4.5,4.5],"rotation":8,"trajet":{"min":1.2},"densite":0.45,"echelle":[0.6,1.3],"teinte":0.3,"desordre":1,"formes":[{"f":"capsule","p":[0,0.05,0],"taille":[0.1,2.2,0.1],"penche":[87,0],"matiere":"bois-mort"},{"f":"capsule","p":[0.45,0.06,0.28],"taille":[0.055,0.9,0.055],"cap":35,"penche":[84,0],"matiere":"bois-mort"},{"f":"capsule","p":[-0.55,0.09,-0.12],"taille":[0.035,0.6,0.035],"cap":-40,"penche":[76,12],"matiere":"bois-mort"},{"f":"capsule","p":[0.2,0.03,-0.6],"taille":[0.05,1.1,0.05],"cap":100,"penche":[89,0],"matiere":"bois-mort"}]},{"id":"cailloux","nom":"éclats et cailloux de grès à demi enterrés","cellule":[2,2],"rotation":53,"trajet":{"min":0.5,"max":12},"densite":0.32,"groupes":0.6,"groupes_echelle":9,"echelle":[0.6,1.4],"desordre":1,"formes":[{"f":"boule","p":[0,-0.01,0],"taille":[0.3,0.1,0.22],"cap":20,"matiere":"gres-eclat"},{"f":"boule","p":[0.32,-0.005,0.18],"taille":[0.15,0.06,0.11],"cap":70,"matiere":"gres-eclat"},{"f":"boule","p":[-0.25,-0.005,0.3],"taille":[0.1,0.045,0.08],"matiere":"gres-eclat"},{"f":"boule","p":[-0.1,-0.01,-0.35],"taille":[0.2,0.08,0.13],"cap":-30,"matiere":"gres-eclat"}]}],"relief":{"amplitude":1.5,"echelle":150,"bosses":{"hauteur":1.1,"echelle":11,"trajet":0.35},"buttes":{"hauteur":5,"echelle":55,"part":0.35,"plat":0.55,"trajet":0.45}},"trajet":{"sinuosite":1,"largeur":1.7,"creux":0.45,"bord":"irregulier"}}];                      // fiches de lieu embarquées (scenes/*.json)
 
@@ -15883,13 +15904,13 @@ function v3Tranches(G,ps,vue){                                 // [programme, pr
   const t=[[G.grainsA,0,ps.part[0]],[G.grainsB,ps.part[0],ps.part[1]],[G.grainsR,ps.part[1],ps.part[2]]];
   if(!vue) t.push([G.grainsL,ps.part[2],ps.part[3]]);
   t.push([BANC.v&&BANC.v.sansF?null:G.grainsF,ps.part[3],ps.total]); return t; }
-function v3Lancer(k){                                          // un programme du semeur, dans la variante voulue par la fiche
+function v3Lancer(k,compte){                                   // un programme du semeur, dans la variante voulue par la fiche (compte : PRXCOMPTE, essais)
   const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
   const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
   const SP=V3_FAM[k]?[FS_V3GBUF,Hp(VS_V3GRAINS).replace("\n","\n#define FAM "+V3_FAM[k]+"\n")]:
-    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+"\n")):
+    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+(compte?"\n#define PRXCOMPTE 1":"")+"\n")):
     { sol:[FS_V3GBUF,R(VS_V3SOL)], grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))] }[k];
-  return lancer(SP[0],SP[1],"v3 "+k);
+  return lancer(SP[0],SP[1],"v3 "+k+(compte?" (compte)":""));
 }
 function v3Formes(){                                           // rend vrai quand les deux variantes FORMES sont en service
   if(!V3.gp) return false; if(V3.gp.grainsF) return true;
@@ -16235,10 +16256,37 @@ function v3Compter(semer){
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.enable(gl.DEPTH_TEST);
   c(r);
 }
+/* Coût des éléments proches (essais : balade.prochesCompte) : la même passe, avec les variantes PRXCOMPTE (compilées à la
+   demande, de façon bloquante : jamais dans la boucle normale), dans une cible flottante additive, sans profondeur. Rend les
+   pixels couverts (au moins un fragment), les fragments (chacun marche son rayon), les formes évaluées, par pixel couvert. */
+function v3PrxCompte(p,px,jc,jit,e1,e2,e3){
+  const ok=V3.prxCompte; V3.prxCompte=null; const C=V3.prxC||(V3.prxC={});
+  const G=V3.gp, PM=S.mou&&G.prochesM?"prochesM":"prochesO";
+  for(const k of new Set([PM,"prochesO","prochesB","prochesT"])) if(!C[k]) C[k]=finir(v3Lancer(k,true));
+  const f32=!!gl.getExtension("EXT_float_blend"), t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,f32?gl.RGBA32F:gl.RGBA16F,W,H);
+  const t2=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t2); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA16F,W,H);
+  const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,t2,0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]); gl.clearBufferfv(gl.COLOR,0,[0,0,0,0]); gl.clearBufferfv(gl.COLOR,1,[0,0,0,0]);
+  gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
+  for(const [k,de,a] of [[PM,0,e1],["prochesB",e1,e2],["prochesT",e2,e3],["prochesO",e3,px.total]]){ if(a<=de) continue;
+    const P=C[k], u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
+    gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); }
+  gl.disable(gl.BLEND);
+  const b=new Float32Array(W*H*4); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,W,H,gl.RGBA,gl.FLOAT,b);
+  let couverts=0, frag=0, ev=0, touches=0, mx=0, mxe=0, boites=0;
+  for(let i=0;i<b.length;i+=4){ if(b[i]>0){ couverts++; frag+=b[i]; ev+=b[i+1]; touches+=b[i+2]; boites+=b[i+3]; if(b[i]>mx) mx=b[i]; if(b[i+1]>mxe) mxe=b[i+1]; } }
+  gl.deleteFramebuffer(fb); gl.deleteTexture(t); gl.deleteTexture(t2);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]); gl.enable(gl.DEPTH_TEST);
+  const r=x=>Math.round(x*100)/100;
+  ok({pixels:W*H,couverts,partCouverte:r(couverts/(W*H)),fragments:Math.round(frag),fragParPixel:r(frag/Math.max(1,couverts)),evaluations:Math.round(ev),evalParPixel:r(ev/Math.max(1,couverts)),
+    evalParFragment:r(ev/Math.max(1,frag)),testsBoiteParPixel:r(boites/Math.max(1,couverts)),touches:Math.round(touches),maxFragPixel:mx,maxEvalPixel:mxe,mou:PM==="prochesM",zoom:cam.zoom});
+}
 function v3Image(p){
   v3Cibles();
   const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
-  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
+  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; (V3.passesD||(V3.passesD={}))[nom]=t-tp; tp=t; };
   const rnd=Math.random;
   const jit=bouge?[0,0]:[rnd()-.5,rnd()-.5];                   // décalage sous-pixel, seulement à l'arrêt
   // soleil de cette image : tiré dans le disque solaire (pénombre par accumulation)
@@ -16285,7 +16333,7 @@ function v3Image(p){
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
   const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol; so.dmax=S.eau&&S.eau[3]>0?150:420;
-  gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
+  chrono("avant"); gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
   if(CFG.v3solPlein){                                         // l'ancien maillage : six sommets par quadrilatère, tout le tour
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,Math.PI,so.secteurs); gl.uniform1i(u.uSolIdx,0);
     so.tri=so.anneaux*so.secteurs*2; gl.drawArrays(gl.TRIANGLES,0,so.anneaux*so.secteurs*6);
@@ -16305,7 +16353,9 @@ function v3Image(p){
     for(const [P,de,a] of [[PM,0,e1],[G.prochesB,e1,e2],[G.prochesT,e2,e3],[G.prochesO,e3,px.total]]){ if(a<=de) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
     gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
-    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); } }
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); }
+    chrono("proches",g);
+    if(V3.prxCompte) v3PrxCompte(p,px,jc,jit,e1,e2,e3); }
   const pc=v3Partage(v3Budget(),0,p); V3.parts=pc; gpuDebut("grains");
   const semer=compte=>{
   for(const [P,de,a] of v3Tranches(G,pc,0)){
@@ -18051,7 +18101,9 @@ window.balade={
   pauseQuand(type,t){ pauseQuand={type,t:+t}; },                 // figer quand le geste en tête de file (ramasser : part 0..1 ; faconner : secondes) atteint t
   enPause:()=>pauseTest,
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },
-  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },   // fragments des grains de la caméra sur la prochaine image (v3Compter)
+  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },
+  prochesCompte(){ return new Promise(ok=>{ V3.prxCompte=ok; V3.n=0; sceneDirty=true; }); },   // essais : coût des éléments proches sur la prochaine image (v3PrxCompte)
+  passes(){ return Object.assign({},V3.passesD||{}); },                                        // essais (option v3detail) : durée de la dernière de chaque passe, attente de la puce comprise   // fragments des grains de la caméra sur la prochaine image (v3Compter)
   regulateur(){ return { niveau:REG.niveau, ms:REG.ms, cible:regCible(), etat:regEtat(), puce:GT.ms, total:GT.total||0 }; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
   mainsP:()=>mainsEtat.H?mainsEtat.H.map(h=>h.p.map(v=>+v.toFixed(3))):null,   // essais : centres des paumes
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,

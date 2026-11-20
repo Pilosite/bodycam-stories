@@ -1159,13 +1159,13 @@ function v3Tranches(G,ps,vue){                                 // [programme, pr
   const t=[[G.grainsA,0,ps.part[0]],[G.grainsB,ps.part[0],ps.part[1]],[G.grainsR,ps.part[1],ps.part[2]]];
   if(!vue) t.push([G.grainsL,ps.part[2],ps.part[3]]);
   t.push([BANC.v&&BANC.v.sansF?null:G.grainsF,ps.part[3],ps.total]); return t; }
-function v3Lancer(k){                                          // un programme du semeur, dans la variante voulue par la fiche
+function v3Lancer(k,compte){                                   // un programme du semeur, dans la variante voulue par la fiche (compte : PRXCOMPTE, essais)
   const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
   const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
   const SP=V3_FAM[k]?[FS_V3GBUF,Hp(VS_V3GRAINS).replace("\n","\n#define FAM "+V3_FAM[k]+"\n")]:
-    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+"\n")):
+    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+(compte?"\n#define PRXCOMPTE 1":"")+"\n")):
     { sol:[FS_V3GBUF,R(VS_V3SOL)], grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))] }[k];
-  return lancer(SP[0],SP[1],"v3 "+k);
+  return lancer(SP[0],SP[1],"v3 "+k+(compte?" (compte)":""));
 }
 function v3Formes(){                                           // rend vrai quand les deux variantes FORMES sont en service
   if(!V3.gp) return false; if(V3.gp.grainsF) return true;
@@ -1511,10 +1511,37 @@ function v3Compter(semer){
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.enable(gl.DEPTH_TEST);
   c(r);
 }
+/* Coût des éléments proches (essais : balade.prochesCompte) : la même passe, avec les variantes PRXCOMPTE (compilées à la
+   demande, de façon bloquante : jamais dans la boucle normale), dans une cible flottante additive, sans profondeur. Rend les
+   pixels couverts (au moins un fragment), les fragments (chacun marche son rayon), les formes évaluées, par pixel couvert. */
+function v3PrxCompte(p,px,jc,jit,e1,e2,e3){
+  const ok=V3.prxCompte; V3.prxCompte=null; const C=V3.prxC||(V3.prxC={});
+  const G=V3.gp, PM=S.mou&&G.prochesM?"prochesM":"prochesO";
+  for(const k of new Set([PM,"prochesO","prochesB","prochesT"])) if(!C[k]) C[k]=finir(v3Lancer(k,true));
+  const f32=!!gl.getExtension("EXT_float_blend"), t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texStorage2D(gl.TEXTURE_2D,1,f32?gl.RGBA32F:gl.RGBA16F,W,H);
+  const t2=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t2); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA16F,W,H);
+  const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,t2,0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]); gl.clearBufferfv(gl.COLOR,0,[0,0,0,0]); gl.clearBufferfv(gl.COLOR,1,[0,0,0,0]);
+  gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
+  for(const [k,de,a] of [[PM,0,e1],["prochesB",e1,e2],["prochesT",e2,e3],["prochesO",e3,px.total]]){ if(a<=de) continue;
+    const P=C[k], u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
+    gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); }
+  gl.disable(gl.BLEND);
+  const b=new Float32Array(W*H*4); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,W,H,gl.RGBA,gl.FLOAT,b);
+  let couverts=0, frag=0, ev=0, touches=0, mx=0, mxe=0, boites=0;
+  for(let i=0;i<b.length;i+=4){ if(b[i]>0){ couverts++; frag+=b[i]; ev+=b[i+1]; touches+=b[i+2]; boites+=b[i+3]; if(b[i]>mx) mx=b[i]; if(b[i+1]>mxe) mxe=b[i+1]; } }
+  gl.deleteFramebuffer(fb); gl.deleteTexture(t); gl.deleteTexture(t2);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]); gl.enable(gl.DEPTH_TEST);
+  const r=x=>Math.round(x*100)/100;
+  ok({pixels:W*H,couverts,partCouverte:r(couverts/(W*H)),fragments:Math.round(frag),fragParPixel:r(frag/Math.max(1,couverts)),evaluations:Math.round(ev),evalParPixel:r(ev/Math.max(1,couverts)),
+    evalParFragment:r(ev/Math.max(1,frag)),testsBoiteParPixel:r(boites/Math.max(1,couverts)),touches:Math.round(touches),maxFragPixel:mx,maxEvalPixel:mxe,mou:PM==="prochesM",zoom:cam.zoom});
+}
 function v3Image(p){
   v3Cibles();
   const G=V3.gp, f=++V3.frame, bouge=V3.n===0, t0=performance.now(); let tp=t0;
-  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; tp=t; };
+  const chrono=(nom,cible)=>{ if(!V3.detail) return; if(cible) v3Sync(cible); const t=performance.now(); V3.passes[nom]=(V3.passes[nom]||0)*.8+(t-tp)*.2; (V3.passesD||(V3.passesD={}))[nom]=t-tp; tp=t; };
   const rnd=Math.random;
   const jit=bouge?[0,0]:[rnd()-.5,rnd()-.5];                   // décalage sous-pixel, seulement à l'arrêt
   // soleil de cette image : tiré dans le disque solaire (pénombre par accumulation)
@@ -1561,7 +1588,7 @@ function v3Image(p){
   const g=V3.gb; gl.bindFramebuffer(gl.FRAMEBUFFER,g.f); gl.viewport(0,0,W,H); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   gl.clearBufferfv(gl.COLOR,0,[0,0,0,-1]); gl.clearBufferfv(gl.COLOR,1,[0,1,0,1e4]); gl.clearBufferfv(gl.DEPTH,0,[1]);
   const jc=[jit[0]*2/W,jit[1]*2/H], so=V3.sol; so.dmax=S.eau&&S.eau[3]>0?150:420;
-  gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
+  chrono("avant"); gpuDebut("sol"); u=G.sol.u; gl.useProgram(G.sol.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,0);
   if(CFG.v3solPlein){                                         // l'ancien maillage : six sommets par quadrilatère, tout le tour
     gl.uniform4f(u.uSolP,so.r0,Math.log(so.dmax/so.r0)/so.anneaux,Math.PI,so.secteurs); gl.uniform1i(u.uSolIdx,0);
     so.tri=so.anneaux*so.secteurs*2; gl.drawArrays(gl.TRIANGLES,0,so.anneaux*so.secteurs*6);
@@ -1581,7 +1608,9 @@ function v3Image(p){
     for(const [P,de,a] of [[PM,0,e1],[G.prochesB,e1,e2],[G.prochesT,e2,e3],[G.prochesO,e3,px.total]]){ if(a<=de) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
     gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
-    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); } }
+    gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); }
+    chrono("proches",g);
+    if(V3.prxCompte) v3PrxCompte(p,px,jc,jit,e1,e2,e3); }
   const pc=v3Partage(v3Budget(),0,p); V3.parts=pc; gpuDebut("grains");
   const semer=compte=>{
   for(const [P,de,a] of v3Tranches(G,pc,0)){
@@ -3327,7 +3356,9 @@ window.balade={
   pauseQuand(type,t){ pauseQuand={type,t:+t}; },                 // figer quand le geste en tête de file (ramasser : part 0..1 ; faconner : secondes) atteint t
   enPause:()=>pauseTest,
   grains(n){ if(n>0) V3.grains=Math.round(n); return V3.grains; },
-  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },   // fragments des grains de la caméra sur la prochaine image (v3Compter)
+  remplissage(){ return new Promise(ok=>{ V3.compte=ok; V3.n=0; sceneDirty=true; }); },
+  prochesCompte(){ return new Promise(ok=>{ V3.prxCompte=ok; V3.n=0; sceneDirty=true; }); },   // essais : coût des éléments proches sur la prochaine image (v3PrxCompte)
+  passes(){ return Object.assign({},V3.passesD||{}); },                                        // essais (option v3detail) : durée de la dernière de chaque passe, attente de la puce comprise   // fragments des grains de la caméra sur la prochaine image (v3Compter)
   regulateur(){ return { niveau:REG.niveau, ms:REG.ms, cible:regCible(), etat:regEtat(), puce:GT.ms, total:GT.total||0 }; },          // essais : budget de grains du v3 (gestes à petit budget, captures au budget normal)                                    // essais : figer le corps sans ouvrir le canal (le meneur continue)
   mainsP:()=>mainsEtat.H?mainsEtat.H.map(h=>h.p.map(v=>+v.toFixed(3))):null,   // essais : centres des paumes
   faconnage:()=>({attente:[...differes.keys()],etats:[...faconnages.keys()],mains:mainsObj?[].concat(mainsObj).reduce((n,o)=>n+o.formes.length,0):0,
