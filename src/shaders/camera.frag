@@ -43,7 +43,8 @@ void main(){
   vec2 uv=gl_FragCoord.xy/uOutRes; float asp=uOutRes.x/uOutRes.y;
   vec2 q=uv-.5; q.x*=asp; float cr=cos(uShake.z), sr=sin(uShake.z); q=mat2(cr,sr,-sr,cr)*q; q.x/=asp; q=q*.955+uShake.xy;
   vec2 qa=q*vec2(asp,1.); float r2=dot(qa,qa);
-  vec3 hdr=vec3(smp(.5+q*(1.+.0032*r2)).r,smp(.5+q).g,smp(.5+q*(1.-.0032*r2)).b);
+  vec4 c0=uLin==1?textureLod(uTex,.5+q,0.):vec4(smp(.5+q),0.);   // alpha : distance du point montré (pour le bougé)
+  vec3 hdr=vec3(smp(.5+q*(1.+.0032*r2)).r,c0.g,smp(.5+q*(1.-.0032*r2)).b);
   if(uSoft>0.){ vec2 sp=uSoft/uSrcRes;
     hdr=(hdr+smp(.5+q+sp*vec2(1.,.6))+smp(.5+q+sp*vec2(-.6,1.))+smp(.5+q+sp*vec2(-1.,-.6))+smp(.5+q+sp*vec2(.6,-1.)))*.2; }
   vec3 bl=textureLod(uBloom,.5+q,0.).rgb;
@@ -51,7 +52,7 @@ void main(){
   vec2 tA=vec2(px.x,0.), tB=vec2(0.,px.y);
   if(uFlou>0.){                                                // bougé : déplacement du pixel depuis l'image précédente, en pixels source
     vec2 sp=(.5+q)*uSrcRes, uv=(sp-.5*uSrcRes)/uSrcRes.y; float rr=length(uv), ang=rr*uFishC;
-    float t=uLin==1?textureLod(uTex,.5+q,0.).a:texelFetch(uTex,ivec2(clamp(sp,vec2(0.),uSrcRes-1.)),0).a;
+    float t=uLin==1?c0.a:texelFetch(uTex,ivec2(clamp(sp,vec2(0.),uSrcRes-1.)),0).a;
     vec3 P=uPosC+uCamC*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang))*min(max(t,.05),1e4);
     vec3 d=normalize(P-uPosA)*uCamA; float s2=length(d.xy);
     vec2 pa=(s2>1e-6?d.xy/s2:vec2(0.))*(acos(clamp(d.z,-1.,1.))/uFishC)*uSrcRes.y+.5*uSrcRes;
