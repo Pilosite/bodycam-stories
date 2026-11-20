@@ -111,7 +111,7 @@ verifier(o1 && Math.abs(o1.angle) < 10 && o1.m < 1, `cadrée de près : ${o1 && 
 { // les bruits de la petite (docs/bruitages.md) : deux ou trois, brefs, aigus, pendant l'effort, puis la chute
   const J = (await page.evaluate(() => window.balSons)).filter(e => e.t >= tVoix1), B = J.filter(e => e.recette === 'flatulence');
   for (const e of J) console.log(sec(), '  son', JSON.stringify(e));
-  verifier(B.length >= 2 && B.length <= 3 && B.every(b => b.duree <= 0.4 && b.f0 >= 180), `petite : ${B.length} petits bruits (${B.map(b => b.duree + ' s, ' + Math.round(b.f0) + ' Hz').join(' ; ')})`);
+  verifier(B.length >= 4 && B.length <= 6 && B.every(b => b.duree <= 0.4 && b.f0 >= 180), `petite : ${B.length} petits bruits (${B.map(b => b.duree + ' s, ' + Math.round(b.f0) + ' Hz').join(' ; ')})`);
   verifier(J.some(e => e.recette === 'chute'), 'on l\'entend tomber (chute)');
 }
 await vueLibre('fab-1', 'petite');

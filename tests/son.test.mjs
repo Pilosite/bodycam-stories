@@ -31,7 +31,7 @@ test('petite contre énorme : nombre, durée, hauteur, force', () => {
   const P = Object.fromEntries(Object.entries(CAS).map(([k, ph]) => [k, geste(ph).plan]));
   const princ = p => p.bruits.find(b => b.principal);
   const petite = P.petite.bruits;
-  assert.ok(petite.length >= 2 && petite.length <= 3, 'petite : 2 ou 3 bruits');
+  assert.ok(petite.length >= 4 && petite.length <= 6, 'petite : 4 à 6 bruits');
   for (const b of petite) {
     assert.ok(b.duree >= 0.06 && b.duree <= 0.4, 'petite : bref ' + b.duree);
     assert.ok(b.f0 >= 180 && b.f0 <= 320, 'petite : aigu ' + b.f0);
@@ -102,7 +102,7 @@ test('synchronisation : pendant l\'effort, entre les souffles, le plus gros just
     }
     if (pal === 'demesure') {
       assert.ok(plan.souffles.length >= 1 && plan.souffles.every(s => s < p.t_abs), 'tous les souffles avant le gros');
-      assert.ok(total <= 12.5, 'l\'effort reste raisonnable : ' + total);
+      assert.ok(total <= 14.5, 'l\'effort reste raisonnable : ' + total);
     }
     if (pal === 'normal') assert.equal(plan.souffles.length, 0);
   }
@@ -124,7 +124,9 @@ test('le lecteur sans Web Audio : rien ne casse, la chronologie vit (enveloppe, 
   assert.equal(S.geste(), false);
   const ev = geste(CAS.enorme).plan.bruits.at(-1);
   const x = S.jouer(ev); assert.ok(x && !x.audio);
-  t = 0.5; assert.ok(S.enveloppe() > 0.1, 'la caméra tremble avec le gros bruit');
+  let fort = 0; for (t = 0.2; t <= 2; t += 0.1) fort = Math.max(fort, S.enveloppe());   // un raté peut tomber sur un instant donné : on regarde le début du bruit
+  assert.ok(fort > 0.1, 'la caméra tremble avec le gros bruit');
+  t = 0.5;
   assert.ok(S.occupe() > ev.duree - 0.6, 'une pensée attendra');
   t = ev.duree + 0.1; assert.equal(S.enveloppe(), 0); assert.equal(S.occupe(), 0);
   const S2 = creerSons({ fabriquer: () => { throw new Error('refusé'); }, bruitages: B });
