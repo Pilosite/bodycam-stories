@@ -97,6 +97,7 @@
    "mots": ["bonhomme", "bonhommes", "bonhomme de neige", "snowman"],
    "transforme": true,
    "besoin": "des bâtons et des cailloux",
+   "matiere_min_m": 0.05,
    "quoi": "la matière de la chose façonnée en trois boules empilées, deux bâtons pour les bras, deux cailloux clairs pour les yeux, face vers celui qui l a fait",
    "echelle": {"regle": "volume", "unite": "diametre de la boule du bas"},
    "formes": [

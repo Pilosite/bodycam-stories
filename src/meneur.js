@@ -1820,7 +1820,7 @@ export function creerMeneur(o) {
       if (!R.RECYCLER && !force) return false;
       const actif = id => partie.monde.suites.some(s => s.etat === 'active' && Object.values(s.refs).includes(id));
       const L = partie.monde.crees.filter(c => !c.retire && !garder.includes(c.id));
-      const c = L.find(c => !actif(c.id)) || (force ? L[0] : null);
+      const c = L.find(c => !demandee(c) && !actif(c.id)) || L.find(c => !actif(c.id)) || (force ? L[0] : null);   // l'ambiance d'une suite part la première
       if (!c) return false;
       log('objet_recycle', { id: c.id, nom: c.nom, pour: garder[0] || 'trame' });
       for (const s of partie.monde.suites) if (s.etat === 'active' && Object.values(s.refs).includes(c.id)) s.etat = 'recyclee';
@@ -1829,14 +1829,34 @@ export function creerMeneur(o) {
     return true;
   }
   /* Les choses qu'un tour peut désigner : ses traces (la plus récente d'abord), puis les objets visibles de la fiche. */
+  /* Ce que le joueur a demandé (un tour de voix : modèle, Claude, secours), pas l'ambiance qu'une suite ajoute (une mouche, une
+     corneille) ni ce qu'il a rapporté pour façonner : seules les premières sont « la dernière », « avec ça », « fais-en un ». */
+  const demandee = c => !c.retire && c.source !== 'suite' && c.source !== 'ramasse';
   function connus() {
-    return [...partie.monde.crees.filter(c => !c.retire).reverse().map(c => ({ id: c.id, nom: c.nom })),
-      ...ficheObjets.filter(o => partie.monde.objets[o.id] !== 'cache').map(o => ({ id: o.id, nom: o.nom || o.id }))];
+    const L = partie.monde.crees.filter(c => !c.retire).reverse();
+    return [...L.filter(demandee), ...L.filter(c => !demandee(c))].map(c => ({ id: c.id, nom: c.nom })).concat(
+      ficheObjets.filter(o => partie.monde.objets[o.id] !== 'cache').map(o => ({ id: o.id, nom: o.nom || o.id })));
+  }
+  /* Une désignation explicite dans la phrase : la grosse, la petite, la première, la précédente (parmi ce qu'il a fait). */
+  function designationExplicite(texte) {
+    const L = partie.monde.crees.filter(demandee), t = sansAccents(texte || ''), taille = c => envergure(c.liste) * (c.echelle || 1);
+    if (L.length < 2) return null;
+    // « énorme » qui qualifie ce qu'on va façonner (« un énorme <modèle transforme> ») ne désigne rien
+    const qualifie = (/\b(enormes?|geante?s?|gigantesques?|immenses?)\s+([a-z-]+)/.exec(t) || [])[2], surLeModele = qualifie && modeleTransforme(qualifie);
+    if (ENORME.test(t) && !surLeModele || /\b(la|le|les) (plus )?(grosse?s?|grande?s?)\b|\bavec (la|le) (grosse|gros|grande|grand)\b/.test(t))
+      return L.slice().sort((a, b) => taille(b) - taille(a))[0].id;
+    if (/\b(la|le) (plus )?(petite?|minuscule)\b|\bavec (la|le) (petite?|minuscule)\b/.test(t)) return L.slice().sort((a, b) => taille(a) - taille(b))[0].id;
+    if (/\b(la|le) premi[e]re?\b|\bla premiere\b|\ble premier\b/.test(t)) return L[0].id;
+    if (/\b(l'autre|la precedente|le precedent|l'ancienne|l'ancien)\b/.test(t)) return L[L.length - 2].id;
+    return null;
   }
   function designer(texte, propose, pronom) {
     const L = connus();
+    // la phrase du joueur d'abord (« la petite », le nom d'une chose), l'id que propose Claude ensuite (§21)
+    const ex = designationExplicite(texte); if (ex) return ex;
+    const xn = L.find(x => nomme(texte, x.nom)); if (xn) return xn.id;
     if (propose && L.some(x => x.id === propose)) return propose;
-    const x = (propose && L.find(x => nomme(propose, x.nom))) || L.find(x => nomme(texte, x.nom));
+    const x = propose && L.find(x => nomme(propose, x.nom));
     if (x) return x.id;
     if (pronom && partie.monde.crees.some(c => !c.retire) && /\b(cette|cet|ce|dessus|la|le|elle|lui|ca|celle|celui)\b/.test(sansAccents(texte || ''))) return L[0].id;
     return null;
@@ -1930,14 +1950,15 @@ export function creerMeneur(o) {
     return !!(m && m.modele.origine === 'corps' && (substitution(t, m.modele, EX) || refusDit(t, EX)));
   }
   function modeleTransforme(texte) { return R.MODELES === 'non' ? null : modeleDe(BIB, texte, { transforme: true }); }
-  function designerTrace(texte) {
-    const L = partie.monde.crees.filter(c => !c.retire), t = sansAccents(texte || '');
-    const taille = c => envergure(c.liste) * (c.echelle || 1);
-    // « avec la grosse », « la petite » : la plus grosse ou la plus petite de ses traces
-    if (L.length > 1 && (ENORME.test(t) || /\b(grosse?s?|grande?s?|geante?s?)\b/.test(t))) return L.slice().sort((a, b) => taille(b) - taille(a))[0].id;
-    if (L.length > 1 && /\b(petite?s?|minuscules?)\b/.test(t)) return L.slice().sort((a, b) => taille(a) - taille(b))[0].id;
-    const d = designer(texte, null, true); if (d) return d;
-    return L.length ? L[L.length - 1].id : null;                 // sinon la dernière faite (« fais-EN », « avec »)
+  /* La chose qu'on façonne (§21, cas réel : le bonhomme fait dans une mouche ajoutée par une suite) : la phrase désigne (« la
+     petite », « la première », un nom), sinon la DERNIÈRE chose que le joueur a demandée, avec assez de matière pour le modèle
+     (`matiere_min_m`), jamais l'ambiance d'une suite ni ce qu'il a rapporté ; l'id que propose Claude ne compte pas. */
+  function designerTrace(texte, tm = null) {
+    const L = partie.monde.crees.filter(demandee);
+    const ex = designationExplicite(texte); if (ex) return ex;
+    const xn = connus().find(x => nomme(texte, x.nom) && partie.monde.crees.some(c => c.id === x.id && !c.retire)); if (xn) return xn.id;
+    const min = tm ? num(tm.modele.matiere_min_m, 0, 5, 0) : 0, assez = L.filter(c => envergure(c.liste) * (c.echelle || 1) >= min);
+    return assez.length ? assez[assez.length - 1].id : L.length ? L[L.length - 1].id : null;   // la dernière demandée (« fais-EN », « avec »)
   }
   /* Un tour qui touche une chose déjà là : la modifier, à sa place, plutôt que d'en refaire une à côté. */
   function preparerModif(v, texte) {
@@ -1951,14 +1972,25 @@ export function creerMeneur(o) {
       const L = connus(), traces = partie.monde.crees.filter(c => !c.retire).map(c => c.id);
       const x = L.find(x => traces.includes(x.id) && nomme(v.fabrique.nom, x.nom) && /\b(sur|dessus|contre|autour|cette|cet|ta|ton|ma|mon|sa|son)\b/.test(t))
         || (/\b(sur|dessus|contre|autour|cette|cet)\b/.test(t) ? L.find(x => nomme(texte, x.nom)) : null);
-      const xt = !x && modeleTransforme(v.fabrique.nom + ' ' + v.fabrique.quoi + ' ' + texte) && traces.length ? { id: designerTrace(texte) } : null;   // « fais-en un bonhomme »
+      const xtm = !x && modeleTransforme(v.fabrique.nom + ' ' + v.fabrique.quoi + ' ' + texte);
+      const xt = xtm && (partie.monde.crees.some(demandee) || enFabrication()) ? { id: designerTrace(texte, xtm) } : null;   // « fais-en un bonhomme », « fais un bonhomme avec des bâtons »
       if (x || xt) { v.modifie = { objet: (x || xt).id, quoi: str(v.fabrique.quoi || v.fabrique.nom, 160) }; log('fabrique_vers_modifie', { id: (x || xt).id, nom: v.fabrique.nom }); v.fabrique = null; }
     }
     if (!v.modifie) return;
     // façonner une trace en un modèle (« fais un bonhomme avec la grosse », « fais-en un ») : c'est la phrase du joueur qui désigne
     // (la taille dite, la chose nommée, sinon la DERNIÈRE faite), pas l'id que Claude propose (essai : il visait la petite)
-    const tmc = modeleTransforme((v.modifie.quoi || '') + ' ' + texte) && partie.monde.crees.some(c => !c.retire);
-    const id = tmc ? designerTrace(texte) : designer(texte, v.modifie.objet, true);
+    const tm0 = modeleTransforme((v.modifie.quoi || '') + ' ' + texte), tmc = tm0 && partie.monde.crees.some(demandee);
+    // la chose qu'il vient de demander n'est pas encore là (l'accessoiriste y travaille) : c'est elle « la dernière » ; il va
+    // chercher ce qu'il faut, et le façonnage part quand elle est posée (§21)
+    if (tm0 && enFabrication() && !designationExplicite(texte) && !connus().some(x => nomme(texte, x.nom))) {
+      let ch = liste(v.actions).find(a => a.type === 'chercher');
+      if (!ch && str(tm0.modele.besoin, 60)) ch = { type: 'chercher', quoi: str(tm0.modele.besoin, 60) };
+      faconnageEnAttente = { quoi: v.modifie.quoi, texte, modele: tm0.id, chercher: ch ? ch.quoi : null, atelier: atelier.id };
+      v.modifie = null; v.actions = ch ? [ch] : [];
+      log('faconnage_attend', { atelier: atelier.id, nom: atelier.dem.fabrique.nom, chercher: ch ? ch.quoi : null });
+      return;
+    }
+    const id = tmc ? designerTrace(texte, tm0) : designer(texte, v.modifie.objet, true);
     if (tmc && v.modifie.objet && id !== v.modifie.objet) log('cible_corrigee', { de: v.modifie.objet, vers: id });
     if (!id || !formesDe(id)) { log('modifie_sans_cible', { objet: v.modifie.objet }); v.modifie = null; return; }
     v.modifie.objet = id;
@@ -1971,8 +2003,10 @@ export function creerMeneur(o) {
     if (ch || tm || /\b(fais-en|faconne|faconner|modele|modeler|sculpte|sculpter|petris|petrir|transforme)\b/.test(t)) {
       v.modifie.faconner = true; if (ch) v.modifie.chercher = ch.quoi; if (tm) v.modifie.modele = tm.id;
       const reste = liste(v.actions).filter(a => !['chercher', 'rejoindre', 'posture', 'faconner', 'marcher', 'attendre', 'cadrer'].includes(a.type) && !(a.type === 'viser' && a.objet === id));
-      v.actions = [...(ch ? [ch] : []), { type: 'rejoindre', objet: id }, { type: 'posture', hauteur: 0.5 }, { type: 'faconner', objet: id }, { type: 'posture', hauteur: 1 }, ...reste].slice(0, 8);
-      log('faconnage', { id, chercher: ch ? ch.quoi : null, modele: tm ? tm.id : null });
+      // loin de la chose : il la rejoint d'abord (on le voit y aller), puis va chercher ce qu'il faut près d'elle, revient, façonne
+      const o = derniereP.objets.find(x => x.id === id), loin = !!(ch && o && o.m > 2.5);
+      v.actions = [...(loin ? [{ type: 'rejoindre', objet: id }] : []), ...(ch ? [ch] : []), { type: 'rejoindre', objet: id }, { type: 'posture', hauteur: 0.5 }, { type: 'faconner', objet: id }, { type: 'posture', hauteur: 1 }, ...reste].slice(0, 8);
+      log('faconnage', { id, chercher: ch ? ch.quoi : null, modele: tm ? tm.id : null, rejoint_d_abord: loin || undefined });
       return;
     }
     // y aller, se baisser si la chose est au sol, faire ; le regard sur le résultat vient à la fin (montrer)
@@ -1982,6 +2016,19 @@ export function creerMeneur(o) {
     if (pre.length) { v.actions = [...pre, ...liste(v.actions).filter(a => !(o && o.m > 1.2 && a.type === 'marcher') && !(a.type === 'viser' && a.objet === id))].slice(0, 8); log('aller_a', { id, ajoute: pre.map(a => a.type) }); }
   }
 
+  let faconnageEnAttente = null;
+  function enFabrication() { return !!(atelier && atelier.dem.fabrique && !atelier.dem.modifie); }
+  /* La chose attendue est posée : le façonnage demandé entre-temps part sur elle (il revient de chercher, la rejoint, façonne). */
+  function lancerFaconnageAttendu(idAtelier, idObjet) {
+    const f = faconnageEnAttente; if (!f || f.atelier !== idAtelier) return;
+    faconnageEnAttente = null;
+    if (!idObjet) { log('faconnage_abandonne', { atelier: idAtelier }); return; }
+    const mod = { objet: idObjet, quoi: f.quoi, faconner: true, modele: f.modele };
+    if (f.chercher) mod.chercher = f.chercher;
+    emettre({ type: 'actions', actions: [{ type: 'rejoindre', objet: idObjet }, { type: 'posture', hauteur: 0.5 }, { type: 'faconner', objet: idObjet }, { type: 'posture', hauteur: 1 }] });
+    log('faconnage', { id: idObjet, chercher: f.chercher, modele: f.modele, attendu: true });
+    commander({ modifie: mod, texte: f.texte, montrer: true });
+  }
   /* Une phrase est une SÉQUENCE (§19) : « déplace-toi PUIS fais X », « fais X PUIS recule ». La page lit l'ordre dans la phrase
      (ordreDemande) et le tient quelle que soit la réponse (objet seul, marche et objet dans le désordre, texte seul) : le
      déplacement demandé est ajouté s'il manque, mis avant ou après le geste selon la phrase. La place de la chose se prend
@@ -2138,6 +2185,7 @@ export function creerMeneur(o) {
       if (!idObjet) suite = null;                                // une suite sans son objet n'a plus de sens
     }
     if (suite) programmer(suite, { '@': idObjet }, source);
+    if (dem.fabrique) lancerFaconnageAttendu(id, idObjet);
   }
   /* Le modèle que nomme une chose fabriquée : par son premier nom (« crotte de 5 kg » ; pas « tas de pierres », qui n'est pas
      un caillou). */
