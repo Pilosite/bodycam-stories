@@ -17,6 +17,7 @@ POC documents first (English, binding), then the legacy French docs of the engin
 - `adr/0008-home-node.md`: models reached through Toine's desktop, and how the page detects it.
 - `adr/0009-model-output-economy.md`: what each tier is asked to produce (choose, write compact, write long), and how it will be measured.
 - `adr/0010-four-temporalities.md`: immediate, consequence, environment, long term; the beats of the present (proposed).
+- `adr/0011-harvest-and-conception.md`: every session is harvested; a prompted world gets a story sketch and questions to its creator before play.
 - `research/models.md`: research behind ADR 0004 (which models for which tier; Jev and decision models, JEPA, embeddings, constrained decoding, the artifact and proxy modes).
 - `story-louis-round.md`: the bible of the POC story (premise, people, stations, beats, endings, tone, what must never happen).
 - `patterns.md`: the narrative pattern library, how a story binds patterns, and what swapping one changes.

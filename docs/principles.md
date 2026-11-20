@@ -73,7 +73,7 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 
 **P22. A semantic engine on several levels: invention and judgement are different instruments.** AI serves the story in two distinct ways, never confused. *Invention* is the creative edge: generative models write what nobody wrote, in three sizes matched to the three clocks (fast, mid, large). *Judgement* is synthesis: decision models turn something open (a sentence, a situation, a fuzzy notion) into a typed answer the code can act on (yes or no, one of these, how much), with a confidence. A generative model is never asked to judge when a judgement will do, and a judgement never writes. Which instrument reads which thing is an explicit choice, recorded in `docs/architecture.md`. *Check: every model call in the journal is either an invention or a judgement, and says which.*
 
-**P17. What happened can be read.** Those who keep a story alive must be able to see what players did, how the world and its principles reacted, and why, in order to refine them.
+**P17. What happened can be read, and it feeds everything.** The engine and the stories grow from what players and narrators actually do: what was asked and could not be done, what was improvised, what was slow or doubtful is collected from the first day (ADR 0011). Those who keep a story alive must be able to see what players did, how the world and its principles reacted, and why, in order to refine them.
 
 ## D. How we go
 
