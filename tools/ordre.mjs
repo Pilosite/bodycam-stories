@@ -55,12 +55,12 @@ for (const phrase of ESSAIS) {
   const traces = () => page.evaluate(() => balade.objets().filter(o => /^fab-/.test(o.id)));
   const dire = async t => { await page.evaluate(t => balade.dire(t), t); await page.waitForTimeout(400); await quand(() => balade.corps().file.length > 0, null, 20000); await auRepos(); };
   await dire('fais une crotte'); await dire('montre-la-moi');
-  const c0 = await corps(), [A] = await traces(), n0 = (await page.evaluate(() => balade.marches())).length, p0 = await page.evaluate(() => window.balPoses.length);
+  const c0 = await corps(), [A] = await traces(), n0 = (await page.evaluate(() => balade.marches())).length, p0 = await page.evaluate(() => (window.balPoses || []).length);
   const dits = new Set(); const ecoute = setInterval(async () => { try { const t = await page.textContent('#pensee'); if (t) dits.add(t); } catch (_) {} }, 400);
   await dire(phrase);
   clearInterval(ecoute);
   const c1 = await corps(), L = await traces(), B = L.find(o => o.id !== (A && A.id));
-  const poses = (await page.evaluate(() => window.balPoses.slice())).slice(p0);
+  const poses = (await page.evaluate(() => (window.balPoses || []).slice())).slice(p0);
   const r2 = v => +v.toFixed(2), d = (a, b) => a && b ? r2(Math.hypot(a.x - b.x, a.z - b.z)) : null;
   const R = { phrase, claude: MODE, depart: { x: r2(c0.x), z: r2(c0.z) }, arrivee: { x: r2(c1.x), z: r2(c1.z) },
     premiere: A && { id: A.id, x: r2(A.x), z: r2(A.z), taille: A.taille }, nouvelle: B && { id: B.id, nom: B.nom, x: r2(B.x), z: r2(B.z), taille: B.taille },
