@@ -2035,16 +2035,16 @@
    "couleur": "forme",
    "relatif": 0.018,
    "variation": {
-    "echelle": 7,
+    "echelle": 38,
     "force": 0.42
    },
    "nuance": {
     "couleur": "#2b1a0d",
     "force": 0.5,
     "echelle": [
-     9,
-     4,
-     9
+     48,
+     26,
+     48
     ],
     "seuils": [
      0.42,
@@ -2056,9 +2056,9 @@
    "motif": {
     "type": "fissures",
     "echelle": [
-     7,
      34,
-     7
+     150,
+     34
     ],
     "seuils": [
      0.84,
@@ -2069,9 +2069,9 @@
     "opacite": 0.85,
     "fines": {
      "echelle": [
-      48,
-      60,
-      48
+      260,
+      300,
+      260
      ],
      "decalage": 4,
      "seuils": [
@@ -2090,9 +2090,9 @@
      "couleur": "#1c1009",
      "force": 0.4,
      "echelle": [
-      3.5,
-      2,
-      3.5
+      20,
+      12,
+      20
      ],
      "seuils": [
       0.5,
@@ -2100,19 +2100,19 @@
      ],
      "fbm": true,
      "decalage": 11,
-     "brillance": 0.5
+     "brillance": 0.14
     },
     {
-     "couleur": "#7d5e3d",
-     "force": 0.38,
+     "couleur": "#5c4632",
+     "force": 0.3,
      "echelle": [
-      4,
-      3,
-      4
+      24,
+      16,
+      24
      ],
      "seuils": [
-      0.58,
-      0.8
+      0.62,
+      0.82
      ],
      "fbm": true,
      "decalage": 29,
@@ -2124,16 +2124,16 @@
      "brillance": 0.03
     },
     {
-     "couleur": "#b39a6e",
-     "force": 0.7,
+     "couleur": "#8a7656",
+     "force": 0.3,
      "echelle": [
-      90,
-      22,
-      90
+      520,
+      140,
+      520
      ],
      "seuils": [
-      0.8,
-      0.83
+      0.81,
+      0.825
      ],
      "decalage": 7
     },
@@ -2141,9 +2141,9 @@
      "couleur": "#6e4a22",
      "force": 0.75,
      "echelle": [
-      40,
-      40,
-      40
+      180,
+      180,
+      180
      ],
      "seuils": [
       0.77,
@@ -2161,29 +2161,29 @@
     "motif": 0.0022,
     "bosses": [
      {
-      "echelle": 5,
+      "echelle": 30,
       "fbm": true,
       "decalage": 5,
-      "force": 0.0035
+      "force": 0.0025
      },
      {
-      "echelle": 22,
+      "echelle": 110,
       "fbm": true,
       "decalage": 2,
-      "force": 0.0011
+      "force": 0.0007
      }
     ],
     "grain": {
      "echelle": 300,
-     "force": 0.16
+     "force": 0.3
     }
    },
    "salissure": {
     "force": 0.5,
     "hauteur": 0.012
    },
-   "brillance": 0.16,
-   "reflet": 90
+   "brillance": 0.03,
+   "reflet": 160
   },
   "peau": {
    "nom": "peau de main, rosée aux jointures, pores fins, un peu luisante",

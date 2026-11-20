@@ -5,7 +5,7 @@
 // Usage : node tools/banc-objet.mjs <modèle> [dossier] [variante]
 // Variables : FICHES='8,0' (indices des fiches : 09 aube, 01 plein jour), TAILLES='0.12,0.5,0.9', QUAL='mobile,pc',
 //   CADRES='pres,entier', PASSES (images accumulées, 5), W, H (portrait 240 × 426 ; pc : 560 × 350), GRAINE (graine du
-//   modèle, pour ses variantes), MODELES (une autre bibliothèque), PAGE (une autre page que dist/index.html), PLANCHE=0 (pas de planche).
+//   modèle, pour ses variantes), CFGX (options de page en plus, JSON), MODELES (une autre bibliothèque), PAGE (une autre page que dist/index.html), PLANCHE=0 (pas de planche).
 // Sortie : <dossier>/<fiche>-<qualité>-<taille>-<cadre>.png et <dossier>/planche.png (python3 + PIL).
 import { chromium } from 'playwright';
 import { mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
@@ -51,7 +51,7 @@ for (const fi of FICHES) for (const q of QUAL) {
   const page = await b.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   const logs = []; page.on('pageerror', e => logs.push(e.message)); page.on('console', m => { if (m.type() === 'error' && !/Failed to load|ERR_/.test(m.text())) logs.push(m.text()); });
   await page.addInitScript(c => { window.__CFG = c; },
-    { still: true, nohud: true, nowalk: true, v3: true, full: pc, mobile: !pc, bureau: false, scene: fiche, z: 26, regulateur: false, grains: pc ? 1200000 : 300000 });
+    { still: true, nohud: true, nowalk: true, v3: true, full: pc, mobile: !pc, bureau: false, scene: fiche, z: 26, regulateur: false, grains: pc ? 1200000 : 300000, ...JSON.parse(process.env.CFGX || '{}') });
   const t0 = Date.now();
   await page.goto('file://' + join(root, process.env.PAGE || 'dist/index.html'), { timeout: 600000 });
   await page.waitForFunction(() => window.__state && window.__state.n >= 2, null, { timeout: 900000, polling: 1000 });
