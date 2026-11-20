@@ -14,6 +14,7 @@ POC documents first (English, binding), then the legacy French docs of the engin
 - `pdl-spec.md`: the PDL specification (source grammar, transactions, rules, validation, ports, clocks, journal).
 - `board.md`: priorities, open questions, working assumptions, and how Toine and the coordinator work together.
 - `adr/0008-home-node.md`: models reached through Toine's desktop, and how the page detects it.
+- `adr/0009-model-output-economy.md`: what each tier is asked to produce (choose, write compact, write long), and how it will be measured.
 - `research/models.md`: research behind ADR 0004 (which models for which tier; Jev and decision models, JEPA, embeddings, constrained decoding, the artifact and proxy modes).
 - `story-louis-round.md`: the bible of the POC story (premise, people, stations, beats, endings, tone, what must never happen).
 - `patterns.md`: the narrative pattern library, how a story binds patterns, and what swapping one changes.
