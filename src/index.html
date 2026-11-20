@@ -34,6 +34,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 @keyframes blink{50%{opacity:.25}}
 .osd{font-family:var(--f-mono);font-size:12px;line-height:1.45;letter-spacing:.03em;text-align:right;display:flex;flex-direction:column;
   font-variant-numeric:tabular-nums;text-shadow:0 0 3px rgba(0,0,0,.9),0 1px 2px rgba(0,0,0,.8)}
+.hint[hidden]{display:none}
 .hint{font-size:13px;color:var(--ink-dim);text-shadow:0 1px 6px rgba(0,0,0,.7);transition:opacity .6s}
 .hint.off{opacity:0}
 .pensee{max-width:34em;text-align:center;font-size:16px;line-height:1.35;font-style:italic;color:var(--ink);
@@ -355,7 +356,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 <div class="hud bottom">
   <div class="pensee" id="pensee" aria-live="polite"></div>
   <button id="taire" type="button" class="ghost" hidden>Silence</button>
-  <div class="hint" id="hint">Glisse pour regarder autour de lui</div>
+  <div class="hint" id="hint" hidden></div>
   <form class="dire" id="dire" hidden>
     <button id="mic" type="button" class="mic" aria-pressed="false" hidden>Micro</button>
     <input id="msg" type="text" autocomplete="off" enterkeyhint="send" placeholder="Dis-lui quoi faire…" aria-label="Ce que tu dis, au porteur de la caméra ou pour décrire un monde">

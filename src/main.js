@@ -3247,7 +3247,7 @@ function meneurEntendre(texte){ say("…"); activite.entendre(texte);
 function interfaceHistoire(on){
   for(const id of ["monde","lieu","mesurer","banc","histoire","v3"]) if($(id)) $(id).hidden=on;
   if($("journal")) $("journal").hidden=!on&&!dernierJournal;
-  $("hint").textContent=on?"Glisse pour regarder · « Lui parler » pour lui dire quelque chose":"Glisse pour regarder autour de lui";
+  $("hint").textContent="";
   $("hint").classList.remove("off"); $("parler").classList.remove("pulse"); $("fin").hidden=true;
 }
 /* Promenade libre : pas d'histoire écrite, mais le même meneur. Le personnage y fait ce qu'on lui demande, ce qu'il fait
