@@ -1,8 +1,9 @@
-<a class="skip" href="#s1" data-t="skip">Skip to the guide</a>
+<a class="skip" href="#play" data-t="skip">Skip to the scene</a>
 <header class="bar">
   <div class="bar-in">
     <span class="rec" aria-hidden="true"><i></i>REC</span>
     <span class="bar-title">Bodycam Stories <span class="dim" data-t="hero.kicker">Field guide</span></span>
+    <nav class="bar-nav" aria-label="Parts"><a href="#play" data-t="nav.see">See it</a><a href="#hood" data-t="nav.hood">Open the hood</a></nav>
     <span class="tc" id="timecode" aria-hidden="true">00:00:00:00</span>
     <span class="bar-ctl">
       <label class="sr" for="lang" data-t="lang.label">Language</label>
@@ -14,52 +15,181 @@
 </header>
 
 <main class="wrap" id="top">
-<section class="hero" aria-labelledby="hero-title">
-  <p class="kicker"><span class="rec-dot" aria-hidden="true"></span><span data-t="hero.kicker">Field guide</span> · <span>Louis’s Round</span></p>
-  <h1 id="hero-title">Bodycam Stories</h1>
-  <ol class="teaser">
-    <li data-t="hero.t1"></li>
-    <li data-t="hero.t2"></li>
-    <li><span data-t="hero.t3"></span> <small data-t="hero.t3src"></small></li>
-  </ol>
-  <p class="lede" data-t="hero.lede"></p>
-  <p class="honest" data-t="hero.honest"></p>
-  <p class="check" id="replay-check"><span data-t="loading"></span></p>
-  <nav class="toc" aria-labelledby="toc-h"><h2 id="toc-h" class="sr" data-t="toc.label">Contents</h2><ol id="toc"></ol></nav>
-</section>
 
-<section id="s1" class="sec" aria-labelledby="s1-h">
-  <h2 id="s1-h"><span class="n">01</span><span data-t="s1.title"></span></h2>
-  <p data-t="s1.p1"></p><p data-t="s1.p2"></p>
-  <div class="bench">
-    <p class="act" data-t="s1.act"></p>
-    <div class="row">
-      <label class="fld"><span data-t="s1.station"></span><select id="s1-station"></select></label>
-      <label class="fld grow"><span data-t="s1.request"></span><select id="s1-request"></select></label>
-      <fieldset class="seg" id="s1-side"><legend data-t="s1.side"></legend>
-        <label><input type="radio" name="s1-side" id="s1-side-live" value="live" checked><span data-t="s1.live"></span></label>
-        <label><input type="radio" name="s1-side" id="s1-side-write" value="write"><span data-t="s1.write"></span></label>
-      </fieldset>
+<!-- ============================================================ PART I · SEE IT -->
+<section class="hero" id="play" aria-labelledby="hero-title">
+  <p class="kicker"><span class="rec-dot" aria-hidden="true"></span><span data-t="part1">I · See it</span> · <span id="story-title">Louis’s Round</span></p>
+  <h1 id="hero-title" data-t="hero.title">Say anything. The world answers.</h1>
+  <p class="lede" data-t="hero.lede"></p>
+
+  <div class="stage">
+    <div class="frame-col">
+      <figure class="frame" id="frame" aria-describedby="frame-cap">
+        <div class="frame-img"><img id="still-a" alt=""><img id="still-b" alt="" class="off"></div>
+        <div class="ov ov-top"><span class="ov-rec"><i></i>REC</span><span class="ov-tc" id="ov-tc">07:52:10</span><span class="ov-bat" id="ov-bat" aria-hidden="true"><b></b></span></div>
+        <div class="ov ov-mid" id="ov-sound" aria-live="polite"></div>
+        <div class="ov ov-bot"><span class="ov-st" id="ov-st"></span><p class="sub-line" id="ov-sub" aria-live="polite"></p></div>
+      </figure>
+      <p class="cap" id="frame-cap" data-t="hero.cap"></p>
     </div>
-    <div id="s1-out" class="out" aria-live="polite"></div>
-    <p class="note" data-t="s1.benchnote"></p>
+    <div class="trace-col">
+      <div class="talk">
+        <p class="talk-h"><span data-t="hero.sayto">Say to Sam</span> <span class="dim" id="talk-where"></span></p>
+        <div class="chips" id="chips" role="group" aria-labelledby="hero-title"></div>
+        <form class="free" id="free" autocomplete="off">
+          <label class="sr" for="free-text" data-t="hero.free">Or type it</label>
+          <input type="text" id="free-text" maxlength="160" spellcheck="false">
+          <button type="submit" class="btn rec-btn" id="free-go"><span class="rec-dot" aria-hidden="true"></span><span data-t="hero.say">Say</span></button>
+        </form>
+        <p class="heard" id="heard" aria-live="polite"></p>
+      </div>
+      <div class="trace" id="trace" aria-live="polite">
+        <div class="tl tl-now"><span class="tl-k">now</span><div class="tl-v" id="tl-now"></div></div>
+        <div class="tl tl-scene"><span class="tl-k">scene</span><div class="tl-v" id="tl-scene"></div></div>
+        <div class="tl tl-story"><span class="tl-k">story</span><div class="tl-v" id="tl-story"></div></div>
+        <details class="tl-j" id="tl-j"><summary data-t="hero.journal">Journal lines</summary><div class="jbox" id="tl-jbox"></div></details>
+      </div>
+      <div class="row tight hero-ctl">
+        <button type="button" class="btn ghost" id="hero-reset" data-t="hero.reset">Start over</button>
+        <span class="check" id="replay-check"><span data-t="loading"></span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="synth" aria-labelledby="synth-h">
+    <h2 class="sub" id="synth-h" data-t="synth.h">Sound is made by code too</h2>
+    <div class="row tight">
+      <span class="synth-p" data-t="synth.p"></span>
+      <button type="button" class="btn" id="synth-0" data-mass="0.05"></button>
+      <button type="button" class="btn" id="synth-1" data-mass="2.5"></button>
+      <button type="button" class="btn" id="synth-2" data-mass="60"></button>
+    </div>
+    <p class="note" id="synth-note"></p>
   </div>
 </section>
 
-<section id="s2" class="sec" aria-labelledby="s2-h">
-  <h2 id="s2-h"><span class="n">02</span><span data-t="s2.title"></span></h2>
-  <p data-t="s2.p1"></p><p data-t="s2.p2"></p>
-  <div class="bench">
-    <label class="fld"><span data-t="s2.preset"></span><select id="s2-preset"></select></label>
-    <div class="fld"><span data-t="s2.header"></span><pre class="code dim" id="s2-header"></pre></div>
-    <label class="fld"><span data-t="s2.line"></span><textarea id="s2-line" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></label>
+<section id="invert" class="sec" aria-labelledby="invert-h">
+  <h2 id="invert-h" data-t="inv.title"></h2>
+  <p class="one" data-t="inv.p"></p>
+  <div class="field-wrap">
+    <div class="field" id="field" role="list"></div>
+    <div class="field-side">
+      <ul class="legend-s" id="field-legend"></ul>
+      <div class="mark-card" id="mark-card" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<section id="book" class="sec" aria-labelledby="book-h">
+  <h2 id="book-h" data-t="book.title"></h2>
+  <p class="one" data-t="book.p"></p>
+  <div class="book">
+    <div class="cover" id="cover"></div>
+    <div class="book-in">
+      <ol class="chapters" id="chapters"></ol>
+      <div class="cast" role="tablist" id="cast" aria-label="Characters"></div>
+      <div class="page" id="page" role="tabpanel"></div>
+    </div>
+  </div>
+  <div class="bench editor" id="editor">
+    <p class="ed-h"><span class="sub" data-t="book.edit"></span> <code class="dim" id="ed-where"></code></p>
+    <label class="sr" for="s2-line" data-t="s2.line">Statement</label>
+    <textarea id="s2-line" rows="2" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
     <div id="s2-out" class="out" aria-live="polite"></div>
   </div>
 </section>
 
+<section id="clocks" class="sec" aria-labelledby="clocks-h">
+  <h2 id="clocks-h" data-t="clk.title"></h2>
+  <div class="duo">
+    <div class="duo-a">
+      <p class="one" data-t="clk.p"></p>
+      <div class="row tight">
+        <label class="sr" for="s4-sentence" data-t="s4.sentence">Sentence</label>
+        <select id="s4-sentence"></select>
+        <button type="button" class="btn rec-btn" id="s4-say"><span class="rec-dot" aria-hidden="true"></span><span data-t="s4.say"></span></button>
+      </div>
+      <div class="lanes compact" id="s4-lanes"></div>
+      <details><summary data-t="clk.tune">Slow a clock down</summary>
+        <div class="sliders">
+          <label class="sl"><span><span data-t="s4.delay"></span> · <b>now</b> <output id="s4-now-v"></output></span><input type="range" id="s4-now" min="0" max="1500" step="10" value="140"></label>
+          <label class="sl"><span><span data-t="s4.delay"></span> · <b>scene</b> <output id="s4-scene-v"></output></span><input type="range" id="s4-scene" min="0" max="12000" step="100" value="2600"></label>
+          <label class="sl"><span><span data-t="s4.delay"></span> · <b>story</b> <output id="s4-story-v"></output></span><input type="range" id="s4-story" min="0" max="30000" step="500" value="9000"></label>
+        </div>
+        <p class="note" data-t="s4.storynote"></p>
+      </details>
+    </div>
+    <div class="duo-b" id="promise" aria-labelledby="promise-h">
+      <h3 class="h3" id="promise-h" data-t="pr.title"></h3>
+      <p class="one" data-t="pr.p"></p>
+      <p class="said" id="s6-said"></p>
+      <ol class="steps" id="s6-steps"></ol>
+      <label class="sl wide"><span><span data-t="s6.step"></span>: <output id="s6-step-v"></output></span><input type="range" id="s6-step" min="0" max="4" step="1" value="4"></label>
+      <div class="row tight">
+        <fieldset class="seg small"><legend data-t="s6.answer"></legend>
+          <label><input type="radio" name="s6-ans" id="s6-ans-accepted" value="accepted"><span data-t="ans.accepted"></span></label>
+          <label><input type="radio" name="s6-ans" id="s6-ans-amended" value="amended" checked><span data-t="ans.amended"></span></label>
+          <label><input type="radio" name="s6-ans" id="s6-ans-refused" value="refused"><span data-t="ans.refused"></span></label>
+        </fieldset>
+        <fieldset class="seg small"><legend data-t="s6.strength"></legend>
+          <label><input type="radio" name="s6-str" id="s6-str-hard" value="hard" checked><span data-t="str.hard"></span></label>
+          <label><input type="radio" name="s6-str" id="s6-str-tendency" value="tendency"><span data-t="str.tendency"></span></label>
+        </fieldset>
+        <fieldset class="seg small" id="s6-ver-wrap"><legend data-t="s6.verdict"></legend>
+          <label><input type="radio" name="s6-ver" id="s6-ver-kept" value="kept" checked><span data-t="ver.kept"></span></label>
+          <label><input type="radio" name="s6-ver" id="s6-ver-broken" value="broken"><span data-t="ver.broken"></span></label>
+        </fieldset>
+      </div>
+      <div id="s6-out" class="out" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<section id="rewind" class="sec" aria-labelledby="rewind-h">
+  <h2 id="rewind-h" data-t="rw.title"></h2>
+  <p class="one" data-t="rw.p"></p>
+  <div class="rw">
+    <ol class="rw-steps"><li data-t="rw.1">Rewind</li><li data-t="rw.2">Change one line</li><li data-t="rw.3">Play again</li></ol>
+    <div class="bench">
+      <label class="fld"><span data-t="s8.rule"></span><select id="s8-rule"></select></label>
+      <textarea id="s8-text" rows="2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Rule source"></textarea>
+      <div class="row tight">
+        <button type="button" class="btn rec-btn" id="s8-replay"><span class="rec-dot" aria-hidden="true"></span><span data-t="s8.replay"></span></button>
+        <button type="button" class="btn ghost" id="s8-reset" data-t="s8.reset"></button>
+      </div>
+      <div id="s8-out" class="out" aria-live="polite"></div>
+      <details class="jread"><summary data-t="rw.read">Read the recorded session</summary>
+        <div class="row">
+          <label class="fld"><span data-t="s8.filter"></span><select id="s8-filter"><option value="all" data-t="f.all"></option><option value="tx" data-t="f.tx"></option><option value="rule" data-t="f.rule"></option><option value="model_call" data-t="f.model"></option><option value="input" data-t="f.input"></option></select></label>
+          <label class="sl grow"><span><span data-t="s8.entry"></span> <output id="s8-seq-v"></output></span><input type="range" id="s8-seq" min="0" max="0" step="1" value="0"></label>
+        </div>
+        <div class="journal" id="s8-list" aria-label="Journal"></div>
+        <div id="s8-entry" class="out entry" aria-live="polite"></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section id="ways" class="sec" aria-labelledby="ways-h">
+  <h2 id="ways-h" data-t="ways.title"></h2>
+  <div class="ways">
+    <a class="way" href="#play"><span class="way-n">01</span><b data-t="ways.play"></b><span data-t="ways.play.p"></span><span class="way-tag" data-t="ways.built">in this page</span></a>
+    <a class="way" href="#book"><span class="way-n">02</span><b data-t="ways.write"></b><span data-t="ways.write.p"></span><span class="way-tag" data-t="ways.built">in this page</span></a>
+    <div class="way planned"><span class="way-n">03</span><b data-t="ways.host"></b><span data-t="ways.host.p"></span><span class="way-tag" data-t="ways.planned">planned, not built</span></div>
+  </div>
+</section>
+
+<!-- ============================================================ PART II · OPEN THE HOOD -->
+<section class="part2" id="hood" aria-labelledby="hood-h">
+  <p class="kicker"><span class="rec-dot" aria-hidden="true"></span><span data-t="part2">II · Open the hood</span></p>
+  <h2 id="hood-h" class="h-part" data-t="hood.title"></h2>
+  <p class="one" data-t="hood.p"></p>
+  <nav class="toc" aria-labelledby="toc-h"><h3 id="toc-h" class="sr" data-t="toc.label">Contents</h3><ol id="toc"></ol></nav>
+</section>
+
 <section id="s3" class="sec" aria-labelledby="s3-h">
-  <h2 id="s3-h"><span class="n">03</span><span data-t="s3.title"></span></h2>
-  <p data-t="s3.p1"></p><p data-t="s3.p2"></p>
+  <h2 id="s3-h"><span class="n">01</span><span data-t="s3.title"></span></h2>
+  <p data-t="s3.p1"></p>
   <div class="bench">
     <div class="row">
       <label class="fld grow"><span data-t="s3.preset"></span><select id="s3-preset"></select></label>
@@ -71,27 +201,9 @@
   </div>
 </section>
 
-<section id="s4" class="sec" aria-labelledby="s4-h">
-  <h2 id="s4-h"><span class="n">04</span><span data-t="s4.title"></span></h2>
-  <p data-t="s4.p1"></p><p data-t="s4.p2"></p>
-  <div class="bench">
-    <div class="row">
-      <label class="fld grow"><span data-t="s4.sentence"></span><select id="s4-sentence"></select></label>
-      <button type="button" class="btn rec-btn" id="s4-say"><span class="rec-dot" aria-hidden="true"></span><span data-t="s4.say"></span></button>
-    </div>
-    <div class="sliders">
-      <label class="sl"><span><span data-t="s4.delay"></span> · <b>now</b> <output id="s4-now-v"></output></span><input type="range" id="s4-now" min="0" max="1500" step="10" value="140"></label>
-      <label class="sl"><span><span data-t="s4.delay"></span> · <b>scene</b> <output id="s4-scene-v"></output></span><input type="range" id="s4-scene" min="0" max="12000" step="100" value="2600"></label>
-      <label class="sl"><span><span data-t="s4.delay"></span> · <b>story</b> <output id="s4-story-v"></output></span><input type="range" id="s4-story" min="0" max="30000" step="500" value="9000"></label>
-    </div>
-    <div class="lanes" id="s4-lanes"></div>
-    <p class="note" data-t="s4.storynote"></p>
-  </div>
-</section>
-
 <section id="s5" class="sec" aria-labelledby="s5-h">
-  <h2 id="s5-h"><span class="n">05</span><span data-t="s5.title"></span></h2>
-  <p data-t="s5.p1"></p><p data-t="s5.p2"></p>
+  <h2 id="s5-h"><span class="n">02</span><span data-t="s5.title"></span></h2>
+  <p data-t="s5.p1"></p>
   <div class="bench">
     <label class="fld"><span data-t="s5.q"></span><select id="s5-q"></select></label>
     <div id="s5-qinfo" class="qinfo"></div>
@@ -113,35 +225,9 @@
   </div>
 </section>
 
-<section id="s6" class="sec" aria-labelledby="s6-h">
-  <h2 id="s6-h"><span class="n">06</span><span data-t="s6.title"></span></h2>
-  <p data-t="s6.p1"></p><p data-t="s6.p2"></p>
-  <div class="bench">
-    <p class="said" id="s6-said"></p>
-    <div class="row">
-      <fieldset class="seg"><legend data-t="s6.answer"></legend>
-        <label><input type="radio" name="s6-ans" id="s6-ans-accepted" value="accepted"><span data-t="ans.accepted"></span></label>
-        <label><input type="radio" name="s6-ans" id="s6-ans-amended" value="amended" checked><span data-t="ans.amended"></span></label>
-        <label><input type="radio" name="s6-ans" id="s6-ans-refused" value="refused"><span data-t="ans.refused"></span></label>
-      </fieldset>
-      <fieldset class="seg"><legend data-t="s6.strength"></legend>
-        <label><input type="radio" name="s6-str" id="s6-str-hard" value="hard" checked><span data-t="str.hard"></span></label>
-        <label><input type="radio" name="s6-str" id="s6-str-tendency" value="tendency"><span data-t="str.tendency"></span></label>
-      </fieldset>
-      <fieldset class="seg" id="s6-ver-wrap"><legend data-t="s6.verdict"></legend>
-        <label><input type="radio" name="s6-ver" id="s6-ver-kept" value="kept" checked><span data-t="ver.kept"></span></label>
-        <label><input type="radio" name="s6-ver" id="s6-ver-broken" value="broken"><span data-t="ver.broken"></span></label>
-      </fieldset>
-    </div>
-    <label class="sl wide"><span><span data-t="s6.step"></span>: <output id="s6-step-v"></output></span><input type="range" id="s6-step" min="0" max="4" step="1" value="4"></label>
-    <ol class="steps" id="s6-steps" aria-hidden="true"></ol>
-    <div id="s6-out" class="out" aria-live="polite"></div>
-  </div>
-</section>
-
 <section id="s7" class="sec" aria-labelledby="s7-h">
-  <h2 id="s7-h"><span class="n">07</span><span data-t="s7.title"></span></h2>
-  <p data-t="s7.p1"></p><p data-t="s7.p2"></p>
+  <h2 id="s7-h"><span class="n">03</span><span data-t="s7.title"></span></h2>
+  <p data-t="s7.p1"></p>
   <div class="bench">
     <label class="fld"><span data-t="s7.src"></span><textarea id="s7-src" rows="5" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></label>
     <div class="row tight" role="group" aria-labelledby="s7-add-l">
@@ -156,30 +242,9 @@
   </div>
 </section>
 
-<section id="s8" class="sec" aria-labelledby="s8-h">
-  <h2 id="s8-h"><span class="n">08</span><span data-t="s8.title"></span></h2>
-  <p data-t="s8.p1"></p><p data-t="s8.p2"></p>
-  <div class="bench">
-    <div class="row">
-      <label class="fld"><span data-t="s8.filter"></span><select id="s8-filter"><option value="all" data-t="f.all"></option><option value="tx" data-t="f.tx"></option><option value="rule" data-t="f.rule"></option><option value="model_call" data-t="f.model"></option><option value="input" data-t="f.input"></option></select></label>
-      <label class="sl grow"><span><span data-t="s8.entry"></span> <output id="s8-seq-v"></output></span><input type="range" id="s8-seq" min="0" max="0" step="1" value="0"></label>
-    </div>
-    <div class="journal" id="s8-list" aria-label="Journal"></div>
-    <div id="s8-entry" class="out entry" aria-live="polite"></div>
-    <h3 class="sub" data-t="s8.whatif"></h3>
-    <label class="fld"><span data-t="s8.rule"></span><select id="s8-rule"></select></label>
-    <textarea id="s8-text" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Rule source"></textarea>
-    <div class="row tight">
-      <button type="button" class="btn rec-btn" id="s8-replay" data-t="s8.replay"></button>
-      <button type="button" class="btn ghost" id="s8-reset" data-t="s8.reset"></button>
-    </div>
-    <div id="s8-out" class="out" aria-live="polite"></div>
-  </div>
-</section>
-
 <section id="s9" class="sec" aria-labelledby="s9-h">
-  <h2 id="s9-h"><span class="n">09</span><span data-t="s9.title"></span></h2>
-  <p data-t="s9.p1"></p><p data-t="s9.p2"></p>
+  <h2 id="s9-h"><span class="n">04</span><span data-t="s9.title"></span></h2>
+  <p data-t="s9.p1"></p>
   <div class="bench split">
     <div class="tree" id="s9-tree" aria-label="stories/louis-round"></div>
     <div class="file" id="s9-file" aria-live="polite"></div>
@@ -190,8 +255,8 @@
 </section>
 
 <section id="s10" class="sec" aria-labelledby="s10-h">
-  <h2 id="s10-h"><span class="n">10</span><span data-t="s10.title"></span></h2>
-  <p data-t="s10.p1"></p><p data-t="s10.p2"></p>
+  <h2 id="s10-h"><span class="n">05</span><span data-t="s10.title"></span></h2>
+  <p data-t="s10.p1"></p>
   <div class="bench">
     <fieldset class="chks"><legend data-t="s10.where"></legend>
       <label class="chk"><input type="checkbox" id="s10-node"><span data-t="s10.node"></span></label>
@@ -208,7 +273,7 @@
 </section>
 
 <section id="s11" class="sec" aria-labelledby="s11-h">
-  <h2 id="s11-h"><span class="n">11</span><span data-t="s11.title"></span></h2>
+  <h2 id="s11-h"><span class="n">06</span><span data-t="s11.title"></span></h2>
   <p data-t="s11.p1"></p>
   <h3 class="sub" data-t="s11.feel"></h3>
   <ol class="feel" id="s11-feel"></ol>
