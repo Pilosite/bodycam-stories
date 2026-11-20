@@ -773,8 +773,9 @@ function display(src,t,cible){
   const u=P_CAM.u; gl.useProgram(P_CAM.p);
   bindTex(0,src.t,u.uTex); bindTex(1,bl1.t,u.uBloom);
   gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
-  bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff?0:1);
-  gl.uniform1f(u.uExp,exposure); gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
+  bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff||CFG.expoFixe>0?0:1);
+  gl.uniform1f(u.uExp,CFG.expoFixe>0?+CFG.expoFixe:exposure);   // mise au point : expoFixe impose l'exposition du capteur
+  gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
   gl.uniform1f(u.uFlare||null,QUAL.full&&S.atmo&&S.atmo[0]?(CFG.flare!==undefined?+CFG.flare:1):0);   // optique face au soleil : grand écran, modèle atmosphère
   gl.uniform1f(u.uGrainPx||null,QUAL.full?Math.max(1,canvas.height/620):1);                          // grain d'une vidéo, pas d'un écran
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
@@ -1024,7 +1025,8 @@ function v3Cibles(){                                          // tampon G (2 tex
     if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail("Moteur v3 : tampon G incomplet.");
     // Qualité mobile : accumulation en RGBA16F filtrable (moitié moins d'octets à lire et écrire ; le capteur la lit en une
     // lecture filtrée au lieu de quatre). Option v3acc32 : l'ancienne accumulation en RGBA32F.
-    const a16=!QUAL.full&&!CFG.v3acc32, fa=a16?gl.RGBA16F:ACC_FMT, fl=a16?gl.LINEAR:gl.NEAREST;
+    const a16=(!QUAL.full||!!CFG.v3acc16)&&!CFG.v3acc32,   // v3acc16 : mise au point, accumulation en RGBA16F en qualité complète aussi
+          fa=a16?gl.RGBA16F:ACC_FMT, fl=a16?gl.LINEAR:gl.NEAREST;
     V3.gb=g; V3.A=target(W,H,fa,fl); V3.B=target(W,H,fa,fl); V3.A.lin=V3.B.lin=a16;
     if(!V3.A.ok){ freeT(V3.A); freeT(V3.B); V3.A=target(W,H,ACC_FMT,gl.NEAREST); V3.B=target(W,H,ACC_FMT,gl.NEAREST); } V3.hist=null; V3.n=0;
   }
@@ -2640,6 +2642,8 @@ $("fin-quitter").onclick=()=>quitterHistoire(false);
 window.balade={
   reessayerOmbrage:ombRaz,                                     // oublie les variantes d'ombrage notées en échec, et recharge
   ombrage:()=>({mode:OMB.mode,enService:V3.omb?V3.omb.sig:"",voulu:OMB.sig,memoire:OMB.mem}),
+  exposition(){ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,expoT[expoI].f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,b);   // exposition tenue sur la puce
+    return {puce:b[0],cible:b[1],processeur:exposure}; },
   reessayerRayons(){ try{ localStorage.removeItem("bodycam-rayons-2"); }catch(_){} location.reload(); },
   fiches:()=>FICHES.map(f=>f.id),
   lieu(i){ ficheIdx=((i%FICHES.length)+FICHES.length)%FICHES.length; applyFiche(FICHES[ficheIdx]); },

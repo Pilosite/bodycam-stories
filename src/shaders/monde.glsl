@@ -599,7 +599,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -622,7 +622,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */

@@ -4408,7 +4408,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -4431,7 +4431,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -5159,6 +5159,9 @@ vec3 smp(vec2 uv){
   return mix(mix(texelFetch(uTex,a,0).rgb,texelFetch(uTex,ivec2(b.x,a.y),0).rgb,f.x),
              mix(texelFetch(uTex,ivec2(a.x,b.y),0).rgb,texelFetch(uTex,b,0).rgb,f.x),f.y);
 }
+/* Valeur invalide ou démesurée (débordement d'un tampon demi-flottant, NaN d'un pilote) : jamais de teinte au hasard.
+   +inf devient très clair, NaN devient noir (les comparaisons avec NaN sont fausses). */
+vec3 sain(vec3 x){ return vec3(x.r>=6e4?6e4:x.r>=0.?x.r:0.,x.g>=6e4?6e4:x.g>=0.?x.g:0.,x.b>=6e4?6e4:x.b>=0.?x.b:0.); }
 vec3 tone(vec3 c){
   c*=EX;
   float l=dot(c,vec3(.2126,.7152,.0722)); const float W=5.5;
@@ -5190,11 +5193,17 @@ void main(){
     add+=g1*vec3(.55,.75,.45)*.11+g2*vec3(.75,.45,.9)*.05;
     hdr+=add*uFlare; nb+=add*uFlare;
   }
+  hdr=sain(hdr); nb=sain(nb); bl=sain(bl);
   vec3 c=tone(mix(hdr,bl,.11)), cn=tone(mix(nb,bl,.11));
   c+=(c-cn)*(uGrainPx>1.?.45:.70)*(1.-min(uSoft,1.));          // grand écran : la netteté d'un téléphone en 1080p, sans liseré noir
   c=max(c,0.);
+  /* Écrêtage du capteur : un photosite saturé ne garde pas sa teinte, tout ce qui dépasse le blanc part vers le blanc (un
+     soleil brûlé est blanc, à peine chaud au bord). Borné à 1 avant la courbe en S : au-delà, c*c*(3-2c) devient négatif
+     et éteignait les canaux les plus forts (soleil bleu vif sur le PC, où l'exposition montait davantage). */
+  float pk=max(c.r,max(c.g,c.b));
+  c=mix(min(c,vec3(1.)),vec3(1.),smoothstep(1.,3.,pk)*.9);
   float l=dot(c,vec3(.299,.587,.114)); c=mix(vec3(l),c,.94);
-  c=pow(max(c,0.),vec3(1./2.2));
+  c=pow(clamp(c,0.,1.),vec3(1./2.2));
   c=mix(c,c*c*(3.-2.*c),.30);
   float v=r2/(.25*(asp*asp+1.)); c*=1.-.46*v*v*v;
   float lg=clamp(dot(c,vec3(.333)),0.,1.);
@@ -5907,7 +5916,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -5930,7 +5939,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -7224,7 +7233,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -7247,7 +7256,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -8031,7 +8040,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -8054,7 +8063,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -8778,7 +8787,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -8801,7 +8810,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -9511,7 +9520,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -9534,7 +9543,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -10868,7 +10877,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -10891,7 +10900,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -11880,7 +11889,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -11903,7 +11912,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -12613,7 +12622,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -12636,7 +12645,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -13488,7 +13497,7 @@ void matCone(vec3 p, vec3 gn, out vec3 alb, out vec3 n, out float spec){   // c�
 vec3 skyAtmo(vec3 rd){
   float y=max(rd.y,0.), sy=uSunDir.y, bas=1.-smoothstep(.02,.42,sy);   // 0 au-delà de 25° environ
   vec2 h=rd.xz/max(length(rd.xz),1e-4), sz=uSunDir.xz/max(length(uSunDir.xz),1e-4);
-  float ca=dot(h,sz)*.5+.5;                                             // 1 : sous le soleil, 0 : à l'opposé
+  float ca=clamp(dot(h,sz)*.5+.5,0.,1.);                                           // 1 : sous le soleil, 0 : à l'opposé
   vec3 zen=mix(vec3(.16,.34,.78),vec3(.085,.19,.52),bas);
   vec3 hzJour=mix(vec3(.62,.72,.86),vec3(.78,.80,.84),uAtmo.y*.5);
   vec3 hzBas=mix(vec3(.80,.56,.62),vec3(1.45,.86,.42),pow(ca,2.2));      // rose à l'opposé du soleil, or vers lui
@@ -13511,7 +13520,7 @@ vec3 skyBase(vec3 rd){
 }
 vec3 skyCol(vec3 rd){
   float s=max(dot(rd,uSunDir),0.);
-  return skyBase(rd)+uSun*vec3(6.4,7.2,8.7)*smoothstep(.9996,.99985,s);
+  return skyBase(rd)+min(uSun*vec3(6.4,7.2,8.7),vec3(100.))*smoothstep(.9996,.99985,s);   // disque plafonné : jamais de valeur démesurée dans les tampons
 }
 /* ---- lointain : la ligne d'horizon (montagnes, collines), calculée par direction et non tracée.
    Deux plans : un massif au fond, des contreforts devant. Neige au-dessus d'une altitude, lumière du soleil, voile de l'air. */
@@ -14386,8 +14395,9 @@ function display(src,t,cible){
   const u=P_CAM.u; gl.useProgram(P_CAM.p);
   bindTex(0,src.t,u.uTex); bindTex(1,bl1.t,u.uBloom);
   gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
-  bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff?0:1);
-  gl.uniform1f(u.uExp,exposure); gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
+  bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff||CFG.expoFixe>0?0:1);
+  gl.uniform1f(u.uExp,CFG.expoFixe>0?+CFG.expoFixe:exposure);   // mise au point : expoFixe impose l'exposition du capteur
+  gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
   gl.uniform1f(u.uFlare||null,QUAL.full&&S.atmo&&S.atmo[0]?(CFG.flare!==undefined?+CFG.flare:1):0);   // optique face au soleil : grand écran, modèle atmosphère
   gl.uniform1f(u.uGrainPx||null,QUAL.full?Math.max(1,canvas.height/620):1);                          // grain d'une vidéo, pas d'un écran
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
@@ -14637,7 +14647,8 @@ function v3Cibles(){                                          // tampon G (2 tex
     if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail("Moteur v3 : tampon G incomplet.");
     // Qualité mobile : accumulation en RGBA16F filtrable (moitié moins d'octets à lire et écrire ; le capteur la lit en une
     // lecture filtrée au lieu de quatre). Option v3acc32 : l'ancienne accumulation en RGBA32F.
-    const a16=!QUAL.full&&!CFG.v3acc32, fa=a16?gl.RGBA16F:ACC_FMT, fl=a16?gl.LINEAR:gl.NEAREST;
+    const a16=(!QUAL.full||!!CFG.v3acc16)&&!CFG.v3acc32,   // v3acc16 : mise au point, accumulation en RGBA16F en qualité complète aussi
+          fa=a16?gl.RGBA16F:ACC_FMT, fl=a16?gl.LINEAR:gl.NEAREST;
     V3.gb=g; V3.A=target(W,H,fa,fl); V3.B=target(W,H,fa,fl); V3.A.lin=V3.B.lin=a16;
     if(!V3.A.ok){ freeT(V3.A); freeT(V3.B); V3.A=target(W,H,ACC_FMT,gl.NEAREST); V3.B=target(W,H,ACC_FMT,gl.NEAREST); } V3.hist=null; V3.n=0;
   }
@@ -16049,6 +16060,8 @@ $("fin-quitter").onclick=()=>quitterHistoire(false);
 window.balade={
   reessayerOmbrage:ombRaz,                                     // oublie les variantes d'ombrage notées en échec, et recharge
   ombrage:()=>({mode:OMB.mode,enService:V3.omb?V3.omb.sig:"",voulu:OMB.sig,memoire:OMB.mem}),
+  exposition(){ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,expoT[expoI].f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,b);   // exposition tenue sur la puce
+    return {puce:b[0],cible:b[1],processeur:exposure}; },
   reessayerRayons(){ try{ localStorage.removeItem("bodycam-rayons-2"); }catch(_){} location.reload(); },
   fiches:()=>FICHES.map(f=>f.id),
   lieu(i){ ficheIdx=((i%FICHES.length)+FICHES.length)%FICHES.length; applyFiche(FICHES[ficheIdx]); },
