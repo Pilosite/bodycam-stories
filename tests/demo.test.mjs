@@ -399,3 +399,38 @@ test('horsDuCorps : « dessous » derrière les talons, à une distance faite po
   const p = placeLibre({ x: 0, z: -0.4 }, 0.2, [], corps, REGLAGES.MARGE_CORPS, q => Math.hypot(q.x, q.z + 0.4) < 0.3);
   assert.ok(Math.hypot(p.x, p.z + 0.4) >= 0.3 && Math.hypot(p.x, p.z) >= 0.35, JSON.stringify(p));
 });
+
+test('façonnage continu : pétrir, diviser, rouler, empiler une à une, prendre dans le tas, tapoter ; 8 à 12 s ; budget tenu', async () => {
+  const { gesteFaconnage, etatGeste } = await import('../src/meneur.js');
+  const av = formesModele(MODELE('crotte'), 'une énorme crotte').formes, ap = formesTransformees(MODELE('bonhomme'), av).formes;
+  const tas = ramassage(MODELES, 'des bâtons et des cailloux').formes.map(f => Object.assign({}, f, { p: [f.p[0] + 0.5, f.p[1], f.p[2] + 0.3] }));
+  const T = gesteFaconnage(av, ap, tas), tot = T.reduce((s, t) => s + t.duree, 0);
+  assert.ok(tot >= 8 && tot <= 12, 'durée : ' + tot);
+  assert.deepEqual(T.map(t => t.geste), ['petrir', 'diviser', 'rouler', 'poser', 'poser', 'poser', 'prendre', 'prendre', 'prendre', 'prendre', 'tapoter']);
+  // chaque ajout vient du tas, d'une forme de même matière, et chaque forme du tas ne sert qu'une fois
+  const pris = T.filter(t => t.geste === 'prendre');
+  for (const t of pris) { const de = t.de.find(f => f._k === t.cle), a = t.a.find(f => f._k === t.cle);
+    assert.equal(tas[t.pile].matiere, a.matiere); assert.deepEqual(de.p, tas[t.pile].p, 'part du tas'); }
+  assert.equal(new Set(pris.map(t => t.pile)).size, pris.length);
+  // continu : d'une image à l'autre (1/30 s), rien ne saute ; le budget d'un objet (24 formes) tenu
+  for (const t of T) { let prec = null;
+    for (let i = 0; i <= 30; i++) { const u = i / 30, F = etatGeste(t, u * u * (3 - 2 * u));
+      assert.ok(F.length <= REGLAGES.FORMES_PAR_OBJET, t.geste + ' : ' + F.length + ' formes');
+      if (prec) for (const f of F) { const g = prec.find(x => x._k === f._k); if (g) assert.ok(Math.hypot(f.p[0] - g.p[0], f.p[1] - g.p[1], f.p[2] - g.p[2]) < 0.25, t.geste + ' : saut de ' + f._k); }
+      prec = F; } }
+  // la fin est exactement le résultat ; le début, la chose telle qu'elle était
+  const fin = etatGeste(T[T.length - 1], 1);
+  assert.equal(fin.length, ap.length);
+  for (const f of ap) assert.ok(fin.some(g => g.f === f.f && g.matiere === f.matiere && g.p.every((v, i) => Math.abs(v - f.p[i]) < 1e-3)), 'forme du résultat');
+  assert.equal(etatGeste(T[0], 0).length, av.length);
+  // les masses montent une à une : après le 1er « poser », une seule est à sa place
+  const surPlace = (F, k) => { const m = F.find(f => f._k === k), b = T[T.length - 1].a.find(f => f._k === k); return Math.hypot(...m.p.map((v, i) => v - b.p[i])) < 1e-3; };
+  const p1 = etatGeste(T[3], 1); assert.ok(surPlace(p1, 'm0') && !surPlace(p1, 'm1') && !surPlace(p1, 'm2'));
+  // les mains, des données : six formes au plus, des matières qui existent
+  const M = MODELES.corps.mains;
+  for (const k of ['manche', 'paume', 'pouce']) assert.ok(['tissu', 'mat'].includes(M[k].matiere) || MATIERES.recettes[M[k].matiere], k);
+  // sans tas ni masse multiple : un geste quand même (pétrir, ajouts venus de la main, tapoter)
+  const T2 = gesteFaconnage(av, [...av.slice(0, 1), { f: 'boule', p: [0, 0.1, 0], taille: [0.3, 0.2, 0.3], couleur: '#5a3d22', matiere: 'pate-organique' }, { f: 'cylindre', p: [0, 0.3, 0], taille: [0.02, 0.3, 0.02], couleur: '#4e3a27', matiere: 'bois' }]);
+  assert.deepEqual(T2.map(t => t.geste), ['petrir', 'petrir', 'prendre', 'tapoter']);
+  assert.ok(T2.find(t => t.geste === 'prendre').depuis, 'vient de la main');
+});
