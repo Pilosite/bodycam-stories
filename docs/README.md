@@ -11,6 +11,10 @@ POC documents first (English, binding), then the legacy French docs of the engin
 - `adr/`: architecture decision records (`0000-template.md`, then 0001 to 0007).
 - `sandbox.md`: what belongs to the satire demo versus the generic mechanisms that stay, and how to separate them.
 - `pdl-spec.md`: the PDL specification (being written; contract first).
+- `story-louis-round.md`: the bible of the POC story (premise, people, stations, beats, endings, tone, what must never happen).
+- `patterns.md`: the narrative pattern library, how a story binds patterns, and what swapping one changes.
+- `characters.md`: light and strong characters in PDL source, and how they feed the model tiers and fallback lines.
+- `creator-kit.md`: how a creator works on a pack with an assistant (what to read, commands, example requests and diffs).
 
 ## Legacy (French; engine and demo, kept as they are)
 
