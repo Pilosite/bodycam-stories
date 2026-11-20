@@ -695,7 +695,7 @@ function simulate(dt){
     if(a.type==="attendreVoix"){ a.rest-=dt; a.t=(a.t||0)+dt; const e=voixP.etat(); if(a.rest<=0||(a.t>.5&&!e.parle&&!e.moteur)) queue.shift(); }   // elle finit sa phrase, puis elle s'y met
     else if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*(a.libre?1:gesteK())*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
-    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK()*(vitK()>1?1.5:1),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
+    else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK()*(vitK()>1?2.2:1),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
     else if(a.type==="soleil") soleilPas(a,dt);
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*gesteK()*dt); if(Math.abs(d)<.012) queue.shift(); }
     else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*gesteK()*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
@@ -1848,7 +1848,7 @@ function enqueue(actions){
       const fe=actions.filter(a=>a&&a.type==="effort"&&a.exploit).pop(); if(fe&&fe.exploit.masse) fe.chute={masse:clampN(fe.exploit.masse,.01,500,1)};   // elle tombe à la fin de l'effort : on l'entend à ce moment, arrivée ou pas
       if(sons) sons.preparer(r.plan.bruits); journalSons.push({t:+(performance.now()/1000).toFixed(2),plan:r.plan.bruits.map(b=>({t:b.t_abs,duree:b.duree,f0:b.f0,force:b.force,principal:b.principal})),souffles:r.plan.souffles,pose_t:r.plan.pose_t}); }
     catch(e){ console.warn("sons :",e&&e.message); } }
-  if(Array.isArray(actions)&&actions.some(a=>a&&a.type==="effort"&&a.exploit)&&voixP.actif()) queue.push({type:"attendreVoix",rest:4.5});   // la phrase d'abord, le geste aussitôt après
+  if(Array.isArray(actions)&&actions.length&&actions[0]&&!/^(marche|marcher|tourner|rejoindre|deplacer|regarder)$/.test(actions[0].type)&&actions.some(a=>a&&a.type==="effort"&&a.exploit)&&voixP.actif()) queue.push({type:"attendreVoix",rest:2.2});   // la phrase d'abord, le geste aussitôt après
   for(const a of (Array.isArray(actions)?actions:[]).slice(0,12)){   // 8 gestes au plus, plus les marqueurs de la page (poser, attendreObjet, §19)
     if(!a||typeof a!=="object") continue;
     if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});

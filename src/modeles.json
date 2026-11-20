@@ -54,7 +54,7 @@
   "bruit": {
    "_doc": "Le bruit pendant l'effort (docs/bruitages.md). Des DONNÉES : la recette de src/bruitages.json et comment elle varie avec la démesure (paliers ; dans un palier, la place du facteur entre les bornes de « facteur » : plus démesuré = plus long, plus grave). nombre : combien de bruits ; le dernier est le principal, qui finit juste avant la pose ; les autres (« avant », plus courts) vont entre les souffles. duree_s et hauteur_hz : du bas au haut du palier. force 0..1. rates : combien ça cale et repart. fin : une fin de la recette. prises : les prises libres qui peuvent servir de source. ecart_voix_s : pas de bruit dans ce délai après un souffle dit.",
    "recette": "flatulence", "gain_max": 0.9,
-   "ecart_voix_s": 1.3, "marge_debut_s": 0.7, "marge_pose_s": 0.25, "ecart_bruits_s": 0.35, "marge_souffle_s": 0.4,
+   "ecart_voix_s": 0.25, "marge_debut_s": 0.1, "marge_pose_s": 0.2, "ecart_bruits_s": 0.12, "marge_souffle_s": 0.15,
    "facteur": { "normal": [0.5, 1.6], "gros": [1.6, 4], "demesure": [4, 7] },
    "paliers": {
     "normal": { "nombre": [4, 6], "duree_s": [0.15, 0.4], "hauteur_hz": [300, 180], "force": 0.26, "rates": 0, "fin": "sec", "vibrato": 0.15, "alea": 0.5,
@@ -63,9 +63,9 @@
     "gros": { "nombre": [4, 6], "duree_s": [0.7, 1.8], "hauteur_hz": [160, 95], "force": 0.5, "rates": 0.6, "fin": "bulle", "vibrato": 0.5,
      "prises": ["longue_chantante", "breve_ronde"], "prise_part": 0.65,
      "avant": { "crescendo": true, "prises": ["breve_aigue", "breve_ronde"], "duree_rapport": [0.2, 0.4], "hauteur_rapport": [1.2, 1.6], "force_rapport": [0.5, 0.7], "fin": "sec" } },
-    "demesure": { "nombre": [5, 7], "duree_s": [2.5, 5], "hauteur_hz": [90, 45], "force": 1, "rates": 1.2, "fin": "ridicule", "vibrato": 1,
+    "demesure": { "nombre": [10, 13], "duree_s": [2.5, 5], "hauteur_hz": [90, 45], "force": 1, "rates": 1.2, "fin": "ridicule", "vibrato": 1,
      "prises": ["grondement", "longue_chantante"], "prise_part": 0.55,
-     "avant": { "prises": ["breve_aigue", "breve_ronde"], "crescendo": true, "duree_rapport": [0.05, 0.3], "hauteur_rapport": [1.3, 2.6], "force_rapport": [0.45, 0.95], "fin": "sec" } }
+     "avant": { "prises": ["breve_aigue", "breve_ronde"], "crescendo": true, "duree_rapport": [0.05, 0.2], "hauteur_rapport": [1.3, 2.6], "force_rapport": [0.45, 0.95], "fin": "sec" } }
    }
   }
  },
