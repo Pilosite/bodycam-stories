@@ -2,13 +2,16 @@
 // captures de la question, de la suggestion tapée, du milieu du rejeu, du fondu et du monde, puis contrôle de l'arrivée
 // (position inchangée 15 s après, phrase affichée). Captures dans out/ouverture/.
 // Usage : node tools/ouverture.mjs [telephone|ordinateur] [--mention]
+// PAGE=autre.html : une autre page que dist/index.html (comparer à main) ; OMBRAGE=echelle|plein|socle (défaut echelle, comme la
+// page publiée : window.__CFG mettrait « plein »). Mesure aussi l'attente entre la fin du rejeu (ligne « Le monde se construit »)
+// et le départ du fondu.
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const out = join(root, 'out/ouverture'); mkdirSync(out, { recursive: true });
+const out = join(root, process.env.OUT || 'out/ouverture'); mkdirSync(out, { recursive: true });
 const quoi = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const mention = process.argv.includes('--mention');
 const FORMATS = {
@@ -22,8 +25,8 @@ for (const nom of quoi.length ? quoi : Object.keys(FORMATS)) {
   const ctx = await browser.newContext({ viewport: F.viewport, isMobile: F.isMobile, hasTouch: F.hasTouch, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const logs = []; page.on('pageerror', e => logs.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error') logs.push(m.text()); });
-  await page.addInitScript(c => { window.__CFG = c; }, Object.assign({ demo: true, arrivee: true, v3: true, demoMention: mention }, F.cfg));
-  await page.goto('file://' + resolve(root, 'dist/index.html'), { timeout: 600000 });
+  await page.addInitScript(c => { window.__CFG = c; }, Object.assign({ demo: true, arrivee: true, v3: true, demoMention: mention, ombrage: process.env.OMBRAGE || 'echelle' }, F.cfg));
+  await page.goto('file://' + resolve(root, process.env.PAGE || 'dist/index.html'), { timeout: 600000 });
   await page.waitForSelector('#ouverture:not([hidden])', { timeout: 120000 });
   await page.waitForTimeout(800);
   const shot = async n => { await page.screenshot({ path: join(out, suf + '-' + n + '.png'), timeout: 300000 }); console.log(nom, n); };
@@ -40,8 +43,11 @@ for (const nom of quoi.length ? quoi : Object.keys(FORMATS)) {
   console.log(nom, 'constats affichés après', ((Date.now() - t0) / 1000).toFixed(1), 's');
   await page.waitForFunction(() => document.querySelectorAll('.ouv-valeur').length >= 5, null, { timeout: 600000 });
   await shot('4-traduction');
-  await page.waitForFunction(() => { const o = document.getElementById('ouverture'); return !o || o.classList.contains('ouv-fondu'); }, null, { timeout: 1200000 });   // en rendu logiciel, le fondu peut être fini avant qu'on regarde
-  console.log(nom, 'fondu après', ((Date.now() - t0) / 1000).toFixed(1), 's');
+  await page.waitForFunction(() => [...document.querySelectorAll('.ouv-titre')].some(x => x.textContent === 'Le monde se construit'), null, { timeout: 1200000, polling: 50 });
+  const tMonde = Date.now();
+  await page.waitForFunction(() => { const o = document.getElementById('ouverture'); return !o || o.classList.contains('ouv-fondu'); }, null, { timeout: 1200000, polling: 50 });   // en rendu logiciel, le fondu peut être fini avant qu'on regarde
+  const attente = (Date.now() - tMonde) / 1000, mes = await page.evaluate(() => window.balade.ouvertureMesure ? window.balade.ouvertureMesure() : null);
+  console.log(nom, 'fondu après', ((Date.now() - t0) / 1000).toFixed(1), 's ; attente fin du rejeu → fondu', attente.toFixed(1), 's', mes ? JSON.stringify(mes) : '');
   await page.waitForTimeout(900);
   await shot('5-fondu');
   await page.waitForFunction(() => !document.getElementById('ouverture'), null, { timeout: 600000 });

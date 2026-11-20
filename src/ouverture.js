@@ -81,7 +81,7 @@ export function programme(r, f, hasard = Math.random, controle = null) {
 /* ------------------------------------------------------------------ interface (DOM)
    deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
             construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
-            surDebut(), surFin(fiche), hasard } */
+            surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard } */
 export function creerOuverture(deps) {
   const d = document, $ = id => d.getElementById(id);
   const racine = d.createElement('section');
@@ -176,9 +176,12 @@ export function creerOuverture(deps) {
     }
     if (e.type === 'fin-etape' && b) { b.x.classList.remove('en-cours'); b.x.classList.add('fait'); return; }
     if (e.type === 'monde') {
-      const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">Le monde se construit</span></div>`);
-      // Le fondu attend une vraie image du moteur : si le GPU est lent, cette ligne reste le temps qu'il faut.
-      Promise.resolve(deps.pret ? deps.pret(45000) : null).catch(() => {}).then(() => { if (fini) return; x.classList.remove('en-cours'); x.classList.add('fait'); racine.classList.add('ouv-fondu');
+      const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">Le monde se construit</span><span class="ouv-compte"></span></div>`);
+      // Le fondu attend la première image du moteur, borné par la page (quelques secondes : au-delà, il part sur ce qui est prêt).
+      // Pendant l'attente, l'étape en cours (deps.etat) : une progression vraie, pas une roue sans fin.
+      const c = x.querySelector('.ouv-compte'), suivi = setInterval(() => { if (deps.etat) c.textContent = deps.etat(); }, 200);
+      if (deps.etat) c.textContent = deps.etat();
+      Promise.resolve(deps.pret ? deps.pret(6000) : null).catch(() => {}).then(() => { clearInterval(suivi); c.textContent = ''; if (fini) return; x.classList.remove('en-cours'); x.classList.add('fait'); racine.classList.add('ouv-fondu');
         timers.push(setTimeout(() => terminer(e.fiche), 2400)); });
       return;
     }

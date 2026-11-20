@@ -30,12 +30,22 @@ export function pretraiter(src) {
   return out.join('\n');
 }
 const fermant = (t, i, o, c) => { let n = 0; for (let j = i; j < t.length; j++) { if (t[j] === o) n++; else if (t[j] === c && --n === 0) return j; } return t.length - 1; };
-export function deplie(src) {
+export function deplie(src, prof) {
   const F = {}, re = /^[ \t]*(?:highp\s+|mediump\s+)?(\w+)\s+(\w+)\s*\(([^()]*)\)\s*\{/gm; let m;
   while ((m = re.exec(src))) { if (['if', 'for', 'while', 'return', 'else'].includes(m[1])) continue; const a = m.index + m[0].length - 1, b = fermant(src, a, '{', '}'); F[m[2]] = src.slice(a + 1, b); re.lastIndex = b; }
   const memo = {};
   const coutF = n => memo[n] ?? (memo[n] = (memo[n] = 0, cout(F[n])));
-  function cout(t) {
+  if (prof) {                                                  // profil : combien de fois chaque fonction est recopiée, et ce qu'elle pèse en tout
+    const appels = {}, propre = {};
+    for (const f in F) { const a = {}; propre[f] = cout(F[f], a, 1); appels[f] = a; }
+    const n = { main: 1 }, ordre = [], vu = new Set();
+    const visite = f => { if (vu.has(f)) return; vu.add(f); for (const g in appels[f] || {}) visite(g); ordre.push(f); };
+    visite('main'); ordre.reverse();
+    for (const f of ordre) for (const g in appels[f] || {}) n[g] = (n[g] || 0) + (n[f] || 0) * appels[f][g];
+    const par = f => ordre.filter(g => appels[g] && appels[g][f]).map(g => [g, (n[g] || 0) * appels[g][f]]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+    return ordre.map(f => ({ f, copies: n[f] || 0, propre: propre[f], total: (n[f] || 0) * propre[f], par: par(f) })).sort((a, b) => b.total - a.total);
+  }
+  function cout(t, A, mul = 1) {
     let total = 0, i = 0;
     const re2 = /\bfor\s*\(|\b([A-Za-z_]\w*)\s*\(/g; let x;
     while ((x = re2.exec(t))) {
@@ -45,8 +55,8 @@ export function deplie(src) {
         const b = h.match(/(\w+)\s*=\s*(-?\d+)\s*;\s*\w+\s*(<=|<)\s*(\d+)\s*;/); const k = b ? Math.max(1, +b[4] - +b[2] + (b[3] === '<=' ? 1 : 0)) : 1;
         let s = q + 1; while (/\s/.test(t[s])) s++;
         let e = t[s] === '{' ? fermant(t, s, '{', '}') : t.indexOf(';', s); if (e < s) e = t.length - 1;
-        total += cout(h) + k * cout(t.slice(s, e + 1)); i = Math.max(e + 1, x.index + 1); re2.lastIndex = i;
-      } else { total += x[0].replace(/\s+/g, '').length + (F[x[1]] !== undefined ? coutF(x[1]) : 0); i = x.index + x[0].length; }
+        total += cout(h, A, mul) + k * cout(t.slice(s, e + 1), A, mul * k); i = Math.max(e + 1, x.index + 1); re2.lastIndex = i;
+      } else { total += x[0].replace(/\s+/g, '').length; if (F[x[1]] !== undefined) { if (A) A[x[1]] = (A[x[1]] || 0) + mul; else total += coutF(x[1]); } i = x.index + x[0].length; }
     }
     return total + t.slice(i).replace(/\s+/g, '').length;
   }

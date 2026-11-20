@@ -66,20 +66,16 @@ async function un(qual) {
 
 const mesure = src => { try { return deplie(pretraiter(src)); } catch { return -1; } };
 const nommer = (sh) => {
-  const [v, f] = sh, def = s => [...new Set((s.match(/#define (SOCLE|TAPIS|SEMO|ATMO|RAIS|FORMES|RELIEF|HOUPPIER|SEMIS|NU) \d+/g) || []).map(x => x.slice(8).replace(' ', '=')))].join(' ');
-  const has = (s, t) => s.includes(t);
-  if (has(f, 'le tapis du sol')) return 'tapis ' + def(f);
-  if (has(f, 'Sonde de collision')) return 'sonde ' + def(f);
-  if (has(f, 'la passe plein écran')) return 'ombrage ' + def(f);
-  if (has(v, 'le semeur')) return (has(f, 'carte d\'ombres') ? 'ombre ' : 'grains ') + def(v + f);
-  if (has(v, 'le sol, un maillage')) return 'sol ' + def(v);
-  if (has(v, 'les éléments proches')) return 'proches ' + def(v + f);
-  if (has(f, 'uOutRes')) return 'capteur';
-  if (has(f, 'uDstRes')) return 'halo (réduction)';
-  if (has(f, 'uDir')) return 'halo (flou)';
-  if (has(f, 'Exposition automatique')) return 'exposition';
-  if (has(f, 'shadeLeaf')) return 'lanceur de rayons ' + def(f);
-  return 'autre';
+  const [v, f] = sh, tete = s => s.slice(0, 700);
+  const def = s => { const L = s.split('\n'), r = []; for (let i = 1; i < L.length && /^#define /.test(L[i]); i++) r.push(L[i].slice(8).replace(' ', '=')); return r.join(' '); };
+  const d = [def(v), def(f)].filter(Boolean).join(' ');
+  const has = (s, t) => tete(s).includes(t);
+  const n = has(f, 'le tapis du sol') ? 'tapis' : has(f, 'Sonde de collision') ? 'sonde' : has(f, 'la passe plein écran') ? 'ombrage'
+    : has(v, 'le semeur') ? (has(f, "carte d'ombres") ? 'ombre (semeur vu du soleil)' : 'grains (semeur, tampon G)')
+    : has(v, 'le sol, un maillage') ? 'sol' : has(v, 'les éléments proches') ? 'proches'
+    : f.includes('uOutRes') ? 'capteur' : f.includes('uDstRes') ? 'halo (réduction)' : f.includes('uDir') ? 'halo (flou)'
+    : has(f, 'Exposition automatique') ? 'exposition' : f.includes('shadeLeaf') ? 'lanceur de rayons' : 'autre';
+  return n + (d ? ' ' + d : '');
 };
 
 const quals = (process.env.QUAL || 'les2') === 'les2' ? ['pc', 'mobile'] : [process.env.QUAL];
@@ -93,7 +89,7 @@ for (const q of quals) {
   rapport[q] = { lignes, appels: r.appels, img: r.img, state: r.state };
   console.log('\n== qualité ' + q + ', fiche ' + (fiche + 1) + (demo ? ', ouverture' + (rejeu ? ' + rejeu' : '') : '') + ' : ' + lignes.length + ' programmes liés');
   console.log('  n°   lancé   prêt   programme                         source V+F     déplié V    déplié F   SPIR-V V+F');
-  for (const l of lignes) console.log('  ' + String(l.i).padStart(2) + '  ' + l.t.toFixed(1).padStart(6) + ' ' + (l.pret === null ? '   —  ' : l.pret.toFixed(1).padStart(6)) + '   ' + l.nom.padEnd(32) + String(l.srcV + l.srcF).padStart(10) + String(l.depV).padStart(12) + String(l.depF).padStart(12) + String(l.spV + l.spF).padStart(12));
+  for (const l of lignes) console.log('  ' + String(l.i).padStart(2) + '  ' + l.t.toFixed(1).padStart(6) + ' ' + (l.pret === null ? '   —  ' : l.pret.toFixed(1).padStart(6)) + '   ' + l.nom.padEnd(44) + String(l.srcV + l.srcF).padStart(10) + String(l.depV).padStart(12) + String(l.depF).padStart(12) + String(l.spV + l.spF).padStart(12));
   const cl = [...lignes].sort((a, b) => Math.max(b.depV, b.depF) - Math.max(a.depV, a.depF));
   console.log('  classés par plus gros déplié : ' + cl.slice(0, 6).map(l => l.nom.trim() + ' ' + Math.max(l.depV, l.depF)).join(' ; '));
   const ap = {}; for (const a of r.appels) ap[a.quoi] = (ap[a.quoi] || 0) + 1;

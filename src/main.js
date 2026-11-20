@@ -46,16 +46,17 @@ if(!gl.getExtension("EXT_color_buffer_float") && !gl.getExtension("EXT_color_buf
 
 function sh(type,src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) fail("Erreur de compilation du shader :\n"+gl.getShaderInfoLog(s)); return s; }
-function lancer(fs,vs=VS){ const p=gl.createProgram(), v=gl.createShader(gl.VERTEX_SHADER), f=gl.createShader(gl.FRAGMENT_SHADER);   // compile sans attendre le résultat
+function lancer(fs,vs=VS,nom){ const p=gl.createProgram(), v=gl.createShader(gl.VERTEX_SHADER), f=gl.createShader(gl.FRAGMENT_SHADER);   // compile sans attendre le résultat
   gl.shaderSource(v,vs); gl.compileShader(v); gl.shaderSource(f,fs); gl.compileShader(f);
-  gl.attachShader(p,v); gl.attachShader(p,f); gl.linkProgram(p); return {p,v,f}; }
+  gl.attachShader(p,v); gl.attachShader(p,f); gl.linkProgram(p);
+  const x={p,v,f,nom:nom||"programme",t0:performance.now()}; COMP.envol.push(x); COMP.dernier=COMP.img; COMP.lances++; etapeGL("lancé : "+x.nom); return x; }
 function finir(x){
   if(!gl.getProgramParameter(x.p,gl.LINK_STATUS)){
     for(const s of [x.v,x.f]) if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) fail("Erreur de compilation du shader :\n"+gl.getShaderInfoLog(s));
     fail("Erreur de liaison du shader :\n"+gl.getProgramInfoLog(x.p)); }
   const p=x.p, u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
   for(let i=0;i<n;i++){ const a=gl.getActiveUniform(p,i); u[a.name.replace("[0]","")]=gl.getUniformLocation(p,a.name); }
-  return {p,u}; }
+  compNote(x); return {p,u}; }
 const prog=(fs,vs=VS,nom)=>{ etapeGL("compilation : "+(nom||"programme")); const r=finir(lancer(fs,vs)); etapeGL("  compilé : "+(nom||"programme")); return r; };
 /* Variantes fixes du même shader, choisies par #define. En rendu logiciel, le code présent coûte à chaque pas de rayon même
    quand il ne s'exécute pas : la forêt garde un programme sans semis, un monde nu un programme sans arbres. Chaque variante se
@@ -63,8 +64,37 @@ const prog=(fs,vs=VS,nom)=>{ etapeGL("compilation : "+(nom||"programme")); const
    Variante 0 : forêt et dunes (le shader d'origine). 1 : avec semis. 2 : monde nu (sans arbres ni canopée). 3 : monde nu avec semis.
    + 4 : bosses et buttes du relief (RELIEF, monde.glsl). */
 const variante=v=>v?FS_PT.replace("\n","\n#define SEMIS "+(v&1)+"\n#define NU "+((v>>1)&1)+"\n#define RELIEF "+((v>>2)&1)+"\n"):FS_PT;
-const P_DOWN=prog(FS_DOWN,VS,"halo (réduction)"), P_BLUR=prog(FS_BLUR,VS,"halo (flou)"), P_CAM=prog(FS_CAM,VS,"capteur"), P_EXPO=prog(FS_EXPO,VS,"exposition");
 const parallele=!!gl.getExtension("KHR_parallel_shader_compile");
+const EXTP=gl.getExtension("KHR_parallel_shader_compile");
+const fini=x=>!EXTP||gl.getProgramParameter(x.p,EXTP.COMPLETION_STATUS_KHR);
+/* Lancement sans gel (docs/moteur-v3.md, « Lancement sans gel »). Le processus graphique de Chrome est partagé par toute
+   l'application qui contient la page (vue web embarquée) : une compilation longue, ou plusieurs à la fois, la figent tout
+   entière. Donc une seule compilation en vol, au moins une image entre deux lancements, jamais d'interrogation d'un
+   programme (LINK_STATUS, uniformes) avant COMPLETION_STATUS_KHR, et les gros programmes (ombrage, tapis, lanceur de rayons)
+   attendent une pause dans la frappe. Ordre : capteur et halo, semeur, socle, formes, variante complète. COMP.journal garde
+   la durée de chaque compilation (diagnostic). Option compTout : tout lancer d'un coup, comme avant. */
+const COMP={ envol:[], img:0, dernier:-1, frappe:-1e9, journal:[], lances:0 };
+addEventListener("keydown",()=>{ COMP.frappe=performance.now(); },true);
+function compNote(x){ if(x.note) return; x.note=true; const ms=performance.now()-x.t0; COMP.journal.push({nom:x.nom,ms,t:(x.t0-t00)/1000}); if(COMP.journal.length>24) COMP.journal.shift(); }
+function compVol(){ COMP.envol=COMP.envol.filter(x=>{ if(x.note) return false; if(!fini(x)) return true; compNote(x); return false; }); return COMP.envol.length>0; }
+function compLibre(gros){                                       // peut-on lancer une compilation maintenant ?
+  if(CFG.compTout) return true;
+  if(compVol()||COMP.img<=COMP.dernier) return false;
+  return !(gros&&(performance.now()-COMP.frappe<900||(typeof frozen!=="undefined"&&frozen)));   // le joueur tape, ou parle au porteur : pas de gros programme
+}
+/* Capteur, halo et exposition : petits, mais compilés eux aussi un à un, sans attendre (postPret, appelé à chaque image). */
+let P_DOWN=null, P_BLUR=null, P_CAM=null, P_EXPO=null; const POST={};
+function postPret(){
+  if(P_CAM) return true;
+  for(const [k,fs,nom] of [["cam",FS_CAM,"capteur"],["down",FS_DOWN,"halo (réduction)"],["blur",FS_BLUR,"halo (flou)"],["expo",FS_EXPO,"exposition"]]){
+    const e=POST[k]||(POST[k]={});
+    if(e.p) continue;
+    if(!e.l){ if(compLibre(false)) e.l=lancer(fs,VS,nom); return false; }
+    if(!fini(e.l)) return false;
+    e.p=finir(e.l);
+  }
+  P_DOWN=POST.down.p; P_BLUR=POST.blur.p; P_EXPO=POST.expo.p; P_CAM=POST.cam.p; return true;
+}
 /* Le shader du lanceur de rayons est très gros. Sur certains ordinateurs (Chrome sous Windows) sa compilation échoue et emporte
    tout le contexte WebGL. On le compile donc sous surveillance : une marque est posée avant, retirée après. Si la page meurt
    entre les deux, le chargement suivant le sait (PT_KO) et ne réessaie pas : il démarre sur le moteur v3, qui n'en a pas besoin.
@@ -77,14 +107,13 @@ const ptDispo=()=>compilerPT(varCourante());                    // le lanceur de
 /* Compilation sans bloquer : quand le navigateur le permet, le programme se compile sur un fil à part et on revient voir
    à chaque image s'il est prêt. Attendre le résultat d'un coup fige le processus graphique ; sur un gros shader, Chrome
    sous Windows le croit planté et le tue (constaté : trois chutes, puis tout l'affichage 3D désactivé). */
-const EXTP=gl.getExtension("KHR_parallel_shader_compile");
-const fini=x=>!EXTP||gl.getProgramParameter(x.p,EXTP.COMPLETION_STATUS_KHR);
 function compilerPT(v,attendre){
   if(progs[v]) return true; if(PT_KO) return false;
   if(!lances[v]||!lances[v].marque){
     try{ localStorage.setItem("bodycam-rayons-2","essai"); }catch(_){}
+    if(!lances[v]&&!attendre&&!compLibre(true)) return false;   // une compilation à la fois
     etapeGL("compilation : moteur à rayons, variante "+v);
-    lances[v]=lances[v]||lancer(variante(v)); lances[v].marque=true;
+    lances[v]=lances[v]||lancer(variante(v),VS,"lanceur de rayons "+v); lances[v].marque=true;
   }
   if(!attendre&&!fini(lances[v])) return false;                 // pas encore prêt : on repassera
   try{ progs[v]=finir(lances[v]); lances[v]=null; etapeGL("  compilé : moteur à rayons"); }
@@ -94,8 +123,8 @@ function compilerPT(v,attendre){
 }
 const ptEnCours=()=>{ const l=lances[varCourante()]; return !!(l&&l.marque&&!progs[varCourante()]&&!PT_KO); };
 function progMonde(){ if(!compilerPT(varCourante(),true)) throw new Error("lanceur de rayons indisponible"); return progs[varCourante()]; }   // le programme qui sait dessiner le monde courant
-if(!bureau && !PT_KO) compilerPT(0);                            // téléphone : compilé d'emblée, comme avant
-if(parallele && !bureau) setTimeout(()=>{ if(!PT_KO&&!progs[3]&&!lances[3]) lances[3]=lancer(variante(3)); },4000);   // la plus probable pour un monde décrit
+if(!bureau && !PT_KO && !CFG.v3) compilerPT(0);                 // téléphone : compilé d'emblée, comme avant (pas en v3 : il n'y sert pas)
+if(parallele && !bureau) setTimeout(function essai3(){ if(V3.on||PT_KO||progs[3]||lances[3]) return; if(!compLibre(true)) return setTimeout(essai3,1000); lances[3]=lancer(variante(3),VS,"lanceur de rayons 3"); },4000);   // la plus probable pour un monde décrit
 /* La sonde de collision peut avoir son propre petit programme (v3_sonde.frag : la distance au décor, map(), rien d'autre),
    qui se compile là où le lanceur de rayons ne se compile pas. Il n'est compilé qu'avec l'option v3sonde : le porteur ne
    bouge que sur ordre du récit. Sans lui ni lanceur de rayons, la sonde rend « rien » (aucun obstacle). */
@@ -103,7 +132,7 @@ const SONDE={lance:null,p:null};
 function sondeProg(){                                           // moteur v3 (ou option v3sonde) : compilée au départ, sans bloquer
   if(SONDE.p&&SONDE.rel!==!!S.relOn){ SONDE.p=null; SONDE.lance=null; }   // bosses et buttes : une autre variante (RELIEF)
   if(SONDE.p) return SONDE.p; if(!CFG.v3sonde&&!(V3.on&&S.semN>0&&S.kit===2)) return null;   // forêt : troncs et blocs sont connus en JS (obstaclesConnus), on épargne ce gros programme à Direct3D ;   // en v3, le lanceur de rayons n'est pas compilé : la sonde garde le porteur hors des surfaces (§16)
-  if(!SONDE.lance){ etapeGL("compilation : sonde de collision"); SONDE.rel=!!S.relOn; SONDE.lance=lancer(FS_V3SONDE.replace("\n","\n#define RELIEF "+(S.relOn?1:0)+"\n")); }
+  if(!SONDE.lance){ if(!compLibre(false)) return null; SONDE.rel=!!S.relOn; SONDE.lance=lancer(FS_V3SONDE.replace("\n","\n#define RELIEF "+(S.relOn?1:0)+"\n"),VS,"sonde de collision"); }
   if(!fini(SONDE.lance)) return null;
   SONDE.p=finir(SONDE.lance); SONDE.lance=null; etapeGL("  compilé : sonde de collision"); return SONDE.p;
 }
@@ -746,6 +775,7 @@ function staticRows(p){
 }
 let blBuf=null; const expoL=lectureDiff();
 function postFX(src){
+  if(!P_CAM) return;                                           // capteur et halo pas encore compilés (postPret)
   gl.useProgram(P_DOWN.p); bindTex(0,src.t,P_DOWN.u.uTex); gl.uniform2f(P_DOWN.u.uDstRes,bl1.w,bl1.h);
   gl.bindFramebuffer(gl.FRAMEBUFFER,bl1.f); gl.viewport(0,0,bl1.w,bl1.h); draw();
   const now=performance.now();
@@ -793,6 +823,7 @@ function flouCapteur(u,t){
 }
 let src0=null;
 function display(src,t,cible){
+  if(!P_CAM) return;
   const u=P_CAM.u; gl.useProgram(P_CAM.p); src0=src;
   if(!cible) flouCapteur(u,t);
   else gl.uniform1f(u.uFlou||null,0);
@@ -964,12 +995,14 @@ function ombVoulue(){                                          // la variante co
   v.sig=ECHELLE.signature(v,OMB.empr); return v; }
 function ombLancer(sig,defs,tapis,rais){                            // une variante, compilée sans attendre
   etapeGL("compilation : ombrage "+sig);
-  const e={ sig, l:lancer(FS_V3OMBRAGE.replace("\n","\n"+defs+"\n")), t0:performance.now(), tapis, rais:rais||0, p:null, echec:"", ms:0 };
-  if(tapis&&!V3.tapP&&!V3.tapL){ V3.tapL=lancer(v3Rel(FS_V3TAPIS)); V3.tapRel=!!S.relOn; }    // le tapis du sol (qualité mobile) va avec la variante qui le lit
-  return OMB.e[sig]=e; }
+  const e={ sig, l:lancer(FS_V3OMBRAGE.replace("\n","\n"+defs+"\n"),VS,"ombrage "+(sig==="socle"?"socle":"complet")), t0:performance.now(), tapis, rais:rais||0, p:null, echec:"", ms:0 };
+  return OMB.e[sig]=e; }                                       // le tapis du sol (qualité mobile) se compile après elle (ombAvancer)
 function ombAvancer(e,socle){                                  // rend vrai quand la variante est prête ; abandonne une complète trop lente
   if(e.p) return true; if(e.echec) return false;
-  const pret=(socle||!CFG.ombrageJamais)&&fini(e.l)&&(!e.tapis||V3.tapP||!V3.tapL||fini(V3.tapL));
+  let pret=(socle||!CFG.ombrageJamais)&&fini(e.l);
+  if(pret&&e.tapis&&!V3.tapP){                                 // le tapis du sol va avec la variante qui le lit : lancé après elle, une compilation à la fois
+    if(!V3.tapL){ if(compLibre(true)){ V3.tapL=lancer(v3Rel(FS_V3TAPIS),VS,"tapis du sol"); V3.tapRel=!!S.relOn; } pret=false; }
+    else if(!fini(V3.tapL)) pret=false; }
   if(!pret){
     if(!socle&&OMB.mode==="echelle"&&performance.now()-e.t0>OMB.delai){
       e.echec="délai"; ombMemoire(e.sig,"delai",performance.now()-e.t0); etapeGL("  ombrage "+e.sig+" : pas prêt en "+(OMB.delai/1000)+" s, on reste au socle");
@@ -987,10 +1020,11 @@ function v3Ombrage(){                                          // choisit le pro
   for(const k in OMB.e){ const e=OMB.e[k]; if(!e.p&&!e.echec&&k!=="socle") ombAvancer(e,false); }   // celles qui compilent encore (fiche quittée comprise)
   let P=OMB.e[v.sig]; const pleinePrete=!!(P&&P.p);
   let So=OMB.e.socle; const soclePret=!!(So&&So.p);
-  const c=ECHELLE.choisir({ mode:OMB.mode, pleinePrete, soclePret, mem:OMB.mem, sig:v.sig, imageFaite:V3.nImg>0 });
-  if(c.socle&&!So) So=ombLancer("socle","#define SOCLE 1\n#define TAPIS 0\n#define SEMO 0\n#define ATMO 0\n#define RAIS 0",false);
-  if(c.socle&&!soclePret&&ombAvancer(So,true)){ OMB.tSocle=So.ms; return v3Ombrage(); }
-  if(c.tenter&&!P){ P=ombLancer(v.sig,"#define TAPIS "+(v.tapis?1:0)+"\n#define SEMO "+(v.semis?1:0)+"\n#define ATMO "+v.atmo+"\n#define RAIS "+v.rais,v.tapis,v.rais); if(OMB.mode==="echelle") ombMemoire(v.sig,"debut"); }
+  // La variante complète se lance après la première image, ou pendant l'ouverture (le moteur s'y repose), une fois les formes compilées.
+  const c=ECHELLE.choisir({ mode:OMB.mode, pleinePrete, soclePret, mem:OMB.mem, sig:v.sig, imageFaite:V3.nImg>0||ouvRepos });
+  if(c.socle&&!So&&compLibre(true)) So=ombLancer("socle","#define SOCLE 1\n#define TAPIS 0\n#define SEMO 0\n#define ATMO 0\n#define RAIS 0",false);
+  if(c.socle&&So&&!soclePret&&ombAvancer(So,true)){ OMB.tSocle=So.ms; return v3Ombrage(); }
+  if(c.tenter&&!P&&(OMB.mode==="plein"||v3Formes())&&compLibre(true)){ P=ombLancer(v.sig,"#define TAPIS "+(v.tapis?1:0)+"\n#define SEMO "+(v.semis?1:0)+"\n#define ATMO "+v.atmo+"\n#define RAIS "+v.rais,v.tapis,v.rais); if(OMB.mode==="echelle") ombMemoire(v.sig,"debut"); }
   if(OMB.mode==="plein"&&P&&!P.p&&ombAvancer(P,true)) return v3Ombrage();   // mode plein : comme avant, une erreur s'affiche
   V3.attendSocle=c.utiliser===null&&c.socle;
   const e=c.utiliser==="plein"?P:c.utiliser==="socle"?So:null; if(!e) return false;
@@ -1013,18 +1047,20 @@ function ombRaz(){ try{ localStorage.removeItem(ECHELLE.CLE_OMBRAGE); }catch(_){
 const v3Rel=src=>S.relOn?src.replace("\n","\n#define RELIEF 1\n"):src;
 function v3Init(){                                             // rend vrai quand les programmes du semeur et un ombrage sont prêts (compilation sans bloquer)
   if((V3.gp||V3.lance) && (V3.avecRel!==!!S.relOn||V3.avecHp!==!!S.hpOn)){ V3.gp=null; V3.lance=null; }
-  if(V3.tapRel!==!!S.relOn && (V3.tapP||V3.tapL)){ V3.tapP=null; V3.tapL=null;   // le tapis cuit le sol (terrainH) : il suit la variante RELIEF
-    for(const k in OMB.e) if(OMB.e[k].tapis){ V3.tapL=lancer(v3Rel(FS_V3TAPIS)); break; } }
-  V3.tapRel=!!S.relOn;
+  if(V3.tapRel!==!!S.relOn && (V3.tapP||V3.tapL)){ V3.tapP=null; V3.tapL=null; }   // le tapis cuit le sol (terrainH) : il suit la variante RELIEF
   if(V3.tapL&&!V3.tapP&&V3.omb&&V3.omb.p&&V3.omb.tapis&&fini(V3.tapL)){ V3.tapP=finir(V3.tapL); V3.tapL=null; }
+  if(!V3.tapL&&!V3.tapP&&V3.omb&&V3.omb.p&&V3.omb.tapis&&compLibre(true)){ V3.tapL=lancer(v3Rel(FS_V3TAPIS),VS,"tapis du sol"); V3.tapRel=!!S.relOn; }
   if(!V3.gp){
-  if(!V3.lance){ V3.avecRel=!!S.relOn; V3.avecHp=!!S.hpOn; etapeGL("compilation : moteur v3 (6 programmes, puis l'ombrage)");
-    const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
-    const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
-    V3.lance={ grains:lancer(FS_V3GBUF,Hp(VS_V3GRAINS)), grainsF:lancer(F(FS_V3GBUF),F(R(VS_V3GRAINS))), sol:lancer(FS_V3GBUF,R(VS_V3SOL)),
-      ombre:lancer(FS_V3OMBRE,Hp(VS_V3GRAINS)), ombreF:lancer(F(FS_V3OMBRE),F(R(VS_V3GRAINS))), proches:lancer(Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)) }; }
-  for(const k in V3.lance) if(!fini(V3.lance[k])){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } V3.attendSocle=true; return false; }
-  const gp={}; for(const k in V3.lance){ gp[k]=finir(V3.lance[k]); etapeGL("  compilé : v3 "+k); } V3.gp=gp; V3.lance=null;
+  if(!V3.lance){ V3.avecRel=!!S.relOn; V3.avecHp=!!S.hpOn; V3.lance={}; etapeGL("compilation : moteur v3, un programme à la fois"); }
+  // Les quatre programmes de la première image, un à un ; les deux variantes FORMES (objets, semis) viennent après le socle
+  // (v3Formes), sauf en mode plein (captures de référence : tout avant la première image).
+  const base=OMB.mode==="plein"?V3_PROGS:V3_PROGS.slice(0,4);
+  for(const k of base){
+    const x=V3.lance[k];
+    if(!x){ if(compLibre(false)) V3.lance[k]=v3Lancer(k); V3.attendSocle=true; return false; }
+    if(!fini(x)){ if(V3.attente!==k){ V3.attente=k; etapeGL("  en attente : v3 "+k); } V3.attendSocle=true; return false; }
+  }
+  const gp={}; for(const k of base){ gp[k]=finir(V3.lance[k]); delete V3.lance[k]; } V3.gp=gp;
   // Taille maximale d'un grain : plafonnée à 64 pixels, une surface vue de très près (tronc, bloc, mur) ne pouvait plus être couverte
   // et laissait voir à travers. Le plafond suit maintenant ce que la puce accepte, jusqu'à 320 pixels.
   V3.maxPt=Math.min(CFG.v3maxPt||320,gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||1);
@@ -1032,7 +1068,28 @@ function v3Init(){                                             // rend vrai quan
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   }
-  return v3Ombrage();
+  const r=v3Ombrage();
+  if(OMB.e.socle&&OMB.e.socle.p) v3Formes();                   // après le socle : les variantes FORMES, puis (v3Ombrage) la complète
+  return r;
+}
+const V3_PROGS=["sol","grains","ombre","proches","grainsF","ombreF"];
+function v3Lancer(k){                                          // un programme du semeur, dans la variante voulue par la fiche
+  const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
+  const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
+  const SP={ sol:[FS_V3GBUF,R(VS_V3SOL)], grains:[FS_V3GBUF,Hp(VS_V3GRAINS)], ombre:[FS_V3OMBRE,Hp(VS_V3GRAINS)], proches:[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)],
+    grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))], ombreF:[F(FS_V3OMBRE),F(R(VS_V3GRAINS))] }[k];
+  return lancer(SP[0],SP[1],"v3 "+k);
+}
+function v3Formes(){                                           // rend vrai quand les deux variantes FORMES sont en service
+  if(!V3.gp) return false; if(V3.gp.grainsF&&V3.gp.ombreF) return true;
+  for(const k of ["grainsF","ombreF"]){
+    if(V3.gp[k]) continue;
+    const x=V3.lance[k];
+    if(!x){ if(compLibre(false)) V3.lance[k]=v3Lancer(k); return false; }
+    if(!fini(x)) return false;
+    V3.gp[k]=finir(x); delete V3.lance[k];
+  }
+  return true;
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
@@ -1304,6 +1361,7 @@ function v3Image(p){
   gl.bindFramebuffer(gl.FRAMEBUFFER,V3.sm.f); gl.viewport(0,0,V3.sm.w,V3.sm.h);
   gl.clearBufferfv(gl.DEPTH,0,[1]); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
   for(const P of [G.ombre,G.ombreF]){                          // deux variantes du semeur : arbres, perches, blocs ; puis formes (objets, semis)
+    if(!P) continue;                                           // variante FORMES pas encore compilée (v3Formes) : les formes viendront
     const de=P===G.ombre?0:ps.part[3], a=P===G.ombre?ps.part[3]:ps.total; if(a<=de&&!(P===G.ombre&&ps.traits>0)) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
     gl.uniform1ui(u.uFrame,f*2+1); gl.uniform1i(u.uVue,1); v3Grains(u,ps); gl.uniform1i(u.uPrx,0);
@@ -1343,6 +1401,7 @@ function v3Image(p){
     gl.drawArrays(gl.TRIANGLES,0,px.total*PRX_VPS); }
   const pc=v3Partage(V3.grains,0,p); V3.parts=pc;
   for(const P of [G.grains,G.grainsF]){
+    if(!P) continue;
     const de=P===G.grains?0:pc.part[3], a=P===G.grains?pc.part[3]:pc.total; if(a<=de) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p);
     gl.uniform1ui(u.uFrame,f*2); gl.uniform1i(u.uVue,0); v3Grains(u,pc);
@@ -1357,7 +1416,7 @@ function v3Image(p){
     gl.drawArrays(gl.POINTS,de,a-de);
   }
   gl.disable(gl.DEPTH_TEST);
-  if(V3.nImg<3){ v3Sync(g); note("  semis fait"); }
+  if(V3.nImg<3&&CFG.v3premieres){ v3Sync(g); note("  semis fait"); }   // lecture bloquante : seulement sur demande (elle fige le processus graphique)
   chrono("tamponG",g);
   // (3) tapis du sol : les bandes qui entrent dans les fenêtres, par tranches
   v3Tapis(p); if(V3.tap.cuits) chrono("tapis",{f:V3.tap.f[V3.tap.dernier],u8:true}); else chrono("tapis");
@@ -1375,7 +1434,7 @@ function v3Image(p){
   gl.uniform1i(u.uDamier,damier?1:0); gl.uniform1f(u.uAlphaD,1-(1-alpha)*(1-alpha));
   if(V3.hist){ gl.uniform3fv(u.uPrevPos,V3.histPose.pos); gl.uniformMatrix3fv(u.uPrevCam,false,V3.histPose.mat); }
   gl.bindFramebuffer(gl.FRAMEBUFFER,dst.f); gl.viewport(0,0,W,H); draw();
-  if(V3.nImg<3){ v3Sync(dst); note("  matière et lumière faites"); }
+  if(V3.nImg<3&&CFG.v3premieres){ v3Sync(dst); note("  matière et lumière faites"); }
   chrono("ombrage",dst);
   // Plus d'attente de la puce à chaque image (option v3sync pour la remettre) : elle empêchait le processeur de préparer
   // l'image suivante pendant que la puce finit celle-ci. Sans elle, V3.ms est l'intervalle entre deux images v3.
@@ -1408,7 +1467,7 @@ function v3Basculer(on){
   if(on&&v3Refus()) on=false;                                  // fiche que le semeur ne sait pas rendre : on reste sur le lanceur de rayons
   if(on&&V2.on) v2Basculer(false);
   V3.on=on; V3.repli=false; v3Bouton();
-  if(on){ v3Init(); V3.hist=null; V3.n=0; } else { hist=null; v3Libere(false); }
+  if(on){ V3.hist=null; V3.n=0; }                              // les programmes se compilent depuis frame(), un à un (v3Init) else { hist=null; v3Libere(false); }
   if(typeof W==="number"&&W>0&&!CFG.w) resize();                    // la résolution interne dépend du moteur
 }
 /* Ce que le semeur ne sait pas encore rendre (docs/moteur-v3.md, « Le v3 rend tous les mondes »). Rend la raison, ou "" si la
@@ -1438,7 +1497,9 @@ function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(CFG.dtMax||.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now;   // dtMax : essais en rendu logiciel, le récit avance malgré des images lentes
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
-  if(ouvRepos) return;                                            // l'ouverture pose sa question : rien n'est visible derrière, le moteur se repose (docs/ouverture.md)
+  COMP.img++;
+  if(ouvRepos){ prechauffer(); return; }                          // l'ouverture pose sa question : rien n'est rendu derrière, mais tout se compile, un programme à la fois (docs/ouverture.md)
+  if(!postPret()&&!V3.on){ return; }                              // capteur et halo d'abord (le v3 compile les siens à la suite, dans v3Init)
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
   const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=(k,cible)=>{ if(!pf) return; if(cible!==undefined) v3Sync(cible); const t=performance.now(); pf[k]=t-pt; pt=t; };
   simulate(dt); etape("sim");
@@ -1752,7 +1813,7 @@ function mondeBati(texte,t){                                  // ville, rue, vil
 function attendreImage(passes,delai,signal){                  // attend que l'image soit posée (accumulation à l'arrêt), ou le délai
   return new Promise((ok,ko)=>{ const t0=performance.now(); let n0=-1;
     const tic=()=>{ if(signal&&signal.aborted) return ko({code:"cancelled",message:"arrêté"});
-      const k=V3.on?V3.n:n, prete=!sceneDirty&&!ptEnCours()&&(V3.on?!!V3.hist:!!hist);
+      const k=V3.on?V3.n:n, prete=!sceneDirty&&(V3.on||!ptEnCours())&&(V3.on?!!V3.hist:!!hist);   // en v3, le lanceur de rayons ne sert pas
       if(prete&&n0<0) n0=k;                                     // première image après le déplacement (une image en mouvement compte pour plusieurs passes)
       const voulu=V3.on?Math.min(passes,V3.max):passes;
       if((prete&&k>=Math.min(n0+voulu,V3.on?V3.max:MAXS))||performance.now()-t0>delai) return ok(k);
@@ -2794,6 +2855,26 @@ function tourHorizon(k){
   setTimeout(()=>{ if(k===arriveeJeton&&!(meneur&&!meneurLibre)) pensee(ARRIVEE[(seedN>>>0)%ARRIVEE.length]); },2200);   // même fiche, même phrase
 }
 
+/* Pendant l'ouverture, aucune image du monde n'est rendue, mais tout ce qu'il faut pour la première se compile, un programme
+   à la fois (compLibre) : capteur et halo, semeur, socle, formes, puis la variante complète. La fiche de la suggestion est
+   appliquée en coulisse dès l'ouverture : c'est la plus probable, et la question laisse le temps de compiler. */
+function prechauffer(){ if(!postPret()) return; if(V3.on) v3Init(); else if(!PT_KO) compilerPT(varCourante()); }
+const OUV_ATTENTE=CFG.ouvAttente||5000;                          // ms : au-delà, le fondu part sur ce qui est prêt (socle), même sans image
+let ouvCoulisse=null, ouvMesure=null;
+function etatPrep(){                                             // l'étape en cours, pour la ligne « Le monde se construit »
+  const x=COMP.envol.find(e=>!e.note);
+  if(x) return "compilation : "+x.nom;
+  if(V3.on&&!(V3.gp&&V3.omb)) return "programmes du moteur";
+  return "première image";
+}
+function pretOuverture(){                                        // fin du rejeu : le moteur se réveille ; rend la main dès la première image, ou au délai
+  ouvRepos=false; const t0=performance.now(), n0=V3.nImg;
+  return new Promise(ok=>{ const tic=()=>{
+    const prete=V3.on?V3.nImg>n0&&!!V3.hist:!!hist&&!sceneDirty&&!ptEnCours(), d=performance.now()-t0;
+    if(prete||d>OUV_ATTENTE){ ouvMesure={ms:Math.round(d),image:prete,ombrage:V3.on?(V3.omb?(V3.omb===OMB.e.socle?"socle":"complet"):"aucun"):"rayons"};
+      etapeGL("ouverture : fondu après "+(d/1000).toFixed(1)+" s"+(prete?"":" (délai, sans image)")); return ok(ouvMesure); }
+    setTimeout(tic,40); }; tic(); });
+}
 /* L'ouverture : « Quel monde veux-tu filmer ? » ; rejeu d'une préparation enregistrée, ou vraie chaîne du constructeur. */
 function lancerOuverture(){
   if(ouverture&&ouverture.ouvert()) return;
@@ -2802,14 +2883,17 @@ function lancerOuverture(){
   const voulue=id=>FICHES.find(f=>f.id===id);
   ouverture=OUVERTURE.creerOuverture({ rejeux:OUVERTURES, fiches:FICHES, C:CONSTRUCTEUR, recettes:Object.keys(MAT_LIB.recettes), mention:mentionRejeu,
     ficheDe:r=>voulue(r.fiche)||voulue(r.ficheSecours)||null,
-    appliquer:f=>{ const i=FICHES.indexOf(f); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); arriveeJeton++; },   // l'arrivée attend la fin du fondu
-    pret:ms=>attendreImage(V3.on?6:4,ms),
+    appliquer:f=>{ if(f!==ouvCoulisse){ const i=FICHES.indexOf(f); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); } ouvCoulisse=null; arriveeJeton++; },   // l'arrivée attend la fin du fondu
+    pret:()=>pretOuverture(), etat:etatPrep,
     dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
-    surDebut:()=>{ ouvRepos=false; },
+    surDebut:(t,rejeu)=>{ if(!rejeu) ouvRepos=false; },          // rejeu : le moteur reste au repos (il compile) jusqu'au fondu
     surFin:o=>{ ouvRepos=false; if(o.constructeur){ creerMonde(o.texte); return; } const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1200); } });
   ouverture.ouvrir(); ouvRepos=true;
+  const r0=OUVERTURES.find(r=>r.suggestion), f0=r0&&(voulue(r0.fiche)||voulue(r0.ficheSecours));   // en coulisse : la fiche de la suggestion
+  if(f0){ const i=FICHES.indexOf(f0); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f0)); arriveeJeton++; ouvCoulisse=f0; }
 }
 setInterval(()=>{ if(ouverture&&ouverture.ouvert()) ouverture.dictee(listening); },300);
 if(DEMO&&!CFG.histoire) lancerOuverture();
 window.balade.ouverture=()=>{ lancerOuverture(); return ouverture; };
+window.balade.ouvertureMesure=()=>ouvMesure;                    // tools/ouverture.mjs : attente entre la fin du rejeu et le fondu
 window.balade.arrivee=()=>({ errance, file:queue.map(a=>a.type), pensee:$("pensee").textContent });
