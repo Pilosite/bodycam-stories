@@ -138,9 +138,13 @@ export function harvestRecord(journal, { gaps = [], meta = {}, strip = false, no
   }
   if (text.length <= journalBytes) rec.journal.text = text;
   else if (!legacy) {                                            // the replay needs inputs, not derived events nor the principles in scope
-    const lean = text.trim().split('\n').map(l => JSON.parse(l)).filter(e => e.type !== 'event').map(e => { if (e.type === 'model_call') delete e.principles; return e; });
+    const lean = text.trim().split('\n').map(l => JSON.parse(l)).filter(e => e.type !== 'event').map(e => {
+      if (e.type === 'model_call') delete e.principles;
+      if (e.type === 'principles' && Array.isArray(e.records)) { e.ids = e.records.map(p => p.id); e.records = null; e.elided = 'records: the pack at versions.pack'; }
+      return e;
+    });
     const t2 = lean.map(e => JSON.stringify(e)).join('\n') + '\n';
-    if (t2.length <= journalBytes) { rec.journal.text = t2; rec.journal.cut = `events and principles in scope left out (${text.length} bytes in full)`; }
+    if (t2.length <= journalBytes) { rec.journal.text = t2; rec.journal.cut = `events, principles in scope and principle records left out (${text.length} bytes in full): not replayable as is`; }
     else rec.journal.cut = `journal not kept: ${text.length} bytes over ${journalBytes}`;
   } else rec.journal.cut = `journal not kept: ${text.length} bytes over ${journalBytes}`;
   return rec;

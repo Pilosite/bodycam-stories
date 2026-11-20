@@ -223,6 +223,7 @@ export function createStoryMode(P) {
     if (!st.session || st.summarized) return;
     st.summarized = true;
     st.session.journal.append(Object.assign({ t: st.session.world.clock.t }, P.CORE.modelSummary(st.session.journal)));
+    harvestHook('end');                                          // harvest block below
   }
 
   /* ------------------------------------------------------------ debug panel (hidden by default) and story controls */
@@ -236,8 +237,9 @@ export function createStoryMode(P) {
     const pre = mk('pre', {}, box); pre.setAttribute('style', 'margin:0;overflow:auto;white-space:pre-wrap;flex:1');
     const row = mk('div', {}, box); row.setAttribute('style', 'display:flex;gap:8px');
     const copy = mk('button', { type: 'button', textContent: L().copy }, row), close = mk('button', { type: 'button', className: 'ghost', textContent: L().close }, row);
-    copy.onclick = async () => { try { await P.win.navigator.clipboard.writeText(api.journal()); copy.textContent = L().copied; } catch (_) { pre.textContent = api.journal(); } setTimeout(() => { copy.textContent = L().copy; }, 1500); };
+    copy.onclick = async () => { harvestHook('copy'); try { await P.win.navigator.clipboard.writeText(api.journal()); copy.textContent = L().copied; } catch (_) { pre.textContent = api.journal(); } setTimeout(() => { copy.textContent = L().copy; }, 1500); };
     close.onclick = () => show(false);
+    if (P.harvest) { const hv = mk('button', { type: 'button', className: 'ghost', textContent: 'Harvest' }, row); hv.onclick = () => P.harvest.panel(); }   // harvest block below
     const tools = P.doc.getElementById('outils');
     const tog = mk('button', { type: 'button', className: 'ghost', id: 'story-journal', textContent: L().panel }, tools);
     tog.onclick = () => { show(box.hidden); panel(); };
@@ -313,5 +315,23 @@ export function createStoryMode(P) {
     return () => { subs.list = subs.list.filter(y => y !== x); if (!subs.list.length) { clearInterval(subs.timer); subs.timer = 0; } };
   };
   /* ---- end of the journal subscription block ---- */
+
+  /* ---- harvest (ADR 0011, src/harvest.js): keep this block last ---------------------------------------------------
+     At a session's end (summarize) and on « Copy journal », the page builds the session's harvest record through
+     P.harvest.story(…) (src/main.js), with what only this mode knows: the executor's gaps and the versions that steered it. */
+  const harvestIds = new WeakMap();
+  function harvestHook(why) {
+    if (!P.harvest || !st.session) return;
+    try {
+      const w = st.session.world, R = P.reflexes || {}, M = P.MODELPORT || {}, C = P.CORE;
+      if (!harvestIds.has(st.session)) harvestIds.set(st.session, st.id + '-' + w.seed + '-' + Date.now().toString(36));
+      const status = st.model && st.model.status ? st.model.status() : { judge: 'code', invent: 'none' };
+      P.harvest.story({ why, journal: st.session.journal.entries, gaps: st.ex ? st.ex.gaps.slice() : [], id: harvestIds.get(st.session), lang: st.lang,
+        pack: { id: st.id, version: st.pk && st.pk.version || null },
+        versions: { pack: st.pk && st.pk.version || null, thresholds: { act_from: R.act_from ?? 0.8, ask_below: R.ask_below ?? 0.5 }, reflexes: C.hashString(C.canonicalJSON(R)),
+          model: { judge: status.judge, invent: status.invent, home: st.home && st.home.state.configured ? (st.home.state.up ? 'up' : 'down') : 'off', host_tiers: M.HOST_TIERS || null, limits_ms: M.LIMITS || null } } });
+    } catch (e) { console.warn('harvest:', e && e.message); }
+  }
+  /* ---- end of the harvest block ---- */
   return api;
 }
