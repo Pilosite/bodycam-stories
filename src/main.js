@@ -3367,6 +3367,31 @@ const activite=(()=>{
   b.onclick=()=>{ activite.bascule(); maj(); }; $("outils").appendChild(b); maj(); }
 window.balActivite=activite;   // essais : balActivite.lignes()
 
+/* ------------------------------------------------------------------ la régie : un petit bandeau à gauche pendant le jeu
+   Une illustration de démo (pas une mesure) : des « agents » par domaine, dont le voyant s'allume quand leur domaine travaille
+   (file d'actions, attente de la réponse, son, marche). Aucun coût de rendu : quatre mises à jour par seconde, opacité seulement. */
+const regie=(()=>{
+  if(window.__CFG&&!CFG.regie) return null;
+  const el=document.createElement("div"); el.id="regie"; el.setAttribute("aria-hidden","true");
+  const L=[["ciel","Ciel · lumière"],["monde","Monde · terrain"],["histoire","Histoire"],["evenements","Événements"],["corps","Comportement"],["son","Son · voix"]];
+  el.innerHTML='<p class="rg-t">Agents · régie</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
+  document.body.appendChild(el);
+  const N={}; for(const p of el.querySelectorAll(".rg-l")) N[p.dataset.k]={p,b:p.querySelector("b"),n:0,t:0};
+  const etats={ciel:["veille","exposition","brume"],monde:["veille","sème","relief"],histoire:["écoute","écrit","décide"],evenements:["veille","prépare","déclenche"],corps:["repos","planifie","agit"],son:["silence","mixe","joue"]};
+  let i=0;
+  setInterval(()=>{ i++;
+    const jeu=!(ouverture&&ouverture.ouvert())&&!document.hidden&&innerWidth>=760&&activite.on()&&!CFG.nohud;
+    el.classList.toggle("on",jeu); if(!jeu) return;
+    const attente=$("pensee").textContent==="…", q=queue.length, type=q?queue[0].type:"", parle=$("pensee").classList.contains("on")&&!attente;
+    const sonne=!!(window.balSon&&window.balSon.occupe&&window.balSon.occupe());
+    const v={ ciel:(i%23<3)||Math.abs(exposure-expTarget)>.08?1:0, monde:walking?2:(i%17<2?1:0), histoire:attente?2:parle?1:0,
+      evenements:/effort|poser|faconner|chercher/.test(type)?2:q>2?1:0, corps:q?(/attendre|penser/.test(type)?1:2):0, son:sonne?2:parle||listening?1:0 };
+    for(const k in N){ const o=N[k], n=v[k]; if(n!==o.n){ o.n=n; o.p.dataset.n=n; o.b.textContent=etats[k][n]; } }
+  },250);
+  for(const k in N){ N[k].p.dataset.n=0; N[k].b.textContent=etats[k][0]; }
+  return el;
+})();
+
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
   banc,                                                         // banc d'essai (rend le tableau, l'affiche en plein écran)
