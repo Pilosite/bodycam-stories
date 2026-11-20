@@ -6,7 +6,7 @@ This is the shared contract for the real proof of concept. It follows `docs/poc-
 
 **Rule of the POC: simple, but every pillar is shown once, for real.** One place, one playable character, ten minutes. No pillar is faked; where something is out of scope it is absent, not staged.
 
-## The eight pillars
+## The nine pillars
 
 | # | Pillar | What it is | What the POC shows |
 |---|---|---|---|
@@ -17,7 +17,31 @@ This is the shared contract for the real proof of concept. It follows `docs/poc-
 | 5 | **Anticipation** | The background tier keeps a frontier of likely next intents, pre-written as PDL. | Hit rate of the frontier and latency gained. |
 | 6 | **Narrative patterns** | Reusable story shapes creators pick from (`absent-one`, `ticking-clock`, `reluctant-guide`…), as data. | The story is assembled from 3 named patterns; swapping one changes the session. |
 | 7 | **Characters, light or strong** | A creator gives either a few directions (traits) or a full sheet (voice, limits, secrets, arc). | Sam as a strong character; one light character defined in three lines. |
-| 8 | **Collaboration and creator view** | The narrative space is layered and every transaction carries its author. Creators see what players did and how the world reacted, and refine rules. | Two creator layers merged with provenance; a session viewer; one rule edited and the session replayed against it. |
+| 8 | **Soft-to-hard principles** | Assets are written as PDL source with strengths from tendency to absolute; hard ones compile to code, soft ones are evaluated by models and audited. | One tendency, one open question, one hard rule and one absolute on Sam, each visibly at work, and an audit score after the session. |
+| 9 | **Collaboration and creator view** | The narrative space is layered and every transaction carries its author. Creators see what players did and how the world reacted, and refine rules. | Two creator layers merged with provenance; a session viewer; one rule edited and the session replayed against it. |
+
+## The authoring format: one text, a spectrum from soft to hard
+
+JSON describes values; it cannot say "she tends to…". Story assets are therefore written as **PDL source**: plain text files, readable by a person and by a model, diffable in Git. JSON remains only as the compiled, machine form.
+
+A PDL source file is a list of statements, each with a **strength**:
+
+| Mark | Strength | Who enforces it | Example |
+|---|---|---|---|
+| `!!` | absolute | the validator: a transaction that breaks it is rejected | `!! Sam never harms an animal.` |
+| `!` | hard | code: compiled once into a deterministic rule | `! She does not shout within 30 m of the hide.` |
+| `when … -> …` | hard, explicit | code, as written | `when clock.battery < 10% once -> say(battery_low), image.degrade(0.3)` |
+| `~` | tendency (optional weight) | the models, in context; audited afterwards | `~0.8 Dry, funny when uneasy. Short sentences.` |
+| `?` | open | the models decide, guided by the note | `? Would she climb? Yes if asked twice, and she complains.` |
+| `>` / `x` | example / counter-example | calibrates `~` and `?`; doubles as a test | `> "C'est un pin sylvestre. Malade, celui-là."` |
+
+Every statement has an id, an author, a layer, a scope (character, place, scene, story) and a horizon.
+
+**Compilation.** A compiler (a model, run when the pack is built, not during play) turns each `!` into a `when / if / then` rule and shows it to the creator for approval; `!!` become validator constraints; `~`, `?` and their examples become the character and scene sections of the model tiers' prompts. The compiled result is cached and versioned with the source.
+
+**Audit.** After a session, a judge pass scores the journal against the soft statements ("was she dry and funny when uneasy?") and against the examples. The creator view shows, per statement: how often it was relevant, respected, broken, and lets the creator promote a tendency to a hard rule, or relax a rule into a tendency. That loop is how creators tune a living story.
+
+**Who writes it.** Most creators never see this file: they talk to an assistant that writes and edits it for them. The repository doubles as a **creator kit** for those who want the backend: opened in Claude Code, Codex or a similar tool, it gives the assistant the spec, the checker, the replay and the audit as commands, so a creator can say "make Sam more guarded with strangers" and review the diff.
 
 ## Core concepts
 
@@ -69,12 +93,13 @@ A folder a creator can author, version and share (collaboration v0 is Git: packs
 stories/<pack-id>/
   pack.json          // title, languages, authors, layers, patterns used
   place.json         // the world description
-  characters/*.json  // light or strong sheets
-  patterns/*.json    // pattern instances (bound to this story)
-  rules/*.json       // creator rules
+  characters/*.pdl   // light or strong sheets, PDL source
+  patterns/*.pdl     // pattern instances (bound to this story)
+  rules/*.pdl        // creator rules and principles, PDL source
   beats.json         // the three or four beats and the families of endings
   lines/<lang>.json  // fallback lines per language
   tests/requests.json// the free-request bench for this story
+  build/             // compiled machine form (JSON), generated
 ```
 
 A pack may declare **layers** (`base`, then one or more contributor layers). Layers merge in order; every fact, rule and character field keeps the layer and author it came from.
