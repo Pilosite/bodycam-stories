@@ -94,7 +94,7 @@ export function validate(tx0, world, budget = BUDGET, opts = {}) {
   const c = { world, B, repairs: [], reasons: [], template: !!opts.template, intent: null, pendingThings: opts.pendingThings || [] };
   const done = tx => {
     const status = c.reasons.length ? 'rejected' : c.repairs.length ? 'repaired' : 'accepted';
-    return { status, tx: tx ? canonical(tx) : null, repair: c.repairs, reasons: c.reasons };
+    return Object.assign({ status, tx: tx ? canonical(tx) : null, repair: c.repairs, reasons: c.reasons }, c.evict && status !== 'rejected' ? { evict: c.evict } : {});
   };
   if (!isObj(tx0)) { c.reasons.push({ path: '', why: 'not_an_object' }); return done(null); }
   const tx = clone(tx0);
@@ -223,7 +223,8 @@ function checkValue(spec, v, path, c) {
     case 'line': {
       if (!isObj(v)) { no(c, path, 'not_a_line', v); return undefined; }
       const langs = c.world ? c.world.langs : ['en'], out = {};
-      for (const k of Object.keys(v)) if (!langs.includes(k)) no(c, path + '.' + k, 'unknown_language');
+      const bad = Object.keys(v).filter(k => !langs.includes(k));
+      if (bad.length) { for (const k of bad) no(c, path + '.' + k, 'unknown_language'); return undefined; }
       for (const k of langs) if (typeof v[k] === 'string' && v[k].trim()) {
         const s = v[k].trim();
         if (s.length > B.line_max) { out[k] = cut(s, B.line_max); rep(c, path + '.' + k, 'truncate', s.length, out[k].length, `max ${B.line_max} characters`); } else out[k] = s;
