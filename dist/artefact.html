@@ -8848,7 +8848,15 @@ const PORTS = {
   /* model (ADR 0004): three entry points, provider-agnostic; tiers are roles (fast, mid, large), chosen in configuration.
        embed(texts: string[])                                   → Promise<number[][]>
        decide({ tier, question, options?, state? })             → Promise<{ answer, p?, uncertain? }>   a typed judgement
-       generate({ tier, purpose, context })                     → Promise<{ tokens }>   PDL token text (§10), validated after */
+       generate({ tier, purpose, context })                     → Promise<{ tokens }>   PDL token text (§10), validated after
+     Additive (M3, docs/pdl-spec.md §9.1.1):
+       decide({ tier, question, questions: [{ id, type, text, options? | slots?, absolute? }], state?, text?, lang? })
+                                                                → Promise<{ answers: { id: { answer, p } } }>   typed questions in one call;
+                                                                  `<id>~r` is the same question with its options reversed (both orders)
+       generate({ …, prompt: { prefix, delta }, lang })        the stage prompt assembled by the core (core/prompt.js)
+       any answer may carry adapter, model_ms, first_ms (who answered, how fast), or { failed: reason } instead of throwing
+       available('judge' | 'invent') → bool (optional): whether a model can judge or invent right now
+     Streaming is not part of this change (the host's model answers whole); see §9.1.1. */
   model: ['embed', 'decide', 'generate'],
   /* input: what the player does, pushed to the clocks.
        subscribe(handler) with handler({ kind: 'speech', text, lang, loud? } | { kind: 'look', target, s }) → unsubscribe() */

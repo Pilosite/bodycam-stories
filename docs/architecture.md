@@ -72,6 +72,7 @@ Rules of use:
 - **One fallback chain, the same everywhere:** a decision model when one is reachable, else the fast generative model with a flat structured output, else the code heuristic (lexicon, nearest match). The journal records which one answered, its probability and its latency, so a creator can see where the engine guessed.
 - **Never on the reflex path.** What code can answer (a gauge, a compiled rule, a closed match) is not asked to a model.
 - D1 to D3 are the only judgements between the player's words and the character's first reaction; they share one call when the model allows several questions per call.
+- In code: `core/judge.js` applies these rules (`judge()`, both orders as `<id>~r` questions, D1 to D3 in one call, D4 on invented lines); `core/clocks.js` asks D1 to D3 only when the reflex is below `act_from`, and D4 on every invented line while prose `!!` are in scope (M3, `docs/pdl-spec.md` §9.1.1, §9.3).
 
 ## The authoring format: one text, a spectrum from soft to hard
 
