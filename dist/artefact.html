@@ -185,7 +185,8 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .ouv-c{font:500 14px/1.4 var(--f-ui)}
 .ouv-r{color:var(--ink-dim);font-size:12px}
 .ouv-photos{margin-left:-24px;overflow:hidden}
-.ouv-bande{overflow:hidden;padding:8px 2px 4px}
+.ouv-bande{overflow:hidden;padding:8px 2px 4px;min-height:142px}
+@media (min-width:760px){.ouv-bande{min-height:157px}}
 .ouv-rail{display:flex;gap:10px;align-items:flex-start;transition:transform .45s cubic-bezier(.2,.7,.2,1);will-change:transform}
 .ouv-vg{flex:none;width:112px;margin:0;transform:rotate(var(--r,0deg));animation:ouvVg .22s ease-out both}
 @media (min-width:760px){.ouv-vg{width:132px}}
@@ -4334,7 +4335,7 @@ function creerOuverture(deps) {
         if (ph.carte) ph.carte.classList.add('epinglee');
       }
       b.ul.appendChild(it); b.n++;
-      const c = b.x.querySelector('.ouv-compte'); if (e.genre === 'requete' || e.genre === 'source') c.textContent = b.n;
+      const c = b.x.querySelector('.ouv-compte'); if ((e.genre === 'requete' || e.genre === 'source') && e.etape !== 'photos') c.textContent = b.n;
       it.scrollIntoView({ block: 'end', behavior: 'smooth' });
       return;
     }
@@ -4359,7 +4360,7 @@ function creerOuverture(deps) {
     if (!b.bande) {
       const it = d.createElement('li'); it.className = 'ouv-it ouv-photos';
       const V = blocs.V, uniq = a => [...new Set(a)];
-      it.innerHTML = `<div class="ouv-bande"><div class="ouv-rail"></div></div><p class="ouv-credit">Photos : Wikimedia Commons, ${esc(uniq(V.photos.map(p => p.auteur)).join(', '))} · ${esc(uniq(V.photos.map(p => p.licence)).join(', '))} · recadrées et réduites</p>`;
+      it.innerHTML = `<div class="ouv-bande"><div class="ouv-rail"></div></div><p class="ouv-credit">Photos : Wikimedia Commons, ${esc(uniq(V.photos.map(p => p.auteur.replace(/ \(.*$/, ''))).join(', '))} · ${esc(uniq(V.photos.map(p => p.licence)).join(', '))} · recadrées et réduites, détail en fin de rejeu</p>`;
       b.ul.appendChild(it);
       b.bande = it.querySelector('.ouv-bande'); b.rail = it.querySelector('.ouv-rail'); b.nv = 0; b.largeur = 0;
       it.scrollIntoView({ block: 'end', behavior: 'smooth' });
@@ -4370,6 +4371,7 @@ function creerOuverture(deps) {
     c.innerHTML = '<div class="ouv-vg-img"></div><figcaption></figcaption>';
     c.firstChild.appendChild(ph.im);
     b.rail.appendChild(c); ph.carte = c; b.nv++;
+    b.x.querySelector('.ouv-compte').textContent = b.nv + ' photo' + (b.nv > 1 ? 's' : '');
     if (!b.pas) { b.pas = c.offsetWidth + 10; b.largeur = b.bande.clientWidth; }   // une seule lecture de mise en page
     const dx = Math.max(0, b.nv * b.pas - 10 - b.largeur);
     b.rail.style.transform = `translate3d(${-dx}px,0,0)`;

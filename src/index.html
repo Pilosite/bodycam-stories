@@ -189,7 +189,8 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .ouv-c{font:500 14px/1.4 var(--f-ui)}
 .ouv-r{color:var(--ink-dim);font-size:12px}
 .ouv-photos{margin-left:-24px;overflow:hidden}
-.ouv-bande{overflow:hidden;padding:8px 2px 4px}
+.ouv-bande{overflow:hidden;padding:8px 2px 4px;min-height:142px}
+@media (min-width:760px){.ouv-bande{min-height:157px}}
 .ouv-rail{display:flex;gap:10px;align-items:flex-start;transition:transform .45s cubic-bezier(.2,.7,.2,1);will-change:transform}
 .ouv-vg{flex:none;width:112px;margin:0;transform:rotate(var(--r,0deg));animation:ouvVg .22s ease-out both}
 @media (min-width:760px){.ouv-vg{width:132px}}
