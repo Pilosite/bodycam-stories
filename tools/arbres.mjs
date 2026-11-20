@@ -19,7 +19,7 @@ mkdirSync(join(root, dir), { recursive: true });
 const ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'];
 const fiche = JSON.parse(readFileSync(resolve(root, process.env.FICHE || 'scenes/09-champcueil-aube.json'), 'utf8'));
 const az = fiche.ambiance.soleil.azimut * Math.PI / 180;
-const N = +(process.env.IMAGES || 8);
+const N = +(process.env.IMAGES || 8), NM = +(process.env.MARCHE || 3);
 const PC = { still: true, nohud: true, nowalk: true, v3: true, full: true, bureau: false, w: 1280, h: 800, vw: 1280, vh: 800 };
 const TEL = { still: true, nohud: true, nowalk: true, v3: true, full: false, mobile: true, vw: 390, vh: 780 };
 const VUES = {
@@ -54,7 +54,7 @@ async function vue(nom) {
       const sol = await p.evaluate(() => window.balade.sol(window.__state.x, window.__state.z));
       await p.evaluate(m => window.balade.agir([{ type: 'marcher', metres: m }]), marche);
       let img = s.v3.images, k = 0;
-      for (let i = 0; i < 40 && k < 3; i++) {                     // trois images neuves de suite, pendant la marche
+      for (let i = 0; i < 40 * NM && k < NM; i++) {             // NM images neuves de suite (3 par défaut, variable MARCHE), pendant la marche
         await p.waitForTimeout(150); const s2 = await p.evaluate(() => window.__state);
         if (s2.v3.images > img && s2.file > 0) { img = s2.v3.images; ecrire(nom + '-' + (++k), await lire(p)); console.log('  ', nom + '-' + k, 'z=' + s2.z.toFixed(2)); }
       }
