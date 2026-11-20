@@ -2018,7 +2018,7 @@ function creerMeneur(o) {
     return isObj(r) ? r : {};
   }
   const emettre = ord => { try { o.emettre && o.emettre(ord); } catch (_) {} };
-  const log = (type, x = {}) => evenements.push(Object.assign({ min: +minutes(partie).toFixed(2), type }, x));
+  const log = (type, x = {}) => { const e = Object.assign({ min: +minutes(partie).toFixed(2), type }, x); evenements.push(e); if (o.surEvenement) try { o.surEvenement(e); } catch (_) {} };   // surEvenement : le panneau d'activité
   const tirer = l => l[Math.floor(alea(partie) * l.length)];
 
   function perimer(a) { if (!a) return; a.perime = true; if (a.fini) { const f = a.fini; a.fini = null; f(); } }
@@ -2996,6 +2996,7 @@ function creerMeneur(o) {
     partie: () => clone(partie),
     fini: () => partie.trame.fin_jouee,
     enVol: () => enVol ? { id: enVol.id, type: enVol.type } : null,
+    atelier: () => atelier ? { id: atelier.id, depuis_s: sec - atelier.debut } : null,
   };
 }
 
@@ -4379,6 +4380,117 @@ function resumer(mem) {
 }
 
 return {CLE_OMBRAGE,DELAI_OMBRAGE,empreinte,signature,lireMemoire,auDemarrage,peutTenter,aLaFermeture,auPlantage,noter,echecs,remettreAZero,choisir,resumer};
+})();
+const ACTIVITE=(function(){"use strict";
+/* Le panneau d'activité (docs/activite.md) : ce que la page fait pendant que Claude réfléchit, écrit dans un petit langage.
+   Module pur, sans DOM : chaque ligne vient d'une structure réelle (la phrase analysée par les fonctions du meneur, l'état de
+   l'appel, un événement du journal, une action de la file). Aucun nom de modèle ici : tout vient des données.
+   Une ligne : { k, t } ; k est le signe de tête : '>' la phrase, ' ' une analyse locale, '~' un appel en cours,
+   '<' ce que Claude rend, '·' une décision du meneur, '!' un garde-fou, '▶' une action qui s'exécute, '✓' une action finie. */
+
+const r1 = v => (Math.round(v * 10) / 10).toFixed(1);
+const r2 = v => (Math.round(v * 100) / 100).toFixed(2);
+const court = (s, n = 60) => { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+const L = (k, t) => ({ k, t });
+
+/* Ce que la page comprend de la phrase, avant Claude. M : les fonctions du meneur (MENEUR) ; bib : la bibliothèque de modèles. */
+function analyser(texte, M, bib) {
+  const out = [L('>', 'entendre "' + court(texte, 80) + '"')];
+  if (!M) return out;
+  const t = String(texte || '');
+  if (M.estStop && M.estStop(t)) { out.push(L(' ', 'stop       : file vidée, sans attendre')); return out; }
+  const od = M.ordreDemande ? M.ordreDemande(t) : null;
+  if (od) {
+    out.push(L(' ', 'ordre      : ' + (od.ordre === 'avant' ? 'aller → faire' : 'faire → aller')));
+    const d = od.deplacement;
+    out.push(L(' ', 'aller      : ' + (d.type === 'rejoindre' ? 'rejoindre ' + d.objet : d.type === 'marcher' ? (d.metres < 0 ? 'reculer ' + r1(-d.metres) : 'marcher ' + r1(d.metres)) + ' m'
+      : 'se déplacer' + (d.metres ? ' ' + r1(d.metres) + ' m' : ', place libre ≥ 4 m')) + (od.demiTour ? ' · demi-tour' : '')));
+  }
+  const tm = bib && M.modeleDe ? M.modeleDe(bib, t, { transforme: true }) : null;
+  const m = !tm && bib && M.modeleDe ? M.modeleDe(bib, t) : null;
+  if (tm) out.push(L(' ', 'façonner   : modele(' + tm.id + ') avec la dernière chose demandée'));
+  if (m) {
+    const fm = M.formesModele ? M.formesModele(m.modele, t) : null;
+    let l = 'faire      : modele(' + m.id + ')';
+    if (fm) {
+      l += ' ' + court(String(fm.raison).split(' (')[0], 24) + ' → ' + r2(fm.envergure) + ' m';
+      if (fm.facteur !== 1) l += ' ×' + r1(fm.facteur);
+      const ex = M.exploitDe ? M.exploitDe(bib) : null;
+      if (ex && M.palierExploit) { const p = M.palierExploit(fm.facteur, ex); if (p !== 'normal') l += ' (' + (p === 'demesure' ? 'démesuré' : p) + ')'; }
+    }
+    out.push(L(' ', l));
+    const mo = m.modele || {}, c = [];
+    if (mo.origine === 'corps') { c.push('accroupi'); if (fm && M.dureeEffort && M.exploitDe) c.push('effort ' + r1(M.dureeEffort(fm.facteur, M.exploitDe(bib))) + ' s'); }
+    if (mo.ou) c.push('pose ' + mo.ou);
+    if (c.length) out.push(L(' ', 'corps      : ' + c.join(' · ')));
+  }
+  if (M.secoursCorps && !(od && od.ordre === 'avant')) {
+    const im = M.secoursCorps(t, null, []).filter(a => a.type === 'posture');
+    if (im.length) out.push(L(' ', 'tout de suite : posture ' + r2(im[0].hauteur)));
+  }
+  if (out.length === 1) out.push(L(' ', 'rien de local : on demande à Claude'));
+  return out;
+}
+
+/* L'état de l'appel en cours, réécrit sur place (la durée tourne). */
+function ligneAppel(qui, secondes) { return L('~', court(qui, 14).padEnd(10) + ' … ' + r1(secondes) + ' s'); }
+
+/* Un événement du journal du meneur, ou null (ceux qui ne disent rien au joueur). */
+function ligneEvenement(e) {
+  if (!e || typeof e !== 'object') return null;
+  const x = e;
+  switch (x.type) {
+    case 'pensee': return x.texte ? L('<', 'pensée     "' + court(x.texte, 70) + '"') : null;
+    case 'sas': return L('<', 'sas        ' + (x.verdict || '?') + (x.regle ? ' · ' + court(x.regle, 30) : ''));
+    case 'geste_immediat': return L('▶', 'tout de suite : ' + (x.actions || []).join(', '));
+    case 'sequence': return L('·', 'séquence   ' + (x.remis_en_ordre ? 'remise dans l\'ordre de la phrase' : (x.de || []).join(' → ')));
+    case 'demande_tenue': return L('!', 'garde-fou  demande tenue : modele(' + x.modele + ')');
+    case 'exploit': return L('·', 'exploit    ×' + r1(x.facteur) + ' ' + (x.palier || '') + (x.corps ? ' · effort ' + r1(x.effort_s) + ' s' : ''));
+    case 'exploit_corrige': return L('!', 'garde-fou  autre matière refusée → corps');
+    case 'apercu_jete': return L('!', 'garde-fou  aperçu jeté');
+    case 'pensee_jetee': return L('!', 'garde-fou  pensée jetée');
+    case 'modele': return L('·', 'modèle     ' + x.id + (x.envergure ? ' → ' + r2(x.envergure) + ' m' : '') + (x.raison ? ' (' + court(x.raison, 26) + ')' : ''));
+    case 'echelle': return L('·', 'échelle    ×' + r1(x.facteur) + ' · ' + court(x.raison, 34));
+    case 'pose_corrigee': return L('!', 'garde-fou  pose ' + (x.de || '?') + ' → ' + x.vers);
+    case 'objet_cree': return L('<', 'fabrique   ' + x.id + ' "' + court(x.nom, 28) + '" ' + x.formes + ' formes · ' + r2(x.envergure) + ' m');
+    case 'objet_recycle': return L('·', 'recycle    ' + x.id + ' (budget du moteur)');
+    case 'suite_programmee': return L('<', 'suite      ' + x.etapes + ' étapes sur ' + Math.round(x.duree_s) + ' s');
+    case 'faconnage': return L('·', 'façonnage  ' + x.id + (x.chercher ? ' · chercher ' + x.chercher : '') + (x.attendu ? ' (attendu)' : ''));
+    case 'degout': return L('·', 'dégoût     ' + (x.palier || '') + ' ' + r2(x.intensite) + (x.nausee ? ' · nausée' : ''));
+    case 'cadrage': return L('·', 'cadrer     ' + x.id);
+    case 'stop': return L('!', 'stop       file vidée');
+    case 'docile': return L('!', 'debug      la page complète la réponse');
+    case 'cede': return L('·', 'cède       il le fait quand même');
+    case 'objet_refuse': case 'objet_rate': return L('!', 'fabrique   ratée');
+    default: return null;
+  }
+}
+
+/* Une action de la file, telle qu'elle s'exécute. */
+function ligneAction(a) {
+  if (!a || typeof a !== 'object') return null;
+  const deg = v => Math.round(v * 57.3) + '°';
+  switch (a.type) {
+    case 'marcher': return 'marcher ' + r1(Math.abs(a.rest || 0)) + ' m';
+    case 'marche': return 'marche ' + r1(a.metres || 0) + ' m';
+    case 'tourner': return 'tourner ' + deg(a.rest || 0);
+    case 'posture': return 'posture ' + (a.h < 0.7 ? 'accroupi' : 'debout');
+    case 'regarder': return 'regarder ' + deg(a.pitch || 0);
+    case 'effort': return 'effort ' + r1(a.secondes || a.rest || 0) + ' s';
+    case 'penser': return 'penser "' + court(a.texte, 30) + '"';
+    case 'poser': return 'poser ' + (a.ref || '');
+    case 'faconner': return 'façonner ' + (a.objet || '');
+    case 'ramasser': return 'ramasser';
+    case 'viser': return 'viser ' + (a.objet || '');
+    case 'zoom': return 'zoom ×' + r1(a.z || 1);
+    case 'attendre': return 'attendre';
+    default: return String(a.type || '?');
+  }
+}
+/* Une barre de progression en texte : u de 0 à 1. */
+function barre(u, n = 8) { const k = Math.max(0, Math.min(n, Math.round(u * n))); return '█'.repeat(k) + '░'.repeat(n - k); }
+
+return {analyser,ligneAppel,ligneEvenement,ligneAction,barre};
 })();
 const SON=(function(){"use strict";
 // Les bruitages, par code (docs/bruitages.md). Aucun fichier son importé, sauf les quelques prises libres de
@@ -17862,7 +17974,7 @@ function ticMeneur(){
   if(dbgOn) dbgMaj();
   if(meneur.fini()) clearInterval(meneurTimer);
 }
-function meneurEntendre(texte){ say("…");
+function meneurEntendre(texte){ say("…"); activite.entendre(texte);
   if(meneurLibre){                                             // promenade libre : une fois qu'on lui a parlé, il ne repart plus tout seul
     const t=texte.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
     errance=/promene|balade-toi|balade toi|continue ta|reprends ta|comme tu veux|ou tu veux|fais ta vie/.test(t);
@@ -17883,7 +17995,7 @@ function demarrerLibre(){
   if(!v.ok){ console.warn("Promenade libre : contrat refusé",v.erreurs); return false; }
   meneur=MENEUR.creerMeneur({ histoire:h, modeles:MODELES, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
-    emettre:executer });
+    emettre:executer, surEvenement:e=>activite.evt(e) });
   meneurLibre=true; histoireId="libre"; meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
   if($("journal")) $("journal").hidden=false;
   return true;
@@ -17908,7 +18020,7 @@ function jouerHistoire(id){
   applyFiche(MENEUR.ficheDe(h,FICHES)||fiche);
   meneur=MENEUR.creerMeneur({ histoire:h, modeles:MODELES, reglages:docile?{DOCILE:true}:undefined, graine:CFG.graine||((Date.now()%1e9)+1), secours:t=>{ const r=lexique(t); r.compris=!/pas compris/.test(r.pensee); return r; },
     demander:(c,opt)=>sampler?sampler.json(c,opt).catch(e=>{ if(e&&e.code==="not_granted") sampler=null; throw e; }):Promise.reject(new Error("sans Claude")),
-    emettre:executer });
+    emettre:executer, surEvenement:e=>activite.evt(e) });
   histoireId=h.id; hold=false; patience=10; cam.haut=1; cam.elev=0; immobile=false; setFrozen(false); interfaceHistoire(true);
   meneurT=performance.now(); clearInterval(meneurTimer); meneurTimer=setInterval(ticMeneur,500); ticMeneur();
   return meneur.partie();
@@ -17976,6 +18088,77 @@ function montrerJournal(){ $("mesure-txt").textContent=journal()||"Aucune partie
   const c=document.createElement("button"); c.type="button"; c.className="ghost"; c.textContent="Journal de la partie"; $("fin-quitter").after(c); c.onclick=montrerJournal; }
 $("fin-rejouer").onclick=()=>jouerHistoire(histoireId);
 $("fin-quitter").onclick=()=>quitterHistoire(false);
+
+/* ------------------------------------------------------------------ panneau d'activité (docs/activite.md)
+   Une colonne à droite, sur PC : ce que la page fait pendant que Claude réfléchit, dans le petit langage de src/activite.js.
+   Lignes vraies (analyse locale, appel en cours, journal du meneur, file d'actions) ; seule la frappe est de l'habillage.
+   Mise à jour par lots, 10 fois par seconde au plus, et seulement entre une phrase et la fin de ce qu'elle déclenche. */
+const activite=(()=>{
+  let on=true; try{ on=localStorage.getItem("bodycam-activite")!=="0"; }catch(_){}
+  const st=document.createElement("style"); st.textContent="#activite{position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:22vh;width:340px;max-height:52vh;overflow:hidden;z-index:6;pointer-events:none;"
+    +"font-family:var(--f-mono);font-size:12.5px;line-height:1.45;color:#cfd8c4;background:rgba(6,8,6,.46);border-left:2px solid rgba(160,200,140,.35);padding:8px 10px;border-radius:4px;"
+    +"opacity:0;transition:opacity .8s;white-space:pre-wrap;word-break:break-word;display:flex;flex-direction:column;justify-content:flex-end}#activite.on{opacity:1}"
+    +"#activite .l{display:flex;gap:6px}#activite .h{flex:none;width:2.6em;color:#7d8a74;font-size:10.5px;padding-top:1px}#activite .s{flex:none;width:1em}"
+    +"#activite .k-gt .s,#activite .k-gt{color:#fff}#activite .k-lt{color:#a9d6f0}#activite .k-ex{color:#f0b47a}#activite .k-go{color:#e8e39a}#activite .k-ok{color:#8fbf7f}#activite .k-ti{color:#9ab}"
+    +"#activite .c{display:inline-block;width:.55em;background:#cfd8c4;animation:actc 1s steps(1) infinite}@keyframes actc{50%{opacity:0}}@media (max-width:760px),(orientation:portrait){#activite{display:none}}";
+  document.head.appendChild(st);
+  const el=document.body.appendChild(document.createElement("div")); el.id="activite"; el.setAttribute("aria-hidden","true");
+  const classe={">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
+  let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false;
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"})[c]);
+  const ms=()=>Math.round(performance.now()-t0);
+  function ajouter(x){ if(!x) return null; const l={k:x.k,t:x.t,n:0,h:ms()}; L.push(l); if(L.length>40) L.shift(); sale=true; tFin=0; return l; }
+  function rendre(){
+    // frappe : la première ligne pas encore écrite avance ; s'il y en a beaucoup en retard, les anciennes s'écrivent d'un coup
+    const att=L.filter(l=>l.n<l.t.length); att.slice(0,Math.max(0,att.length-3)).forEach(l=>l.n=l.t.length);
+    if(att.length){ const l=att.find(l=>l.n<l.t.length); l.n=Math.min(l.t.length,l.n+14); sale=true; }
+    if(!sale) return; sale=false;
+    const V=L.slice(-16), dern=V.findIndex(l=>l.n<l.t.length);
+    el.innerHTML=V.map((l,i)=>'<div class="l '+(classe[l.k]||"")+'" style="opacity:'+(.45+.55*Math.min(1,(i+1)/(V.length-6||1)))+'"><span class="h">'+(l.h/1000).toFixed(1)+'</span><span class="s">'+esc(l.k)+'</span><span>'
+      +esc(l.t.slice(0,l.n))+(i===dern||(dern<0&&i===V.length-1&&tFin===0)?'<span class="c">&nbsp;</span>':'')+'</span></div>').join("");
+  }
+  function pas(){
+    const now=performance.now();
+    if(meneur){
+      const v=meneur.enVol(), a=meneur.atelier&&meneur.atelier();
+      if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interprète",0))};
+        appel.l.t=ACTIVITE.ligneAppel("interprète",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
+      else if(appel){ appel.l.k="✓"; appel.l.t="interprète  répondu en "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true; }
+      if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("accessoiriste",0))};
+        fab.l.t=ACTIVITE.ligneAppel("accessoiriste",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
+      else if(fab){ fab.l.k="✓"; fab.l.t="accessoiriste  rendu en "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
+    }
+    const q=queue[0];
+    if(q!==(act&&act.a)){
+      if(act){ act.l.k="✓"; act.l.t=act.l.t.replace(/ [█░]+$/,""); act.l.n=act.l.t.length; }
+      act=null;
+      if(q){ const t=ACTIVITE.ligneAction(q), p=L[L.length-1];
+        // pas d'un même trajet (tourner, marcher, tourner…) : une seule ligne qui compte
+        if(p&&p.k==="✓"&&p.type===q.type&&/^(marcher|tourner)$/.test(q.type)){ p.k="▶"; p.x=(p.x||1)+1; p.t=t+" ×"+p.x; p.n=p.t.length; act={a:q,l:p,r0:q.rest}; }
+        else { const l=ajouter({k:"▶",t}); l.type=q.type; act={a:q,l,r0:q.rest}; } }
+      sale=true;
+    } else if(act&&q.type==="effort"&&act.r0>0){ act.l.t=ACTIVITE.ligneAction({type:"effort",secondes:act.r0})+" "+ACTIVITE.barre(1-q.rest/act.r0); act.l.n=act.l.t.length; sale=true; }
+    rendre();
+    // la fin : plus d'appel, plus de fabrication, la file vide ; on laisse lire 4 s, puis fondu
+    const calme=repondu&&!appel&&!fab&&!queue.length;
+    if(!calme){ finQ=0; tFin=0; }
+    else if(!finQ) finQ=now;
+    else if(now-finQ>4000&&!tFin){ tFin=now; el.classList.remove("on"); }
+    if(tFin&&now-tFin>1200||now-t0>90000){ clearInterval(timer); timer=0; el.classList.remove("on"); }
+  }
+  return {
+    entendre(texte){ if(!on||!window.ACTIVITE) return; t0=performance.now(); L=[]; appel=fab=act=null; finQ=tFin=0; repondu=false;
+      try{ ACTIVITE.analyser(texte,MENEUR,MODELES).forEach(ajouter); }catch(e){ console.warn("activité",e); }
+      el.classList.add("on"); if(!timer) timer=setInterval(pas,100); pas(); },
+    evt(e){ if(!on||!timer) return; const x=ACTIVITE.ligneEvenement(e); if(x) ajouter(x); },
+    bascule(){ on=!on; try{ localStorage.setItem("bodycam-activite",on?"1":"0"); }catch(_){} if(!on){ clearInterval(timer); timer=0; el.classList.remove("on"); } return on; },
+    on:()=>on, lignes:()=>L.map(l=>l.k+" "+l.t)
+  };
+})();
+{ const b=document.createElement("button"); b.type="button"; b.id="activite-bouton"; b.className="ghost";
+  const maj=()=>{ b.textContent="Activité : "+(activite.on()?"oui":"non"); b.setAttribute("aria-pressed",String(activite.on())); };
+  b.onclick=()=>{ activite.bascule(); maj(); }; $("outils").appendChild(b); maj(); }
+window.balActivite=activite;   // essais : balActivite.lignes()
 
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
