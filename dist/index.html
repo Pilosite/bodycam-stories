@@ -221,6 +221,19 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 @keyframes ouvVg{from{opacity:0;transform:translateY(10px) rotate(var(--r,0deg)) scale(.92)}to{opacity:1;transform:rotate(var(--r,0deg))}}
 @keyframes ouvBalaye{to{transform:translateY(310%)}}
 @keyframes ouvEpingle{from{opacity:0;transform:translateY(-6px) rotate(-8deg) scale(1.3)}to{opacity:1;transform:rotate(-3deg)}}
+/* fenêtre large (démo sur PC) : le journal à gauche, la planche de photos à droite, vignettes plus grandes en mosaïque */
+.ouv-large .ouv-cadre{max-width:1480px;display:grid;grid-template-columns:minmax(0,540px) minmax(0,1fr);grid-template-rows:auto auto auto auto auto minmax(0,1fr) auto;column-gap:44px;align-content:stretch}
+.ouv-large .ouv-cadre>*{grid-column:1}
+.ouv-large .ouv-log{grid-row:6}
+.ouv-large .ouv-planche{grid-column:2;grid-row:1/-1;align-self:start;min-width:0;padding-top:2px;animation:ouvApparait .4s ease both}
+.ouv-planche-t{margin:0 0 6px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim)}
+.ouv-planche .ouv-bande{min-height:0;padding:10px 8px 6px}
+.ouv-planche .ouv-rail{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 14px;transform:none;transition:none}
+.ouv-planche .ouv-vg{width:auto}
+.ouv-planche .ouv-vg figcaption{font-size:11.5px;min-height:2.8em}
+.ouv-planche .ouv-credit{font-size:11px;margin-top:8px}
+.ouv-planche .ouv-credits{margin-top:6px}
+.ouv-planche .ouv-credits details{font-size:11px}
 .ouv-mention{margin:10px 0 0;font:400 11px/1.4 var(--f-mono);letter-spacing:.04em;color:var(--ink-dim)}
 .ouv-passer{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:14px;min-height:36px;padding:0 14px;font-size:13px}
 .ouv-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
@@ -4241,6 +4254,7 @@ function programme(r, f, hasard = Math.random, controle = null) {
    deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
             construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
             surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard } */
+const LARGE = '(min-width: 1000px) and (min-aspect-ratio: 5/4)';   // démo sur PC : planche de photos à côté du journal
 function creerOuverture(deps) {
   const d = document, $ = id => d.getElementById(id);
   const racine = d.createElement('section');
@@ -4324,6 +4338,8 @@ function creerOuverture(deps) {
         blocs.vg[p.id] = { p, im };
       }
       blocs.V = V;
+      blocs.large = !!(window.matchMedia && matchMedia(LARGE).matches);
+      if (blocs.large) racine.classList.add('ouv-large');   // colonne des photos réservée dès le début : pas de saut de mise en page
     }
     for (const e of ev) timers.push(setTimeout(() => jouer(e, blocs), e.t * 1000));
   }
@@ -4377,12 +4393,17 @@ function creerOuverture(deps) {
   function vignette(e, b, blocs) {
     const ph = blocs.vg && blocs.vg[e.photo]; if (!ph) return;
     if (!b.bande) {
-      const it = d.createElement('li'); it.className = 'ouv-it ouv-photos';
+      // Fenêtre large et couchée (démo sur PC) : une planche à côté du journal, vignettes plus grandes en mosaïque ;
+      // sinon (téléphone), une bande qui défile dans le journal.
+      b.large = !!blocs.large;
+      const it = d.createElement(b.large ? 'aside' : 'li'); it.className = b.large ? 'ouv-planche' : 'ouv-it ouv-photos';
+      if (b.large) it.setAttribute('aria-label', 'Photos du lieu');
       const V = blocs.V, uniq = a => [...new Set(a)];
-      it.innerHTML = `<div class="ouv-bande"><div class="ouv-rail"></div></div><p class="ouv-credit">Photos : Wikimedia Commons, ${esc(uniq(V.photos.map(p => p.auteur.replace(/ \(.*$/, ''))).join(', '))} · ${esc(uniq(V.photos.map(p => p.licence)).join(', '))} · recadrées et réduites, détail en fin de rejeu</p>`;
-      b.ul.appendChild(it);
+      it.innerHTML = `${b.large ? '<p class="ouv-planche-t">Photos du lieu · Wikimedia Commons</p>' : ''}<div class="ouv-bande"><div class="ouv-rail"></div></div><p class="ouv-credit">Photos : Wikimedia Commons, ${esc(uniq(V.photos.map(p => p.auteur.replace(/ \(.*$/, ''))).join(', '))} · ${esc(uniq(V.photos.map(p => p.licence)).join(', '))} · recadrées et réduites, détail en fin de rejeu</p>`;
+      if (b.large) { racine.querySelector('.ouv-cadre').appendChild(it); blocs.planche = it; }
+      else b.ul.appendChild(it);
       b.bande = it.querySelector('.ouv-bande'); b.rail = it.querySelector('.ouv-rail'); b.nv = 0; b.largeur = 0;
-      it.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      if (!b.large) it.scrollIntoView({ block: 'end', behavior: 'smooth' });
     }
     const c = d.createElement('figure'); c.className = 'ouv-vg lecture';
     c.style.setProperty('--r', ((e.garde ? 1 : -1) * (0.6 + 2.2 * ((b.nv * 0.618) % 1)) * (b.nv % 2 ? 1 : -1)).toFixed(2) + 'deg');
@@ -4391,6 +4412,7 @@ function creerOuverture(deps) {
     c.firstChild.appendChild(ph.im);
     b.rail.appendChild(c); ph.carte = c; b.nv++;
     b.x.querySelector('.ouv-compte').textContent = b.nv + ' photo' + (b.nv > 1 ? 's' : '');
+    if (b.large) return;                                // la mosaïque ne défile pas
     if (!b.pas) { b.pas = c.offsetWidth + 10; b.largeur = b.bande.clientWidth; }   // une seule lecture de mise en page
     const dx = Math.max(0, b.nv * b.pas - 10 - b.largeur);
     b.rail.style.transform = `translate3d(${-dx}px,0,0)`;
@@ -4409,6 +4431,7 @@ function creerOuverture(deps) {
     it.innerHTML = `<details><summary>Crédits des photos (${blocs.V.photos.length})</summary><ul>${blocs.V.photos.map(p =>
       `<li><a href="${esc(p.page)}" target="_blank" rel="noopener">${esc(p.titre)}</a> · ${esc(p.auteur)} · ${esc(p.licence)}, recadrée et réduite</li>`).join('')}</ul></details>`;
     const blocP = Object.values(blocs).find(x => x && x.bande);
+    if (blocs.planche) { const p = d.createElement('div'); p.className = 'ouv-credits'; p.innerHTML = it.innerHTML; blocs.planche.appendChild(p); return; }
     (blocP ? blocP.ul : log).appendChild(it);
   }
 

@@ -221,6 +221,19 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 @keyframes ouvVg{from{opacity:0;transform:translateY(10px) rotate(var(--r,0deg)) scale(.92)}to{opacity:1;transform:rotate(var(--r,0deg))}}
 @keyframes ouvBalaye{to{transform:translateY(310%)}}
 @keyframes ouvEpingle{from{opacity:0;transform:translateY(-6px) rotate(-8deg) scale(1.3)}to{opacity:1;transform:rotate(-3deg)}}
+/* fenêtre large (démo sur PC) : le journal à gauche, la planche de photos à droite, vignettes plus grandes en mosaïque */
+.ouv-large .ouv-cadre{max-width:1480px;display:grid;grid-template-columns:minmax(0,540px) minmax(0,1fr);grid-template-rows:auto auto auto auto auto minmax(0,1fr) auto;column-gap:44px;align-content:stretch}
+.ouv-large .ouv-cadre>*{grid-column:1}
+.ouv-large .ouv-log{grid-row:6}
+.ouv-large .ouv-planche{grid-column:2;grid-row:1/-1;align-self:start;min-width:0;padding-top:2px;animation:ouvApparait .4s ease both}
+.ouv-planche-t{margin:0 0 6px;font:500 11.5px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim)}
+.ouv-planche .ouv-bande{min-height:0;padding:10px 8px 6px}
+.ouv-planche .ouv-rail{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 14px;transform:none;transition:none}
+.ouv-planche .ouv-vg{width:auto}
+.ouv-planche .ouv-vg figcaption{font-size:11.5px;min-height:2.8em}
+.ouv-planche .ouv-credit{font-size:11px;margin-top:8px}
+.ouv-planche .ouv-credits{margin-top:6px}
+.ouv-planche .ouv-credits details{font-size:11px}
 .ouv-mention{margin:10px 0 0;font:400 11px/1.4 var(--f-mono);letter-spacing:.04em;color:var(--ink-dim)}
 .ouv-passer{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:14px;min-height:36px;padding:0 14px;font-size:13px}
 .ouv-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
