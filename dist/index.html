@@ -4923,6 +4923,7 @@ const REGLAGES_VOIX = {
   langue: 'fr',
   max: 2000,         // limite de speak()
   doublon_s: 30,     // même texte relu dans ce délai : ignoré
+  file: false,       // true : une phrase en cours n'est pas coupée, la suivante attend (la page) ; false : la nouvelle remplace
   geste_s: 20,       // une pensée refusée faute de geste se rejoue au geste suivant, si elle a moins de cet âge
 };
 const VOIX_TTS = ['buttery', 'airy', 'glassy', 'rounded'];
@@ -4954,7 +4955,10 @@ function creerVoix({ tts = null, locale = null, reglages = {}, maintenant = () =
   const sec = () => maintenant() / 1000;
   let T = null, ttsAttendu = !!(tts && typeof tts.then === 'function'), refus = false, sansTts = false;
   let on = false, n = 0, courant = null, attente = null, dernier = null, parle = false;
-  const signaler = p => { if (p !== parle) { parle = p; try { onParle(p); } catch (_) {} } };
+  const file = [];                                                // pensées en attente : une phrase en cours n'est plus coupée par la suivante
+  let tFile = 0;
+  const signaler = p => { if (p !== parle) { parle = p; try { onParle(p); } catch (_) {} }
+    if (!p && file.length) { clearTimeout(tFile); tFile = setTimeout(() => { if (!parle && file.length && on && !refus) lancer(file.shift()); }, 120); } };
 
   function brancher(t) {
     T = t && typeof t.speak === 'function' ? t : null;
@@ -5020,7 +5024,7 @@ function creerVoix({ tts = null, locale = null, reglages = {}, maintenant = () =
   }
 
   function taire() {
-    attente = null;
+    attente = null; file.length = 0; clearTimeout(tFile);
     const c = courant; courant = null;
     if (c && c.moteur === 'tts' && T) { try { T.stop().catch(() => {}); } catch (_) {} }
     if (locale) try { locale.cancel(); } catch (_) {}
@@ -5035,6 +5039,8 @@ function creerVoix({ tts = null, locale = null, reglages = {}, maintenant = () =
     dernier = { texte: t, t: sec() };
     attente = null;
     if (ttsAttendu) { taire(); attente = { texte: t, t: sec() }; return true; }   // la capacité répond encore : on lira à sa réponse
+    if (R.file && /^[\shmnrgaeo….!'’-]+$/i.test(t) && t.length < 28) return false;      // un souffle d'effort (« Hhhnn… ») : les bruitages s'en chargent
+    if (R.file && (parle || courant)) { if (file.length >= 2) file.shift(); file.push(t); return true; }   // elle finit sa phrase d'abord
     if (!ttsUtilisable() && !locale) return false;
     lancer(t);
     return true;
@@ -5195,40 +5201,40 @@ const L = (k, t) => ({ k, t });
 
 /* Ce que la page comprend de la phrase, avant Claude. M : les fonctions du meneur (MENEUR) ; bib : la bibliothèque de modèles. */
 function analyser(texte, M, bib) {
-  const out = [L('>', 'entendre "' + court(texte, 80) + '"')];
+  const out = [L('>', 'hear "' + court(texte, 80) + '"')];
   if (!M) return out;
   const t = String(texte || '');
-  if (M.estStop && M.estStop(t)) { out.push(L(' ', 'stop       : file vidée, sans attendre')); return out; }
+  if (M.estStop && M.estStop(t)) { out.push(L(' ', 'stop       : queue cleared, no wait')); return out; }
   const od = M.ordreDemande ? M.ordreDemande(t) : null;
   if (od) {
-    out.push(L(' ', 'ordre      : ' + (od.ordre === 'avant' ? 'aller → faire' : 'faire → aller')));
+    out.push(L(' ', 'order      : ' + (od.ordre === 'avant' ? 'go → make' : 'make → go')));
     const d = od.deplacement;
-    out.push(L(' ', 'aller      : ' + (d.type === 'rejoindre' ? 'rejoindre ' + d.objet : d.type === 'marcher' ? (d.metres < 0 ? 'reculer ' + r1(-d.metres) : 'marcher ' + r1(d.metres)) + ' m'
-      : 'se déplacer' + (d.metres ? ' ' + r1(d.metres) + ' m' : ', place libre ≥ 4 m')) + (od.demiTour ? ' · demi-tour' : '')));
+    out.push(L(' ', 'go         : ' + (d.type === 'rejoindre' ? 'reach ' + d.objet : d.type === 'marcher' ? (d.metres < 0 ? 'back up ' + r1(-d.metres) : 'walk ' + r1(d.metres)) + ' m'
+      : 'move' + (d.metres ? ' ' + r1(d.metres) + ' m' : ', free spot ≥ 4 m')) + (od.demiTour ? ' · turn around' : '')));
   }
   const tm = bib && M.modeleDe ? M.modeleDe(bib, t, { transforme: true }) : null;
   const m = !tm && bib && M.modeleDe ? M.modeleDe(bib, t) : null;
-  if (tm) out.push(L(' ', 'façonner   : modele(' + tm.id + ') avec la dernière chose demandée'));
+  if (tm) out.push(L(' ', 'shape      : model(' + tm.id + ') from the last thing asked'));
   if (m) {
     const fm = M.formesModele ? M.formesModele(m.modele, t) : null;
-    let l = 'faire      : modele(' + m.id + ')';
+    let l = 'make       : model(' + m.id + ')';
     if (fm) {
       l += ' ' + court(String(fm.raison).split(' (')[0], 24) + ' → ' + r2(fm.envergure) + ' m';
       if (fm.facteur !== 1) l += ' ×' + r1(fm.facteur);
       const ex = M.exploitDe ? M.exploitDe(bib) : null;
-      if (ex && M.palierExploit) { const p = M.palierExploit(fm.facteur, ex); if (p !== 'normal') l += ' (' + (p === 'demesure' ? 'démesuré' : p) + ')'; }
+      if (ex && M.palierExploit) { const p = M.palierExploit(fm.facteur, ex); if (p !== 'normal') l += ' (' + (p === 'demesure' ? 'outsized' : p) + ')'; }
     }
     out.push(L(' ', l));
     const mo = m.modele || {}, c = [];
-    if (mo.origine === 'corps') { c.push('accroupi'); if (fm && M.dureeEffort && M.exploitDe) c.push('effort ' + r1(M.dureeEffort(fm.facteur, M.exploitDe(bib))) + ' s'); }
-    if (mo.ou) c.push('pose ' + mo.ou);
-    if (c.length) out.push(L(' ', 'corps      : ' + c.join(' · ')));
+    if (mo.origine === 'corps') { c.push('crouch'); if (fm && M.dureeEffort && M.exploitDe) c.push('effort ' + r1(M.dureeEffort(fm.facteur, M.exploitDe(bib))) + ' s'); }
+    if (mo.ou) c.push('place ' + mo.ou);
+    if (c.length) out.push(L(' ', 'body       : ' + c.join(' · ')));
   }
   if (M.secoursCorps && !(od && od.ordre === 'avant')) {
     const im = M.secoursCorps(t, null, []).filter(a => a.type === 'posture');
-    if (im.length) out.push(L(' ', 'tout de suite : posture ' + r2(im[0].hauteur)));
+    if (im.length) out.push(L(' ', 'right now  : posture ' + r2(im[0].hauteur)));
   }
-  if (out.length === 1) out.push(L(' ', 'rien de local : on demande à Claude'));
+  if (out.length === 1) out.push(L(' ', 'nothing local : asking Claude'));
   return out;
 }
 
@@ -5240,28 +5246,28 @@ function ligneEvenement(e) {
   if (!e || typeof e !== 'object') return null;
   const x = e;
   switch (x.type) {
-    case 'pensee': return x.texte ? L('<', 'pensée     "' + court(x.texte, 70) + '"') : null;
-    case 'sas': return L('<', 'sas        ' + (x.verdict || '?') + (x.regle ? ' · ' + court(x.regle, 30) : ''));
-    case 'geste_immediat': return L('▶', 'tout de suite : ' + (x.actions || []).join(', '));
-    case 'sequence': return L('·', 'séquence   ' + (x.remis_en_ordre ? 'remise dans l\'ordre de la phrase' : (x.de || []).join(' → ')));
-    case 'demande_tenue': return L('!', 'garde-fou  demande tenue : modele(' + x.modele + ')');
-    case 'exploit': return L('·', 'exploit    ×' + r1(x.facteur) + ' ' + (x.palier === 'demesure' ? 'démesuré' : x.palier || '') + (x.corps ? ' · effort ' + r1(x.effort_s) + ' s' : ''));
-    case 'exploit_corrige': return L('!', 'garde-fou  autre matière refusée → corps');
-    case 'apercu_jete': return L('!', 'garde-fou  aperçu jeté');
-    case 'pensee_jetee': return L('!', 'garde-fou  pensée jetée');
-    case 'modele': return L('·', 'modèle     ' + x.id + (x.envergure ? ' → ' + r2(x.envergure) + ' m' : '') + (x.raison ? ' (' + court(String(x.raison).split(' (')[0], 22) + ')' : ''));
-    case 'echelle': return L('·', 'échelle    ×' + r1(x.facteur) + ' · ' + court(x.raison, 34));
-    case 'pose_corrigee': return L('!', 'garde-fou  pose ' + (x.de || '?') + ' → ' + x.vers);
-    case 'objet_cree': return L('<', 'fabrique   ' + x.id + ' "' + court(x.nom, 28) + '" ' + x.formes + ' formes · ' + r2(x.envergure) + ' m');
-    case 'objet_recycle': return L('·', 'recycle    ' + x.id + ' (budget du moteur)');
-    case 'suite_programmee': return L('<', 'suite      ' + x.etapes + ' étapes sur ' + Math.round(x.duree_s) + ' s');
-    case 'faconnage': return L('·', 'façonnage  ' + x.id + (x.chercher ? ' · chercher ' + x.chercher : '') + (x.attendu ? ' (attendu)' : ''));
-    case 'degout': return L('·', 'dégoût     ' + (x.palier || '') + ' ' + r2(x.intensite) + (x.nausee ? ' · nausée' : ''));
-    case 'cadrage': return L('·', 'cadrer     ' + x.id);
-    case 'stop': return L('!', 'stop       file vidée');
-    case 'docile': return L('!', 'debug      la page complète la réponse');
-    case 'cede': return L('·', 'cède       il le fait quand même');
-    case 'objet_refuse': case 'objet_rate': return L('!', 'fabrique   ratée');
+    case 'pensee': return x.texte ? L('<', 'thought    "' + court(x.texte, 70) + '"') : null;
+    case 'sas': return L('<', 'gate       ' + (x.verdict || '?') + (x.regle ? ' · ' + court(x.regle, 30) : ''));
+    case 'geste_immediat': return L('▶', 'right now  : ' + (x.actions || []).join(', '));
+    case 'sequence': return L('·', 'sequence   ' + (x.remis_en_ordre ? 'reordered to match the sentence' : (x.de || []).join(' → ')));
+    case 'demande_tenue': return L('!', 'guard      request kept : model(' + x.modele + ')');
+    case 'exploit': return L('·', 'exploit    ×' + r1(x.facteur) + ' ' + (x.palier === 'demesure' ? 'outsized' : x.palier || '') + (x.corps ? ' · effort ' + r1(x.effort_s) + ' s' : ''));
+    case 'exploit_corrige': return L('!', 'guard      other material refused → body');
+    case 'apercu_jete': return L('!', 'guard      preview dropped');
+    case 'pensee_jetee': return L('!', 'guard      thought dropped');
+    case 'modele': return L('·', 'model      ' + x.id + (x.envergure ? ' → ' + r2(x.envergure) + ' m' : '') + (x.raison ? ' (' + court(String(x.raison).split(' (')[0], 22) + ')' : ''));
+    case 'echelle': return L('·', 'scale      ×' + r1(x.facteur) + ' · ' + court(x.raison, 34));
+    case 'pose_corrigee': return L('!', 'guard      place ' + (x.de || '?') + ' → ' + x.vers);
+    case 'objet_cree': return L('<', 'build      ' + x.id + ' "' + court(x.nom, 28) + '" ' + x.formes + ' shapes · ' + r2(x.envergure) + ' m');
+    case 'objet_recycle': return L('·', 'recycle    ' + x.id + ' (engine budget)');
+    case 'suite_programmee': return L('<', 'follow-up  ' + x.etapes + ' steps over ' + Math.round(x.duree_s) + ' s');
+    case 'faconnage': return L('·', 'shaping    ' + x.id + (x.chercher ? ' · fetch ' + x.chercher : '') + (x.attendu ? ' (expected)' : ''));
+    case 'degout': return L('·', 'disgust    ' + (x.palier || '') + ' ' + r2(x.intensite) + (x.nausee ? ' · nausea' : ''));
+    case 'cadrage': return L('·', 'frame      ' + x.id);
+    case 'stop': return L('!', 'stop       queue cleared');
+    case 'docile': return L('!', 'debug      page completes the answer');
+    case 'cede': return L('·', 'gives in   does it anyway');
+    case 'objet_refuse': case 'objet_rate': return L('!', 'build      failed');
     default: return null;
   }
 }
@@ -5271,19 +5277,19 @@ function ligneAction(a) {
   if (!a || typeof a !== 'object') return null;
   const deg = v => Math.round(v * 57.3) + '°';
   switch (a.type) {
-    case 'marcher': return 'marcher ' + r1(Math.abs(a.rest || 0)) + ' m';
-    case 'marche': return 'marche ' + r1(a.metres || 0) + ' m';
-    case 'tourner': return 'tourner ' + deg(a.rest || 0);
-    case 'posture': return 'posture ' + (a.h < 0.7 ? 'accroupi' : 'debout');
-    case 'regarder': return 'regarder ' + deg(a.pitch || 0);
+    case 'marcher': return 'walk ' + r1(Math.abs(a.rest || 0)) + ' m';
+    case 'marche': return 'walk ' + r1(a.metres || 0) + ' m';
+    case 'tourner': return 'turn ' + deg(a.rest || 0);
+    case 'posture': return 'posture ' + (a.h < 0.7 ? 'crouched' : 'standing');
+    case 'regarder': return 'look ' + deg(a.pitch || 0);
     case 'effort': return 'effort ' + r1(a.secondes || a.rest || 0) + ' s';
-    case 'penser': return 'penser "' + court(a.texte, 30) + '"';
-    case 'poser': return 'poser ' + (a.ref || '');
-    case 'faconner': return 'façonner ' + (a.objet || '');
-    case 'ramasser': return 'ramasser';
-    case 'viser': return 'viser ' + (a.objet || '');
+    case 'penser': return 'think "' + court(a.texte, 30) + '"';
+    case 'poser': return 'place ' + (a.ref || '');
+    case 'faconner': return 'shape ' + (a.objet || '');
+    case 'ramasser': return 'pick up';
+    case 'viser': return 'aim ' + (a.objet || '');
     case 'zoom': return 'zoom ×' + r1(a.z || 1);
-    case 'attendre': return 'attendre';
+    case 'attendre': return 'wait';
     default: return String(a.type || '?');
   }
 }
@@ -5315,6 +5321,7 @@ const CLASSES = {
 const RUBRIQUE = { lieu: 'lieu', relief: 'relief', trajet: 'trajet', arbres: 'flore', perches: 'flore', gres: 'matiere', surfaces: 'matiere', air: 'air', camera: 'camera', personnage: 'personnage' };
 const classeDe = cle => RUBRIQUE[cle] || (/^semis/.test(cle) ? 'flore' : 'histoire');
 
+const EN = { lieu: 'place', relief: 'relief', trajet: 'path', flore: 'flora', lumiere: 'light', matiere: 'material', air: 'air', camera: 'camera', personnage: 'persona', demande: 'request', analyse: 'analysis', action: 'action', son: 'audio', histoire: 'story', garde: 'guard' };
 const cleCode = k => { const h = empreinte(k) % 3844; return B62[Math.floor(h / 62)] + B62[h % 62]; };
 const lisible = v => typeof v === 'number' ? String(+v.toFixed(2)).replace('.', ',') : typeof v === 'boolean' ? (v ? 'oui' : 'non') : String(v);
 
@@ -5340,7 +5347,7 @@ function trame(classe, objet, rang = 0) {
   const jetons = F.map(([k, v], i) => {
     const court = k.split('.').filter(x => !/^\d+$/.test(x)).slice(-2).join('.') || classe;
     const p = i === 0 ? 3 : typeof v === 'number' ? (Math.abs(v) >= 10 ? 3 : 2) : 1;
-    return { s: sg + cleCode(k) + valeur(v), cle: (classe + (court ? ' · ' + court : '')).replace(/_/g, ' '), val: lisible(v), poids: p };
+    return { s: sg + cleCode(k) + valeur(v), cle: ((EN[classe] || classe) + (court ? ' · ' + court : '')).replace(/_/g, ' '), val: lisible(v), poids: p };
   });
   const entete = '▣' + sg + B36[rang % 36];
   const corps = jetons.map(j => j.s).join(' ');
@@ -5383,25 +5390,26 @@ const traduire = j => j.s + ' = ' + j.cle + ' : ' + j.val;
    réglages (ceux de la recherche de l'ouverture) et de la nature de la demande, jamais d'un objet en dur.
    perso : { id, genre, age, pays, annee, metier, ton[], peur (0..3), humour, sait[] } ;
    nature : { repugnance 0..1, facteur (échelle), effort (s), chercher, faconner }. Rend null si ses réglages ne jouent pas. */
+const TON = { sec: 'dry', 'drôle': 'funny', doux: 'gentle', anxieux: 'anxious', bavard: 'chatty' };
 function reactionAttendue(perso, nature = {}) {
   if (!perso || typeof perso !== 'object') return null;
   const n = nature || {}, rp = +n.repugnance || 0, fa = +n.facteur || 1, ef = +n.effort || 0;
   if (!(rp > 0 || fa >= 3 || ef >= 4 || n.chercher || n.faconner)) return null;
-  const F = perso.genre === 'F', e = s => F ? s + 'e' : s, ton = [].concat(perso.ton || []);
+  const F = perso.genre === 'F', ton = [].concat(perso.ton || []);
   const R = [];
-  if (ton.includes('sec')) R.push('râle');
-  R.push('obéit');
-  if (rp >= .5) R.push(fa >= 3 || rp >= .85 ? 'dégoût marqué, se retient' : 'dégoût marqué');
-  else if (rp > 0) R.push('grimace');
-  if (fa >= 5) R.push('incrédule devant la taille');
-  if (ef >= 4) R.push('souffle, effort long');
-  if (n.chercher) R.push((perso.sait || []).length ? 'cherche en ' + (F ? 'connaisseuse' : 'connaisseur') : 'cherche sans discuter');
-  if ((+perso.peur || 0) <= 1) R.push('pas ' + e('impressionné'));
-  else R.push(e('inquiet'));
+  if (ton.includes('sec')) R.push('grumbles');
+  R.push('complies');
+  if (rp >= .5) R.push(fa >= 3 || rp >= .85 ? 'strong disgust, holds it in' : 'strong disgust');
+  else if (rp > 0) R.push('winces');
+  if (fa >= 5) R.push('disbelief at the size');
+  if (ef >= 4) R.push('long effort, heavy breathing');
+  if (n.chercher) R.push((perso.sait || []).length ? 'searches like she knows the woods'.replace('she', F ? 'she' : 'he') : 'searches without arguing');
+  if ((+perso.peur || 0) <= 1) R.push('unfazed');
+  else R.push('uneasy');
   const H = ton.includes('drôle') || perso.humour;
   R.splice(H ? 4 : 5);                                     // court : trois lignes au plus dans le panneau
-  if (H) R.push('humour à froid');
-  const profil = [perso.id ? perso.id[0].toUpperCase() + perso.id.slice(1) : 'perso', (perso.genre || '') + (perso.age || ''), (perso.pays || '') + (perso.annee || ''), perso.metier, ton.length ? 'ton ' + ton.join(', ') : ''].filter(Boolean).join(' · ');
+  if (H) R.push('deadpan');
+  const profil = [perso.id ? perso.id[0].toUpperCase() + perso.id.slice(1) : 'perso', (perso.genre || '') + (perso.age || ''), (perso.pays || '') + (perso.annee || ''), ton.map(x => TON[x] || x).join(', ')].filter(Boolean).join(' · ');
   const tr = trame('personnage', { id: perso.id, genre: perso.genre, age: perso.age, pays: perso.pays, annee: perso.annee, ton, peur: perso.peur, demande: { repugnance: rp || undefined, facteur: fa !== 1 ? fa : undefined, effort: ef || undefined } }, 2);
   return { profil, reaction: R, texte: profil + ' → ' + R.join(', '), trame: tr };
 }
@@ -6025,7 +6033,7 @@ function programme(r, f, hasard = Math.random, controle = null, enc = null) {
    deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
             construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
             surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard } */
-const MOTEUR = ['image', 'son', 'histoire'];
+const MOTEUR = ['image', 'audio', 'story'];
 const LARGE = '(min-width: 1000px) and (min-aspect-ratio: 5/4)';   // démo sur PC : planche de photos à côté du journal
 function creerOuverture(deps) {
   const d = document, $ = id => d.getElementById(id);
@@ -6206,7 +6214,7 @@ function creerOuverture(deps) {
       if (e.genre === 'bilan') {
         it.innerHTML = `<span class="ouv-k">PDL</span><b>${e.tok}</b> tokens <span class="ouv-k">· JSON</span>${e.json} <span class="ouv-gain">−${e.gain} %</span><span class="ouv-jauge"><i style="transform:scaleX(${(e.tok / e.json).toFixed(3)})"></i></span>`;
         b.ul.appendChild(it); b.x.querySelector('.ouv-compte').textContent = `${e.tok} tokens · −${e.gain} %`; it.scrollIntoView({ block: 'end', behavior: 'smooth' });
-        if (blocs.apercu) blocs.apercu.fin = true, blocs.apercu.cpt.innerHTML = `<b>${e.tok}</b> tokens PDL · JSON ${e.json} · <span class="ouv-gain">−${e.gain} %</span>`;
+        if (blocs.apercu) blocs.apercu.fin = true, blocs.apercu.cpt.innerHTML = `<b>${e.tok}</b> PDL tokens · JSON ${e.json} · <span class="ouv-gain">−${e.gain} %</span>`;
         return;
       }
       if (e.genre === 'requete') it.innerHTML = `<span class="ouv-k">cherche${e.ou ? ' · ' + esc(e.ou) : ''}</span> ${esc(e.texte)}`;
@@ -6274,9 +6282,9 @@ function creerOuverture(deps) {
     R.t.forEach(p => svg += noeud(p, 5, 't') + mc(p, 5, 't')); R.o.forEach(p => svg += noeud(p, 14, 'o') + mc(p, 14, 'o'));
     R.m.forEach((p, i) => svg += `<rect class="ouv-nd m" x="${p.x - 9}" y="${p.y - 9}" width="18" height="18" rx="2" style="transform-origin:${p.x}px ${p.y}px"/><text class="ouv-mn" x="${p.x + 15}" y="${p.y + 4}">${MOTEUR[i]}</text>`);
     svg += `<text x="4" y="10">web</text><text x="4" y="46">haiku × 15</text><text x="4" y="110">sonnet × 5</text>`
-      + `<text x="4" y="156" class="ouv-tr">JEV × 4</text><text x="4" y="168" class="ouv-tr2">dLLM · instantané</text><text x="4" y="218">opus × 2</text>`
-      + `<text x="4" y="296">moteur</text><g class="ouv-imp"></g><g class="ouv-eti"></g></svg>`;
-    el.innerHTML = `<p class="ouv-planche-t">Réseau d'agents</p>${svg}<p class="ouv-leg"><span><i class="h"></i>recherche</span> · <span><i class="s"></i>analyse</span> · <span><i class="t"></i>traduction instantanée</span> · <span><i class="o"></i>écriture PDL</span> · <span><i class="em"></i>émet</span> <span><i class="re"></i>reçoit</span> <span><i class="fa"></i>terminé</span></p><p class="ouv-etat-r"></p>`;
+      + `<text x="4" y="156" class="ouv-tr">JEV × 4</text><text x="4" y="168" class="ouv-tr2">dLLM · instant</text><text x="4" y="218">opus × 2</text>`
+      + `<text x="4" y="296">engine</text><g class="ouv-imp"></g><g class="ouv-eti"></g></svg>`;
+    el.innerHTML = `<p class="ouv-planche-t">Agent network</p>${svg}<p class="ouv-leg"><span><i class="h"></i>research</span> · <span><i class="s"></i>analysis</span> · <span><i class="t"></i>instant translation</span> · <span><i class="o"></i>PDL writing</span> · <span><i class="em"></i>sends</span> <span><i class="re"></i>receives</span> <span><i class="fa"></i>done</span></p><p class="ouv-etat-r"></p>`;
     hote.appendChild(el);
     R.el = el; R.svg = el.querySelector('svg'); R.imp = el.querySelector('.ouv-imp'); R.eti = el.querySelector('.ouv-eti'); R.rc = el.querySelector('.ouv-etat-r');
     R.nd = { h: [...el.querySelectorAll('.ouv-nd.h')], s: [...el.querySelectorAll('.ouv-nd.s')], t: [...el.querySelectorAll('.ouv-nd.t')], o: [...el.querySelectorAll('.ouv-nd.o')], m: [...el.querySelectorAll('.ouv-nd.m')] };
@@ -6286,7 +6294,7 @@ function creerOuverture(deps) {
     R.cpt = () => {
       const now = performance.now(); R.flux = R.flux.filter(f => now - f[0] < 1500);
       const debit = Math.round(R.flux.reduce((a, f) => a + f[1], 0) / 1.5), actifs = R.svg.querySelectorAll('.ouv-nd.emet,.ouv-nd.recoit').length;
-      R.rc.innerHTML = `<b>${debit}</b> tok/s · <b>${actifs}</b> agents actifs · ${R.n.q} requêtes · ${R.n.s} sources · ${R.n.t} tokens PDL`;
+      R.rc.innerHTML = `<b>${debit}</b> tok/s · <b>${actifs}</b> active agents · ${R.n.q} queries · ${R.n.s} sources · ${R.n.t} PDL tokens`;
     };
     R.cpt();
     return R;
@@ -6339,7 +6347,7 @@ function creerOuverture(deps) {
       // transmission groupée : tout ce que les Sonnet ont retenu part vers les Opus, par les traducteurs
       R.s.forEach((p, i) => R.o.forEach((q, j) => timers.push(setTimeout(() => parJev(R, i, j, 360, 'g', 2000), 70 * i + 40 * j))));
       timers.push(setTimeout(() => R.nd.o.forEach(c => poser(c, 'recoit')), 900));   // les Opus écrivent jusqu'au contrôle
-      etiquette(R, R.o[0], 'contexte → opus', 18);
+      etiquette(R, R.o[0], 'context → opus', 18);
       if (blocs && blocs.planche) blocs.planche.classList.add('ouv-replie');   // les photos ont servi : place à l'aperçu du PDL
       if (blocs && blocs.droite && !blocs.apercu) blocs.apercu = creerApercu(blocs.droite);
     } else R.el.classList.remove('pdl');
@@ -6377,7 +6385,7 @@ function creerOuverture(deps) {
   /* Aperçu du PDL (colonne de droite) : les trames s'écrivent jeton par jeton pendant que les Opus travaillent. */
   function creerApercu(hote) {
     const el = d.createElement('div'); el.className = 'ouv-apercu';
-    el.innerHTML = '<p class="ouv-planche-t">PDL · langage intermédiaire</p><div class="ouv-flux"></div><p class="ouv-pdl-leg"></p><p class="ouv-pdl-cpt"></p>';
+    el.innerHTML = '<p class="ouv-planche-t">PDL · intermediate language</p><div class="ouv-flux"></div><p class="ouv-pdl-leg"></p><p class="ouv-pdl-cpt"></p>';
     hote.appendChild(el);
     return { el, flux: el.querySelector('.ouv-flux'), leg: el.querySelector('.ouv-pdl-leg'), cpt: el.querySelector('.ouv-pdl-cpt'), n: 0 };
   }
@@ -18390,7 +18398,7 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
 
 /* ------------------------------------------------------------------ voix du personnage (src/voix.js) : ses pensées lues à voix haute
    Capacité « tts » de l'artefact, sinon la voix du navigateur. Éteinte par défaut (« Voix » dans « Plus »), allumée par CFG.demo. */
-const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal},
+const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal,file:CFG.voixFile!==false},
   onParle:p=>{ $("taire").hidden=!p; } });
 function penser(t){ say(t); direVoix(t); notePensee(t,"meneur"); }
 const journalPensees=[]; window.balPensees=journalPensees;   // essais (tools/demo.mjs) : chaque pensée et son instant
@@ -19629,7 +19637,7 @@ const activite=(()=>{
   const el=document.body.appendChild(document.createElement("div")); el.id="activite"; el.setAttribute("aria-hidden","true");
   const classe={"⇢":"k-pe",">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
   let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false, tTrad=-1e9, trAct=0;
-  // une trame PDL (src/pdl.js) : ses jetons s'écrivent comme une ligne ; dessous, la traduction en clair de 2 jetons défile
+  // une trame PDL (src/pdl.js) : ses jetons s'écrivent comme une ligne ; dessous, la traduction en clair (anglais) de 2 jetons défile
   // le profil du personnage : les vrais réglages issus de la recherche de l'ouverture (ouvertures/*.json, section personnage)
   const PERSO=(()=>{ try{ const r=(typeof OUVERTURES!=="undefined"?OUVERTURES:[]).find(r=>r.personnage&&r.personnage.reglages); return r?r.personnage.reglages:null; }catch(_){ return null; } })();
   let persona=null;
@@ -19640,7 +19648,7 @@ const activite=(()=>{
       chercher:/cherch|ramass|rapport|trouve/i.test(t), faconner:!!tm };
     const r=PDL.reactionAttendue(PERSO,nature); if(!r) return;
     const l=ajouter({k:"◈",t:r.trame.texte}); l.tr=r.trame; l.pe=1;
-    ajouter({k:"⇢",t:"réaction attendue · traducteur : "+r.texte}).pe=1; persona={lie:false}; tTrad=performance.now(); }
+    ajouter({k:"⇢",t:"expected reaction · translated by JEV : "+r.texte}).pe=1; persona={lie:false}; tTrad=performance.now(); }
   function ajouterTrame(tr){ if(!tr||!tr.jetons.length) return; const l=ajouter({k:"◈",t:tr.texte}); l.tr=tr; el.classList.add("tr"); tTrad=performance.now(); }
   function rendreTrame(l,curseur){ const tr=l.tr, J=[{s:tr.entete,poids:3,sg:1},...tr.jetons,{s:tr.somme,poids:1,sg:1}]; let c=0, h="";
     for(const j of J){ if(c>=l.n) break; c+=j.s.length+1; h+='<span class="tj p'+j.poids+(j.sg?' sg':'')+'">'+esc(j.s)+'</span>'; }
@@ -19664,13 +19672,13 @@ const activite=(()=>{
     const now=performance.now();
     if(meneur){
       const v=meneur.enVol(), a=meneur.atelier&&meneur.atelier();
-      if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interprète",0))};
-        appel.l.t=ACTIVITE.ligneAppel("interprète",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
-      else if(appel){ appel.l.k="✓"; appel.l.t="interprète  répondu en "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true;
+      if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interpreter",0))};
+        appel.l.t=ACTIVITE.ligneAppel("interpreter",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
+      else if(appel){ appel.l.k="✓"; appel.l.t="interpreter  answered in "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true;
         if(typeof PDL!=="undefined"&&queue.length&&!trAct) try{ trAct=1; ajouterTrame(PDL.trameActions(queue)); }catch(_){} }
-      if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("accessoiriste",0))};
-        fab.l.t=ACTIVITE.ligneAppel("accessoiriste",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
-      else if(fab){ fab.l.k="✓"; fab.l.t="accessoiriste  rendu en "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
+      if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("prop master",0))};
+        fab.l.t=ACTIVITE.ligneAppel("prop master",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
+      else if(fab){ fab.l.k="✓"; fab.l.t="prop master  done in "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
     }
     const q=queue[0];
     if(q!==(act&&act.a)){
@@ -19713,11 +19721,11 @@ window.balActivite=activite;   // essais : balActivite.lignes()
 const regie=(()=>{
   if(window.__CFG&&!CFG.regie) return null;
   const el=document.createElement("div"); el.id="regie"; el.setAttribute("aria-hidden","true");
-  const L=[["ciel","Ciel · lumière"],["monde","Monde · terrain"],["histoire","Histoire"],["evenements","Événements"],["corps","Comportement"],["son","Son · voix"],["traduction","Traduction · PDL"]];
-  el.innerHTML='<p class="rg-t">Agents · régie</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
+  const L=[["ciel","Sky · light"],["monde","World · terrain"],["histoire","Story"],["evenements","Events"],["corps","Behavior"],["son","Audio · voice"],["traduction","Translation · PDL"]];
+  el.innerHTML='<p class="rg-t">Agents · live</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
   document.body.appendChild(el);
   const N={}; for(const p of el.querySelectorAll(".rg-l")) N[p.dataset.k]={p,b:p.querySelector("b"),n:0,t:0};
-  const etats={ciel:["veille","exposition","brume"],monde:["veille","sème","relief"],histoire:["écoute","écrit","décide"],evenements:["veille","prépare","déclenche"],corps:["repos","planifie","agit"],son:["silence","mixe","joue"],traduction:["veille","écoute","traduit"]};
+  const etats={ciel:["idle","exposure","haze"],monde:["idle","seeding","terrain"],histoire:["listening","writing","deciding"],evenements:["idle","staging","firing"],corps:["rest","planning","acting"],son:["silent","mixing","playing"],traduction:["idle","listening","translating"]};
   let i=0;
   setInterval(()=>{ i++;
     const jeu=!(ouverture&&ouverture.ouvert())&&!document.hidden&&innerWidth>=760&&activite.on()&&!CFG.nohud;

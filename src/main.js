@@ -2174,7 +2174,7 @@ $("dire").addEventListener("submit",async e=>{ e.preventDefault();
 
 /* ------------------------------------------------------------------ voix du personnage (src/voix.js) : ses pensées lues à voix haute
    Capacité « tts » de l'artefact, sinon la voix du navigateur. Éteinte par défaut (« Voix » dans « Plus »), allumée par CFG.demo. */
-const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal},
+const voixP=VOIX.creerVoix({ tts:capacite("tts"), locale:VOIX.voixNavigateur(window), reglages:{voix:CFG.voix,debit:CFG.voixDebit,debitLocal:CFG.voixDebitLocal,file:CFG.voixFile!==false},
   onParle:p=>{ $("taire").hidden=!p; } });
 function penser(t){ say(t); direVoix(t); notePensee(t,"meneur"); }
 const journalPensees=[]; window.balPensees=journalPensees;   // essais (tools/demo.mjs) : chaque pensée et son instant
@@ -3497,11 +3497,11 @@ window.balActivite=activite;   // essais : balActivite.lignes()
 const regie=(()=>{
   if(window.__CFG&&!CFG.regie) return null;
   const el=document.createElement("div"); el.id="regie"; el.setAttribute("aria-hidden","true");
-  const L=[["ciel","Ciel · lumière"],["monde","Monde · terrain"],["histoire","Histoire"],["evenements","Événements"],["corps","Comportement"],["son","Son · voix"],["traduction","Translation · PDL"]];
-  el.innerHTML='<p class="rg-t">Agents · régie</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
+  const L=[["ciel","Sky · light"],["monde","World · terrain"],["histoire","Story"],["evenements","Events"],["corps","Behavior"],["son","Audio · voice"],["traduction","Translation · PDL"]];
+  el.innerHTML='<p class="rg-t">Agents · live</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
   document.body.appendChild(el);
   const N={}; for(const p of el.querySelectorAll(".rg-l")) N[p.dataset.k]={p,b:p.querySelector("b"),n:0,t:0};
-  const etats={ciel:["veille","exposition","brume"],monde:["veille","sème","relief"],histoire:["écoute","écrit","décide"],evenements:["veille","prépare","déclenche"],corps:["repos","planifie","agit"],son:["silence","mixe","joue"],traduction:["idle","listening","translating"]};
+  const etats={ciel:["idle","exposure","haze"],monde:["idle","seeding","terrain"],histoire:["listening","writing","deciding"],evenements:["idle","staging","firing"],corps:["rest","planning","acting"],son:["silent","mixing","playing"],traduction:["idle","listening","translating"]};
   let i=0;
   setInterval(()=>{ i++;
     const jeu=!(ouverture&&ouverture.ouvert())&&!document.hidden&&innerWidth>=760&&activite.on()&&!CFG.nohud;
