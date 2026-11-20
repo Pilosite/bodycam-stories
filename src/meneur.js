@@ -1753,7 +1753,7 @@ export function creerMeneur(o) {
     return isObj(r) ? r : {};
   }
   const emettre = ord => { try { o.emettre && o.emettre(ord); } catch (_) {} };
-  const log = (type, x = {}) => evenements.push(Object.assign({ min: +minutes(partie).toFixed(2), type }, x));
+  const log = (type, x = {}) => { const e = Object.assign({ min: +minutes(partie).toFixed(2), type }, x); evenements.push(e); if (o.surEvenement) try { o.surEvenement(e); } catch (_) {} };   // surEvenement : le panneau d'activité
   const tirer = l => l[Math.floor(alea(partie) * l.length)];
 
   function perimer(a) { if (!a) return; a.perime = true; if (a.fini) { const f = a.fini; a.fini = null; f(); } }
@@ -2732,6 +2732,7 @@ export function creerMeneur(o) {
     partie: () => clone(partie),
     fini: () => partie.trame.fin_jouee,
     enVol: () => enVol ? { id: enVol.id, type: enVol.type } : null,
+    atelier: () => atelier ? { id: atelier.id, depuis_s: sec - atelier.debut } : null,
   };
 }
 
