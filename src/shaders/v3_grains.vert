@@ -117,9 +117,9 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
     c+=db*rad*.55; rad*=.52+.2*hb.z;
     vec3 vl=vueCellule(T,c);
     float z=2.*rnd()-1., a=6.2831853*rnd(), sn=sqrt(max(1.-z*z,0.)); vec3 d=vec3(sn*cos(a),z,sn*sin(a));
-    if(dot(d/rad,vl)<0. && rnd()<.8) d=-d;                   // surtout la face vue ; un peu de l'arrière, vu par les trous
+    if(dot(d/rad,vl)<0. && rnd()<.93) d=-d;                  // surtout la face vue ; un peu de l'arrière, vu par les trous
     float bos=1.+.5*(vnoise3(d*2.2+T.h.xyz*40.+float(k*5+m*4+b))-.5);   // contour bosselé
-    inner=rnd()<.3?.55+.3*rnd():1.;                          // un peu de feuilles dedans : la masse a de l'épaisseur
+    inner=rnd()<.12?.55+.3*rnd():1.;                          // un peu de feuilles dedans : la masse a de l'épaisseur
     lp=c+d*rad*inner*bos; nl=normalize(d/rad);
     rim=abs(dot(nl,normalize(vl)));                          // 0 au bord de la silhouette : le bord s'effiloche
     g.s=min(s,1.5*P2.z);
