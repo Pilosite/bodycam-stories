@@ -1,0 +1,66 @@
+{
+  "version": 0,
+  "note": "Anchors for the translation of the player's words without a model (M2: plain lexical nearest match, src/reflex-model.js). Paraphrases per language for the pack's intent classes, its commit classes and its things; what Sam does when she accepts a commitment of a class is a rule template (PDL canonical JSON, docs/pdl-spec.md §6.6). Story data: the engine knows none of these names. Matching ignores case and accents; an anchor matches whole words.",
+  "things": {
+    "marque-1": { "en": ["mark", "stripe", "orange", "paint", "trunk", "tree"], "fr": ["marque", "trait", "orange", "peinture", "tronc", "arbre"] },
+    "chablis": { "en": ["fallen pine", "fallen tree", "stump", "pine"], "fr": ["pin tombe", "arbre tombe", "souche", "chablis", "pin"] },
+    "platiere": { "en": ["stones", "cairn", "slabs", "pool", "rocks", "sandstone"], "fr": ["pierres", "cairn", "dalles", "mare", "rochers", "gres"] },
+    "ruban": { "en": ["tape", "ribbon", "birch"], "fr": ["ruban", "bouleau"] },
+    "affut": { "en": ["hide", "shelter", "branches", "seat", "board"], "fr": ["affut", "abri", "branches", "planchette"] },
+    "terrier": { "en": ["bank", "sand", "holes", "sett", "burrow", "spoil", "badger"], "fr": ["talus", "sable", "trous", "terrier", "blaireau", "gueules"] }
+  },
+  "via": {
+    "tape": { "en": ["tape", "ribbon", "down", "off the path", "his way"], "fr": ["ruban", "descends", "en bas", "comme lui"] },
+    "path": { "en": ["path", "official", "round", "the long way"], "fr": ["sentier", "officiel", "tournee", "par le chemin"] }
+  },
+  "intent_classes": {
+    "shout": { "loud": true, "verb": "say", "en": ["shout", "yell", "scream", "call his name", "call out", "louder"], "fr": ["crie", "hurle", "appelle le", "plus fort"] },
+    "move_free": { "verb": "go", "en": ["cut through", "through the trees", "off the path", "shortcut", "explore", "wander"], "fr": ["coupe", "a travers", "hors du sentier", "raccourci", "explore", "promene"] },
+    "approach_sett": { "verb": "go", "target": "thing:terrier", "en": ["go down to the bank", "closer to the bank", "go to the holes", "get closer", "look inside", "go down to them"], "fr": ["descends au talus", "approche toi", "va voir les trous", "plus pres", "regarde dedans"],
+      "line": "sett.too_close", "line_unless_station": "hide" },
+    "direction": { "verb": "ask", "en": ["which way", "where now", "where are we going", "where do we go"], "fr": ["par ou", "on va ou", "ou maintenant"], "line": "down.unknown" }
+  },
+  "talk": [
+    { "line": "louis.question", "en": ["louis", "your brother", "lou", "tell me about him", "what was he like"], "fr": ["louis", "ton frere", "lou", "parle moi de lui"] },
+    { "line": "greet.answer", "en": ["hello", "hi", "i am here", "i'm here", "can you hear", "yes"], "fr": ["bonjour", "salut", "je suis la", "tu m'entends", "oui"] },
+    { "line": "climb.refuse", "en": ["climb"], "fr": ["grimpe", "escalade"] },
+    { "line": "dig.refuse", "en": ["dig"], "fr": ["creuse"] },
+    { "line": "fire.refuse", "en": ["fire", "light a"], "fr": ["feu", "allume"] },
+    { "line": "call.refuse", "en": ["call someone", "phone", "call your mother", "call the police"], "fr": ["telephone", "appelle ta mere", "appelle quelqu'un", "la police"] }
+  ],
+  "conditional": { "en": ["if", "when", "whatever", "in case"], "fr": ["si", "quand", "quoi que", "au cas ou", "s'il"] },
+  "please": { "en": ["please"], "fr": ["s'il te plait", "stp", "steuplait"] },
+  "commit_classes": {
+    "jay": {
+      "en": ["jay", "bird", "alarm", "siren"], "fr": ["geai", "oiseau", "alarme", "sirene"],
+      "promise": "stop and crouch if the jay calls",
+      "rule": { "when": { "event": "sound.played", "match": { "cue": "jay.alarm" } },
+        "then": [{ "horizon": "now", "kind": "act", "body": { "op": "stop" } }, { "horizon": "now", "kind": "act", "body": { "op": "posture", "height": 0.55 } }, { "horizon": "now", "kind": "act", "body": { "op": "say", "ref": "commit.keeping", "tone": "whisper" } }] },
+      "amend": { "en": ["lie down", "lie flat", "flat on", "on your belly", "on the ground"], "fr": ["couche", "allonge", "a plat ventre", "par terre"],
+        "line": { "en": "Not lying down in that mud. Stop and crouch, yes.", "fr": "Je ne me couche pas dans cette boue. M'arrêter et m'accroupir, oui." } }
+    },
+    "silence": {
+      "en": ["whatever you hear", "don't move", "do not move", "don't speak", "don't talk", "stay still", "keep quiet", "just film"], "fr": ["quoi que tu entendes", "bouge pas", "ne bouge pas", "ne parle pas", "tais toi", "reste immobile", "filme juste"],
+      "promise": "at the hide, whatever she hears, she does not move and does not speak",
+      "rule": { "when": { "event": "fact.added", "match": { "subject": "f.rustle" } },
+        "then": [{ "horizon": "now", "kind": "act", "body": { "op": "stop" } }, { "horizon": "now", "kind": "act", "body": { "op": "wait", "seconds": 5 } }] }
+    },
+    "battery": {
+      "en": ["battery", "camera dies", "power"], "fr": ["batterie", "camera meurt", "s'eteint"],
+      "promise": "when the battery is low, she talks less",
+      "rule": { "when": { "event": "camera.changed", "match": { "battery": { "lt": 0.2 } } },
+        "then": [{ "horizon": "now", "kind": "act", "body": { "op": "say", "ref": "commit.keeping" } }, { "horizon": "now", "kind": "effect", "body": { "op": "speech.set", "shorten": 0.5 } }] }
+    },
+    "louis": {
+      "en": ["something of his", "his things", "anything of louis", "something of louis"], "fr": ["quelque chose a lui", "ses affaires", "quelque chose de louis"],
+      "promise": "if she finds something Louis made, she films it and says so",
+      "refuse_in_beats": ["path"],
+      "rule": { "when": { "event": "fact.added", "match": { "subject": "f.hide" } },
+        "then": [{ "horizon": "now", "kind": "act", "body": { "op": "look", "target": "thing:affut" } }, { "horizon": "now", "kind": "act", "body": { "op": "say", "ref": "commit.keeping" } }] }
+    },
+    "leave": {
+      "en": ["leave", "go home", "turn back", "get out", "go back to the car"], "fr": ["pars", "rentre", "fais demi-tour", "va-t'en", "retourne a la voiture"],
+      "promise": "leave the forest", "refuse": true
+    }
+  }
+}

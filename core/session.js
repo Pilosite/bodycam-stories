@@ -156,6 +156,9 @@ export function createSession({ scene, seed = 1, executor, budget, journal, onDu
             w.camera.battery = r4(Math.max(0, w.camera.battery - edge.cost_s * w.camera.drain_per_s));
             ev.push({ event: 'camera.changed', data: { battery: w.camera.battery, degrade: w.camera.degrade, shake: w.camera.shake } });
           }
+          // the light only rises (P13 data, pack stations.json `light`): arriving where the morning is further on raises the sun
+          if (st.light && typeof st.light.sun_height === 'number' && st.light.sun_height > w.base.place.sun_height) queue.push({ tx: { author: { kind: 'engine', id: 'stations' }, horizon: 'story', kind: 'effect', cause: { tx: seq },
+            body: { op: 'light.raise', degrees: r4(Math.min(30, st.light.sun_height - w.base.place.sun_height)) } }, meta: {}, group: null });
           if (edge && edge.establishes) queue.push({ tx: { author: { kind: 'engine', id: 'stations' }, horizon: 'story', kind: 'fact', cause: { tx: seq },
             body: { subject: edge.establishes, predicate: 'established', value: true, source: `went ${args.from} -> ${args.station}${edge.via ? ' by ' + edge.via : ''}` } }, meta: {}, group: null });
         }

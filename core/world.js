@@ -39,7 +39,7 @@ export function createWorld(scene, { seed = 1 } = {}) {
   const sc = clone(scene || {});
   const stations = {};
   for (const s of sc.stations || []) stations[s.id] = Object.assign({ id: s.id, pos: s.pos || [0, 0], heading: s.heading || 0, reach_m: s.reach_m ?? 2.5,
-    next: s.next || [...new Set((s.edges || []).map(e => e.to))] }, s.edges ? { edges: s.edges } : {}, s.within ? { within: s.within } : {}, s.beat ? { beat: s.beat } : {}, s.posture !== undefined ? { posture: s.posture } : {});
+    next: s.next || [...new Set((s.edges || []).map(e => e.to))] }, s.edges ? { edges: s.edges } : {}, s.within ? { within: s.within } : {}, s.beat ? { beat: s.beat } : {}, s.posture !== undefined ? { posture: s.posture } : {}, s.light ? { light: clone(s.light) } : {});
   const first = sc.start || (sc.stations && sc.stations[0] && sc.stations[0].id) || null;
   const things = {};
   for (const t of sc.things || []) things[t.id] = { id: t.id, name: t.name || t.id, shapes: t.shapes || [], mass_kg: t.mass_kg ?? null, pos: t.pos || [0, 0], size_m: t.size_m ?? 1, fixed: true, horizon: 'story', expires: null, scene: null, tx: 0, author: { kind: 'creator', id: sc.author || 'pack' } };

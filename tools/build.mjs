@@ -1,8 +1,11 @@
 // Assemble src/ en une seule page autonome : dist/index.html (aucune dépendance, publiable telle quelle).
 // Usage : node tools/build.mjs
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bundleCore } from './bundle-core.mjs';
+import { loadPack, loadLibrary } from './pack-check.mjs';
+import { compilePack, parseSource } from '../core/source.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = p => readFileSync(join(root, p), 'utf8');
@@ -72,11 +75,27 @@ const ouvFiles = readdirSync(join(root, 'ouvertures')).filter(f => f.endsWith('.
 // Un journal qui nomme ses photos (« photos » : ouvertures/photos/<nom>.json, vignettes et crédits, docs/ouverture.md) les reçoit en « vignettes ».
 const ouvJournal = f => { const r = JSON.parse(read('ouvertures/' + f)); if (r.photos) r.vignettes = JSON.parse(read('ouvertures/photos/' + r.photos + '.json')); return r; };
 const ouvertureJs = embarquer('OUVERTURE', 'src/ouverture.js') + `\nconst OUVERTURES=${JSON.stringify(ouvFiles.map(ouvJournal)).replace(/<\//g, '<\\/')};`;
-const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n' + constructeurJs + '\n' + ouvertureJs + '\n</script>\n<script>\n' + js);
+// Story mode (M2, src/story.js): the narrative core (core/, bundled as CORE), the compiled packs of stories/ (STORY_PACKS),
+// the engine adapter (ADAPTER), the model port served by code (REFLEX, REFLEXES) and the page glue (STORY).
+const esc = o => JSON.stringify(o).replace(/<\//g, '<\\/');
+function storyPack(id) {
+  const dir = join(root, 'stories', id), pack = loadPack(dir), c = compilePack(pack, loadLibrary(join(root, 'patterns')));
+  if (c.errors.length) throw new Error('stories/' + id + ': ' + JSON.stringify(c.errors.slice(0, 3)));
+  const M = pack.manifest, speakers = {};
+  for (const [f, t] of Object.entries(pack.texts)) if (f.startsWith('characters/')) { const d = parseSource(t, { file: f }); if (d.meta && d.meta.name) speakers[d.meta.id || d.id] = d.meta.name; }
+  return { id, title: M.title, langs: M.languages, carrier: M.carrier, scene: c.scene, principles: c.principles, place: pack.place, stations: pack.stations.stations,
+    anchors: M.anchors ? JSON.parse(read(join('stories', id, M.anchors))) : {}, endings: (pack.beats && pack.beats.endings) || [], speakers };
+}
+const storyIds = readdirSync(join(root, 'stories')).filter(d => !d.startsWith('_') && !d.startsWith('.') && existsSync(join(root, 'stories', d, 'pack.json'))).sort();
+const STORY_PACKS = Object.fromEntries(storyIds.map(id => [id, storyPack(id)]));
+const storyJs = bundleCore(root) + '\n' + embarquer('ADAPTER', 'src/adaptateur-core.js') + '\n' + embarquer('REFLEX', 'src/reflex-model.js') + '\n' + embarquer('STORY', 'src/story.js')
+  + `\nconst REFLEXES=${esc(JSON.parse(read('src/reflexes.json')))};\nconst STORY_PACKS=${esc(STORY_PACKS)};`;
+if (/<\/script/i.test(storyJs.replace(/<\\\//g, ''))) throw new Error('story mode: </script> in the embedded code');
+const html = read('src/index.html').replace('__MAIN_JS__', () => meneurJs + '\n' + constructeurJs + '\n' + ouvertureJs + '\n' + storyJs + '\n</script>\n<script>\n' + js);
 mkdirSync(join(root, 'dist'), { recursive: true });
 writeFileSync(join(root, 'dist/index.html'), html);
 // Variante pour un artefact claude.ai : la page y est enveloppée à la publication, donc sans doctype, html, head ni body.
 const body = html.replace(/<!DOCTYPE html>\s*<html[^>]*>\s*<head>\s*/i, '').replace(/<meta charset[^>]*>\s*/i, '').replace(/<meta name="viewport"[^>]*>\s*/i, '<meta name="claude:viewport-fit-sides" content="cover">\n')
   .replace(/<\/head>\s*<body>\s*/i, '').replace(/<\/body>\s*<\/html>\s*$/i, '');
 writeFileSync(join(root, 'dist/artefact.html'), body);
-console.log(`dist/index.html : ${(html.length / 1024).toFixed(1)} Ko, ${scenes.length} fiches (${sceneFiles.join(', ')}), ${histoires.length} histoires`);
+console.log(`dist/index.html : ${(html.length / 1024).toFixed(1)} Ko, ${scenes.length} fiches (${sceneFiles.join(', ')}), ${histoires.length} histoires, ${storyIds.length} story packs (${storyIds.join(', ')})`);

@@ -14,6 +14,7 @@ uniform float uFlare; uniform float uGrainPx;
    contraste effondré, paupières plissées en amande, léger flou ; y = persistance rétinienne (tache sombre verdâtre au centre,
    image plus sombre le temps que l'exposition rattrape). (0, 0) : rien ne change. */
 uniform vec2 uEbl;
+uniform vec2 uAbime;          // story mode (camera.set) : x = dégradation 0..1 (batterie : bruit, couleur perdue, lignes et blocs), y = 1 caméra coupée
 /* Bougé (qualité mobile, en mouvement) : uFlou = part du bougé (0 à l'arrêt, 1 en marche ou en rotation, fondu entre les deux).
    Le déplacement de chaque pixel pendant l'image est calculé ici, comme la reprojection : point du monde (distance lue dans
    l'alpha de l'accumulation) revu depuis la pose de l'image précédente (uPosA, uCamA) ; uCamC, uPosC : pose de l'image montrée.
@@ -114,6 +115,15 @@ void main(){
   c+=cn3*.022*(1.-lg)*GAIN;
   vec2 bq=floor(gl_FragCoord.xy/vec2(16.*max(uGrainPx,1.)));                // macroblocs de compression vidéo
   c+=(vec3(h12(bq+tt*1.7),h12(bq+tt*2.9+5.),h12(bq+tt*4.1+9.))-.5)*(.012+.010*uFlou);   // plus marqués en mouvement, comme un codec à court de débit
+  if(uAbime.x>0.){                                                      // capteur qui lâche : couleurs perdues, bruit, macroblocs, lignes
+    float ab=uAbime.x;
+    c=mix(c,vec3(dot(c,vec3(.3,.59,.11))),.75*ab);
+    c+=g*.22*ab;
+    vec2 bb=floor(gl_FragCoord.xy/vec2(32.*max(uGrainPx,1.)));
+    c+=(vec3(h12(bb+tt*1.3),h12(bb+tt*2.1+3.),h12(bb+tt*3.7+7.))-.5)*.10*ab;
+    c*=1.-.55*ab*step(.992-.06*ab,h12(vec2(floor(gl_FragCoord.y/(2.*max(uGrainPx,1.))),tt)));
+  }
+  c*=1.-uAbime.y;
   c=c*.985+.012;
   o=vec4(c,1.);
 }
