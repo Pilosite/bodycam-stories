@@ -98,6 +98,7 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
       const marque = ref => w.file.some(a => a.type === 'poser' && a.ref === ref);
       if (o.op === 'reserver') { w.reserves[o.ref] = o.au_geste && marque(o.ref) ? { ou: o.ou, distance: o.distance, pos: null } : { pos: place() }; return; }
       if (o.op === 'abandon') { delete w.reserves[o.ref]; return; }
+      if (o.op === 'creer' && o.retenu) { (w.retenus = w.retenus || {})[o.retenu] = Object.assign({}, o, { retenu: undefined }); noter('retenu', { id: o.objet.id, pour: o.retenu }); return; }   // §22.2 : posé quand il vomit
       if (o.op === 'creer') {
         if (objets.filter(x => !caches.has(x.id)).length >= 8) return;
         const rs = o.reserve && w.reserves[o.reserve];
@@ -167,6 +168,22 @@ export function mondePapier(histoire, { graine = 7, flaner = true, arbres = [], 
           const avant = (ob ? ob.formesL : []).map(f => Object.assign({}, f, { p: f.p.map(v => v * e0 / E), taille: f.taille.map(v => v * e0 / E) }));
           a.plan = planDegout(gesteFaconnage(avant, op.etapes[op.etapes.length - 1], []), a.degout, degoutDe(MODELES)); a.tt = -0.4; a.dites = 0;
           noter('faconner_debut', { id: a.objet, total: a.plan.total, palier: a.degout.palier, intensite: a.degout.intensite }); w.degouts = (w.degouts || []).concat([{ id: a.objet, t0: w.t + 0.4, plan: a.plan }]); }
+        const N = a.plan.nausee;
+        if (N && (a.nau || !a.nauFait && a.tt >= N.t)) {              // §22.2 : le geste est suspendu, il vomit, il revient, le geste reprend au même point
+          if (!a.nau) { a.nau = { t: 0, e: -1, p: 0, yaw0: w.yaw }; a.nauFait = true; }
+          const n = a.nau; n.t += dt;
+          while (n.e + 1 < N.etapes.length && n.t >= N.etapes[n.e + 1].t0) { const e = N.etapes[++n.e];
+            if (e.quoi === 'detourner') { const ob = objets.find(x => x.id === a.objet), cote = ob && Math.sin(Math.atan2(ob.x - w.x, ob.z - w.z) - w.yaw) > 0 ? -1 : 1; w.yaw += cote * N.angle * Math.PI / 180; }
+            if (e.quoi === 'revenir') w.yaw = n.yaw0;
+            const fl = e.quoi === 'vomir' && w.retenus && w.retenus[a.objet];
+            if (fl) { delete w.retenus[a.objet]; w.executer(fl); const ob = objets.find(x => x.id === fl.objet.id); noter('flaque', { id: fl.objet.id, x: ob && ob.x, z: ob && ob.z }); }
+            noter('nausee_' + e.quoi, { tt: Math.round(a.tt * 100) / 100, yaw: w.yaw });
+            if (e.quoi === 'vomir') noter('son', { evenement: 'nausee', intensite: a.degout.intensite, duree: e.duree }); }
+          while (n.p < N.pensees.length && n.t >= N.pensees[n.p].t) { const q = N.pensees[n.p++];
+            w.pensees.push({ type: 'pensee', texte: q.texte, source: 'nausee', phase: q.phase, t: w.t }); w.dernierePensee = w.t; noter('penser', { texte: q.texte, phase: q.phase }); }
+          if (n.t >= N.duree) { a.nau = null; noter('reprend', { tt: Math.round(a.tt * 100) / 100 }); }
+          return;
+        }
         a.tt += dt;
         while (a.dites < a.plan.pensees.length && a.tt >= a.plan.pensees[a.dites].t) { const q = a.plan.pensees[a.dites++];
           w.pensees.push({ type: 'pensee', texte: q.texte, source: 'degout', phase: q.phase, t: w.t }); w.dernierePensee = w.t; noter('penser', { texte: q.texte, phase: q.phase }); }

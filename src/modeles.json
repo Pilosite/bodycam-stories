@@ -63,6 +63,19 @@
    "leger": ["C'est immonde. Il est plutôt réussi.", "Bon. C'est dégoûtant. Et pas mal du tout."],
    "fort": ["C'est immonde. … Il est plutôt réussi.", "J'ai honte. Et il a une bonne tête, en plus.", "Je vais me laver les mains pendant une semaine. Mais regarde-le."]
   },
+  "nausee": {
+   "_doc": "Une réaction du corps à un dégoût fort (§22.2) : au-delà d'un seuil, le geste s'interrompt UNE fois, après un contact prolongé (phases « contact » : pétrir, diviser, rouler ; jamais en plantant). Seuil sur l'intensité × le contact (contact_s / contact_ref_s, borné à 1) : au-dessus de « toujours », toujours ; en dessous de « jamais », jamais ; entre les deux, selon la graine. Le déroulé (secondes, 6 à 9 en tout) : lâcher, se détourner (60 à 110°, côté dégagé), se pencher, vomir (la chose « modele » de la bibliothèque, posée devant lui, hors de l'ouvrage, comptée comme ambiance), souffler, s'essuyer la bouche, revenir. Un événement « nausee » est exposé pour le bruitage.",
+   "toujours": 0.8, "jamais": 0.62, "contact_ref_s": 3,
+   "phases_contact": ["petrir", "diviser", "rouler"],
+   "modele": "vomi",
+   "deroule": {"lacher": 0.5, "detourner": 1.2, "pencher": 0.9, "vomir": 1.6, "souffler": 1.3, "essuyer": 1.2, "revenir": 1.1},
+   "angle_deg": [60, 110],
+   "humeur": {"agacement": 1, "peur": 1},
+   "signes": ["Non. Non non non.", "Oh non. Ça monte.", "Attends… attends…"],
+   "pardon": ["Pardon.", "… Pardon. Ça va.", "Hhh… Pardon."],
+   "reprise": ["On finit. Vite.", "Bon. On finit, et on n'en parle plus.", "On finit. Sans respirer."],
+   "memoire": ["A vomi en façonnant {nom} : il est pâle, le ventre retourné."]
+  },
   "memoire": {
    "leger": ["{nom} fait à mains nues : il veut se laver les mains."],
    "fort": ["{nom} pétri à mains nues : il veut se laver, ne serre la main à personne."]
@@ -102,6 +115,25 @@
     {"f": "capsule", "p": [0.004, 0.075, 0.01], "taille": [0.021, 0.005, 0.021], "cap": -172, "penche": [0, -71], "couleur": "#52381f", "matiere": "pate-organique"},
     {"f": "capsule", "p": [0, 0.076, 0.007], "taille": [0.018, 0.006, 0.018], "cap": 119, "penche": [0, -85], "couleur": "#5a3d22", "matiere": "pate-organique"},
     {"f": "capsule", "p": [-0.002, 0.077, 0.003], "taille": [0.011, 0.004, 0.011], "cap": 100, "penche": [0, -74], "couleur": "#4b331c", "matiere": "pate-organique"}
+   ]
+  },
+  "vomi": {
+   "nom": "flaque de vomi",
+   "mots": ["vomi", "vomis", "degueulis", "gerbe", "rendu"],
+   "quoi": "flaque plate et irrégulière, beige jaunâtre, luisante, avec des grumeaux ; quelques éclaboussures autour",
+   "envergure_m": 0.42,
+   "echelle": {"regle": "taille"},
+   "origine": "corps",
+   "repugnance": 0.8,
+   "ambiance": true,
+   "formes": [
+    {"f": "boule", "p": [0, 0.004, 0], "taille": [0.3, 0.008, 0.22], "couleur": "#a08a4a", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [0.1, 0.004, 0.07], "taille": [0.17, 0.007, 0.13], "cap": 35, "couleur": "#8f7a3c", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [-0.11, 0.004, -0.05], "taille": [0.15, 0.006, 0.1], "cap": -20, "couleur": "#a8924f", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [0.03, 0.009, -0.02], "taille": [0.05, 0.012, 0.04], "couleur": "#cdb67a", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [-0.04, 0.008, 0.05], "taille": [0.035, 0.01, 0.03], "couleur": "#c7ae6c", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [0.2, 0.002, -0.08], "taille": [0.04, 0.004, 0.03], "couleur": "#9a8445", "matiere": "flaque-organique"},
+    {"f": "boule", "p": [-0.19, 0.002, 0.09], "taille": [0.03, 0.004, 0.025], "couleur": "#9a8445", "matiere": "flaque-organique"}
    ]
   },
   "baton": {

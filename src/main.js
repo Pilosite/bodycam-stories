@@ -2422,7 +2422,7 @@ function versFiche(x,z){ if(S.kit!==1) return {devant:z,cote:x-pathX(z)}; const 
    (la chose arrivée trop tôt, posée au marqueur)}. Sans marqueur dans la file (ancien ordre, file vidée), la place se prend
    tout de suite. Une place prise reste la sienne s'il bouge ensuite sans qu'on le lui demande. */
 const reserves=new Map();
-const differes=new Map(), faconnages=new Map();               // façonnage (§15.3) : ce qu'il rapporte (posé à son retour) ; les états à jouer
+const differes=new Map(), faconnages=new Map(), retenus=new Map();               // façonnage (§15.3) : ce qu'il rapporte (posé à son retour) ; les états à jouer
 let dernierLieu=null;                                          // où il est allé chercher (tests, démo)
 const marquePose=ref=>queue.some(a=>a.type==="poser"&&a.ref===ref);
 function poserIci(ref){                                          // la file atteint le geste : la place se prend ici ; la chose arrivée trop tôt y est posée
@@ -2437,6 +2437,7 @@ function objetMeneur(o){
   const L=Array.isArray(fiche.objets)?fiche.objets.slice():[], id=o.id||(o.objet&&o.objet.id), i=L.findIndex(x=>x&&x.id===id);
   if(o.op==="reserver"){ reserves.set(o.ref,o.au_geste&&marquePose(o.ref)?{ou:o.ou,distance:o.distance,pos:null}:{pos:placeGeste(o)}); if(reserves.size>8) reserves.delete(reserves.keys().next().value); return; }
   if(o.op==="abandon"){ reserves.delete(o.ref); return; }          // l'accessoiriste n'a rien donné : il n'attend plus
+  if(o.op==="creer"&&o.retenu){ retenus.set(o.retenu,Object.assign({},o,{retenu:undefined})); return; }   // §22.2 : ce qu'il laisse en vomissant, posé à ce moment-là
   if(o.op==="creer"&&o.differe){ differes.set(o.differe,[...(differes.get(o.differe)||[]),o]); return; }   // ramassé : posé près de la chose quand il revient
   if(o.op==="faconner"){ faconnages.set(id,o); if(!queue.some(a=>a.type==="faconner"&&a.objet===id)) faconnerTout(id); return; }
   if(o.op==="creer"){
@@ -2518,14 +2519,20 @@ function faconnerPas(a,dt){
       const c=versMonde(R,[0,Math.max(...F.map(f=>f.p[1]),.03),0]); mainsVers(geste1("petrir",c,g*R.ech/2,t),dt); bougerCamera(a,c,t); buildShapes(fiche,true); }
     if(a.attente>30) fin(); return; }
   if(a.i<0){ reveler(a.objet); tournerVers(a.objet); a.G=preparerGeste(a.objet,op,a); a.i=0; a.t0=t; a.k=-1; return; }
-  const G=a.G; let tt=t-a.t0-.4, k=0;                             // un temps pour poser ce qu'il a rapporté
+  const G=a.G;
+  // §22.2 : la nausée, une fois, à la fin de la dernière phase de contact (par son nom) : le geste est suspendu (la chose reste
+  // dans l'état atteint), il se détourne, vomit, s'essuie la bouche, revient ; puis le geste reprend au même point
+  if(G&&G.D&&G.D.nausee&&(a.nau||!a.nauFait&&t-a.t0-.4-(a.pause||0)>=G.D.nausee.t)){
+    if(!a.nau){ a.nau={t:0,e:-1,p:0,base:{yaw:cam.yaw,pitch:cam.pitch,haut:cam.haut}}; a.nauFait=true; mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); }
+    a.pause=(a.pause||0)+dt; if(nauseePas(a.nau,G.D.nausee,dt,a.objet,a.degout)) a.nau=null; return; }
+  let tt=t-a.t0-.4-(a.pause||0), k=0;                             // un temps pour poser ce qu'il a rapporté
   while(G&&k<G.T.length&&tt>G.T[k].duree){ tt-=G.T[k].duree; k++; }
   if(!G||k>=G.T.length){                                          // fini : l'état final exact, ce qui a servi disparaît
     objetMeneur({type:"objet",op:"remplacer",id:a.objet,formes:op.etapes[op.etapes.length-1],nom:op.nom,echelle:op.echelle});
     for(const c of op.consomme||[]) objetMeneur({type:"objet",op:"retirer",id:c});
     faconnages.delete(a.objet); fin(); return; }
   const tr=G.T[k], u=Math.min(1,Math.max(0,tt/tr.duree)), ue=u*u*(3-2*u);
-  if(G.D){ const tg=t-a.t0-.4;                                     // §22 : les pensées de dégoût, à leurs instants (au plus une toutes les ~3 s)
+  if(G.D){ const tg=t-a.t0-.4-(a.pause||0);                                     // §22 : les pensées de dégoût, à leurs instants (au plus une toutes les ~3 s)
     while(G.dites<G.D.pensees.length&&tg>=G.D.pensees[G.dites].t&&pensePeut(3,G)){ const q=G.D.pensees[G.dites++]; say(q.texte); voixP.dire(q.texte); notePensee(q.texte,"degout",q.phase); } }
   if(k!==a.k){ a.k=k; a.i=k; if(tr.pile!==null&&tr.pile!==undefined&&G.tas) G.pris.add(tr.pile); }   // la main prend dans le tas : il quitte le tas
   let F=MENEUR.etatGeste(tr,ue);
@@ -2543,7 +2550,7 @@ function faconnerPas(a,dt){
     const b0=bs[0]||act, b1=bs[bs.length-1]||act; H=[W(b0.p),W(b1.p)].map((c,s)=>{ const rr=Math.max(...(s?b1:b0).taille)/2*R.ech, w=t*9+s*1.7;
       return [c[0]+.03*Math.cos(w),c[1]+rr+.035+.012*Math.sin(w*1.3),c[2]+.03*Math.sin(w)]; }); }
   else H=geste1(tr.geste==="prendre"?"poser":tr.geste,cible,r,t,u);   // prendre, 2e temps : la main porte ce qu'elle a pris
-  mainsVers(H,dt); bougerCamera(a,cible,t,G.D?MENEUR.detourneA(G.D,t-a.t0-.4):null);
+  mainsVers(H,dt); bougerCamera(a,cible,t,G.D?MENEUR.detourneA(G.D,t-a.t0-.4-(a.pause||0)):null);
   buildShapes(fiche,true);
 }
 /* Le façonnage préparé une fois (§17) : la chose et ce qu'il a rapporté, dans le repère de la chose, puis la suite des
@@ -2632,6 +2639,40 @@ function hesiterPas(a,dt){
   cam.pitch=a.base.pitch+(.55-a.base.pitch*.3)*w*k+.02*Math.sin(u*23); cam.yaw=a.base.yaw+.22*k*w*Math.sin(u*2.4+.4); cam.haut=a.base.haut+.05*w;
   if(u<.3) moveBy(-.12*dt/(.3*a.duree));                          // il recule un peu
   if(a.rest<=0){ cam.yaw=a.base.yaw; cam.pitch=a.base.pitch; cam.haut=a.base.haut; queue.shift(); }
+}
+/* §22.2 : la nausée. N (MENEUR.planDegout) : étapes datées (lâcher, se détourner, se pencher, vomir, souffler, s'essuyer la
+   bouche, revenir), pensées datées, angle. Il se tourne du côté le plus dégagé, à l'opposé de l'ouvrage, fait un petit pas, se
+   penche (la caméra plonge, à-coups), et ce qu'il laisse (gardé par la page, `retenus`) est posé devant lui à ce moment ; un
+   événement « nausee » est exposé pour le bruitage. Rend true quand il est revenu face à l'ouvrage. */
+const journalSons=[]; window.balSons=journalSons;
+function evenementSon(nom,detail){                               // l'accroche des bruitages (le lot des sons s'y branche) ; essais : balSons
+  const d=Object.assign({evenement:nom,t:+(performance.now()/1000).toFixed(2)},detail||{}); journalSons.push(d); if(journalSons.length>40) journalSons.shift();
+  try{ const s=window.balSon||window.SON; if(s&&typeof s.evenement==="function") s.evenement(nom,d); }catch(_){}
+  try{ dispatchEvent(new CustomEvent("balade-son",{detail:d})); }catch(_){}
+}
+function nauseePas(n,N,dt,idOuvrage,dg){
+  n.t+=dt; const B=n.base, et=N.etapes;
+  while(n.e+1<et.length&&n.t>=et[n.e+1].t0){ const e=et[++n.e];
+    if(e.quoi==="detourner"){ const A=N.angle*Math.PI/180, o=(fiche.objets||[]).find(x=>x&&x.id===idOuvrage), q=o?posObjet(o):null;
+      const libre=s=>{ const y=B.yaw+s*A, px=cam.x+Math.sin(y)*.8, pz=cam.z+Math.cos(y)*.8; let m=9; for(const b of obstaclesConnus()) m=Math.min(m,Math.hypot(b.x-px,b.z-pz)-b.r); return m-(semisSous(px,pz,.2,.1)?1:0); };
+      n.cote=libre(1)>=libre(-1)?1:-1; if(q){ const a=wrapA(Math.atan2(q.x-cam.x,q.z-cam.z)-B.yaw); if(Math.abs(a)>.25) n.cote=a>0?-1:1; } n.A=A; }
+    if(e.quoi==="vomir"){ const fl=retenus.get(idOuvrage); if(fl){ retenus.delete(idOuvrage); objetMeneur(fl); }
+      evenementSon("nausee",{intensite:dg?dg.intensite:.8,duree:e.duree,instants:et.map(x=>({quoi:x.quoi,t0:x.t0,duree:x.duree}))}); } }
+  while(n.p<N.pensees.length&&n.t>=N.pensees[n.p].t){ const q=N.pensees[n.p++]; say(q.texte); voixP.dire(q.texte); notePensee(q.texte,"nausee",q.phase); }
+  const e=et[Math.max(0,n.e)], u=Math.min(1,Math.max(0,(n.t-e.t0)/e.duree)), sm=u*u*(3-2*u), A=(n.cote||1)*(n.A||1.5);
+  const j=(k,f)=>k*Math.sin(n.t*f), pv=-.95;
+  if(e.quoi==="lacher"){ cam.pitch=B.pitch+.05*sm+j(.01,17); }
+  else if(e.quoi==="detourner"){ cam.yaw=B.yaw+A*sm; cam.pitch=B.pitch+(.1-B.pitch*.5)*sm; if(u>.6&&!n.pas){ n.pas=true; moveBy(.15); } }
+  else if(e.quoi==="pencher"){ cam.yaw=B.yaw+A; cam.pitch=B.pitch*.5+.1+(pv-(B.pitch*.5+.1))*sm+j(.03,9); cam.haut=B.haut-.06*sm; }
+  else if(e.quoi==="vomir"){ cam.yaw=B.yaw+A+j(.03,7); cam.pitch=pv+.09*Math.abs(Math.sin(n.t*5.5))-.04*Math.sin(n.t*13); cam.haut=B.haut-.06-.02*Math.abs(Math.sin(n.t*5.5)); }
+  else if(e.quoi==="souffler"){ cam.yaw=B.yaw+A; cam.pitch=pv+.25*sm+j(.02,2.6); cam.haut=B.haut-.06+.03*sm; }
+  else if(e.quoi==="essuyer"){ cam.yaw=B.yaw+A; cam.pitch=pv+.25+j(.015,3);               // le revers de la manche passe devant la caméra
+    const {e:o,f,r}=corpsAxes(), rep=mainsRepos(), x=.18-.36*sm, H=[rep[0],[o[0]+f[0]*.13+r[0]*x,o[1]-.05,o[2]+f[2]*.13+r[2]*x]];
+    mainsVers(H,dt,[1]); buildShapes(fiche,true); }
+  else if(e.quoi==="revenir"){ if(mainsObj){ mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); } if(!n.retour){ n.retour=true; if(n.pas) moveBy(-.15); }
+    cam.yaw=B.yaw+A*(1-sm); cam.pitch=(pv+.25)+(B.pitch-(pv+.25))*sm; cam.haut=B.haut-.03*(1-sm); }
+  if(n.t>=N.duree){ cam.yaw=B.yaw; cam.pitch=B.pitch; cam.haut=B.haut; mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); return true; }
+  return false;
 }
 /* §22 : après, il s'essuie les mains : elles descendent hors du champ (l'herbe, le pantalon) et frottent, la tête un peu tournée. */
 function essuyerPas(a,dt){

@@ -1160,16 +1160,38 @@ export function planDegout(T, d, dg) {
     return false; };
   const c0 = (premier('petrir') || debut[0] || { t0: 0 }).t0 + 0.5;
   poser(d.contact, 'contact', c0, c0 + esp);
+  // la nausée (§22.2) : une fois, à la fin de la dernière phase de contact (pétrir, diviser, rouler : par leur NOM, pas par un
+  // instant), si l'intensité × le contact passe le seuil ; le geste est suspendu pendant le déroulé, puis reprend au même point
+  const NZ = isObj(dg) && isObj(dg.nausee) ? dg.nausee : null;
+  if (NZ && isObj(d.nausee)) {
+    const phc = liste(NZ.phases_contact).length ? liste(NZ.phases_contact) : ['petrir', 'diviser', 'rouler'];
+    const kc = L.map(t => t.geste).reduce((k, g, i) => phc.includes(g) ? i : k, -1);
+    const contact = L.reduce((x, t) => x + (phc.includes(t.geste) ? t.duree : 0), 0);
+    const sc = num(d.intensite, 0, 1, 0) * Math.min(1, contact / num(NZ.contact_ref_s, 0.1, 30, 3));
+    const hi = num(NZ.toujours, 0, 1, 0.8), lo = Math.min(hi, num(NZ.jamais, 0, 1, 0.62));
+    const oui = kc >= 0 && (sc >= hi || sc > lo && num(d.nausee.tirage, 0, 1, 1) < (sc - lo) / Math.max(1e-6, hi - lo));
+    if (oui) {
+      const tn = Math.round(debut[kc].t1 * 100) / 100, D = isObj(NZ.deroule) ? NZ.deroule : {}, etapes = [];
+      let u = 0; for (const q of ['lacher', 'detourner', 'pencher', 'vomir', 'souffler', 'essuyer', 'revenir']) { const x = num(D[q], 0.1, 4, 1); etapes.push({ quoi: q, t0: Math.round(u * 100) / 100, duree: x }); u += x; }
+      const duree = Math.round(Math.min(9, Math.max(6, u)) * 100) / 100, et = q => etapes.find(e => e.quoi === q);
+      const pz = [];
+      if (d.nausee.signe) pz.push({ t: 0.2, phase: 'signe', texte: d.nausee.signe });
+      if (d.nausee.pardon) pz.push({ t: Math.round((et('souffler').t0 + 0.2) * 100) / 100, phase: 'pardon', texte: d.nausee.pardon });
+      if (d.nausee.reprise) pz.push({ t: Math.round((duree - 0.1) * 100) / 100, phase: 'reprise', texte: d.nausee.reprise });
+      out.nausee = { t: tn, apres: L[kc].geste, k: kc, duree, etapes, pensees: pz, angle: num(d.nausee.angle, 30, 150, 85), score: Math.round(sc * 100) / 100 };
+      out.pensees.push({ t: tn, phase: 'nausee', texte: null });   // la place qu'elle prend (aucune pensée du geste à moins de l'espacement)
+    } else out.sans_nausee = { score: Math.round(sc * 100) / 100, contact: Math.round(contact * 100) / 100 };
+  }
   const P = liste(d.pendant).filter(Boolean), pr0 = prises.length ? prises[0].t0 : s;
   if (P[0]) poser(P[0], 'pendant', c0 + esp, s);
   if (d.autre && prises.length) poser(d.autre, 'autre', prises[0].t0 + 0.3, prises[prises.length - 1].t1);
   for (const p of P.slice(1)) poser(p, 'pendant', c0 + esp, s);
-  out.pensees.sort((a, b) => a.t - b.t);
+  out.pensees = out.pensees.filter(p => p.texte).sort((a, b) => a.t - b.t);
   // les regards détournés : entre les pensées, hors des prises, amplitude selon l'intensité
   const n = Math.round(num(isObj(dg) && isObj(dg.detourne_n) ? dg.detourne_n[d.palier] : 0, 0, 8, d.palier === 'fort' ? 4 : 2)), k = num(d.intensite, 0, 1, 0.5);
   const dansPrise = t => prises.some(x => t >= x.t0 - 0.2 && t <= x.t1);
   for (let i = 0, t = c0 + 1.1; i < n && t < s - 0.9; t += 0.3) {
-    if (dansPrise(t) || out.pensees.some(p => Math.abs(p.t - t) < 0.7) || out.detourne.some(x => t - x.t < 1.6)) continue;
+    if (dansPrise(t) || out.nausee && Math.abs(t - out.nausee.t) < 1.2 || out.pensees.some(p => Math.abs(p.t - t) < 0.7) || out.detourne.some(x => t - x.t < 1.6)) continue;
     out.detourne.push({ t: Math.round(t * 100) / 100, duree: 0.8, amp: Math.round((0.15 + 0.35 * k) * 100) / 100, sens: i % 2 ? -1 : 1 }); i++;
   }
   return out;
@@ -1905,7 +1927,7 @@ export function creerMeneur(o) {
   /* Les choses qu'un tour peut désigner : ses traces (la plus récente d'abord), puis les objets visibles de la fiche. */
   /* Ce que le joueur a demandé (un tour de voix : modèle, Claude, secours), pas l'ambiance qu'une suite ajoute (une mouche, une
      corneille) ni ce qu'il a rapporté pour façonner : seules les premières sont « la dernière », « avec ça », « fais-en un ». */
-  const demandee = c => !c.retire && c.source !== 'suite' && c.source !== 'ramasse';
+  const demandee = c => !c.retire && c.source !== 'suite' && c.source !== 'ramasse' && c.source !== 'ambiance';   // ambiance : ce que le corps laisse de lui-même (§22.2)
   function connus() {
     const L = partie.monde.crees.filter(c => !c.retire).reverse();
     return [...L.filter(demandee), ...L.filter(c => !demandee(c))].map(c => ({ id: c.id, nom: c.nom })).concat(
@@ -2056,12 +2078,29 @@ export function creerMeneur(o) {
     if (pendant.length) src.pendant = 'ia';
     else { const L = banque('pendant'); src.pendant = 'banque'; while (pendant.length < nP && L.length) pendant.push(L.splice(Math.floor(alea(partie) * L.length), 1)[0]); }
     const sec = k => num(isObj(DG[k]) ? DG[k][pal] : 2, 0.5, 6, 2), esp = num(DG.espacement_s, 0.5, 20, 3);
-    const A = liste(actions).slice(), fac = Object.assign({}, A[i], { degout: { intensite: d.intensite, palier: pal, contact, pendant, autre } });
+    // la nausée possible (§22.2) : le seuil se juge sur l'intensité (le contact se mesure sur le geste réel : planDegout, même
+    // tirage) ; la chose qu'elle laisse vient de la bibliothèque, comptée comme ambiance, posée seulement quand elle vomit
+    const NZ = isObj(DG.nausee) ? DG.nausee : null; let nausee = null;
+    if (NZ && d.intensite > num(NZ.jamais, 0, 1, 0.62)) {
+      const tirage = Math.round(alea(partie) * 1000) / 1000, hi = num(NZ.toujours, 0, 1, 0.8), lo = num(NZ.jamais, 0, 1, 0.62);
+      if (d.intensite >= hi || tirage < (d.intensite - lo) / Math.max(1e-6, hi - lo)) {
+        const a = liste(NZ.angle_deg), L2 = k => liste(NZ[k]).filter(x => typeof x === 'string' && x.trim());
+        nausee = { tirage, angle: Math.round(num(a[0], 30, 150, 60) + alea(partie) * (num(a[1], 30, 150, 110) - num(a[0], 30, 150, 60))),
+          signe: L2('signes').length ? tirer(L2('signes')) : null, pardon: L2('pardon').length ? tirer(L2('pardon')) : null, reprise: L2('reprise').length ? tirer(L2('reprise')) : null };
+        const mv = listeModeles(BIB)[str(NZ.modele, 40)], fm = mv ? formesModele(mv, '') : null;
+        if (fm) { const idv = creer({ nom: str(mv.nom, 60) || 'trace', formes: fm.formes, degage: 0 }, { ou: 'devant', retenu: id }, 'ambiance', false);
+          if (idv) { nausee.objet = idv; const cv = vivant(idv); cv.repugnance = num(mv.repugnance, 0, 1, 0); cv.origine = str(mv.origine, 20) || null; cv.facteur = 1; } }
+      }
+    }
+    const A = liste(actions).slice(), fac = Object.assign({}, A[i], { degout: Object.assign({ intensite: d.intensite, palier: pal, contact, pendant, autre }, nausee ? { nausee } : {}) });
     A.splice(i, 1, ...(avant ? [{ type: 'penser', texte: avant, espace: esp }] : []), { type: 'hesiter', secondes: sec('hesiter_s'), force: d.intensite },
       fac, { type: 'essuyer', secondes: sec('essuyer_s'), force: d.intensite });
     const mem = banque('memoire');
-    log('degout', { id, intensite: d.intensite, palier: pal, taille: d.taille, fraicheur: d.fraicheur, sources: src, jetees: jetees.length || undefined });
-    return { actions: A, d, humeur: isObj(DG.humeur) && isObj(DG.humeur[pal]) ? DG.humeur[pal] : {}, memoire: mem.length ? tirer(mem) : null,
+    log('degout', { id, intensite: d.intensite, palier: pal, taille: d.taille, fraicheur: d.fraicheur, sources: src, jetees: jetees.length || undefined, nausee: nausee ? { tirage: nausee.tirage, objet: nausee.objet } : undefined });
+    const hum = Object.assign({}, isObj(DG.humeur) && isObj(DG.humeur[pal]) ? DG.humeur[pal] : {});
+    if (nausee && isObj(NZ.humeur)) for (const [j, k] of Object.entries(NZ.humeur)) hum[j] = num(hum[j], -5, 5, 0) + num(k, -5, 5, 0);
+    const memN = nausee ? liste(NZ.memoire).filter(x => typeof x === 'string').map(x => x.replace(/\{nom\}/g, c.nom || '')) : [];
+    return { actions: A, d, humeur: hum, memoire: memN.length ? tirer(memN) : mem.length ? tirer(mem) : null, nausee,
       fin: fin ? { texte: fin, palier: pal, source: src.fin, degout: true } : null };
   }
   /* Un tour qui touche une chose déjà là : la modifier, à sa place, plutôt que d'en refaire une à côté. */
