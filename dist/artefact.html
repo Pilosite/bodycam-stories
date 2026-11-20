@@ -16284,11 +16284,11 @@ function simulate(dt){
     else if(errance && idle>2.5 && !CFG.auto && !CFG.nowalk){ idle=0; flaner(); } } else idle=0;
   const a=queue[0];
   if(a){
-    if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*(a.libre?1:vitK())*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
+    if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*(a.libre?1:gesteK())*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
     else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK(),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
-    else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*vitK()*dt); if(Math.abs(d)<.012) queue.shift(); }
-    else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
+    else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*gesteK()*dt); if(Math.abs(d)<.012) queue.shift(); }
+    else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*gesteK()*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
     else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet,a.cadre);   // vers un objet : la page calcule cap et inclinaison
       if(v&&v.raide&&!a.cadre) queue.unshift({type:"cadrer",objet:a.objet});              // presque sous lui : il recule et se baisse pour la voir
       else if(v) queue.unshift({type:"tourner",rest:v.yaw},{type:"regarder",pitch:v.pitch}); }   // vers un objet : la page calcule cap et inclinaison
@@ -16335,9 +16335,10 @@ let mLevel=0, msMotion=50, msPerRow=.25, exposure=1.2, expTarget=1.2, lastExpRea
 const coarse=matchMedia("(pointer:coarse)").matches;
 /* Qualité : « mobile » tient un téléphone moyen ; « complète » est faite pour un ordinateur (pleine résolution, bien plus de grains,
    carte d'ombres plus fine). Par défaut : complète sans écran tactile, mobile sinon. Le choix est gardé dans le navigateur. */
-const DEMO=CFG.demo!==false;                                  // mode démo (« Claude réagit plus vite ») : actif par défaut, {"demo":false} pour les durées d'origine
-function reglagesMeneur(){ const r=Object.assign({},DEMO?MENEUR.REGLAGES_DEMO:{},docile?{DOCILE:true}:{}); return Object.keys(r).length?r:undefined; }
-const vitK=()=>meneur&&meneur.reglages&&meneur.reglages.MARCHE_K||1;   // marches dirigées, ramassage, regard : plus vifs en démo
+const DEMO_VITE=CFG.demo!==false;                                  // mode démo (« Claude réagit plus vite ») : actif par défaut, {"demo":false} pour les durées d'origine
+function reglagesMeneur(){ const r=Object.assign({},DEMO_VITE?MENEUR.REGLAGES_DEMO:{},docile?{DOCILE:true}:{}); return Object.keys(r).length?r:undefined; }
+const vitK=()=>meneur&&meneur.reglages&&meneur.reglages.MARCHE_K||1;
+const gesteK=()=>vitK()>1?2.4:1;                               // démo : se relever, se retourner, se pencher vont nettement plus vite   // marches dirigées, ramassage, regard : plus vifs en démo
 var docile=!!CFG.docile; try{ if(localStorage.getItem("bodycam-docile")==="1") docile=true; }catch(_){}   // mode essai : il fait exactement ce qu'on demande
 var errance=true;                                             // il se promène de lui-même ; dès qu'on lui parle, il attend qu'on lui dise quoi faire
 var immobile=false;                                           // « arrête-toi » : ni flânerie ni petits pas tant qu'on ne lui dit pas autre chose
