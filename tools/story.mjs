@@ -12,6 +12,9 @@
 //   node tools/story.mjs audit   <journal>                      what was asked, repaired, rejected, which rules fired, commitments, gauges
 //   node tools/story.mjs journal <journal> [--all]              a journal, readable
 //   node tools/story.mjs new     <pack-id> [--author id]        a new pack from stories/_template/
+//   node tools/story.mjs sketch  "<sentence>" --place <place file> [--answer <model answer>] [--answers <json>] [--out dir] [--prompt]
+//                                                               conception before play (core/sketch.js): a story sketch as a pack folder;
+//                                                               --prompt prints what the large tier is asked; with no answer, the code fallback
 //
 // The pure functions are exported (tests/story.test.mjs); the I/O is in the loaders and in main() at the bottom.
 // tools/pack-check.mjs is an alias of `check`.
@@ -26,6 +29,7 @@ import { createClocks } from '../core/clocks.js';
 import { replay, diff, fromJSONL, toJSONL } from '../core/journal.js';
 import { serializeTokens, DIRS, refId } from '../core/pdl.js';
 import { canonicalJSON, hashString } from '../core/world.js';
+import { conceive, sketchPrompt, withAnswers, guessLang } from '../core/sketch.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const clone = o => o === undefined ? undefined : JSON.parse(JSON.stringify(o));
@@ -256,7 +260,8 @@ export function checkPack(pack, library = {}) {
     if (d.id === carrier && d.meta.strength === 'strong') {
       const n = { '!!': 0, '!': 0, '~w': 0, '?': 0, '>': 0, 'x': 0 };
       for (const p of st) { const m = markOf(p); if (m === '~') { if (p.weight !== undefined) n['~w']++; } else if (m in n) n[m]++; }
-      for (const [k, min] of Object.entries(CARRIER_MIN)) if (n[k] < min) errors.push(`${f}: carrier has ${n[k]} "${k}" statements, needs ${min}`);
+      // a sketch (pack.json "stage": "sketch", written by core/sketch.js) is a first draft: the minimums are what to grow next
+      for (const [k, min] of Object.entries(CARRIER_MIN)) if (n[k] < min) (M.stage === 'sketch' ? warnings : errors).push(`${f}: carrier has ${n[k]} "${k}" statements, needs ${min}`);
     }
   }
   if (carrier && !characters.has(carrier)) errors.push(`pack.json: carrier ${carrier} has no character file`);
@@ -443,7 +448,7 @@ export function explain(pack, library, id) {
   const out = { id, refs };
   if (p) {
     Object.assign(out, { found: 'statement', mark: markOf(p), strength: p.strength, form: p.form, weight: p.weight, text: p.text, note: p.note, lines: p.lines, why: p.why,
-      scope: p.scope, horizon: p.horizon, layer: p.layer, author: p.author.id, source: `${p.source.file}:${p.source.line}`, overrides: p.overrides,
+      scope: p.scope, horizon: p.horizon, layer: p.layer, author: p.author.id, author_kind: p.author.kind, source: `${p.source.file}:${p.source.line}`, overrides: p.overrides,
       pattern: p.pattern, instance: p.instance, doc_kind: p.doc_kind, compiled: p.compiled, enforced_by: enforcedBy(p), carried: r.carried.includes(id) });
     return out;
   }
@@ -951,6 +956,25 @@ export function newPack(id, { root = ROOT, author } = {}) {
 }
 function listFiles(d) { return readdirSync(d, { withFileTypes: true }).flatMap(x => x.isDirectory() ? listFiles(join(d, x.name)) : [join(d, x.name)]).sort(); }
 
+/* ================================================================ sketch (conception before play, core/sketch.js) */
+
+export function loadSketchBase() { return JSON.parse(readFileSync(join(ROOT, 'src/sketch-base.json'), 'utf8')); }
+/* A sketch as a pack folder: the same pack the page plays, written as files a creator edits, checks and plays. */
+export function writePack(dir, pack) {
+  const w = (f, o) => { const p = join(dir, f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, typeof o === 'string' ? o : JSON.stringify(o, null, 2) + '\n'); return relative(dir, p); };
+  const M = pack.manifest, out = [w('pack.json', M), w('place.json', pack.place), w('stations.json', pack.stations), w('beats.json', pack.beats), w('anchors.json', pack.anchors)];
+  for (const [lang, f] of Object.entries(M.lines)) out.push(w(f, pack.lines[lang]));
+  for (const [f, t] of Object.entries(pack.texts)) out.push(w(f, t));
+  return out;
+}
+/* `answer`: the large tier's answer as text (a file a model or an assistant wrote), or null: the code fallback. */
+export async function sketchCommand({ sentence, place, answer = null, answers = null, library, base = loadSketchBase() }) {
+  const asked = [];
+  const ask = answer === null ? null : async prompt => { asked.push(prompt.length); if (asked.length > 1) throw new Error('no second answer given (--answer holds one)'); return answer; };
+  const r = await conceive({ sentence, place, library, base, ask });
+  return Object.assign(r, { pack: answers ? withAnswers(r.pack, answers) : r.pack });
+}
+
 /* ================================================================ CLI */
 
 function renderCheck(dir, res) {
@@ -980,8 +1004,8 @@ function renderExplain(x) {
     if (x.note) L.push(`  note: ${x.note}`);
     if (x.lines) L.push(...Object.entries(x.lines).map(([l, t]) => `  ${l}: ${t}`));
     if (x.why) L.push(`  why: ${x.why}`);
-    L.push(`  from ${x.source}, layer ${x.layer}, author ${x.author}${x.pattern ? `, pattern ${x.pattern} (instance ${x.instance})` : ''}`);
-    if (x.overrides) L.push(`  overrides: ${x.overrides.map(o => `${o.layer} by ${o.author.id} (${o.source.file}:${o.source.line})`).join(', ')}`);
+    L.push(`  from ${x.source}, layer ${x.layer}, author ${x.author}${x.author_kind === 'model' ? ' (a model)' : ''}${x.pattern ? `, pattern ${x.pattern} (instance ${x.instance})` : ''}`);
+    if (x.overrides) L.push(`  overrides: ${x.overrides.map(o => `${o.layer} by ${o.author.id}${o.author.kind === 'model' ? ' (a model)' : ''} (${o.source.file}:${o.source.line})`).join(', ')}`);
     L.push(`  enforced by: ${x.enforced_by}`);
     if (x.compiled && !(x.doc_kind === 'facts' && x.compiled.status === 'to_compile')) L.push(`  compiled: ${x.compiled.kind}, ${x.compiled.status}${x.carried ? ' (carried from build/compiled.json)' : ''}${x.compiled.body ? '\n    ' + JSON.stringify(x.compiled.body) : ''}`);
   } else L.push(`${x.id}: ${x.found}\n  ${JSON.stringify(x[x.found] || x.lines)}`);
@@ -1066,6 +1090,23 @@ export async function main(argv, { print = console.log } = {}) {
       const E = readJournal(f);
       out(E, renderJournal(E, { all, lang }));
       return 0;
+    }
+    case 'sketch': {
+      const placeFile = opt(args, '--place'), answerFile = opt(args, '--answer'), answersFile = opt(args, '--answers'), outDir = opt(args, '--out'), promptOnly = flag(args, '--prompt');
+      const sentence = args.join(' ').trim(); if (!sentence || !placeFile) break;
+      const place = JSON.parse(readFileSync(placeFile, 'utf8'));
+      if (promptOnly) { print(sketchPrompt({ sentence, place, library: lib(), lang: guessLang(sentence) })); return 0; }
+      const r = await sketchCommand({ sentence, place, library: lib(), answer: answerFile ? readFileSync(answerFile, 'utf8') : null, answers: answersFile ? JSON.parse(readFileSync(answersFile, 'utf8')) : null });
+      const dir = outDir || join(ROOT, 'stories', r.pack.manifest.id);
+      if (existsSync(join(dir, 'pack.json')) && !outDir) { print(`stories/${r.pack.manifest.id} exists: pass --out <dir>`); return 1; }
+      const files = writePack(dir, r.pack), check = checkPack(loadPack(dir), lib());
+      const how = r.source === 'fallback' ? (answerFile ? 'the answer did not compile, even after a repair could not be asked: the code fallback (one carrier, the place\'s things, two open questions)' : 'no model answer given (--answer): the code fallback (one carrier, the place\'s things, two open questions)') : r.source === 'repaired' ? 'the model\'s answer, repaired' : 'the model\'s answer';
+      out({ dir, source: r.source, attempts: r.attempts, questions: r.questions, files, errors: check.errors, warnings: check.warnings },
+        [`wrote ${relative(process.cwd(), dir)} from ${how}`, ...r.attempts.filter(a => a.errors || a.error).map(a => `  ${a.kind}: ${a.error || a.errors.slice(0, 5).join('; ')}`),
+          ...r.questions.map(q => `  question ${q.id}: ${q.text} [${q.options.join(' | ')}] (the model's guess: ${q.target})`),
+          `  ${files.length} files; check: ${check.errors.length} error(s), ${check.warnings.length} warning(s)`, ...check.errors.map(e => '  error: ' + e),
+          `next: node tools/story.mjs check ${relative(process.cwd(), dir)}`].join('\n'));
+      return check.errors.length ? 1 : 0;
     }
     case 'new': {
       const author = opt(args, '--author'), id = args[0]; if (!id) break;

@@ -1,0 +1,61 @@
+{
+  "_doc": "Conception before play (core/sketch.js, docs/creation-pipeline.md): the bank a sketch starts from (the reflex's line keys, src/reflexes.json), replaced key by key by the lines the model writes; and, when no model answers, what the code fallback says of the carrier and its two generic open questions. Data, per play language; the engine learns no name from it.",
+  "lines": {
+    "en": {
+      "greet": ["Okay. It's recording. Are you there?"],
+      "ask.back": ["Say that again? I'm not sure what you mean."],
+      "doubt.check": ["Hm. I think so. Wait."],
+      "hold.think": ["Hang on. Let me think."],
+      "engine.cant": ["No. Not that."],
+      "move.ok": ["Okay.", "Going."],
+      "move.v2": ["There's nowhere else to go from here. I'm staying."],
+      "look.ok": ["Looking."],
+      "touch.ok": ["There. I've got my hand on it."],
+      "make.cant": ["I can't make that here."],
+      "commit.accept": ["Fine. I'll do that."],
+      "commit.amend": ["Almost. I'll do it my way."],
+      "commit.refuse": ["No. I won't promise that."],
+      "commit.keeping": ["Like you said."]
+    },
+    "fr": {
+      "greet": ["Bon. Ça enregistre. Tu es là ?"],
+      "ask.back": ["Tu peux répéter ? Je ne suis pas sûr de comprendre."],
+      "doubt.check": ["Hm. Je crois. Attends."],
+      "hold.think": ["Attends. Je réfléchis."],
+      "engine.cant": ["Non. Pas ça."],
+      "move.ok": ["D'accord.", "J'y vais."],
+      "move.v2": ["On ne va nulle part d'ici. Je reste."],
+      "look.ok": ["Je regarde."],
+      "touch.ok": ["Voilà. J'ai la main dessus."],
+      "make.cant": ["Je ne peux pas fabriquer ça ici."],
+      "commit.accept": ["D'accord. Je le ferai."],
+      "commit.amend": ["Presque. Je le ferai à ma façon."],
+      "commit.refuse": ["Non. Ça, je ne le promets pas."],
+      "commit.keeping": ["Comme tu as dit."]
+    }
+  },
+  "fallback": {
+    "en": {
+      "carrier_name": "The one filming",
+      "carrier_who": "The one who carries the camera here, in the situation the creator wrote",
+      "carrier_voice": "Speaks little, in short sentences; says what they see before what they feel.",
+      "carrier_why": "Why are they here, now?",
+      "carrier_why_note": "not said at first; let it come from what the voice asks and from the things of the place.",
+      "questions": [
+        { "text": "Who else matters here, and where are they?", "note": "decide in play from what the voice asks; the camera never shows another person, so they are absent or only heard." },
+        { "text": "What has just happened, or is about to?", "note": "let it come out of the things of the place, one at a time; do not settle it in the first minute." }
+      ]
+    },
+    "fr": {
+      "carrier_name": "Celui qui filme",
+      "carrier_who": "La personne qui porte la caméra ici, dans la situation que le créateur a écrite",
+      "carrier_voice": "Parle peu, en phrases courtes ; dit ce qu'il voit avant ce qu'il ressent.",
+      "carrier_why": "Pourquoi est-il là, maintenant ?",
+      "carrier_why_note": "pas dit d'emblée ; que cela vienne de ce que la voix demande et des choses du lieu.",
+      "questions": [
+        { "text": "Qui d'autre compte ici, et où sont-ils ?", "note": "à décider en jeu selon ce que la voix demande ; la caméra ne montre jamais une autre personne, elle est donc absente ou seulement entendue." },
+        { "text": "Que vient-il de se passer, ou que va-t-il se passer ?", "note": "que cela sorte des choses du lieu, une à la fois ; ne pas le régler dans la première minute." }
+      ]
+    }
+  }
+}

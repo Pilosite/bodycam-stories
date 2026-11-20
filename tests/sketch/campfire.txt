@@ -1,0 +1,87 @@
+=== questions
+q f.claire-where | Où est Claire, la mère ? | Partie chercher du bois, elle tarde | Elle est restée à la voiture après une dispute | Personne ne sait, son téléphone est resté sur la chaise
+q f.voice | Qui est la voix dans l'oreille de Marc ? | Son frère, au téléphone | Quelqu'un qu'il ne connaît pas | Sa propre conscience
+=== about
+title: Le feu de camp
+lang: fr
+carrier: marc
+pronoun: he
+who: Marc, 38 ans, père de Léo (4 ans) et Manon (7 ans), seul avec eux autour du feu.
+stake: Claire n'est pas revenue, et Marc fait comme si de rien n'était devant les enfants.
+absence: la chaise rouge de Claire, vide ; les enfants qu'on entend sans les voir.
+cannot_show: people, animals moving
+=== lines
+greet: Ouais. Ça tourne. T'es là ?
+ask.back: Pardon ? Redis-moi ça.
+doubt.check: Euh… ouais, je crois. Attends.
+hold.think: Attends. Laisse-moi deux secondes.
+engine.cant: Non. Pas devant les gosses.
+chair.read: Sa chaise. Son gilet est encore dessus.
+cooler.read: Elle a pris deux bières. Deux.
+understand: Elle n'est pas partie chercher du bois.
+=== file characters/marc.pdl
+# marc — character (strong)
+@id marc  @kind character  @strength strong  @name Marc  @lang fr  @scope character  @horizon story
+
+## identity
+~1.0 Marc, 38 ans, père de Léo et Manon, en camping sous les pins avec sa famille. {marc.who}
+## voice
+~0.8 Parle bas pour ne pas inquiéter les enfants ; plaisante quand il a peur. {marc.voice.low}
+~0.6 Dit « ouais » plutôt que « oui ». {marc.voice.ouais}
+## knows
+! Claire est partie il y a une heure en disant qu'elle allait chercher du bois. {marc.knows.wood}
+## does-not-know
+! Où est Claire maintenant. {marc.dnk.where}
+? Qui est la voix ? -- il fait avec ; il ne pose pas la question devant les enfants. {marc.dnk.voice}
+## limits
+!! Il ne laisse jamais les enfants seuls près du feu. {marc.never-alone}
+## secrets
+~0.7 Ils se sont disputés juste avant qu'elle parte. {marc.secret.fight}
+## arc
+? Finit-il par dire la vérité aux enfants ? -- seulement si la voix l'y pousse avec douceur. {marc.arc.truth}
+## body
+~0.6 Fatigué, une lampe frontale sur le front. {marc.body.lamp}
+## examples
+> [la chaise vide] fr: Elle revient. Elle revient toujours. {marc.ex.back}
+> [les enfants] fr: Manon, tu surveilles ton frère deux minutes ? {marc.ex.manon}
+## counter-examples
+x [n'importe où] fr: Je vois Claire là-bas ! | why: personne d'autre que Marc n'est jamais vu ; la caméra ne montre pas les gens. {marc.cx.see}
+=== file characters/claire.pdl
+# claire — character (light)
+@id claire  @kind character  @strength light  @name Claire  @presence absent  @lang fr  @scope character  @horizon story
+~ La femme de Marc, la mère des enfants ; partie « chercher du bois » il y a une heure.
+~ Sa chaise rouge est vide, son gilet dessus.
+? Reviendra-t-elle ? -- laisse le doute ouvert ; jamais vue, jamais entendue.
+=== file characters/leo.pdl
+# leo — character (light)
+@id leo  @kind character  @strength light  @name Léo  @presence unseen  @lang fr  @scope character  @horizon story
+~ Quatre ans, a froid, demande sa maman ; on l'entend, on ne le voit pas.
+=== file characters/manon.pdl
+# manon — character (light)
+@id manon  @kind character  @strength light  @name Manon  @presence unseen  @lang fr  @scope character  @horizon story
+~ Sept ans, sérieuse, sent que quelque chose ne va pas ; on l'entend, on ne la voit pas.
+=== file facts/sketch.pdl
+# sketch-facts — what is true
+@id sketch-facts  @kind facts  @lang fr  @scope story  @horizon story
+! Claire est partie chercher du bois vers le sentier, sans lampe. {f.claire-where}
+! La voix est quelqu'un que Marc ne connaît pas. {f.voice}
+! La chaise rouge est celle de Claire. {f.chair-empty}
+! Deux bières manquent dans la glacière. {f.cooler}
+!! Claire n'est jamais vue ni entendue pendant l'histoire. {f.claire-absent}
+! Claire et Marc se sont disputés avant son départ. {f.fight}
+? Claire est-elle en danger ? -- ne le règle pas ; les signes doivent pouvoir se lire des deux façons. {f.danger}
+? Les enfants savent-ils ? -- Manon devine, Léo non. {f.kids-know}
+? Que fera Marc si elle ne revient pas ? -- c'est la voix qui l'aide à décider. {f.marc-choice}
+=== file patterns/claire.pdl
+# claire-absent — pattern instance
+@id claire-absent  @kind pattern-instance  @pattern absent-one
+## bind
+bind absent = claire
+bind witness = marc
+bind trace = chaise-2 fact=f.chair-empty line=chair.read
+bind trace = glaciere fact=f.cooler line=cooler.read
+bind resting_place = chaise-2
+bind truth_clue = f.cooler
+bind truth = f.fight
+bind understand_line = understand
+bind absence = f.claire-absent

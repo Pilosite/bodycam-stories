@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const CORE_ORDER = ['vocab', 'world', 'rules', 'tokens', 'pdl', 'source', 'journal', 'session', 'judge', 'prompt', 'clocks', 'ports', 'paper-world', 'canned-model'];
+export const CORE_ORDER = ['vocab', 'world', 'rules', 'tokens', 'pdl', 'source', 'journal', 'session', 'judge', 'prompt', 'sketch', 'clocks', 'ports', 'paper-world', 'canned-model'];
 
 export function bundleCore(root, order = CORE_ORDER) {
   const parts = [];

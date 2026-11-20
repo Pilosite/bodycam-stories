@@ -1,0 +1,248 @@
+{
+ "version": 0,
+ "id": "feu-de-camp",
+ "titre": "Un feu de camp sous les pins",
+ "inspiration": "Une famille autour d'un feu de camp, la nuit, sous les pins.",
+ "graine": 217113628,
+ "kit": "foret",
+ "foret": {
+  "densite": 0.5,
+  "rochers": 0.2,
+  "feuillage": 0.6
+ },
+ "ambiance": {
+  "saison": "ete",
+  "soleil": {
+   "azimut": 40,
+   "hauteur": -12
+  },
+  "brume": 0.01,
+  "lampe": true
+ },
+ "camera": {
+  "profil": "bodycam-poitrine",
+  "hauteur": 1.36,
+  "champ": 125
+ },
+ "objets": [
+  {
+   "id": "feu",
+   "nom": "feu de camp dans un cercle de pierres",
+   "devant": 12,
+   "cote": 0,
+   "degage": 1.2,
+   "formes": [
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.1,
+      0
+     ],
+     "taille": [
+      1.2,
+      0.2,
+      1.2
+     ],
+     "matiere": "pierre",
+     "couleur": "#6b665e"
+    },
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.35,
+      0
+     ],
+     "taille": [
+      0.5,
+      0.4,
+      0.5
+     ],
+     "matiere": "braise",
+     "couleur": "#d0602a"
+    }
+   ]
+  },
+  {
+   "id": "chaise-1",
+   "nom": "chaise pliante en toile bleue",
+   "devant": 11,
+   "cote": -1.8,
+   "degage": 0.6,
+   "formes": [
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.42,
+      0
+     ],
+     "taille": [
+      0.5,
+      0.04,
+      0.45
+     ],
+     "matiere": "toile",
+     "couleur": "#2f4f6a"
+    },
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.7,
+      -0.22
+     ],
+     "taille": [
+      0.5,
+      0.5,
+      0.04
+     ],
+     "matiere": "toile",
+     "couleur": "#2f4f6a"
+    }
+   ]
+  },
+  {
+   "id": "chaise-2",
+   "nom": "chaise pliante en toile bleue",
+   "devant": 11,
+   "cote": 1.8,
+   "degage": 0.6,
+   "formes": [
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.42,
+      0
+     ],
+     "taille": [
+      0.5,
+      0.04,
+      0.45
+     ],
+     "matiere": "toile",
+     "couleur": "#7a2f2f"
+    },
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.7,
+      -0.22
+     ],
+     "taille": [
+      0.5,
+      0.5,
+      0.04
+     ],
+     "matiere": "toile",
+     "couleur": "#7a2f2f"
+    }
+   ]
+  },
+  {
+   "id": "chaise-3",
+   "nom": "petite chaise pliante",
+   "devant": 14,
+   "cote": -1.2,
+   "degage": 0.6,
+   "formes": [
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.294,
+      0
+     ],
+     "taille": [
+      0.35,
+      0.04,
+      0.315
+     ],
+     "matiere": "toile",
+     "couleur": "#c9a23a"
+    },
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.48999999999999994,
+      -0.154
+     ],
+     "taille": [
+      0.35,
+      0.35,
+      0.04
+     ],
+     "matiere": "toile",
+     "couleur": "#c9a23a"
+    }
+   ]
+  },
+  {
+   "id": "chaise-4",
+   "nom": "petite chaise pliante",
+   "devant": 14,
+   "cote": 1.2,
+   "degage": 0.6,
+   "formes": [
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.294,
+      0
+     ],
+     "taille": [
+      0.35,
+      0.04,
+      0.315
+     ],
+     "matiere": "toile",
+     "couleur": "#3a8a4a"
+    },
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.48999999999999994,
+      -0.154
+     ],
+     "taille": [
+      0.35,
+      0.35,
+      0.04
+     ],
+     "matiere": "toile",
+     "couleur": "#3a8a4a"
+    }
+   ]
+  },
+  {
+   "id": "glaciere",
+   "nom": "glacière rouge, couvercle ouvert",
+   "devant": 10,
+   "cote": 3,
+   "degage": 0.6,
+   "formes": [
+    {
+     "f": "boite",
+     "p": [
+      0,
+      0.22,
+      0
+     ],
+     "taille": [
+      0.6,
+      0.44,
+      0.4
+     ],
+     "matiere": "plastique",
+     "couleur": "#b03030"
+    }
+   ]
+  }
+ ]
+}

@@ -231,15 +231,18 @@ function scopeOf(doc) {
   const s = doc.meta.scope || 'story';
   return s === 'character' ? 'character:' + doc.id : s;
 }
+/* An author of the pack whose role is "model" (a sketch written by the large tier, core/sketch.js) keeps kind "model";
+   every other author is a creator. */
+const authorOf = (id, roles) => ({ kind: roles[id] === 'model' ? 'model' : 'creator', id });
 /* One parsed file → principle records (provenance from the file and its layer). */
-export function principlesOf(doc, { layer, author, pack, ctx = {} } = {}) {
+export function principlesOf(doc, { layer, author, pack, ctx = {}, roles = {} } = {}) {
   const out = [], errors = [];
   const scope = scopeOf(doc), horizon = doc.meta.horizon || (scope.startsWith('scene') ? 'scene' : 'story');
   for (const st of doc.statements) {
     if (PATTERN_WORDS.includes(st.mark)) continue;
     const p = { id: st.id, strength: st.mark === 'gauge' ? 'gauge' : MARKS[st.mark],
       form: st.mark === 'when' || st.mark === 'gauge' || (st.mark === '!!' && /^never\s/.test(st.text)) ? 'explicit' : 'prose',
-      scope, horizon, section: st.section, lang: doc.meta.lang || 'en', author: { kind: 'creator', id: doc.meta.author || author || 'unknown' },
+      scope, horizon, section: st.section, lang: doc.meta.lang || 'en', author: authorOf(doc.meta.author || author || 'unknown', roles),
       layer: doc.meta.layer || layer || 'base', pack: pack || null, doc: doc.id, doc_kind: doc.meta.kind || null, source: st.source };
     for (const k of ['text', 'weight', 'note', 'context', 'lines', 'why', 'auto_id']) if (st[k] !== undefined) p[k] = st[k];
     if (p.strength === 'hard' || p.strength === 'absolute' || p.strength === 'gauge') {
@@ -322,7 +325,7 @@ export function compilePack(pack, library = {}) {
   for (const layer of M.layers || []) for (const f of layer.files || []) {
     if (pack.texts[f] === undefined) { errors.push({ file: f, line: 0, why: 'missing_file' }); continue; }
     const doc = parseSource(pack.texts[f], { file: f }); errors.push(...doc.errors);
-    const opts = { layer: layer.id, author: layer.author, pack: M.id, ctx };
+    const opts = { layer: layer.id, author: layer.author, pack: M.id, ctx, roles: Object.fromEntries((M.authors || []).map(a => [a.id, a.role])) };
     let recs;
     if (doc.meta.kind === 'pattern-instance') {
       const pat = lib[doc.meta.pattern];
