@@ -1,8 +1,10 @@
 {
-  "_doc": "The model port served by code (src/reflex-model.js, M2): anchors for the closed PDL intent verbs (docs/pdl-spec.md §6.1), per language, and the fallback line a verb answers with (a line id of the pack's bank). Story-specific anchors (things, classes, commitments) are in the pack (stories/<id>/anchors.json). Thresholds: below `ask_below` Sam asks back; between it and `act_from` she acts with the doubt showing.",
+  "_doc": "The model port served by code (src/reflex-model.js, M2): anchors for the closed PDL intent verbs (docs/pdl-spec.md §6.1), per language, and the fallback line a verb answers with (a line id of the pack's bank). Story-specific anchors (things, classes, commitments) are in the pack (stories/<id>/anchors.json). Thresholds: below `ask_below` Sam asks back; between it and `act_from` she acts with the doubt showing (`doubt_line` first); `hold_line` is what she says while a model judges what was meant (M3, core/clocks.js).",
   "act_from": 0.8,
   "ask_below": 0.5,
   "ask_line": "ask.back",
+  "doubt_line": "doubt.check",
+  "hold_line": "hold.think",
   "verbs": {
     "go": { "en": ["go", "walk", "move on", "keep going", "continue", "next", "let's go", "go on", "forward", "carry on", "go ahead", "go down", "follow", "take the", "move"], "fr": ["avance", "vas y", "va", "continue", "on y va", "marche", "suis", "descends", "prends le", "bouge"], "line": "move.ok" },
     "back": { "en": ["go back", "turn back", "back to"], "fr": ["retourne", "reviens", "recule"], "line": "move.ok" },

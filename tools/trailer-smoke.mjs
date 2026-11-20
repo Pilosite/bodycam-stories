@@ -13,7 +13,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..'), out = join(roo
 mkdirSync(out, { recursive: true });
 const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
 const lang = arg('--lang') || 'en', [W, H] = (arg('--size') || '270x480').split('x').map(Number);
-const SHOTS = (arg('--shots') || '9,27,end').split(',');      // step indexes (after the step started) and 'end'
+const SHOTS = (arg('--shots') || '1,11,25,end').split(',');      // step indexes (after the step started) and 'end'
 const [RW, RH] = (arg('--res') || '108x192').split('x').map(Number), pace = +(arg('--pace') || 1.5);
 
 const browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
@@ -21,10 +21,15 @@ const page = await browser.newPage({ viewport: { width: W, height: H }, deviceSc
 const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-await page.addInitScript(c => { window.__CFG = c; }, { trailer: true, trailerDirect: true, lang, pace, maxSpp: 4, w: RW, h: RH });
+await page.addInitScript(c => { window.__CFG = c; }, { trailer: true, lang, pace, maxSpp: 4, w: RW, h: RH });
 const t0 = Date.now(), sec = () => ((Date.now() - t0) / 1000).toFixed(0) + ' s';
 await page.goto('file://' + resolve(root, 'dist/index.html'), { timeout: 300000 });
-await page.waitForFunction(() => window.trailer && window.trailer.get() && window.trailer.get().on(), null, { timeout: 300000 });
+// the start card, as a visitor sees it: once the engine has drawn, one press on Play
+await page.waitForSelector('#tr .tr-card button', { timeout: 300000 });
+await page.waitForFunction(() => window.__state && window.__state.n >= 1, null, { timeout: 300000 });
+await page.screenshot({ path: join(out, lang + '-start.png'), timeout: 300000 });
+await page.click('#tr .tr-card button');
+await page.waitForFunction(() => window.trailer.get() && window.trailer.get().on(), null, { timeout: 300000 });
 const step = () => page.evaluate(() => { const t = window.trailer.get(); return t ? t.step() : -1; });
 const ended = () => page.evaluate(() => { const c = document.querySelector('#tr .tr-card'); return !!c && !c.hidden; });
 let last = -2;

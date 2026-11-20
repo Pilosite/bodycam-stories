@@ -14,7 +14,9 @@ const feedAll = (E, patterns) => { const r = createReadout({ patterns }), sig = 
 test('the trailer of « Louis\'s Round » loads, in both languages, and lasts about ninety seconds', () => {
   const { script, errors } = loadTrailer(SCRIPT);
   assert.deepEqual(errors, []);
-  for (const s of script.steps.filter(s => s.kind === 'say' || s.kind === 'caption')) for (const l of ['en', 'fr']) assert.ok((s.text || s.caption.text)[l], 'step text in ' + l);
+  const texts = s => s.kind === 'caption' ? [s.caption.text, s.caption.kicker] : s.kind === 'tag' ? [s.tag, s.text] : s.kind === 'prompt' ? [s.text, s.note] : s.kind === 'say' ? [s.text] : [];
+  for (const s of script.steps) for (const m of texts(s).filter(Boolean)) for (const l of ['en', 'fr']) assert.ok(m[l], s.kind + ' text in ' + l);
+  assert.equal(script.steps.find(s => s.kind === 'prompt').note.en.includes('by hand'), true, 'the prompt says the pack was written by hand');
   const secs = scriptSeconds(script);
   assert.ok(secs > 75 && secs < 120, secs + ' s');
   assert.equal(script.steps.at(-1).kind, 'end');

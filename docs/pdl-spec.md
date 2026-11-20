@@ -316,7 +316,7 @@ Bounds are inclusive. A number outside them is clamped (repair). "intent" names 
 | `speech.set` | one of `volume` (`whisper`, `low`, `normal`), `shorten` 0..1 | voice (new) |
 | `scene.start` | `id` required | — (new) |
 | `beat.set` | `id` required | — (story state) |
-| `story.end` | `id` (an ending family) required | écran de fin |
+| `story.end` | `id` (an ending family) required; one of the story's endings (`unknown_value` otherwise) | écran de fin |
 
 ### 6.4 Shapes (the engine's vocabulary, English keys)
 
@@ -406,7 +406,7 @@ A `scene` rule only fires in the scene it was registered in. A `tendency` rule d
 
 ### 8.3 Rejections (`reasons[].why`)
 
-`unknown_field`, `unknown_kind`, `unknown_op`, `reserved_v2`, `unknown_value`, `unknown_event`, `unknown_operator`, `unknown_condition`, `unknown_cue`, `unknown_line`, `unknown_language`, `unknown_target`, `forbidden_target`, `out_of_reach`, `wrong_target_class`, `bad_ref`, `missing`, `missing_one_of`, `not_a_number` (and other type errors), `already_there`, `unreachable_station`, `over_budget`, `self_trigger`, `id_taken`, `not_owner`, `not_allowed`, `constraint` (value: the principle id), `unknown_commitment`, `bad_transition`, `commit_needs_condition_and_behaviour`. Every rejection names the field path and the bound, vocabulary entry or principle that caused it (P8).
+`unknown_field`, `unknown_kind`, `unknown_op`, `reserved_v2`, `unknown_value`, `unknown_event`, `unknown_operator`, `unknown_condition`, `unknown_cue`, `unknown_line`, `unknown_language`, `unknown_target`, `forbidden_target`, `out_of_reach`, `wrong_target_class`, `bad_ref`, `missing`, `missing_one_of`, `not_a_number` (and other type errors), `already_there`, `unreachable_station`, `over_budget`, `self_trigger`, `id_taken`, `not_owner`, `not_allowed`, `constraint` (value: the principle id; `by: judgement` when D4 found it, §9.3), `ending_not_open` (a model's `story.end` before the ending is open, §9.3), `unknown_commitment`, `bad_transition`, `commit_needs_condition_and_behaviour`. Every rejection names the field path and the bound, vocabulary entry or principle that caused it (P8).
 
 ### 8.4 Absolute constraints
 
@@ -440,9 +440,16 @@ A `scene` rule only fires in the scene it was registered in. A `tendency` rule d
 | Port | Interface | Adapters |
 |---|---|---|
 | engine | the executor below | `core/paper-world.js` (tests); the page (M2, §12) |
-| model | `embed(texts)`, `decide({ tier, question, options?, state? }) → { answer, p?, uncertain? }`, `generate({ tier, purpose, context }) → { tokens }` (ADR 0004; tiers are roles, models are configuration) | `core/canned-model.js` (tests); artifact and proxy adapters (later lot) |
+| model | `embed(texts)`, `decide({ tier, question, options?, state? }) → { answer, p?, uncertain? }`, `generate({ tier, purpose, context }) → { tokens }` (ADR 0004; tiers are roles, models are configuration). Additive (M3, §9.1.1): `decide({ …, questions })` → `{ answers }`; `generate({ …, prompt: { prefix, delta }, lang })`; every answer may carry `adapter`, `model_ms`, `first_ms`, or `failed`; optional `available(what)` | `core/canned-model.js` (tests); `src/reflex-model.js` (code); `src/model-port.js` (the page: home node, host's model, chain) |
 | input | `subscribe(handler)`; events `{ kind: speech, text, lang, loud? }`, `{ kind: look, target, s }` | the page (later) |
 | store | `readPack`, `readLibrary`, `appendJournal`, `readJournal` | `tools/story.mjs` `loadPack` / `loadLibrary` (files; re-exported by `tools/pack-check.mjs`) |
+
+#### 9.1.1 The model port in play (M3, additive)
+
+- **Typed questions.** `decide({ tier, question, questions: [{ id, type: bool | choice | score, text, options? | slots?, absolute? }], state?, text?, lang? })` answers `{ answers: { <id>: { answer, p } } }`. A question asked in both orders is present twice, the second with id `<id>~r` and its options reversed. `core/judge.js` checks each answer against its options (anything else is no answer), pairs the orders and applies the confidence rule: `judge({ answer, p, reverse? }, { act_from, ask_below, absolute }) → { answer, p, uncertain, play: act | doubt | ask, orders }`. Two question sets exist: `understand` (D1 what is asked, D2 now or later, D3 does she go along; one call) and `absolutes` (D4 on invented lines against the prose `!!` in scope, both orders).
+- **Invention.** `generate({ tier: 'stage', purpose: 'react', context, prompt: { prefix, delta }, lang })` answers `{ tokens }`: PDL token lines with no envelope (§10; `parseModelTokens` in `core/prompt.js` adds author and horizon, reads aliases, closes a broken quote, drops what is not a transaction). The prompt is assembled by the core (`stagePrompt`): the prefix is stable while the station, the facts she knows and her promises do not change; only the delta follows. The wire form around it is the adapter's (ADR 0009 §5).
+- **Who answered.** Any answer may carry `adapter` (`home`, `host`, `reflex`, …), `model_ms`, `first_ms`; a failed call answers `{ failed: <reason> }` instead of throwing. `available('judge' | 'invent')`, when present, says whether a model can judge or invent now; without it, a port judges never and invents when it has `generate`.
+- **Streaming: not in this change.** The host's model gives whole answers; the home node may stream later as an optional `onLine(line)` in the `generate` request, each complete line validated as it arrives (§10). Until then `first_ms` equals the full answer's time.
 
 `missing(port, impl)` lists what an adapter lacks. Whatever a model returns goes through `validate`; the core never trusts a port.
 
@@ -458,7 +465,7 @@ The engine implements: `go, look, turn, posture, touch, take, shape, wait, stop,
 | `scene` | 8 s | `generate` at the staging tier | the full reaction: lines, things, facts |
 | `story` | 120 s, continuous | the background tier | rules, the frontier, arcs |
 
-`createClocks({ session, model, clock })`: `hear(utterance)` runs the now loop (decide the intent, submit it; decide the reaction, submit it) and returns as soon as that is done; it opens a `scene` model call (journaled `status: pending`) whose answer lands later (`status: landed`, `ref_seq`) and is submitted with `cause { tx: <the call>, amends?: <a now transaction> }`. Nothing in the now loop awaits a slower loop. Every transaction entry records `loop`, `latency_ms`, `budget_ms` and `late`; a late present shows up in the journal as a defect. Rule-fired transactions inherit the loop of their cause.
+`createClocks({ session, model, clock })`: `hear(utterance)` runs the now loop (decide the intent, submit it; decide the reaction, submit it) and returns as soon as that is done. When the intent's confidence is below `act_from` and the port can judge, D1 to D3 are asked in one call raced against `judgeWaitMs` (default 350 ms): in time, the now loop uses the judged intent; late, she holds (the bank's `hold_line`) and the judged intent lands in the scene loop with `cause { tx: <the call>, amends: <the reflex intent> }`, followed by its reaction; failed, the reflex answer is played. A middle confidence puts the bank's `doubt_line` first. When the port can invent, it opens a `scene` model call (journaled `status: pending`) whose answer lands later (`status: landed`, `ref_seq`, or `failed` with `error`) and is submitted with `cause { tx: <the call>, amends?: <the now loop's last say> }`. Before submission, a `story.end` that is not an open decision ending (trigger `decision`, every `requires` fact established) and an invented line that D4 finds against an absolute (or uncertain between the two orders) are vetoed: submitted with `veto`, so journaled `rejected` with the reason (`ending_not_open`, or `constraint` with the principle's id and `by: judgement`). An answer to an older utterance lands `stale` and is dropped. Nothing in the now loop awaits a slower loop. Every transaction entry records `loop`, `latency_ms`, `budget_ms` and `late`; a late present shows up in the journal as a defect. Rule-fired transactions inherit the loop of their cause.
 
 ### 9.4 The journal (`core/journal.js`)
 
@@ -467,13 +474,14 @@ JSON lines, English keys, append-only. Every entry has `seq`, `t`, `type`.
 | type | Keys | Input (replayed) |
 |---|---|---|
 | `session` | v, seed, scene, budget | header |
-| `tx` | loop, latency_ms, budget_ms, late, author, tier, horizon, kind, status, repair, reasons, cause, depth, body, ttl, timings, input, proposed | yes when `input: true` (the `proposed` form is re-submitted); rule-fired ones are derived |
+| `tx` | loop, latency_ms, budget_ms, late, author, tier, horizon, kind, status, repair, reasons, cause, depth, body, ttl, timings, input, proposed, veto (reasons given by a judgement outside the validator, re-applied on replay) | yes when `input: true` (the `proposed` form is re-submitted); rule-fired ones are derived |
 | `event` | event, data, cause (seq) | no |
 | `rule` | rule, status (fired, blocked), reason, event, cause, author, layer | no |
 | `advance` | dt | yes |
 | `observe` | event, data | yes |
 | `principles` | records | yes |
-| `model_call` | loop, status (done, pending, landed), ref_seq, tier, purpose, character, principles (ids of soft principles in scope), gauges ([{ id, value, word, mentioned_by }] for gauges those principles mention), latency_ms, timings | yes |
+| `model_call` | loop, status (done, pending, landed, failed), ref_seq, tier, purpose, character, adapter (home, host, reflex, …), instrument (judgement, invention: P22), principles (ids of soft principles in scope), gauges ([{ id, value, word, mentioned_by }] for gauges those principles mention), p, play (act, doubt, ask), latency_ms (since the utterance), timings ({ model_ms, first_ms }), error, stale, dropped (lines a model wrote that were not transactions) | yes |
+| `summary` | calls ({ "adapter/instrument[/failed]": n }), median_ms per adapter and instrument, first_reaction_ms, full_reaction_ms, reactions, repaired, rejected, rejected_by, dropped (`modelSummary` in `core/journal.js`, once at the end of a page session) | no (derived) |
 | `start` | — | yes (emits `session.started`) |
 | `audit` | principle, ref_seq, relevant, respected, note, judge | yes |
 | `hash` | hash | yes (re-computed) |

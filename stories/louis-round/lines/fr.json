@@ -17,6 +17,8 @@
     "fire.refuse": ["Un feu, ici, en novembre, sur de la litière ? Non. Je suis pas idiote."],
     "call.refuse": ["Pas de réseau dans ce creux. Et j'appelle pas ma mère en direct, merci."],
     "ask.back": ["Pardon, quoi ? Redis-moi ça.", "Hein ? J'ai pas compris. Encore ?"],
+    "doubt.check": ["Si je t'ai bien compris…", "Tu veux dire… bon. Je crois."],
+    "hold.think": ["Hm. Attends.", "Attends…"],
     "out_of_world": ["… Je sais pas de quoi tu parles. On est dans une forêt, là.", "T'es bizarre, toi. Bon."],
     "engine.cant": ["Ça, non. Pas aujourd'hui.", "Je peux pas faire ça. Demande-moi autre chose."],
     "louis.question": ["Lou ? Il parlait aux arbres. Comme à des collègues.", "Tu le connaissais ? … Alors tu sais."],

@@ -17,6 +17,8 @@
     "fire.refuse": ["A fire, here, in November, on dry litter? No. I'm not an idiot."],
     "call.refuse": ["No signal in this hollow. And I'm not calling my mother live, thanks."],
     "ask.back": ["Sorry, what? Say that again.", "Hm? I didn't get that. Again?"],
+    "doubt.check": ["If I got you right…", "You mean… okay. I think."],
+    "hold.think": ["Hm. Wait.", "Hang on…"],
     "out_of_world": ["… I don't know what you're talking about. We're in a forest.", "You're strange. Right."],
     "engine.cant": ["That, no. Not today.", "I can't do that. Ask me something else."],
     "louis.question": ["Lou? He talked to trees. Like to colleagues.", "Did you know him? … Then you know."],
