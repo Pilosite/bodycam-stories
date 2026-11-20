@@ -93,6 +93,7 @@ float hR(ivec2 c){ uvec2 u=uvec2(c+ivec2(uRelS)+46000); uint x=(u.x*1597334677u)
 float bruitR(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); ivec2 c=ivec2(i);
   return mix(mix(hR(c),hR(c+ivec2(1,0)),f.x),mix(hR(c+ivec2(0,1)),hR(c+ivec2(1,1)),f.x),f.y); }
 float reliefDetail(vec2 p, float ax){
+  if(uRelB.x==0. && uRelB.z==0.) return 0.;                 // ni bosses ni buttes (banc d'essai : « sans relief de détail »)
   vec2 q=p*uRelB.y, r=p*uRelB.w; float v[3];
   for(int i=0;i<3+uZ;i++)                                     // un seul appel de bruitR (FXC recopie chaque appel, et terrainH est partout)
     v[i]=bruitR(i==0?q:i==1?vec2(.8*q.x-.6*q.y,.6*q.x+.8*q.y)*2.13+vec2(31.,17.):vec2(.6*r.x+.8*r.y,-.8*r.x+.6*r.y)+vec2(-57.,83.));

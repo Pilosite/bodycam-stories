@@ -65,6 +65,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #mesure{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
   padding:calc(24px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:rgba(12,15,11,.86)}
 #mesure{z-index:30}
+#mesure.banc pre{font-size:clamp(11px,1.6vw,17px);line-height:1.45;max-height:82%;white-space:pre;overflow:auto}
 #mesure pre{margin:0;max-width:100%;max-height:72%;overflow:auto;font:400 12.5px/1.6 var(--f-mono);white-space:pre-wrap;-webkit-user-select:text;user-select:text;font-variant-numeric:tabular-nums}
 #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:left;
   background:var(--bg);font-family:var(--f-mono);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow:auto}
@@ -215,6 +216,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
   <div id="outils" class="outils" role="group" aria-label="Autres commandes" hidden>
     <button id="monde" type="button" class="ghost">Décrire un monde</button>
     <button id="mesurer" type="button" class="ghost">Mesurer</button>
+    <button id="banc" type="button" class="ghost" title="Environ 15 s, caméra figée : ce que coûte chaque partie de l'image sur cet appareil">Banc d'essai</button>
     <button id="voix-inter" type="button" class="ghost" aria-pressed="false" title="Ses pensées lues à voix haute">Voix : non</button>
     <button id="suivi" type="button" class="ghost" aria-pressed="true" hidden>Suivi du téléphone : oui</button>
     <button id="qualite" type="button" class="ghost" aria-pressed="false" title="Mobile : téléphone moyen. Complète : ordinateur, pleine résolution.">Qualité : mobile</button>

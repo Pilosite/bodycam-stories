@@ -41,6 +41,8 @@ uniform mat3  uSoleilM;
 uniform vec4  uSoleilE;      // demi-largeur, demi-hauteur, demi-profondeur, taille d'un texel (m)
 uniform vec3  uSd;           // direction du soleil de cette image
 uniform int   uTrait;        // vue du soleil : 1 = les perches sont semées en traits (deux sommets par grain, gl.LINES)
+uniform ivec2 uBanc;         // banc d'essai (src/main.js, banc) : x 1 = grains d'un pixel (le coût des sommets seuls) ; y : 1 sans les
+                             // feuilles, 2 les feuilles seules, 3 sans troncs ni branches (grains calculés, puis rejetés : sans fragments)
 uniform sampler2D uSemis;    // objets de la fiche : lignes 0-7 (poids cumulé, grains), lignes 8+ (aire cumulée dans l'objet, aire) ;
                              // couches de semis : ligne de tête (aire de l'élément), lignes des formes (aire cumulée dans l'élément, aire)
 
@@ -518,7 +520,8 @@ void main(){
     if(uAncre.z>.5){ rs=hu(uint(gl_VertexID)*2654435761u+97u); rnd(); }   // graine fixe : le tirage ne dépend plus de l'image
     if(!semeF(pos,t)) return;
     if(t<1.){ if(rnd()>t*t) return; t=1.; }
-    gl_Position=pos; gl_PointSize=min(t,uMaxPt); vSz=gl_PointSize;
+    if(uBanc.y==1) return;
+    gl_Position=pos; gl_PointSize=uBanc.x==1?1.:min(t,uMaxPt); vSz=gl_PointSize;
     return;
   }
 #endif
@@ -541,6 +544,7 @@ void main(){
 #endif
   float s=g.s;
   bool forme=FORMES==1;
+  if(uBanc.y!=0 && (uBanc.y==1?g.feuille:uBanc.y==2?!g.feuille:(!g.feuille && g.code<3.))) return;
   vec3 dv, ex, ey; float t, m, dist=0.;
   if(uVue==1){                                               // carte d'ombres : projection orthographique
     vec3 l=(g.P-uSoleilC)*uSoleilM;
@@ -567,6 +571,7 @@ void main(){
   // Sur une forme, le plan tangent est exact jusqu'au bord (où le fragment est découpé) : on le suit même en incidence rasante.
   float den=dot(dv,g.N); den=sign(den)*max(abs(den),forme?.02:.25); if(den==0.) den=-.25;
   ex-=dv*dot(ex,g.N)/den; ey-=dv*dot(ey,g.N)/den;
+  if(uBanc.x==1) gl_PointSize=1.;
   vSz=gl_PointSize;
 #if FORMES
   {

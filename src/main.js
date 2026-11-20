@@ -57,7 +57,7 @@ function finir(x){
     fail("Erreur de liaison du shader :\n"+gl.getProgramInfoLog(x.p)); }
   const p=x.p, u={}; const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
   for(let i=0;i<n;i++){ const a=gl.getActiveUniform(p,i); u[a.name.replace("[0]","")]=gl.getUniformLocation(p,a.name); }
-  compNote(x); return {p,u}; }
+  compNote(x); p.__nom=x.nom; return {p,u}; }
 const prog=(fs,vs=VS,nom)=>{ etapeGL("compilation : "+(nom||"programme")); const r=finir(lancer(fs,vs)); etapeGL("  compilé : "+(nom||"programme")); return r; };
 /* Variantes fixes du même shader, choisies par #define. En rendu logiciel, le code présent coûte à chaque pas de rayon même
    quand il ne s'exécute pas : la forêt garde un programme sans semis, un monde nu un programme sans arbres. Chaque variante se
@@ -78,6 +78,29 @@ const COMP={ envol:[], img:0, dernier:-1, frappe:-1e9, journal:[], lances:0 };
 addEventListener("keydown",()=>{ COMP.frappe=performance.now(); },true);
 function compNote(x){ if(x.note) return; x.note=true; const ms=performance.now()-x.t0; COMP.journal.push({nom:x.nom,ms,t:(x.t0-t00)/1000}); if(COMP.journal.length>24) COMP.journal.shift(); }
 function compVol(){ COMP.envol=COMP.envol.filter(x=>{ if(x.note) return false; if(!fini(x)) return true; compNote(x); return false; }); return COMP.envol.length>0; }
+/* Premier dessin de chaque programme. Sous Direct3D, ANGLE et le pilote peuvent finir le travail au premier dessin (variante du
+   nuanceur de pixels selon les cibles, nuanceur de géométrie des points, compilation du pilote) : un gel qui ne se voit pas dans
+   la durée de compilation. Chaque programme est marqué à sa première utilisation (useProgram) ; à la fin d'une image qui en
+   contient, une attente de la puce (gl.finish, seulement ces images-là) chronomètre le tout (diagnostic, COMP.premiers). */
+COMP.froids=[]; COMP.premiers=[]; COMP.gels=[];
+/* Gels : tout intervalle de plus de 250 ms entre deux images (page visible), ouverture comprise, avec ce qui compilait ou
+   faisait son premier dessin à ce moment-là. Dit, sur la vraie machine, si une compilation « en parallèle » fige quand même
+   la page (diagnostic et banc d'essai). */
+function gelNote(now,d){
+  if(!(d>250)||document.hidden||!COMP.vu) { COMP.vu=!document.hidden; return; }
+  const vol=COMP.envol.filter(x=>!x.note).map(x=>x.nom), fr=COMP.dernPrem&&now-COMP.dernPrem.t<d+50?COMP.dernPrem.noms:"";
+  COMP.gels.push({t:(now-t00)/1000,ms:d,quoi:(vol.length?"compile : "+vol.join(", "):"")+(fr?(vol.length?" ; ":"")+"1er dessin : "+fr:"")+(ouvRepos?" (ouverture)":"")});
+  if(COMP.gels.length>10) COMP.gels.splice(COMP.gels.reduce((m,g,i,a)=>g.ms<a[m].ms?i:m,0),1);   // on garde les dix plus longs
+}
+const gelsTexte=()=>COMP.gels.length?COMP.gels.map(g=>g.t.toFixed(0)+" s : "+(g.ms/1000).toFixed(1)+" s"+(g.quoi?" ("+g.quoi+")":"")).join(" · "):"aucun (> 250 ms)";
+const BANC={ on:false, v:null, vi:-1, rec:null, tFin:0 };       // banc d'essai (balade.banc, « Plus » → « Banc d'essai ») : variante en cours, mesures
+{ const use=gl.useProgram.bind(gl); gl.useProgram=p=>{ if(p&&p.__nom&&!p.__chaud){ p.__chaud=true; COMP.froids.push(p.__nom); } use(p); }; }
+function premiersDessins(){
+  if(!COMP.froids.length) return;
+  const t=performance.now(); gl.finish(); const ms=performance.now()-t;
+  COMP.premiers.push({noms:COMP.froids.join(", "),ms,ouv:!!ouvRepos}); COMP.dernPrem={t:performance.now(),noms:COMP.froids.join(", ")}; if(COMP.premiers.length>12) COMP.premiers.shift();
+  etapeGL("premier dessin ("+(ms/1000).toFixed(1)+" s"+(ouvRepos?", ouverture":"")+") : "+COMP.froids.join(", ")); COMP.froids=[];
+}
 function compLibre(gros){                                       // peut-on lancer une compilation maintenant ?
   if(CFG.compTout) return true;
   if(compVol()||COMP.img<=COMP.dernier) return false;
@@ -545,6 +568,7 @@ function bruitR(px,pz){ const ix=Math.floor(px), iz=Math.floor(pz); let fx=px-ix
   const a=hR(ix,iz), b=hR(ix+1,iz), c=hR(ix,iz+1), d=hR(ix+1,iz+1); return (a+(b-a)*fx)+((c+(d-c)*fx)-(a+(b-a)*fx))*fz; }
 function reliefDetail(x,z,ax){
   const B=S.relB, C=S.relC, qx=x*B[1], qz=z*B[1], rx=x*B[3], rz=z*B[3], hw=S.traj[1];
+  if(B[0]===0&&B[2]===0) return 0;                              // ni bosses ni buttes (comme monde.glsl)
   const b=(bruitR(qx,qz)-.5)*1.4+(bruitR((.8*qx-.6*qz)*2.13+31,(.6*qx+.8*qz)*2.13+17)-.5)*.6;
   const t=sstep(C[0],C[1],bruitR(.6*rx+.8*rz-57,-.8*rx+.6*rz+83));
   return B[0]*b*(C[2]+(1-C[2])*sstep(hw,hw+2.5,ax))+B[2]*t*(C[3]+(1-C[3])*sstep(hw+1,hw+14,ax));
@@ -1051,7 +1075,8 @@ function ombDiag(){                                           // pour le diagnos
   const m=ECHELLE.resumer(OMB.mem); if(m.length) L.push("  mémoire : "+m.join(" ; "));
   // Lancement (docs/moteur-v3.md, « Lancement sans gel ») : durée de chaque compilation, plus longue image des 10 premières secondes
   L.push("Compilations ("+COMP.lances+") : "+COMP.journal.map(j=>j.nom+" "+(j.ms/1000).toFixed(1)+" s").join(" · ")+(COMP.envol.some(x=>!x.note)?" · en cours : "+COMP.envol.filter(x=>!x.note).map(x=>x.nom).join(", "):""));
-  L.push("Plus longue image des 10 premières s : "+Math.round(LONGUE.max)+" ms");
+  if(COMP.premiers.length) L.push("Premiers dessins : "+COMP.premiers.map(x=>(x.ms/1000).toFixed(1)+" s"+(x.ouv?" (ouv.)":"")+" ["+x.noms+"]").join(" · "));
+  L.push("Plus longue image des 10 premières s : "+Math.round(LONGUE.max)+" ms · gels : "+gelsTexte());
   const gk=Object.keys(GT.ms);
   L.push(GT.ext?"Puce (ms) : "+gk.map(k=>k+" "+GT.ms[k].toFixed(1)).join(" · ")+" · image "+(GT.total||0).toFixed(1):"Puce : pas de chronomètre (EXT_disjoint_timer_query_webgl2 absente), image "+Math.round(V3.msMoy)+" ms");
   const deux=Object.keys(GT.nImg).filter(k=>GT.nImg[k]>1); if(deux.length) L.push("  passes doublées : "+deux.map(k=>k+" ×"+GT.nImg[k]).join(", "));
@@ -1101,7 +1126,7 @@ const V3_PF={prochesO:1,prochesB:2,prochesT:3};               // éléments proc
 function v3Tranches(G,ps,vue){                                 // [programme, premier grain, fin] de chaque famille ; vue du soleil : pas de feuilles de canopée
   const t=[[G.grainsA,0,ps.part[0]],[G.grainsB,ps.part[0],ps.part[1]],[G.grainsR,ps.part[1],ps.part[2]]];
   if(!vue) t.push([G.grainsL,ps.part[2],ps.part[3]]);
-  t.push([G.grainsF,ps.part[3],ps.total]); return t; }
+  t.push([BANC.v&&BANC.v.sansF?null:G.grainsF,ps.part[3],ps.total]); return t; }
 function v3Lancer(k){                                          // un programme du semeur, dans la variante voulue par la fiche
   const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
   const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
@@ -1311,7 +1336,7 @@ function v3Partage(N,vue,p){
    mètres (au plus 2 cellules de part et d'autre, une ou deux rangées par rive). Option v3proches (false : tout en grains). */
 const PRX_VPS=6*5*5*6;                                          // sommets par emplacement (v3_proches.vert : NS = 5)
 function v3Proches(){
-  const on=CFG.v3proches!==false&&CFG.v3proches!==0;
+  const on=CFG.v3proches!==false&&CFG.v3proches!==0&&!(BANC.v&&BANC.v.sansPrx);
   const r={on,o:0,b:0,a:0,p:0,n:[0,0,0,0],fin:[0,0,0,0],total:0};
   if(!on) return r;
   r.o=S.objRows||0; r.b=S.kitP[1]>0?25:0;
@@ -1339,7 +1364,7 @@ function v3Monde(u,w,h,p){                                    // uniformes de mo
   if(u.uShapes) bindTex(3,shapesT,u.uShapes); gl.uniform1i(u.uObjN||null,S.objN);
   if(u.uMats){ bindTex(4,matT,u.uMats); gl.uniform4iv(u.uSurf,S.surf); gl.uniform4iv(u.uSurfT,S.surfT); gl.uniform4fv(u.uSurfP,S.surfP); }
   gl.uniform4fv(u.uRel||null,S.rel); gl.uniform4fv(u.uTraj||null,S.traj); gl.uniform4fv(u.uCreux||null,S.creux);   // relief et trajet de la fiche
-  if(u.uRelB){ gl.uniform4fv(u.uRelB,S.relB); gl.uniform4fv(u.uRelC,S.relC); gl.uniform2fv(u.uRelS,S.relS); }   // bosses et buttes (variante RELIEF)
+  if(u.uRelB){ gl.uniform4fv(u.uRelB,BANC.v&&BANC.v.sansRel?[0,S.relB[1],0,S.relB[3]]:S.relB); gl.uniform4fv(u.uRelC,S.relC); gl.uniform2fv(u.uRelS,S.relS); }   // bosses et buttes (variante RELIEF ; banc : sans)
   if(u.uHp) gl.uniform4fv(u.uHp,S.hp); if(u.uHpC) gl.uniform3fv(u.uHpC,S.hpC);   // houppiers (variante HOUPPIER)
   gl.uniform1i(u.uSemN||null,S.semN); gl.uniform4fv(u.uSemTop||null,S.semTop); gl.uniform1f(u.uNuit||null,S.lum);
   gl.uniform4fv(u.uEau||null,S.eau||[0,0,0,0]);
@@ -1370,7 +1395,7 @@ function v3Sync(t){
 const GT={ ext:CFG.chronoGpu===false?null:gl.getExtension("EXT_disjoint_timer_query_webgl2"), libres:[], attente:[], cur:null, ms:{}, n:{}, nImg:{}, img:0 };
 function gpuDebut(nom){
   if(!GT.ext) return; gpuFin();
-  const q=GT.libres.pop()||gl.createQuery(); gl.beginQuery(GT.ext.TIME_ELAPSED_EXT,q); GT.cur={q,nom,img:GT.img};
+  const q=GT.libres.pop()||gl.createQuery(); gl.beginQuery(GT.ext.TIME_ELAPSED_EXT,q); GT.cur={q,nom,img:GT.img,v:BANC.vi};
   GT.n[nom]=(GT.n[nom]||0)+1; }
 function gpuFin(){ if(!GT.cur) return; gl.endQuery(GT.ext.TIME_ELAPSED_EXT); GT.attente.push(GT.cur); GT.cur=null; }
 function gpuImage(){                                           // fin d'une image : passes comptées, résultats arrivés
@@ -1381,6 +1406,7 @@ function gpuImage(){                                           // fin d'une imag
     if(!gl.getQueryParameter(a.q,gl.QUERY_RESULT_AVAILABLE)) break;
     GT.attente.shift(); const ms=gl.getQueryParameter(a.q,gl.QUERY_RESULT)/1e6; GT.libres.push(a.q);
     if(dj) continue;
+    if(a.v>=0&&BANC.rec) BANC.rec.push({v:a.v,nom:a.nom,ms,img:a.img});
     GT.ms[a.nom]=GT.ms[a.nom]===undefined?ms:GT.ms[a.nom]*.8+ms*.2;
     if(a.img!==GT.dernImg){ if(GT.dernImg!==undefined) GT.total=GT.somme; GT.somme=0; GT.dernImg=a.img; } GT.somme+=ms; }
   if(GT.attente.length>48) GT.attente.splice(0,GT.attente.length-48).forEach(a=>GT.libres.push(a.q));
@@ -1392,7 +1418,7 @@ function gpuImage(){                                           // fin d'une imag
    résolution interne plus basse. Option regulateur:false (défaut des captures d'essai, window.__CFG) pour le couper. */
 const REG_N=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:1, fG:.6, fMax:64, rais:1, res:1}, {g:.75, fG:.5, fMax:48, rais:1, res:1},
   {g:.55, fG:.5, fMax:40, rais:.5, res:1}, {g:.4, fG:.4, fMax:32, rais:.3, res:.85}, {g:.32, fG:.4, fMax:28, rais:0, res:.7} ];
-const REG={ on:CFG.regulateur!==undefined?!!CFG.regulateur:!window.__CFG, niveau:0, ms:0, haut:0, bas:0, t:0, change:0 };
+const REG={ on:CFG.regulateur!==undefined?!!CFG.regulateur:!window.__CFG, niveau:0, ms:0, haut:0, bas:0, t:0, change:0, vu:{}, quand:{} };
 function regCible(){ return CFG.cibleMs||(QUAL.full?18:33); }
 function regMesure(dt,dtBrut){                                 // après chaque image v3 en marche ou accumulée
   if(!REG.on) return;
@@ -1404,11 +1430,15 @@ function regMesure(dt,dtBrut){                                 // après chaque 
   if(REG.ms>c*1.1) { REG.haut+=dt; REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
   if(now-REG.change<1500) return;                              // le temps que le niveau précédent se mesure
   let k=REG.niveau;
-  if(REG.haut>1&&k<REG_N.length-1) k++; else if(REG.bas>3&&k>0) k--;
+  /* Pas de pompage : on ne remonte pas vers un niveau qu'on vient de quitter parce qu'il dépassait la cible (mesuré au-dessus
+     de 100 % il y a moins de 20 s). Passé ce temps (la scène a pu changer), on réessaie. */
+  const retour=j=>!(REG.vu[j]>c&&now-REG.quand[j]<20000);
+  if(REG.haut>1&&k<REG_N.length-1) k++; else if(REG.bas>3&&k>0&&retour(k-1)) k--;
   if(k!==REG.niveau) regNiveau(k);
 }
 function regNiveau(k){
-  const avant=REG_N[REG.niveau]; REG.niveau=k; REG.haut=REG.bas=0; REG.change=performance.now(); REG.ms=0;
+  const avant=REG_N[REG.niveau]; REG.vu[REG.niveau]=REG.ms; REG.quand[REG.niveau]=performance.now();   // ce que coûtait le niveau quitté
+  REG.niveau=k; REG.haut=REG.bas=0; REG.change=performance.now(); REG.ms=0;
   etapeGL("régulateur : niveau "+k);
   if(avant.res!==REG_N[k].res){ REG_RES=REG_N[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
 }
@@ -1417,7 +1447,7 @@ const regEtat=()=>REG_N[REG.on?REG.niveau:0];
    et la première seconde ne doit pas cumuler compilation et rendu plein pot). Pas dans les captures d'essai (window.__CFG). */
 function v3Budget(){
   const k=regEtat().g, r=CFG.rampe!==undefined?!!CFG.rampe:!window.__CFG, m=r?Math.min(1,.2+.08*(V3.nImg-(V3.nImg0||0))):1;
-  return Math.max(20000,Math.round(V3.grains*k*m));
+  return Math.max(20000,Math.round(V3.grains*k*m*(BANC.v&&BANC.v.g||1)));
 }
 /* Remplissage des grains de la caméra (balade.remplissage(), mise au point) : chaque fragment ajoute 1 dans une cible RGBA16F,
    sans test de profondeur ; 1 : fragments tramés (ce que paie la puce), 2 : fragments gardés (après la découpe des feuilles et
@@ -1458,6 +1488,7 @@ function v3Image(p){
   const az=v3Cap(p), dmin=.35, L=Math.log(160/dmin);
   // (1) carte d'ombres
   // En marche, la carte n'est refaite qu'une image sur trois : le soleil ne bouge pas, et c'était une grosse part du coût mesuré sur téléphone.
+  if(BANC.on) V3.smP=null;                                    // banc d'essai : la carte d'ombres à chaque image (mesurée)
   const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%3===0));
   let u;
   if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w}; gpuDebut("ombre");
@@ -1474,7 +1505,7 @@ function v3Image(p){
     gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H); { const r=regEtat(), fg=CFG.feuilG||[r.fG,0,r.fMax*Math.max(1,H/480)]; gl.uniform3f(u.uFeuilG||null,fg[0],fg[1],fg[2]); }   // feuilG : [part, seuil px, max px] imposés (essais)
     gl.uniform3fv(u.uSoleilC,C); gl.uniformMatrix3fv(u.uSoleilM,false,soleilM); gl.uniform4fv(u.uSoleilE,soleilE); gl.uniform3fv(u.uSd,sd);
     gl.uniform2f(u.uJit||null,0,0); bindTex(5,V3.semisT,u.uSemis);
-    gl.uniform1i(u.uTrait,0);
+    gl.uniform1i(u.uTrait,0); gl.uniform2i(u.uBanc||null,BANC.v&&BANC.v.pt1?1:0,BANC.v&&BANC.v.feuil|0);
     gl.uniform1f(u.uAzPres,0); gl.uniform4i(u.uPrxN,0,0,0,0); gl.uniform4f(u.uAncre||null,0,0,0,0); gl.uniform1i(u.uPts,0); gl.uniform1i(u.uCompte||null,0);   // programme partagé avec le tampon G : les valeurs d'un programme à part
     if(u.uOmbreG){ bindTex(9,dummy.t,u.uOmbreG); gl.uniform1i(u.uOmbreOk,0); }   // la carte se dessine : les feuilles ne la lisent pas
     if(a>de) gl.drawArrays(gl.POINTS,de,a-de);
@@ -1518,7 +1549,7 @@ function v3Image(p){
     gl.uniform4f(u.uAz,az.cap,az.demi,dmin,L); gl.uniform1f(u.uAzPres,az.pres); gl.uniform3fv(u.uZone,zone); gl.uniform4f(u.uNb,pc.nA,pc.nB,pc.nR,pc.nF);
     gl.uniform1f(u.uK,V3.k); gl.uniform1f(u.uMaxPt,V3.maxPt); gl.uniform2f(u.uFeuil||null,70,W*H); { const r=regEtat(), fg=CFG.feuilG||[r.fG,0,r.fMax*Math.max(1,H/480)]; gl.uniform3f(u.uFeuilG||null,fg[0],fg[1],fg[2]); }   // feuilG : [part, seuil px, max px] imposés (essais)
     gl.uniform3fv(u.uSoleilC,SP.C); gl.uniformMatrix3fv(u.uSoleilM,false,SP.soleilM); gl.uniform4fv(u.uSoleilE,SP.soleilE); gl.uniform3fv(u.uSd,SP.sd);
-    gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis);
+    gl.uniform2fv(u.uJit,jc); gl.uniform1i(u.uPts,1); gl.uniform1i(u.uTrait,0); bindTex(5,V3.semisT,u.uSemis); gl.uniform2i(u.uBanc||null,BANC.v&&BANC.v.pt1?1:0,BANC.v&&BANC.v.feuil|0);
     if(u.uOmbreG){ bindTex(9,V3.sm.t,u.uOmbreG); gl.uniform1i(u.uOmbreOk,1); }   // houppiers : chaque feuille lit son ombre dans la carte de cette image
     { const cap=Math.atan2(fwd[0],fwd[1]), q=Math.PI/4;       // ancre des feuilles : la position arrondie à 4 m, le cap arrondi à 45°
       gl.uniform4f(u.uAncre||null,Math.round(p.pos[0]/4)*4,Math.round(p.pos[2]/4)*4,bouge&&!CFG.v3libre?1:0,Math.round(cap/q)*q); }
@@ -1611,16 +1642,19 @@ function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(CFG.dtMax||.1,(now-lastT)/1000), dtBrut=now-lastT; lastT=now; V3.dtBrut=dtBrut;   // dtMax : essais en rendu logiciel, le récit avance malgré des images lentes
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
+  gelNote(now,dtBrut);
   COMP.img++;
   if(REG.redim){ REG.redim=false; resize(); }
-  if(ouvRepos){ prechauffer(); if(dbgOn&&now-lastHud>250){ lastHud=now; dbgMaj(); } return; } 
+  let chauffe=false;
+  if(ouvRepos){ prechauffer(); if(dbgOn&&now-lastHud>250){ lastHud=now; dbgMaj(); } chauffe=ouvChauffe(); if(!chauffe) return; }   // une image cachée quand un programme est prêt
   // Page cachée ou sans le focus (vue embarquée dans une application, l'utilisateur est ailleurs) : au repos, dix images par
   // seconde au plus et pas de gros programme lancé (compLibre) ; le processus graphique est partagé avec l'application hôte.
   if(!window.__CFG||CFG.repos){ if(document.hidden) return; if(!document.hasFocus()&&now-REPOS.t<100) return; REPOS.t=now; }                         // l'ouverture pose sa question : rien n'est rendu derrière, mais tout se compile, un programme à la fois (docs/ouverture.md)
   if(!postPret()&&!V3.on){ return; }                              // capteur et halo d'abord (le v3 compile les siens à la suite, dans v3Init)
   // Profil (bouton Mesurer) : chaque étape est suivie d'une lecture qui attend la fin du calcul graphique, pour savoir où part le temps.
   const pf=prof?{dt:dtBrut}:null; let pt=performance.now(); const etape=(k,cible)=>{ if(!pf) return; if(cible!==undefined) v3Sync(cible); const t=performance.now(); pf[k]=t-pt; pt=t; };
-  simulate(dt); etape("sim");
+  if(!chauffe&&!BANC.on) simulate(dt); etape("sim");
+  if(BANC.on) sceneDirty=true;                                  // banc d'essai : pose figée, chaque image recalculée
   walkAmt+=((walking?1:0)-walkAmt)*(1-Math.exp(-dt/.2));
   const p=pose(); lastPose=p;
   const v2pret=V2.on&&!sceneDirty&&V2.panos.some(o=>o.t);         // tant qu'aucun panoramique n'est tourné, on garde l'image du moteur actuel : jamais d'écran noir
@@ -1639,6 +1673,9 @@ function frame(now){
   if(!(exposure>0)||!Number.isFinite(exposure)){ exposure=1.2; if(!(expTarget>0)) expTarget=1.2; }
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
   gpuFin(); gpuImage();
+  if(chauffe) v3ChaufferFroids();
+  premiersDessins();
+  if(BANC.on&&BANC.vi>=0&&!GT.ext){ gl.finish(); const t=performance.now(); if(BANC.tFin) BANC.rec.push({v:BANC.vi,nom:"image",ms:t-BANC.tFin,img:V3.nImg}); BANC.tFin=t; }   // sans chronomètre de la puce : intervalle entre deux fins d'image (gl.finish, ici seulement)
   if(now-t00<10000&&lastT0>0) LONGUE.max=Math.max(LONGUE.max,dtBrut);   // plus longue image des dix premières secondes (diagnostic)
   lastT0=1;
   etape("aff",null); hud(now);
@@ -2248,7 +2285,70 @@ function bancPasses(){
   return ["","BANC DES PASSES (une passe presque vide)",...L].join("\n");
 }
 $("mesurer").onclick=()=>{ mesurer().then(()=>{ let banc=""; try{ banc=bancPasses(); }catch(e){ banc="\nBanc des passes : "+(e&&e.message||e); } $("mesure-txt").textContent+="\n"+profTexte+"\n"+banc; }).catch(e=>{ hold=false; bench=null; $("mesure-txt").textContent="La mesure a échoué : "+(e&&e.message||e); }); };
-$("mesure-fermer").onclick=()=>{ $("mesure").hidden=true; };
+$("banc").onclick=()=>{ fermerOutils(); banc().then(t=>{ $("mesure-txt").textContent=t; $("mesure").hidden=false; $("mesure-copier").disabled=false; }).catch(e=>{ BANC.on=false; $("mesure-txt").textContent="Le banc d'essai a échoué : "+(e&&e.message||e); }); };
+$("mesure-fermer").onclick=()=>{ $("mesure").hidden=true; $("mesure").classList.remove("banc"); };
+/* Banc d'essai (docs/moteur-v3.md, « Banc d'essai ») : environ 15 s, caméra figée sur deux poses de la fiche courante (de face,
+   regard levé dans les houppiers), régulateur coupé, chaque image recalculée (comme en marche) et la carte d'ombres refaite à
+   chaque image. Pour chaque variante, temps de la puce (EXT_disjoint_timer_query_webgl2, médiane de 8 images) des passes grains,
+   proches, ombre, ombrage, et la somme ; sans le chronomètre, l'intervalle entre deux fins d'image (gl.finish, dans le banc
+   seulement). Les variantes passent par des uniformes et des drapeaux (uBanc du semeur, BANC.v), aucun programme nouveau. */
+const BANC_VAR=[
+  {nom:"référence (100 % des grains)"},
+  {nom:"grains 50 %",g:.5},
+  {nom:"grains 25 %",g:.25},
+  {nom:"grains d'un pixel (sommets seuls)",pt1:1},
+  {nom:"sans feuilles (rejetées)",feuil:1},
+  {nom:"feuilles seules",feuil:2},
+  {nom:"sans troncs ni branches",feuil:3},
+  {nom:"sans semis ni objets",sansF:1},
+  {nom:"sans relief de détail",sansRel:1,si:()=>!!S.relOn},
+  {nom:"résolution interne × 0,5",res:.5},
+  {nom:"sans proches (en grains)",sansPrx:1} ];
+const imagesV3=n=>new Promise(ok=>{ const n0=V3.nImg, t0=performance.now(); const f=()=>{ if(V3.nImg>=n0+n||performance.now()-t0>8000) ok(); else requestAnimationFrame(f); }; f(); });
+async function banc(){
+  if(BANC.on) return "Banc d'essai déjà en cours.";
+  if(!V3.on||!V3.gp||!V3.omb||!V3.omb.p) return "Banc d'essai : le moteur v3 n'est pas prêt (il compile encore, ou le moteur à rayons est en service).";
+  const el=$("mesure"), tx=$("mesure-txt"); el.classList.add("banc"); el.hidden=false; $("mesure-copier").disabled=true;
+  const av={pitch:cam.pitch,ly:look.yaw,lp:look.pitch,reg:REG.on,niv:REG.niveau,res:REG_RES,walking,regMs:Math.round(REG.ms)};
+  BANC.on=true; BANC.rec=[]; REG.on=false; walking=false; if(REG_RES!==1){ REG_RES=1; resize(); }
+  const poses=[["de face",-.03],["vers le haut",.75]], vars=BANC_VAR.filter(v=>!v.si||v.si()), R={}, t0=performance.now();
+  try{
+    for(let pi=0;pi<poses.length;pi++){
+      cam.pitch=poses[pi][1]; look.yaw=0; look.pitch=0;
+      for(let vi=0;vi<vars.length;vi++){
+        const v=vars[vi], id=pi*100+vi;
+        tx.textContent="Banc d'essai… pose « "+poses[pi][0]+" », "+(vi+1)+"/"+vars.length+" : "+v.nom+"\n\nNe touche à rien (environ 15 s).";
+        BANC.v=v; if(v.res){ REG_RES=v.res; resize(); }
+        await imagesV3(v.res?6:3); BANC.vi=id; BANC.tFin=0; await imagesV3(8); BANC.vi=-1;
+        if(v.res){ REG_RES=1; resize(); } BANC.v=null; R[id]=v;
+      } }
+    await imagesV3(6);                                           // les dernières requêtes du chronomètre arrivent quelques images plus tard
+  } finally {
+    BANC.on=false; BANC.v=null; BANC.vi=-1; cam.pitch=av.pitch; look.yaw=av.ly; look.pitch=av.lp; REG.on=av.reg; walking=av.walking;
+    if(REG_RES!==av.res){ REG_RES=av.res; resize(); } sceneDirty=true; }
+  const med=a=>{ if(!a.length) return null; const b=a.slice().sort((x,y)=>x-y); return b[b.length>>1]; };
+  const passes=GT.ext?["grains","proches","ombre","ombrage","image"]:["image"];
+  const cell=(id,k)=>{ const r=BANC.rec.filter(x=>x.v===id);
+    if(k==="image"&&GT.ext){ const par={}; r.forEach(x=>{ par[x.img]=(par[x.img]||0)+x.ms; }); return med(Object.values(par)); }
+    return med(r.filter(x=>x.nom===k).map(x=>x.ms)); };
+  const f=v=>v===null?"   –":v.toFixed(1).padStart(5), L=[];
+  const dbg=(()=>{ try{ const d=gl.getExtension("WEBGL_debug_renderer_info"); return d?gl.getParameter(d.UNMASKED_VENDOR_WEBGL)+" · "+gl.getParameter(d.UNMASKED_RENDERER_WEBGL):"(WEBGL_debug_renderer_info absente)"; }catch(_){ return "?"; } })();
+  L.push("BANC D'ESSAI v3 · "+new Date().toISOString().slice(0,16).replace("T"," ")+" · "+((performance.now()-t0)/1000).toFixed(0)+" s");
+  L.push("Machine : "+dbg);
+  L.push("Navigateur : "+navigator.userAgent.replace(/^Mozilla\/5\.0 /,""));
+  L.push("Fiche : "+(fiche.id||fiche.titre||"?")+" · qualité "+(QUAL.full?"complète":"mobile")+" · interne "+W+" × "+H+" · écran "+canvas.width+" × "+canvas.height+" · ×"+(devicePixelRatio||1));
+  L.push("Grains : "+V3.grains.toLocaleString("fr")+" (budget, niveau 0) · ombre ×0,6 · régulateur avant le banc : niveau "+av.niv+", "+av.regMs+" ms");
+  L.push("Chrono de la puce (EXT_disjoint_timer_query_webgl2) : "+(GT.ext?"oui, médiane de 8 images, ms":"NON : intervalle entre deux fins d'image avec gl.finish, ms (la passe seule est inconnue)"));
+  L.push("Ombrage : "+(V3.omb===OMB.e.socle?"socle":"complet "+V3.omb.sig)+" · KHR_parallel_shader_compile : "+(parallele?"oui":"non"));
+  for(let pi=0;pi<poses.length;pi++){
+    L.push(""); L.push("— "+poses[pi][0].toUpperCase()+" —"); L.push("variante".padEnd(36)+passes.map(k=>k.padStart(8)).join(""));
+    for(let vi=0;vi<vars.length;vi++){ const id=pi*100+vi; L.push(vars[vi].nom.padEnd(36)+passes.map(k=>("   "+f(cell(id,k))).padStart(8)).join("")); } }
+  L.push(""); L.push("Compilations ("+COMP.lances+") : "+COMP.journal.map(j=>j.nom+" "+(j.ms/1000).toFixed(1)+" s").join(" · "));
+  L.push("Premiers dessins : "+(COMP.premiers.length?COMP.premiers.map(x=>(x.ms/1000).toFixed(2)+" s"+(x.ouv?" (ouverture)":"")+" ["+x.noms+"]").join(" · "):"aucun mesuré"));
+  L.push("Plus longue image des 10 premières s : "+Math.round(LONGUE.max)+" ms");
+  L.push("Gels (intervalles de plus de 250 ms entre deux images, ouverture comprise) : "+gelsTexte());
+  const txt=L.join("\n"); tx.textContent=txt; $("mesure-copier").disabled=false; BANC.dernier=txt; return txt;
+}
 $("mesure-copier").onclick=()=>{ const t=$("mesure-txt"), b=$("mesure-copier"), ok=()=>{ b.textContent="Copié"; setTimeout(()=>b.textContent="Copier",1500); };
   const sel=()=>{ const r=document.createRange(); r.selectNodeContents(t); const s=getSelection(); s.removeAllRanges(); s.addRange(r); };
   try{ navigator.clipboard.writeText(t.textContent).then(ok,sel); }catch(_){ sel(); } };
@@ -2807,7 +2907,7 @@ function meneurEntendre(texte){ say("…");
   }                                                             // « stop » : c'est le meneur qui l'ordonne, en histoire comme ici
   return meneur.voix(texte); }
 function interfaceHistoire(on){
-  for(const id of ["monde","lieu","mesurer","histoire","v3"]) if($(id)) $(id).hidden=on;
+  for(const id of ["monde","lieu","mesurer","banc","histoire","v3"]) if($(id)) $(id).hidden=on;
   if($("journal")) $("journal").hidden=!on&&!dernierJournal;
   $("hint").textContent=on?"Glisse pour regarder · « Lui parler » pour lui dire quelque chose":"Glisse pour regarder autour de lui";
   $("hint").classList.remove("off"); $("parler").classList.remove("pulse"); $("fin").hidden=true;
@@ -2917,6 +3017,7 @@ $("fin-quitter").onclick=()=>quitterHistoire(false);
 
 /* ------------------------------------------------------------------ API : ce qu'un metteur en scène (IA ou script) peut piloter */
 window.balade={
+  banc,                                                         // banc d'essai (rend le tableau, l'affiche en plein écran)
   reessayerOmbrage:ombRaz,                                     // oublie les variantes d'ombrage notées en échec, et recharge
   ombrage:()=>({mode:OMB.mode,enService:V3.omb?V3.omb.sig:"",voulu:OMB.sig,memoire:OMB.mem}),
   exposition(){ const b=new Float32Array(4); gl.bindFramebuffer(gl.FRAMEBUFFER,expoT[expoI].f); gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,b);   // exposition tenue sur la puce
@@ -3027,7 +3128,28 @@ function tourHorizon(k){
    à la fois (compLibre) : capteur et halo, semeur, socle, formes, puis la variante complète. La fiche de la suggestion est
    appliquée en coulisse dès l'ouverture : c'est la plus probable, et la question laisse le temps de compiler. */
 function prechauffer(){ if(!postPret()) return; if(V3.on) v3Init(); else if(!PT_KO) compilerPT(varCourante()); }
-const OUV_ATTENTE=CFG.ouvAttente||5000;                          // ms : au-delà, le fondu part sur ce qui est prêt (socle), même sans image
+/* Réchauffe pendant l'ouverture : dès qu'un programme du moteur devient prêt (semeur, proches, socle, formes, variante complète,
+   tapis), une image réelle est rendue derrière l'écran d'ouverture (opaque) : chaque programme fait son premier dessin là, avec
+   ses vraies cibles, et pas dans les premières secondes du monde. Les programmes qu'aucune image n'a encore utilisés (famille
+   absente du champ) font un dessin vide (sommet rejeté) dans chacune de leurs cibles (v3ChaufferFroids). */
+const OUVCH={sig:""};
+function ouvChauffe(){
+  if(!V3.on||!V3.gp||!V3.omb||!V3.omb.p||CFG.ouvChauffe===false) return false;
+  const sig=Object.keys(V3.gp).filter(k=>V3.gp[k]).join()+"|"+V3.omb.sig+"|"+(V3.tapP?1:0);
+  if(sig===OUVCH.sig) return false;
+  OUVCH.sig=sig; sceneDirty=true; return true; }
+function v3ChaufferFroids(){
+  if(!V3.on||!V3.gp||!V3.gb||!V3.sm) return;
+  for(let i=0;i<16;i++){ gl.activeTexture(gl.TEXTURE0+i); gl.bindTexture(gl.TEXTURE_2D,null); gl.bindTexture(gl.TEXTURE_2D_ARRAY,null); }   // aucune boucle cible-texture : le dessin n'est pas refusé
+  for(const k in V3.gp){ const P=V3.gp[k]; if(!P||P.p.__chaud||k==="sol") continue;
+    const u=P.u; gl.useProgram(P.p);
+    if(V3_PF[k]){ gl.bindFramebuffer(gl.FRAMEBUFFER,V3.gb.f); for(const n of ["uPrxO","uPrxB","uPrxA","uPrxP"]) gl.uniform1i(u[n]||null,0); gl.uniform4i(u.uPrxS||null,0,0,0,0); gl.drawArrays(gl.TRIANGLES,0,3); }
+    else { gl.uniform1i(u.uTotal||null,0); gl.uniform1i(u.uTrait||null,0);
+      for(const [f,v] of [[V3.gb.f,0],[V3.sm.f,1]]){ gl.bindFramebuffer(gl.FRAMEBUFFER,f); gl.uniform1i(u.uVue||null,v); gl.drawArrays(gl.POINTS,0,1); } } }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+}
+const OUV_ATTENTE=CFG.ouvAttente||5000, OUV_PLEIN=CFG.ouvPlein||25000;   // ms : attente de la première image ; de la variante complète si elle compile encore
+const ombEnVol=()=>{ const P=OMB.e[OMB.sig]; return !!(V3.on&&P&&!P.p&&!P.echec); };                          // ms : au-delà, le fondu part sur ce qui est prêt (socle), même sans image
 let ouvCoulisse=null, ouvMesure=null;
 function etatPrep(){                                             // l'étape en cours, pour la ligne « Le monde se construit »
   const x=COMP.envol.find(e=>!e.note);
@@ -3039,6 +3161,7 @@ function pretOuverture(){                                        // fin du rejeu
   ouvRepos=false; const t0=performance.now(), n0=V3.nImg; V3.nImg0=V3.nImg;
   return new Promise(ok=>{ const tic=()=>{
     const prete=V3.on?V3.nImg>n0&&!!V3.hist:!!hist&&!sceneDirty&&!ptEnCours(), d=performance.now()-t0;
+    if(prete&&ombEnVol()&&d<OUV_PLEIN) return setTimeout(tic,40);   // la variante complète finit derrière l'ouverture : pas de gel une fois dans le monde
     if(prete||d>OUV_ATTENTE){ ouvMesure={ms:Math.round(d),image:prete,ombrage:V3.on?(V3.omb?(V3.omb===OMB.e.socle?"socle":"complet"):"aucun"):"rayons"};
       etapeGL("ouverture : fondu après "+(d/1000).toFixed(1)+" s"+(prete?"":" (délai, sans image)")); return ok(ouvMesure); }
     setTimeout(tic,40); }; tic(); });

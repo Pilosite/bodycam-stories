@@ -401,3 +401,43 @@ Programmes de la première image (capteur, halo, exposition, sol, semeur ×2, pr
 ### Ce qui n'est pas vérifié, ce qui reste gros
 
 Rien n'a tourné sur Direct3D ni sur un vrai GPU : le déplié est une estimation de ce que fait FXC, et la règle des 10 000 caractères par seconde vient d'une seule mesure. On ne sait pas si ANGLE ou FXC déroulent quand même une boucle à borne `N+uZ` (ils ne le peuvent pas sans connaître `uZ`). Le plus gros restant : la variante complète (77 000), le semeur à houppiers compilé deux fois (tampon G et ombre, 62 000 chacun : même source de sommets), le lanceur de rayons (6,8 millions, compilé seulement s'il sert). En rendu logiciel, une compilation n'a lieu qu'au premier dessin : les durées mesurées ici ne disent rien de FXC.
+
+## Compilation en petits morceaux, réchauffe et banc d'essai (branche `perf`, 20 novembre 2026)
+
+Mesures réelles du PC de Toine (Windows, RTX, Direct3D 11, fiche 09, version `gel`) : socle 4,9 s (31 s avant), mais `v3 grains` 14,5 s et `v3 ombre` 11,0 s (le même source de sommets du semeur, compilé deux fois), `v3 proches` 6,0 s, `grainsF` 3,0 s, `ombreF` 2,8 s ; variante complète en échec (délai) ; 43 ms par image au niveau 4/5 du régulateur, dont 38 ms pour la passe grains. Retour : « après c'est fluide, juste ça hang au loading et une fois le rendu fait ». Deux gels, donc : les compilations au chargement, et ce qui part juste après la première image (variante complète, premiers dessins).
+
+### Ce que FXC coûte
+
+Durées réelles contre déplié (`tools/deplie.mjs`) : sol 11 k → 0,4 s, `grainsF` 35 k → 3,0 s, socle 34 k → 4,9 s, proches 52 k → 6,0 s, semeur à houppiers 62 k → 11 à 14,5 s. Le temps croît bien plus vite que la taille (à peu près son carré au-delà de 30 k) : quatre programmes de 15 à 29 k coûtent bien moins qu'un de 62 k. D'où :
+
+- **Un seul programme pour le tampon G et la carte d'ombres** (par variante du semeur) : `v3_gbuf.frag` sait aussi n'écrire que la profondeur (`uVue` = 1, ce que faisait `v3_ombre.frag`, retiré). Les valeurs que le programme d'ombre n'avait jamais reçues (`uAzPres`, `uPrxN`, `uAncre`, `uPts`, `uCompte`) sont remises à 0 avant la passe d'ombre : même calcul. Un seul `sdPrim` dans la découpe des formes (les deux vues).
+- **Le semeur en un programme par famille** (`#define FAM`, `v3_grains.vert` : 1 arbres, 2 perches et leurs traits vus du soleil, 3 blocs, 4 feuilles de la canopée ; 0 = tout, comme avant). La page dessine chaque tranche de grains avec le programme de sa famille (`v3Tranches`) ; `gl_VertexID` compte le premier sommet du dessin, le tirage est donc identique. Vu du soleil, la tranche des feuilles de la canopée n'est plus dessinée (elle ne sortait rien).
+- **Les proches en trois programmes** (`#define PF` : formes des objets et des semis, blocs, troncs et perches), dessinés dans l'ordre des emplacements (objets, blocs, troncs, semis). Un seul `sdPrim` pour objets et semis.
+
+| Programme (fiche 09, PC) | déplié avant | après |
+|---|---|---|
+| sol | 11 021 | 11 224 |
+| semeur, tampon G | 62 303 | A 27 116 · B 29 354 · R 14 645 · L 13 077 |
+| semeur, ombre | 61 791 | (le même programme) |
+| proches | 51 587 | O 19 811 · B 11 761 · T 23 324 |
+| socle | 33 913 | 33 913 |
+| FORMES, tampon G | 34 997 | 35 230 |
+| FORMES, ombre | 34 758 | (le même programme) |
+| total avant la variante complète | 290 370 | 219 455 |
+| variante complète (PC) | 77 278 | 77 278 |
+
+Estimation, en prenant les durées réelles du PC pour les programmes inchangés et une loi en carré de la taille pour les autres (étalonnée sur `grainsF` : 35 k → 3 s) : semeur 25,5 s → environ 4,8 s (A 1,8, B 2,1, R 0,5, L 0,4) ; proches 6 s → environ 2,4 s ; `ombreF` 2,8 s → 0. Total avant la première image et les formes : environ 42,6 s → 15,5 s. Le plus long restant : le socle (4,9 s mesurées) et la variante complète (77 k, au moins 11 s). Rien de cela n'est mesuré sur Direct3D : le banc d'essai et le diagnostic donnent maintenant la durée de chaque compilation et de chaque premier dessin.
+
+### Premiers dessins et réchauffe pendant l'ouverture
+
+Sous Direct3D, ANGLE et le pilote peuvent finir le travail au premier dessin d'un programme (variante du nuanceur de pixels selon les cibles, nuanceur de géométrie des points, compilation du pilote). Chaque programme est marqué à son premier `useProgram` ; à la fin d'une image qui en contient, un `gl.finish` (ces images-là seulement) chronomètre le tout (« Premiers dessins » du diagnostic). Pendant l'écran d'ouverture, dès qu'un programme du moteur devient prêt, une image réelle est rendue derrière l'écran (opaque, `ouvChauffe`) ; les programmes qu'aucune image n'a utilisés (famille absente du champ) font un dessin vide dans chacune de leurs cibles (`v3ChaufferFroids`). La fin du rejeu attend aussi la variante complète si elle compile encore (au plus 25 s, `ouvPlein`).
+
+**Gels** : tout intervalle de plus de 250 ms entre deux images, ouverture comprise, est noté avec ce qui compilait ou faisait son premier dessin à ce moment-là (dix plus longs, diagnostic et banc). C'est ce qui dira, sur le PC, si une compilation « en parallèle » fige quand même la page.
+
+### Régulateur
+
+Pas de pompage : on ne remonte pas vers un niveau quitté parce qu'il dépassait la cible (mesuré au-dessus de 100 % il y a moins de 20 s) ; passé ce délai, on réessaie. Le reste ne change pas (descente après 1 s au-dessus de 110 %, remontée après 3 s sous 65 % avec le chronomètre de la puce, 95 % sans).
+
+### Banc d'essai
+
+« Plus » → « Banc d'essai », ou `balade.banc()` (rend le texte). Environ 15 s, caméra figée sur la fiche courante (de face, puis regard levé de 43° dans les houppiers), régulateur coupé, chaque image recalculée comme en marche, carte d'ombres refaite à chaque image. Pour chaque variante, médiane sur 8 images du temps de la puce (`EXT_disjoint_timer_query_webgl2`) des passes grains, proches, ombre, ombrage et de leur somme ; sans le chronomètre, l'intervalle entre deux fins d'image (`gl.finish`, dans le banc seulement). Variantes, par uniformes et drapeaux (aucun programme nouveau ; `uBanc` du semeur, `BANC.v`) : grains 100, 50 et 25 % ; grains d'un pixel (le coût des sommets seuls) ; sans feuilles, feuilles seules, sans troncs ni branches (grains calculés puis rejetés : le coût de leurs fragments) ; sans semis ni objets ; sans relief de détail (fiches à bosses ou buttes) ; résolution interne × 0,5 (la part du remplissage) ; sans proches. En tête : la machine (`WEBGL_debug_renderer_info`), le navigateur, la fiche, la résolution interne et l'écran, le budget, la présence du chronomètre et de `KHR_parallel_shader_compile` ; en pied : chaque compilation, chaque premier dessin, les gels. Affiché en plein écran (bouton « Copier »).
