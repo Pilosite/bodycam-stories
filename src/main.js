@@ -344,28 +344,38 @@ function repereObjet(o){
 function versMonde(R,p){ const c=Math.cos(R.yaw), s=Math.sin(R.yaw); return [R.x+(c*p[0]+s*p[2])*R.ech, R.y+p[1]*R.ech, R.z+(-s*p[0]+c*p[2])*R.ech]; }
 function versLocal(R,w){ const dx=w[0]-R.x, dz=w[2]-R.z, c=Math.cos(R.yaw), s=Math.sin(R.yaw); return [(c*dx-s*dz)/R.ech,(w[1]-R.y)/R.ech,(s*dx+c*dz)/R.ech]; }
 function buildShapes(f,seulsGestes){                            // seulsGestes : les mains ou une chose façonnée bougent (rien de nouveau pour les obstacles)
-  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; if(!seulsGestes) S.objVer=(S.objVer||0)+1; let row=8;
+  shapesData.fill(0); S.objN=0; S.objRows=0; S.objTop=0; S.vac=[]; S.mou=false; if(!seulsGestes) S.objVer=(S.objVer||0)+1; let row=8;
   // seuls les objets visibles prennent une des 8 places (le meneur compte de même : un accessoire caché ne coûte rien) ; les
   // mains du porteur (§17), quand elles sont dans le champ, prennent la dernière
   const vis=(Array.isArray(f.objets)?f.objets:[]).filter(o=>o&&!(o.visible===false||cacheObj.has(o.id)));
-  for(const o of mainsObj?[...vis.slice(0,7),mainsObj]:vis.slice(0,8)){
-    const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24);
+  const MO=mainsObj?(Array.isArray(mainsObj)?mainsObj:[mainsObj]):[];
+  for(const o of [...vis.slice(0,8-MO.length),...MO]){
+    // les creux (empreintes) après les autres formes : le lanceur de rayons les retranche de ce qui précède
+    const formes=(Array.isArray(o.formes)?o.formes:[]).filter(x=>x&&FORMES[x.f]!==undefined).slice(0,24).sort((a,b)=>(a.creux>0?1:0)-(b.creux>0?1:0));
     if(!formes.length || row+formes.length>SEM0) continue;
     const R=repereObjet(o), {x,z,yaw,ech}=R;
     const y=R.y, c=Math.cos(yaw), sn=Math.sin(yaw), i=S.objN; let rad=.1;
+    const mou=formes.some(fo=>fo.lisse>0||fo.creux>0||fo.bosse>0), bmn=[1e9,1e9,1e9], bmx=[-1e9,-1e9,-1e9];
     formes.forEach((fo,k)=>{
       const p=(Array.isArray(fo.p)?fo.p:[0,0,0]).map(v=>clampN(v,-30,30,0)*ech);
       const t=(Array.isArray(fo.taille)?fo.taille:[1,1,1]).map(v=>clampN(v,.01,40,1)*ech*.5);
       const pe=Array.isArray(fo.penche)?fo.penche:[0,0], col=couleur(fo.couleur), r=(row+k)*16;
       ancrer(fo.f,p,t,pe,2);
-      shapesData.set([x+c*p[0]+sn*p[2], y+p[1], z-sn*p[0]+c*p[2], FORMES[fo.f]+8*dentsDe(fo),
-                      t[0],t[1],t[2], yaw+clampN(fo.cap,-360,360,0)*Math.PI/180,
-                      col[0],col[1],col[2], matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0,
-                      clampN(fo.lisse,0,.5,0)*ech, clampN(fo.arrondi,0,.3,0)*ech, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
+      // objet mou (lisse, creux, bosse) : le creux s'écrit en lisse négatif ; la bosse dans la partie fractionnaire de la matière
+      const cx=x+c*p[0]+sn*p[2], cz=z-sn*p[0]+c*p[2], ca=yaw+clampN(fo.cap,-360,360,0)*Math.PI/180, ar=clampN(fo.arrondi,0,.3,0)*ech;
+      const li=fo.creux>0?-Math.max(.001,clampN(fo.creux,0,.5,0)*ech):clampN(fo.lisse,0,.5,0)*ech, bo=mou?clampN(fo.bosse,0,.4,0):0;
+      shapesData.set([cx, y+p[1], cz, FORMES[fo.f]+8*dentsDe(fo),
+                      t[0],t[1],t[2], ca,
+                      col[0],col[1],col[2], (matIdx.has(fo.matiere)?16+matIdx.get(fo.matiere):MATIERES[fo.matiere]!==undefined?MATIERES[fo.matiere]:0)+bo,
+                      li, ar, clampN(pe[0],-90,90,0)*Math.PI/180, clampN(pe[1],-90,90,0)*Math.PI/180], r);
+      if(mou&&li>=0){ const e=etendueForme(FORMES[fo.f],t,ar,ca,clampN(pe[0],-90,90,0)*Math.PI/180,clampN(pe[1],-90,90,0)*Math.PI/180), m=Math.max(li,0)+bo*Math.min(...t)+.01;
+        [cx,y+p[1],cz].forEach((v,j)=>{ bmn[j]=Math.min(bmn[j],v-e[j]-m); bmx[j]=Math.max(bmx[j],v+e[j]+m); }); }
       if(fo.vacille>0) S.vac.push([r,col[0],col[1],col[2],clampN(fo.vacille,0,1,0),k*1.7+i]);   // éclat qui tremble (flamme) : voir vaciller()
       rad=Math.max(rad,Math.hypot(p[0],p[1],p[2])+Math.hypot(t[0],t[1],t[2]));
     });
     shapesData.set([x,y,z,rad, row,formes.length, clampN(o.degage,0,12,0), (o.visible===false||cacheObj.has(o.id))?0:1], i*16);
+    if(mou&&bmx[0]>bmn[0]){ shapesData.set([(bmn[0]+bmx[0])/2,(bmn[1]+bmx[1])/2,(bmn[2]+bmx[2])/2,1, (bmx[0]-bmn[0])/2,(bmx[1]-bmn[1])/2,(bmx[2]-bmn[2])/2,0], i*16+8);
+      if(!(o.visible===false||cacheObj.has(o.id))) S.mou=true; }   // objet mou : sa boîte (programme des proches PATE)
     row+=formes.length; S.objN++; S.objRows=row-8;
     S.objTop=Math.max(S.objTop,y+rad-S.rel[2]*z);
   }
@@ -374,6 +384,17 @@ function buildShapes(f,seulsGestes){                            // seulsGestes :
   S.yTop=Math.max(S.kit===0?23:5,terr+Math.max(S.objTop,...S.semTop));
   gl.bindTexture(gl.TEXTURE_2D,shapesT); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,4,SH_ROWS,gl.RGBA,gl.FLOAT,shapesData);
   sceneDirty=true;
+}
+/* Demi-étendue dans les axes du monde d'une forme (demi-tailles t, arrondi ar), tournée comme primMonde (monde.glsl) :
+   cap ca, penche autour de x (px) puis de z (pz). Même boîte de forme que v3_proches.vert (boite). */
+function etendueForme(ty,t,ar,ca,px,pz){
+  const h=ty>=2&&ty<=4?[t[0]+ar,t[1]+(ty===4?t[0]+ar:ar),t[0]+ar]:[t[0]+ar,t[1]+ar,t[2]+ar];
+  const rot=q=>{ let [a,b,d]=q, C, Sn;
+    if(px){ C=Math.cos(px); Sn=Math.sin(px); [b,d]=[C*b-Sn*d,Sn*b+C*d]; }
+    if(pz){ C=Math.cos(pz); Sn=Math.sin(pz); [a,b]=[C*a-Sn*b,Sn*a+C*b]; }
+    C=Math.cos(ca); Sn=Math.sin(ca); return [C*a+Sn*d,b,-Sn*a+C*d]; };
+  const ax=[rot([h[0],0,0]),rot([0,h[1],0]),rot([0,0,h[2]])];
+  return [0,1,2].map(j=>Math.abs(ax[0][j])+Math.abs(ax[1][j])+Math.abs(ax[2][j]));
 }
 /* Une boîte posée au sol descend sous terre : sur une pente, sa base ne flotte pas (fondation, soubassement). */
 function ancrer(f,p,t,pe,prof){
@@ -1131,7 +1152,7 @@ function v3Init(){                                             // rend vrai quan
    tranche de grains : FXC compile bien plus vite quatre petits programmes qu'un gros. */
 const V3_FAM={grainsA:1,grainsB:2,grainsR:3,grainsL:4};
 const V3_PROGS=["sol","grainsA","grainsB","grainsR","grainsL","prochesO","prochesB","prochesT","grainsF"];
-const V3_PF={prochesO:1,prochesB:2,prochesT:3};               // éléments proches, une famille par programme (PF dans v3_proches) : formes (objets, semis), blocs, troncs
+const V3_PF={prochesO:1,prochesB:2,prochesT:3,prochesM:1};    // éléments proches, une famille par programme (PF dans v3_proches) : formes (objets, semis), blocs, troncs ; objets mous (PATE)
 function v3Tranches(G,ps,vue){                                 // [programme, premier grain, fin] de chaque famille ; vue du soleil : pas de feuilles de canopée
   const t=[[G.grainsA,0,ps.part[0]],[G.grainsB,ps.part[0],ps.part[1]],[G.grainsR,ps.part[1],ps.part[2]]];
   if(!vue) t.push([G.grainsL,ps.part[2],ps.part[3]]);
@@ -1140,7 +1161,7 @@ function v3Lancer(k){                                          // un programme d
   const F=src=>src.replace("\n","\n#define FORMES 1\n");   // variante du semeur pour les formes (objets, semis) : voir v3_grains.vert
   const R=v3Rel, Hp=src=>R(V3.avecHp?src.replace("\n","\n#define HOUPPIER 1\n"):src);
   const SP=V3_FAM[k]?[FS_V3GBUF,Hp(VS_V3GRAINS).replace("\n","\n#define FAM "+V3_FAM[k]+"\n")]:
-    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+"\n")):
+    V3_PF[k]?[Hp(FS_V3PROCHES),Hp(VS_V3PROCHES)].map(x=>x.replace("\n","\n#define PF "+V3_PF[k]+(k==="prochesM"?"\n#define PATE 1":"")+"\n")):
     { sol:[FS_V3GBUF,R(VS_V3SOL)], grainsF:[F(FS_V3GBUF),F(R(VS_V3GRAINS))] }[k];
   return lancer(SP[0],SP[1],"v3 "+k);
 }
@@ -1154,6 +1175,16 @@ function v3Formes(){                                           // rend vrai quan
     V3.gp[k]=finir(x); delete V3.lance[k];
   }
   return true;
+}
+/* Objets mous (lisse, creux, bosse : pâte, boue, neige, chair) : la variante PATE du programme des formes proches, compilée
+   seulement quand un tel objet est visible, au calme (comme un gros programme), jamais avant la première image. Tant
+   qu'elle n'est pas prête, ses formes sont dessinées une à une, sans fondu (prochesO). */
+function v3Mou(){
+  if(!V3.gp||!V3.gp.prochesO) return false; if(V3.gp.prochesM) return true;
+  const x=V3.lance.prochesM;
+  if(!x){ if(compLibre(true)) V3.lance.prochesM=v3Lancer("prochesM"); return false; }
+  if(!fini(x)) return false;
+  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; return true;
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
@@ -1289,13 +1320,13 @@ function v3Semis(nb,vue,p){
   const d=V3.semis; d.fill(0);
   const ws=[], ai=[]; let tot=0;
   for(let i=0;i<S.objN;i++){ const o=i*16, row=shapesData[o+4], cn=shapesData[o+5], vis=shapesData[o+7]>.5, rad=shapesData[o+3];
-    let a=0; for(let j=0;j<cn;j++){ const r=(row+j)*16; a+=aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); }
+    let a=0; for(let j=0;j<cn;j++){ const r=(row+j)*16; a+=shapesData[r+12]<0?0:aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); }   // un creux n'est pas semé
     const dd=Math.max(1,Math.hypot(shapesData[o]-p.pos[0],shapesData[o+1]-p.pos[1],shapesData[o+2]-p.pos[2])-rad*.5);
     const w=vis?(vue===0?rad*rad/(dd*dd):rad*rad):0; ws.push(w); ai.push(a||1); tot+=w; }
   let cum=0;
   for(let i=0;i<S.objN;i++){ cum+=ws[i]; d[i*4]=tot>0?cum/tot:0; d[i*4+1]=tot>0?nb*(ws[i]/tot)/ai[i]:0;
     const o=i*16, row=shapesData[o+4], cn=shapesData[o+5]; let c=0;
-    for(let j=0;j<cn;j++){ const r=(row+j)*16, a=aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); c+=a;
+    for(let j=0;j<cn;j++){ const r=(row+j)*16, a=shapesData[r+12]<0?0:aireForme(shapesData[r+3],[shapesData[r+4],shapesData[r+5],shapesData[r+6]]); c+=a;
       d[(row+j)*4]=c/ai[i]; d[(row+j)*4+1]=a; } }
   if(tot<=0) for(let i=0;i<S.objN;i++) d[i*4]=0;
   for(let k=0;k<S.semN;k++){ const r0=SEM0+k*SEM_L, a=semisAire(k); let c=0;
@@ -1544,7 +1575,8 @@ function v3Image(p){
   const px=v3Proches();
   if(px.total>0){ gpuDebut("proches");                         // dans l'ordre des emplacements : objets, blocs, troncs et perches, semis
     const e1=px.o, e2=e1+px.b, e3=e2+px.a+px.p;
-    for(const [P,de,a] of [[G.prochesO,0,e1],[G.prochesB,e1,e2],[G.prochesT,e2,e3],[G.prochesO,e3,px.total]]){ if(a<=de) continue;
+    const PM=S.mou&&v3Mou()?G.prochesM:G.prochesO;            // objets mous : formes fondues (variante PATE), dès qu'elle est prête
+    for(const [P,de,a] of [[PM,0,e1],[G.prochesB,e1,e2],[G.prochesT,e2,e3],[G.prochesO,e3,px.total]]){ if(a<=de) continue;
     u=P.u; gl.useProgram(P.p); v3Monde(u,W,H,p); gl.uniform2fv(u.uJit,jc); gl.uniform2fv(u.uJitPx,jit);
     gl.uniform1i(u.uPrxO,px.o); gl.uniform1i(u.uPrxB,px.b); gl.uniform1i(u.uPrxA,px.a); gl.uniform1i(u.uPrxP,px.p); gl.uniform4iv(u.uPrxS,px.fin); gl.uniform4iv(u.uPrxN,px.n);
     gl.drawArrays(gl.TRIANGLES,de*PRX_VPS,(a-de)*PRX_VPS); } }

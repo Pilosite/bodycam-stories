@@ -10,6 +10,14 @@ precision highp float; precision highp int; precision highp sampler2D;
 #ifndef PF
 #define PF 0
 #endif
+/* PATE : variante du programme des formes (PF 1) pour les objets MOUS (pâte, boue, neige, argile, chair) : un objet dont une
+   forme se fond (lisse), creuse (creux) ou bosselle (bosse) est dessiné en UNE boîte (sa boîte englobante, calculée par la page :
+   lignes 0 à 7 de uShapes, texels 2 et 3), et chaque pixel y cherche l'union adoucie de toutes ses formes (v3_proches.frag,
+   sdMou). Compilée seulement quand un objet mou existe ; sinon, et tant qu'elle n'est pas prête, le programme PF 1 dessine
+   ses formes une à une, sans fondu. Ne dessine que les emplacements des objets (pas de semis). */
+#ifndef PATE
+#define PATE 0
+#endif
 #include "monde.glsl"
 #include "v3_commun.glsl"
 uniform int   uPrxO;         // emplacements des formes d'objets (lignes 8 et suivantes)
@@ -17,7 +25,7 @@ uniform int   uPrxB;         // emplacements des blocs (25, ou 0)
 uniform int   uPrxA;         // emplacements des arbres (9, ou 0) : le tronc, et le cœur des conifères
 uniform int   uPrxP;         // emplacements des perches (25, ou 0)
 uniform ivec4 uPrxS;         // fin des emplacements de chaque couche de semis (cellules × formes), après objets et blocs
-flat out ivec4 vK;           // genre (0 objet, 1 semis, 2 bloc, 3 arbre, 4 perche), ligne de la forme, couche, rive
+flat out ivec4 vK;           // genre (0 objet, 1 semis, 2 bloc, 3 arbre, 4 perche, 5 objet mou entier), ligne de la forme, couche (objet mou : nombre de formes), rive
 flat out vec2 vId;           // cellule
 flat out vec2 vPrx;          // caméra dans la boîte (1/0), diamètre de la boîte (m)
 out vec3 vW;                 // point du monde sur la boîte
@@ -50,13 +58,25 @@ void main(){
   if(false){}
 #if PF==0 || PF==1
   else if(slot<uPrxO){                                            // forme d'un objet de la fiche
-    int row=8+slot;
-    for(int i=0;i<8;i++){ if(i>=uObjN) break; vec4 o1=texelFetch(uShapes,ivec2(1,i),0);
-      if(row>=int(o1.x) && row<int(o1.x+o1.y) && o1.w<.5) return; }   // objet caché
+    int row=8+slot, oi=-1; vec4 o1=vec4(0.);
+    for(int i=0;i<8;i++){ if(i>=uObjN) break; vec4 x=texelFetch(uShapes,ivec2(1,i),0);
+      if(row>=int(x.x) && row<int(x.x+x.y)){ oi=i; o1=x; } }
+    if(oi>=0 && o1.w<.5) return;                                  // objet caché
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
+    if(e.x<0.) return;                                            // un creux n'a pas de surface à lui : il creuse les formes molles
+#if PATE
+    vec4 m0=oi>=0?texelFetch(uShapes,ivec2(2,oi),0):vec4(0.);
+    if(m0.w>.5){                                                  // objet mou : une seule boîte pour tout l'objet, à sa première forme
+      if(row!=int(o1.x)) return;
+      hb=texelFetch(uShapes,ivec2(3,oi),0).xyz; cl=uCamPos-m0.xyz; W=m0.xyz+coin(u,hb,cl); diam=2.*length(hb);
+      vK=ivec4(5,row,int(o1.y),0);
+    } else
+#endif
+    {
     hb=boite(a.w,b.xyz,e.y)*1.04+.03;
     cl=primLocal(uCamPos,row); W=primMonde(coin(u,hb,cl),row,false); diam=2.*length(hb);
     vK=ivec4(0,row,0,0);
+    }
   }
 #endif
 #if PF==0 || PF==2
@@ -96,7 +116,7 @@ void main(){
     vK=ivec4(arbre?3:4,0,0,0); vId=id;
   }
 #endif
-#if PF==0 || PF==1
+#if (PF==0 || PF==1) && !PATE
   else if(slot>=uPrxO+uPrxB+uPrxA+uPrxP){                                                   // élément d'une couche de semis, cellules voisines de la caméra
     int k=slot<uPrxS.x?0:slot<uPrxS.y?1:slot<uPrxS.z?2:3;
     int s=slot-(k==0?uPrxO+uPrxB+uPrxA+uPrxP:k==1?uPrxS.x:k==2?uPrxS.y:uPrxS.z);

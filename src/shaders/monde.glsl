@@ -383,8 +383,8 @@ float sdProps(vec3 p, out vec4 info){
       int row=st+j;
       vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
       float dd=sdPrim(primLocal(p,row),a.w,b.xyz)-e.y;
-      if(dd<best){ best=dd; brow=float(row); }
-      od=e.x>0.?smin(od,dd,e.x):min(od,dd);
+      if(dd<best && e.x>=0.){ best=dd; brow=float(row); }
+      od=e.x>0.?smin(od,dd,e.x):e.x<0.?-smin(-od,dd,-e.x):min(od,dd);   // lisse < 0 : un creux (rangé après les autres formes)
     }
     od*=.8;
     if(od<d){ d=od; info=vec4(0.,0.,0.,brow); }
