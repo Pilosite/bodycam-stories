@@ -10,6 +10,12 @@ float EX, GAIN;
    centre — à partir du halo déjà calculé (5 lectures). uGrainPx : taille du grain en pixels de l'écran, pour qu'un écran de
    1280 × 800 garde le grain d'une vidéo et non un bruit de pixels fin. 0 et 1 en qualité mobile : rien ne change. */
 uniform float uFlare; uniform float uGrainPx;
+/* Bougé (qualité mobile, en mouvement) : uFlou = part du bougé (0 à l'arrêt, 1 en marche ou en rotation, fondu entre les deux).
+   Le déplacement de chaque pixel pendant l'image est calculé ici, comme la reprojection : point du monde (distance lue dans
+   l'alpha de l'accumulation) revu depuis la pose de l'image précédente (uPosA, uCamA) ; uCamC, uPosC : pose de l'image montrée.
+   Les quatre lectures qui servent à la netteté se placent alors le long de ce déplacement (et un peu en travers) et adoucissent
+   au lieu d'accentuer : un flou de bougé directionnel, sans lecture de plus. À l'arrêt (uFlou = 0) : rien ne change. */
+uniform float uFlou; uniform float uFishC; uniform mat3 uCamC; uniform vec3 uPosC; uniform mat3 uCamA; uniform vec3 uPosA;
 uniform int uLin;            // 1 = source filtrable (RGBA16F, LINEAR) : une lecture filtrée par la puce au lieu de quatre texelFetch
 out vec4 o;
 float h12(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
@@ -42,7 +48,20 @@ void main(){
     hdr=(hdr+smp(.5+q+sp*vec2(1.,.6))+smp(.5+q+sp*vec2(-.6,1.))+smp(.5+q+sp*vec2(-1.,-.6))+smp(.5+q+sp*vec2(.6,-1.)))*.2; }
   vec3 bl=textureLod(uBloom,.5+q,0.).rgb;
   vec2 px=1.2/uSrcRes;
-  vec3 nb=(smp(.5+q+vec2(px.x,0.))+smp(.5+q-vec2(px.x,0.))+smp(.5+q+vec2(0.,px.y))+smp(.5+q-vec2(0.,px.y)))*.25;
+  vec2 tA=vec2(px.x,0.), tB=vec2(0.,px.y);
+  if(uFlou>0.){                                                // bougé : déplacement du pixel depuis l'image précédente, en pixels source
+    vec2 sp=(.5+q)*uSrcRes, uv=(sp-.5*uSrcRes)/uSrcRes.y; float rr=length(uv), ang=rr*uFishC;
+    float t=uLin==1?textureLod(uTex,.5+q,0.).a:texelFetch(uTex,ivec2(clamp(sp,vec2(0.),uSrcRes-1.)),0).a;
+    vec3 P=uPosC+uCamC*vec3(uv/max(rr,1e-5)*sin(ang),cos(ang))*min(max(t,.05),1e4);
+    vec3 d=normalize(P-uPosA)*uCamA; float s2=length(d.xy);
+    vec2 pa=(s2>1e-6?d.xy/s2:vec2(0.))*(acos(clamp(d.z,-1.,1.))/uFishC)*uSrcRes.y+.5*uSrcRes;
+    vec2 m=(sp-pa)*.35; float lm=length(m);                    // obturateur : un tiers d'image
+    if(lm>8.) m*=8./lm;
+    m=lm>.65?m:(lm>1e-3?m/lm:vec2(1.,0.))*.65;                   // au moins un pixel : les arêtes des grains ne restent pas en marches d'escalier
+    vec2 np=vec2(-m.y,m.x)/max(length(m),1e-4);
+    tA=mix(tA,m/uSrcRes,uFlou); tB=mix(tB,(m*.35+np*.6)/uSrcRes,uFlou);
+  }
+  vec3 nb=(smp(.5+q+tA)+smp(.5+q-tA)+smp(.5+q+tB)+smp(.5+q-tB))*.25;
   if(uFlare>0.){
     vec3 v=(textureLod(uBloom,.5+q*.55+vec2(.17,.1),0.).rgb+textureLod(uBloom,.5+q*.55-vec2(.17,.1),0.).rgb
            +textureLod(uBloom,.5+q*.55+vec2(-.1,.17),0.).rgb)*(1./3.);
@@ -56,7 +75,7 @@ void main(){
   }
   hdr=sain(hdr); nb=sain(nb); bl=sain(bl);
   vec3 c=tone(mix(hdr,bl,.11)), cn=tone(mix(nb,bl,.11));
-  c+=(c-cn)*(uGrainPx>1.?.45:.70)*(1.-min(uSoft,1.));          // grand écran : la netteté d'un téléphone en 1080p, sans liseré noir
+  c+=(c-cn)*mix(uGrainPx>1.?.45:.70,-.5,uFlou)*(1.-min(uSoft,1.));   // en mouvement : adoucit (bougé) au lieu d'accentuer          // grand écran : la netteté d'un téléphone en 1080p, sans liseré noir
   c=max(c,0.);
   /* Écrêtage du capteur : un photosite saturé ne garde pas sa teinte, tout ce qui dépasse le blanc part vers le blanc (un
      soleil brûlé est blanc, à peine chaud au bord). Borné à 1 avant la courbe en S : au-delà, c*c*(3-2c) devient négatif
@@ -76,7 +95,7 @@ void main(){
   vec3 cn3=vec3(h12(cq+tt*3.1),h12(cq+tt*5.3+11.),h12(cq+tt*7.7+23.))-.5;
   c+=cn3*.022*(1.-lg)*GAIN;
   vec2 bq=floor(gl_FragCoord.xy/vec2(16.*max(uGrainPx,1.)));                // macroblocs de compression vidéo
-  c+=(vec3(h12(bq+tt*1.7),h12(bq+tt*2.9+5.),h12(bq+tt*4.1+9.))-.5)*.012;
+  c+=(vec3(h12(bq+tt*1.7),h12(bq+tt*2.9+5.),h12(bq+tt*4.1+9.))-.5)*(.012+.010*uFlou);   // plus marqués en mouvement, comme un codec à court de débit
   c=c*.985+.012;
   o=vec4(c,1.);
 }

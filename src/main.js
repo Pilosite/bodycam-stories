@@ -769,8 +769,25 @@ function postFX(src){
 }
 const still=matchMedia("(prefers-reduced-motion:reduce)").matches || !!CFG.still;
 let walkAmt=0;
+/* Bougé du capteur (camera.frag, uFlou) : qualité mobile seulement (option flou : true l'impose, false le coupe). La pose de
+   l'image montrée et celle de l'image d'avant donnent à chaque pixel son déplacement ; la part du bougé monte vite quand la
+   caméra bouge et retombe en un quart de seconde à l'arrêt, le temps que l'accumulation reprenne la main. */
+const FLOU={ pose:null, prev:null, s:0, t:0 };
+function flouCapteur(u,t){
+  const on=CFG.flou!==undefined?!!CFG.flou:!QUAL.full, p=V2.on?null:V3.on?V3.histPose:histPose;
+  if(p&&p!==FLOU.pose){ FLOU.prev=FLOU.pose; FLOU.pose=p; }
+  const bouge=on&&!!p&&!!FLOU.prev&&!samePose(FLOU.prev,p), dt=Math.max(0,Math.min(.25,t-FLOU.t)); FLOU.t=t;
+  FLOU.s+=((bouge?1:0)-FLOU.s)*(1-Math.exp(-dt/(bouge?.03:.25))); if(!on||FLOU.s<.01) FLOU.s=0;
+  gl.uniform1f(u.uFlou||null,FLOU.s); if(!FLOU.s) return;
+  const q=FLOU.prev||p, w=V3.on?W:src0.w, h=V3.on?H:src0.h;
+  gl.uniform1f(u.uFishC,1.09/(.5*Math.max(1,w/h))/cam.zoom);
+  gl.uniform3fv(u.uPosC,p.pos); gl.uniformMatrix3fv(u.uCamC,false,p.mat); gl.uniform3fv(u.uPosA,q.pos); gl.uniformMatrix3fv(u.uCamA,false,q.mat);
+}
+let src0=null;
 function display(src,t,cible){
-  const u=P_CAM.u; gl.useProgram(P_CAM.p);
+  const u=P_CAM.u; gl.useProgram(P_CAM.p); src0=src;
+  if(!cible) flouCapteur(u,t);
+  else gl.uniform1f(u.uFlou||null,0);
   bindTex(0,src.t,u.uTex); bindTex(1,bl1.t,u.uBloom);
   gl.uniform2f(u.uSrcRes,src.w,src.h); gl.uniform2f(u.uOutRes,canvas.width,canvas.height);
   bindTex(2,expoT[expoI].t,u.uExpoT); gl.uniform1i(u.uExpoGpu,OPT.expoSync||CFG.expoDiff||CFG.expoFixe>0?0:1);
