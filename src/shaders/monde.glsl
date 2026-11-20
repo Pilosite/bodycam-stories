@@ -149,7 +149,7 @@ float rayonA(ArbreA A, float y){ return A.r0*(1.-.5*clamp(y/A.H,0.,1.))+A.r0*.45
    sa cellule) : le semeur pose ses grains dessus, vus de la caméra comme du soleil (les masses trouées laissent passer les rais). */
 uniform vec4  uHp[16];     // port e (0 arbres a, 1 arbres b, 2 perches a, 3 perches b), 4 lignes :
                            // (bas, haut : part de la hauteur ; largeur (m) ; aplati 0 ovale, 1 plateau) (charpentières, montée, retombée, rameaux)
-                           // (masse (m), feuilles 0 à 1, taille d'une feuille (m), actif) (part de l'écorce a, -, -, -)
+                           // (masse (m), feuilles 0 à 1, taille d'une feuille (m), actif) (part de l'écorce a, inégal 0 à 1, -, -)
 struct Tige { vec2 c; mat2 M; vec2 o; vec2 lean; float H; float r0; vec4 h; int e; float wa; float wp; vec2 wd; float th; };
 vec2 axeT(Tige T, float y){ return T.o+T.lean*y+T.wa*sin(y*.6+T.wp)*T.wd; }   // axe du tronc (repère de la cellule), à la hauteur y
 bool portA(ArbreA A, out Tige T){

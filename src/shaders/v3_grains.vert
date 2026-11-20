@@ -47,7 +47,7 @@ uint hu(uint x){ x=x*747796405u+2891336453u; x=((x>>((x>>28u)+4u))^x)*277803737u
 
 struct Grain { vec3 P; vec3 N; vec3 q; float code; mat2 rot; float s;   // s : côté du grain, en mètres
   int row; bool sem; ElemS e; float ech;                     // forme touchée (-1 : aucune), élément de semis, mètres du repère de la forme par mètre
-  bool feuille; vec3 col; vec3 nf; float lf; };                        // grain de feuillage d'un houppier : couleur et normale de la feuille (élément 5)
+  bool feuille; vec3 col; vec3 nf; float lf; float fs; };                        // grain de feuillage d'un houppier : couleur et normale de la feuille (élément 5)
 // Sur un cylindre de rayon r, le côté du grain ne dépasse pas le diamètre et le grain reste dans la silhouette :
 // un tronc fin n'est pas épaissi, il est seulement moins couvert à chaque image (l'accumulation en fait un trait fin).
 float cote(float aire, float n){ return uK*sqrt(aire/max(n,1e-6)); }
@@ -91,11 +91,11 @@ vec2 aireHoup(Tige T){                                       // aires du bois et
   return vec2(P1.x*3.1416*T.r0*.45*P0.z*.85*(1.+.16*P1.w), P1.x*(P1.w+1.)*8.9*P2.x*P2.x);
 }
 bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
-  vec4 P1=uHp[T.e*4+1], P2=uHp[T.e*4+2];
+  vec4 P1=uHp[T.e*4+1], P2=uHp[T.e*4+2], P3=uHp[T.e*4+3];
   int nb=int(P1.x), nr=int(P1.w);
   int k=min(int(rnd()*P1.x),nb-1);
   vec3 a0, am, a1, d2; float rb; charpente(T,k,a0,am,a1,rb,d2);
-  vec3 lp, nl, hb=vec3(.5); float inner=1., rim=1.;
+  vec3 lp, nl, hb=vec3(.5), c=vec3(0.), rad=vec3(1.), vlc=vec3(0.,1.,0.); float inner=1.;
   g.feuille=u>=aH.x;
   if(!g.feuille){                                            // bois : un des deux segments de la charpentière, ou un rameau
     vec3 A, B; float ra, rz;
@@ -111,40 +111,61 @@ bool semeHoup(Tige T, float u, vec2 aH, float s, out Grain g){
     g.s=min(s,2.*rr);
   } else {                                                   // masse de feuillage : quatre bouquets, pas une boule
     int m=min(int(rnd()*(P1.w+1.)),nr);
-    vec3 c, rad; masse(T,k,m,c,rad);
+    masse(T,k,m,c,rad);
     int b=int(rnd()*4.); hb=h33(T.h.xyz*31.7+vec3(float(k*7+m),float(b),float(m*3+b)));
     vec3 db=normalize(hb*2.-1.+vec3(0.,.15,0.));             // bouquet b : décalé dans la masse, plus petit
-    c+=db*rad*.7; rad*=.38+.16*hb.z;                         // bouquets séparés : le ciel passe entre eux
+    c+=db*rad*.7; rad*=mix(.38+.16*hb.z,.26+.4*hb.z,P3.y);   // bouquets séparés (le ciel passe entre eux), de tailles inégales
     vec3 vl=vueCellule(T,c);
     float z=2.*rnd()-1., a=6.2831853*rnd(), sn=sqrt(max(1.-z*z,0.)); vec3 d=vec3(sn*cos(a),z,sn*sin(a));
     if(dot(d/rad,vl)<0. && rnd()<.93) d=-d;                  // surtout la face vue ; un peu de l'arrière, vu par les trous
-    float bos=1.+.5*(vnoise3(d*2.2+T.h.xyz*40.+float(k*5+m*4+b))-.5);   // contour bosselé
-    inner=rnd()<.12?.55+.3*rnd():1.;                          // un peu de feuilles dedans : la masse a de l'épaisseur
+    vec3 dn=d*2.2+T.h.xyz*40.+float(k*5+m*4+b);
+    float bos=1.+.55*(vnoise3(dn)-.5)+.4*(vnoise3(dn*3.1+5.3)-.5);   // contour bosselé, déchiqueté (deux échelles)
+    inner=rnd()<.1?.55+.3*rnd():.9+.15*rnd();                 // un peu de feuilles dedans : la masse a de l'épaisseur
     lp=c+d*rad*inner*bos; nl=normalize(d/rad);
-    rim=abs(dot(nl,normalize(vl)));                          // 0 au bord de la silhouette : le bord s'effiloche
-    g.s=min(s,1.5*P2.z);
+    vlc=normalize(vl);
   }
   g.P=mondeT(T,lp);
   vec2 nw=nl.xz*T.M; g.N=normalize(vec3(nw.x,nl.y,nw.y));
   float yc=clamp(lp.y,-1.,T.H); vec2 dq=lp.xz-axeT(T,yc);
   g.q=vec3(dq.x,lp.y,dq.y);
   if(!g.feuille) return true;
-  vec3 cell=floor(g.P/P2.z), hc=h33(cell+uSeed*3.1);         // la feuille de cette cellule du monde
-  float gp=vnoise3(g.P/(P2.x*.3)+uSeed+float(T.e)*7.);       // trouées, à l'échelle du bouquet : le ciel passe entre les paquets de feuilles
-  if(hc.x>clamp(P2.y*2.2*smoothstep(.42,.58,gp),0.,1.)*mix(.25,1.,smoothstep(0.,.5,rim))) return false;   // paquets denses, vides francs entre eux
+  /* La feuille de cette cellule du monde (côté P2.z) : sa place, sa taille, son orientation et sa présence ne dépendent que de
+     la cellule. Tous les grains qui tombent dans la cellule dessinent la même feuille, entière : de près on lit des feuilles
+     (pas une coque de points), d'une image à l'autre elle ne bouge pas. */
+  float L=P2.z;
+  vec3 cell=floor(g.P/L), hc=h33(cell+uSeed*3.1), h2=h33(cell+7.7);
+  vec3 Pf=(cell+.15+.7*h2)*L, dw=Pf-g.P; vec2 dx=T.M*dw.xz;
+  vec3 dr=(lp+vec3(dx.x,dw.y,dx.y)-c)/rad;                   // la feuille, dans le repère du bouquet
+  float rim=abs(dot(normalize(dr/rad),vlc));                 // 0 au bord de la silhouette : le bord s'effiloche
+  float ht=fract(T.h.z*13.37+T.h.y*7.1);                     // arbre plus ou moins garni (inegal) : certains presque nus
+  float tm=mix(1.,ht<.25?.04+.3*ht:.4+1.2*(ht-.25)/.75,P3.y)*mix(1.,.35+1.3*hb.y,P3.y);
+  float gp=vnoise3(Pf/(P2.x*.3)+uSeed+float(T.e)*7.);        // trouées, à l'échelle du bouquet : le ciel passe entre les paquets de feuilles
+  float gq=vnoise3(Pf/(L*3.5)+uSeed*1.7);                    // petits jours entre les feuilles : le bouquet est ajouré
+  float pres=clamp(P2.y*2.2*tm*smoothstep(.42,.58,gp),0.,1.)*mix(.45,1.,smoothstep(0.,.5,rim))*mix(1.,smoothstep(.25,.45,gq),P3.y);
+  if(hc.x>pres && hc.x>.03*min(tm*4.,1.)) return false;      // paquets denses, vides francs ; quelques feuilles isolées tiennent encore
+  float Ls=L*(.6+.9*h2.x);                                   // tailles variées
+  g.s=1.35*Ls;
+  if(uVue==0 && rnd()>.5*s*s/(g.s*g.s)) return false;        // de près, plusieurs grains par feuille : trois en moyenne suffisent
+  g.P=Pf;
   int e3=T.e*3;
-  g.col=(hc.y<.45?uHpC[e3]:hc.y<.8?uHpC[e3+1]:uHpC[e3+2])*(.7+.6*hc.z)*(inner<1.?.75:1.)*(.8+.4*hb.x);   // chaque bouquet sa teinte
+  g.col=(hc.y<.45?uHpC[e3]:hc.y<.8?uHpC[e3+1]:uHpC[e3+2])*(.7+.6*hc.z)*(.8+.4*hb.x);   // chaque bouquet sa teinte
   vec3 nf=normalize(g.N*.6+h33(cell+19.19)*2.-1.+vec3(0.,.25,0.));
+  vec3 v=normalize(uCamPos-Pf);
   if(uVue==0 && uOmbreOk==1){                                // ombre lue dans la carte semée depuis le soleil
-    vec3 l=(g.P-uSoleilC)*uSoleilM; vec2 uv=l.xy/uSoleilE.xy*.5+.5;
+    vec3 l=(Pf-uSoleilC)*uSoleilM; vec2 uv=l.xy/uSoleilE.xy*.5+.5;
     if(uv.x>.01 && uv.y>.01 && uv.x<.99 && uv.y<.99){
       vec2 sz=vec2(textureSize(uOmbreG,0));
       float zd=texelFetch(uOmbreG,ivec2(uv*sz+(vec2(rnd(),rnd())-.5)*1.5),0).r;
-      if(clamp(-l.z/uSoleilE.z,-1.,1.)*.5+.5-.2/uSoleilE.z>zd){ nf=normalize(nf-uSunDir*dot(nf,uSunDir)+vec3(0.,.002,0.)); g.col*=1.3; }   // à l'ombre : la lumière qui traverse les feuilles voisines, en gros
-    }
+      float pz=clamp(-l.z/uSoleilE.z,-1.,1.)*.5+.5, ep=(pz-zd)*2.*uSoleilE.z;   // épaisseur de feuillage traversée (m)
+      if(ep>.2){
+        vec3 vp=v-uSunDir*dot(v,uSunDir); vp=dot(vp,vp)>1e-6?normalize(vp):vec3(0.,1.,0.);
+        float tr=dot(v,uSunDir)<0.?.6*exp(-ep/.9):0.;          // contre-jour : la lumière traverse les feuilles devant, s'éteint avec l'épaisseur
+        nf=normalize(vp*sqrt(1.-tr*tr)-uSunDir*tr+vec3(0.,.002,0.)); g.col*=1.15; } }
   }
   g.nf=nf; g.lf=6.2831853*fract(hc.z*7.13);                  // orientation de la feuille dans l'image (v3_gbuf.frag)
+  g.fs=clamp(abs(dot(nf,v)),.18,1.);                         // vue de biais, la feuille s'amincit
   return true;
+}
 }
 #endif
 #if !FORMES
@@ -469,7 +490,7 @@ void main(){
   }
 #endif
   if(i>=uTotal) return;
-  Grain g; bool ok; g.row=-1; g.sem=false; g.ech=1.; g.feuille=false; g.col=vec3(0.); g.nf=vec3(0.,1.,0.); g.lf=-1.;
+  Grain g; bool ok; g.row=-1; g.sem=false; g.ech=1.; g.feuille=false; g.col=vec3(0.); g.nf=vec3(0.,1.,0.); g.lf=-1.; g.fs=1.;
 #if FORMES
   if(i<uPartO) ok=semeP(g);
   else ok=semeS(i<uPartS.x?0:i<uPartS.y?1:i<uPartS.z?2:3,g);
@@ -529,7 +550,7 @@ void main(){
   vec2 rx=g.rot*ex.xz, ry=g.rot*ey.xz;
   vQ=g.q; vN=g.N; vCode=g.code; vDist=dist;
   vDx=vec3(rx.x,ex.y,rx.y); vDy=vec3(ry.x,ey.y,ry.y); vDd=vec2(dot(ex,dv),dot(ey,dv));
-  if(g.feuille){ vQ=g.col; vN=g.nf; vCode=5.; vDx=vec3(0.); vDy=g.lf<0.?vec3(0.):vec3(cos(g.lf),sin(g.lf),1.); }   // feuille d'un houppier : comme les feuilles de la canopée (shadeLeaf)
+  if(g.feuille){ vQ=g.col; vN=g.nf; vCode=5.; vDx=vec3(0.); vDy=g.lf<0.?vec3(0.):vec3(cos(g.lf),sin(g.lf),1.+g.fs); }   // feuille d'un houppier : comme les feuilles de la canopée (shadeLeaf)
 #if FORMES
   if(g.sem){ vQ=primMonde(vL,g.row,false); vDx=primMonde(vLx,g.row,true); vDy=primMonde(vLy,g.row,true); }   // élément de semis : point et variation dans le repère de l'élément (voir semeS)
 #endif

@@ -26,6 +26,7 @@
           "rameaux": 3,
           "masse": 0.75,
           "feuilles": 0.8,
+          "inegal": 0.2,
           "taille": 0.1,
           "couleurs": [
             "#34482a",
@@ -46,7 +47,8 @@
           "retombe": 0.1,
           "rameaux": 3,
           "masse": 0.6,
-          "feuilles": 0.42,
+          "feuilles": 0.55,
+          "inegal": 0.85,
           "taille": 0.06,
           "couleurs": [
             "#a8692a",
@@ -69,7 +71,8 @@
           "retombe": 0.85,
           "rameaux": 3,
           "masse": 0.42,
-          "feuilles": 0.3,
+          "feuilles": 0.36,
+          "inegal": 0.9,
           "taille": 0.05,
           "couleurs": [
             "#cfa83a",
@@ -91,6 +94,7 @@
           "rameaux": 2,
           "masse": 0.5,
           "feuilles": 0.62,
+          "inegal": 0.5,
           "taille": 0.07,
           "couleurs": [
             "#b5733a",

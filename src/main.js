@@ -237,7 +237,7 @@ function portHoup(o,i,part){
   const hb=Array.isArray(o.hauteur)?o.hauteur:[.45,1], bas=clampN(hb[0],0,.95,.45), haut=clampN(hb[1],bas+.03,1,1);
   S.hp.set([bas,haut,clampN(o.largeur,.2,8,2.5),clampN(o.aplati,0,1,.3),
     Math.round(clampN(o.branches,1,8,5)),clampN(o.montee,0,1,.5),clampN(o.retombe,0,1,.1),Math.round(clampN(o.rameaux,0,3,2)),
-    clampN(o.masse,.15,2.5,.8),clampN(o.feuilles,0,1,.5),clampN(o.taille,.02,.4,.08),1, part,0,0,0],r);
+    clampN(o.masse,.15,2.5,.8),clampN(o.feuilles,0,1,.5),clampN(o.taille,.02,.4,.08),1, part,clampN(o.inegal,0,1,0),0,0],r);
   const cs=(Array.isArray(o.couleurs)?o.couleurs:[]).filter(x=>typeof x==="string").slice(0,3);
   if(!cs.length) cs.push("#6b5a2a");
   for(let k=0;k<3;k++) S.hpC.set(couleur(cs[k%cs.length]),c+3*k);

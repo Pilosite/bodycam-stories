@@ -106,6 +106,7 @@ Le kit forêt a deux familles de troncs (arbres et perches), chacune avec deux �
 | `masse` | 0,15 à 2,5 m | Rayon d'une masse de feuillage. |
 | `feuilles` | 0 à 1 | Remplissage d'une masse (0 : pas de feuilles, une charpente nue ; 0,3 clairsemé ; 0,75 dense). Les masses sont trouées : le soleil passe entre elles. |
 | `taille` | 0,02 à 0,4 m | Taille d'une feuille (ou d'une touffe d'aiguilles). |
+| `inegal` | 0 à 1 | Inégalité d'un arbre à l'autre et d'un bouquet à l'autre (0 par défaut : tous pareils). À 1, un arbre sur quatre est presque nu (quelques feuilles qui tiennent encore), les autres plus ou moins garnis, les bouquets de tailles et de remplissages variés, et chaque bouquet est ajouré de petits jours. Une forêt d'automne avancée : 0,8 à 0,9 ; des pins : 0,2. |
 | `couleurs` | 1 à 3 couleurs | Teintes des feuilles, tirées au hasard. |
 
 Moteur v3 seulement : le lanceur de rayons garde les trois branches et la canopée d'avant. `foret.feuillage` (canopée statistique) reste lu : avec des houppiers, le garder bas (0,2) pour que le soleil rasant ne soit pas éteint deux fois.
