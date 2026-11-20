@@ -37,13 +37,18 @@ int NEV=0, NFR=0;
    - bosse (partie fractionnaire de la matière, 0 à 0,4) : bosses molles à l'échelle de la forme, dans son repère (elles
      tournent avec elle quand on la roule).
    Une seule boucle sur les formes de l'objet, un seul appel de sdPrim : borné par le nombre de formes de l'objet (24 au plus),
-   évalué seulement dans les boîtes des formes de l'objet. */
+   évalué seulement dans les boîtes des formes de l'objet, et seulement pour les formes dont la boîte croise le rayon (msk).
+   Un pixel couvert par plusieurs boîtes d'un même objet ne marche l'objet qu'une fois : la boîte « propriétaire » (la première
+   que croise le rayon, test analytique rayon-boîte dans le repère de chaque forme : sans projection, donc sans souci de boîte
+   derrière la caméra) ; les autres jettent leur fragment dès qu'une boîte d'avant croise le rayon. La marche est bornée à
+   [entrée, sortie] de la réunion des boîtes croisées. */
 float smaxP(float a, float b, float k){ return -smin(-a,-b,k); }
 float bosseP(vec3 q){ return sin(q.x*1.9+1.3*sin(q.z*1.6))*sin(q.y*2.2+1.1+.8*sin(q.x*1.2))*sin(q.z*2.0+.7*sin(q.y*1.7)); }
-float sdMou(vec3 p, int st, int cn, bool mou, out float brow){
+float sdMou(vec3 p, int st, int cn, bool mou, int msk, out float brow){
   float so=1e5, ha=1e5, cr=1e5, kS=0., kC=0., bs=1e5, bh=1e5, rs=float(st), rh=float(st), wb=1e5;
   for(int j=0;j<24+uZ;j++){
     if(j>=cn) break;
+    if(((msk>>j)&1)==0) continue;                                    // sa boîte ne croise pas le rayon : elle ne compte pas
     int row=st+j;
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
     vec3 q=primLocal(p,row);
@@ -82,6 +87,31 @@ void main(){
   if(vK.x==2){ if(!blocGres(vId,B)) JETER }
 #endif
   float t0=length(vW-uCamPos), t=vPrx.x>.5?.02:max(.02,t0-.05), tmax=t0+vPrx.y, d=1.;
+#if PATE
+  int msk=1;
+  if(vK.x==5){                                                // objet mou : propriétaire, formes croisées, intervalle
+    float T0=1e5, T1=-1e5; int own=-1; msk=0;
+    for(int j=0;j<24+uZ;j++){
+      if(j>=vK.z) break;
+      int r=vK.y+j;
+      vec4 ja=texelFetch(uShapes,ivec2(0,r),0), jb=texelFetch(uShapes,ivec2(1,r),0), je=texelFetch(uShapes,ivec2(3,r),0);
+      vec3 hb=boiteP(ja.w,jb.xyz,je.y)+vId.x+fract(texelFetch(uShapes,ivec2(2,r),0).w)*min(jb.x,min(jb.y,jb.z));
+      vec3 ro=primLocal(uCamPos,r), rl=primLocal(uCamPos+rd,r)-ro;
+#if PRXCOMPTE
+      NFR++;
+#endif
+      rl=mix(rl,vec3(1e-6),lessThan(abs(rl),vec3(1e-6)));
+      vec3 t1=(-hb-ro)/rl, t2=(hb-ro)/rl, tn=min(t1,t2), tf=max(t1,t2);
+      float a0=max(tn.x,max(tn.y,tn.z)), a1=min(tf.x,min(tf.y,tf.z));
+      if(a1>max(a0,0.)){
+        if(own<0 && je.x>=0.){ own=r; if(r!=vK.w) break; }   // une boîte d'avant tient ce pixel : rien à faire ici
+        msk|=1<<j; T0=min(T0,a0); T1=max(T1,a1);
+      }
+    }
+    if(own!=vK.w) JETER
+    t=max(.02,T0); tmax=T1;
+  }
+#endif
   bool touche=false; vec4 gv=vec4(0.); const vec2 k=vec2(1.,-1.);
   int nn=0; float brow=float(row);
   for(int i=0;i<24+uZ;i++){                                    // jusqu'à 20 pas de marche, puis 4 évaluations pour la normale
@@ -93,7 +123,7 @@ void main(){
     NEV++;
 #endif
 #if PATE
-    if(vK.x==0 || vK.x==5){ float br; dd=sdMou(p,row,vK.x==5?vK.z:1,vK.x==5,br)*(vK.x==5?.7:.8); if(!touche) brow=br; }   // un seul appel de sdMou
+    if(vK.x==0 || vK.x==5){ float br; dd=sdMou(p,row,vK.x==5?vK.z:1,vK.x==5,msk,br)*(vK.x==5?.7:.8); if(!touche) brow=br; }   // un seul appel de sdMou
 #elif PF==0 || PF==1
     if(vK.x<=1) dd=(sdPrim(primLocal(vK.x==0?p:semisLocal(p,e),row),a.w,b.xyz)-ee.y)*(vK.x==0?.8:sc);   // un seul appel de sdPrim
 #endif

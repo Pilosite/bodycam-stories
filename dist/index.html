@@ -5543,6 +5543,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
   }
   return d;
 }
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
+}
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
@@ -7133,6 +7138,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
   }
   return d;
 }
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
+}
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
@@ -8495,6 +8505,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
   }
   return d;
 }
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
+}
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
@@ -9313,6 +9328,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
   }
   return d;
 }
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
+}
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
@@ -10081,6 +10101,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
     d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
   }
   return d;
+}
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -11525,6 +11550,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
   }
   return d;
 }
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
+}
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
@@ -12598,6 +12628,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
   }
   return d;
 }
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
+}
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
@@ -13354,6 +13389,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
   }
   return d;
 }
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
+}
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);
@@ -13798,11 +13838,6 @@ vec3 coin(vec3 u, vec3 hb, vec3 cl){
   if(abs(u.z)<.999) r.z=angulaire(u.z,hb.z,cl.z,max(length(cl.xy),.05));
   return r;
 }
-vec3 boite(float ty, vec3 b, float ar){                       // demi-tailles de la boîte englobante d'une forme (repère de la forme)
-  ty=mod(ty,8.);                                             // dents du peigne : même boîte
-  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
-  return b+ar;
-}
 void main(){
   sansGrain();
   gl_Position=vec4(2.,2.,2.,1.); vK=ivec4(-1); vId=vec2(0.); vPrx=vec2(0.); vW=vec3(0.);
@@ -13812,7 +13847,10 @@ void main(){
   vec2 uw=(vec2(float(qd-(qd/NS)*NS),float(qd/NS))+cr)/float(NS)*2.-1.;
   int ax=f>>1; float sg=(f&1)==0?1.:-1.;
   vec3 u=ax==0?vec3(sg,uw.x,uw.y):ax==1?vec3(uw.y,sg,uw.x):vec3(uw.x,uw.y,sg);
-  vec3 W, cl; vec3 hb; float diam;
+  vec3 W, cl, hb, O; mat2 Mr; int rs=-1;                     // repère de la boîte : forme (rs, primMonde) ou rotation Mr et origine O
+#if (PF==0 || PF==1) && !PATE
+  ElemS e;
+#endif
   if(false){}
 #if PF==0 || PF==1
   else if(slot<uPrxO){                                            // forme d'un objet de la fiche
@@ -13822,21 +13860,13 @@ void main(){
     if(oi>=0 && o1.w<.5) return;                                  // objet caché
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
     if(e.x<0.) return;                                            // un creux n'a pas de surface à lui : il creuse les formes molles
+    hb=boiteP(a.w,b.xyz,e.y)*1.04+.03; vK=ivec4(0,row,0,0);
 #if PATE
     vec4 m0=oi>=0?texelFetch(uShapes,ivec2(2,oi),0):vec4(0.);
-    float mg=0.;
-    if(m0.w>.5){ mg=m0.x+.4*m0.y; vK=ivec4(5,int(o1.x),int(o1.y),0); }   // objet mou : la boîte de la forme, élargie du fondu et des bosses
-    else vK=ivec4(0,row,0,0);
-#else
-    vK=ivec4(0,row,0,0);
+    if(m0.w>.5){ float mg=m0.x+.4*m0.y; vK=ivec4(5,int(o1.x),int(o1.y),row); vId=vec2(mg,0.);   // objet mou : la boîte de la forme, élargie du fondu et des bosses (le fragment refait la même, marge mg)
+      hb+=mg+fract(texelFetch(uShapes,ivec2(2,row),0).w)*min(b.x,min(b.y,b.z)); }
 #endif
-    {
-    hb=boite(a.w,b.xyz,e.y)*1.04+.03;
-#if PATE
-    hb+=mg+(m0.w>.5?fract(texelFetch(uShapes,ivec2(2,row),0).w)*min(b.x,min(b.y,b.z)):0.);
-#endif
-    cl=primLocal(uCamPos,row); W=primMonde(coin(u,hb,cl),row,false); diam=2.*length(hb);
-    }
+    rs=row; cl=primLocal(uCamPos,row);
   }
 #endif
 #if PF==0 || PF==2
@@ -13844,12 +13874,9 @@ void main(){
     int s=slot-uPrxO; vec2 id=floor(uCamPos.xz/CC)+vec2(float(s-(s/5)*5)-2.,float(s/5)-2.);
     Bloc B; if(!blocGres(id,B)) return;
     hb=B.rad*1.12+.15*B.R+vec3(.05,.4,.05);                   // bosses, et le sol qui varie sous le bloc
-    vec2 cw=(id+.5)*CC+B.o; float th=terrainH(cw);
-    float ca=cos(B.a), sa=sin(B.a);
-    vec3 lc=uCamPos-vec3(cw.x,th+B.R*.22,cw.y); vec2 lr=mat2(ca,sa,-sa,ca)*lc.xz; cl=vec3(lr.x,lc.y,lr.y);
-    vec3 lp=coin(u,hb,cl); vec2 xz=lp.xz*mat2(ca,sa,-sa,ca);
-    W=vec3(cw.x+xz.x,th+B.R*.22+lp.y,cw.y+xz.y);
-    diam=2.*length(hb);
+    vec2 cw=(id+.5)*CC+B.o; float ca=cos(B.a), sa=sin(B.a);
+    O=vec3(cw.x,terrainH(cw)+B.R*.22,cw.y); Mr=mat2(ca,sa,-sa,ca);
+    vec3 lc=uCamPos-O; cl=vec3(Mr*lc.xz,lc.y).xzy;
     vK=ivec4(2,0,0,0); vId=id;
   }
 #endif
@@ -13866,13 +13893,11 @@ void main(){
       c0=(id+.5)*CB-17.3; ax0=B.o; lean=B.lean; H=B.H; r=B.r0*1.4+.07; M=RB; y1=H+.3; }
     vec2 ctr=ax0+lean*(H-1.)*.5; float hx=max(r+abs(lean.x)*(H+1.)*.5,R)+.05, hz=max(r+abs(lean.y)*(H+1.)*.5,R)+.05;
     if(R>0.) ctr=ax0;
-    vec2 pied=(c0+ctr)*M; float th=terrainH(pied);
+    float th=terrainH((c0+ctr)*M);
     hb=vec3(hx,(y1-y0)*.5,hz);
     vec3 bc=vec3(ctr.x,y0+hb.y+th,ctr.y);                    // repère de la cellule ; le sol varie peu sous un tronc (marge en bas)
     vec2 cq=M*uCamPos.xz-c0; cl=vec3(cq.x,uCamPos.y,cq.y)-bc;
-    vec3 lp=bc+coin(u,hb,cl);
-    vec2 xz=(c0+lp.xz)*M; W=vec3(xz.x,lp.y,xz.y);
-    diam=2.*length(hb);
+    O=vec3((c0+bc.xz)*M,bc.y).xzy; Mr=M;
     vK=ivec4(arbre?3:4,0,0,0); vId=id;
   }
 #endif
@@ -13881,7 +13906,7 @@ void main(){
     int k=slot<uPrxS.x?0:slot<uPrxS.y?1:slot<uPrxS.z?2:3;
     int s=slot-(k==0?uPrxO+uPrxB+uPrxA+uPrxP:k==1?uPrxS.x:k==2?uPrxS.y:uPrxS.z);
     int n=k==0?uPrxN.x:k==1?uPrxN.y:k==2?uPrxN.z:uPrxN.w, w=2*n+1;
-    ElemS e; semisTete(k,1.,e);
+    semisTete(k,1.,e);
     int cn=int(e.K.z); if(cn<1) return;
     int ce=s/cn, j=s-ce*cn; vec2 id;
     if(e.rg){
@@ -13894,17 +13919,37 @@ void main(){
     if(!semisElem(k,id,e)) return;
     int row=SEM0+k*SEML+4+j;
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), ee=texelFetch(uShapes,ivec2(3,row),0);
-    hb=boite(a.w,b.xyz,ee.y)*1.06+.05/e.s;
-    cl=primLocal(semisLocal(uCamPos,e),row); W=semisMonde(primMonde(coin(u,hb,cl),row,false),e);
-    diam=2.*length(hb)*e.s*max(1.,e.sy);
+    hb=boiteP(a.w,b.xyz,ee.y)*1.06+.05/e.s;
+    rs=row; cl=primLocal(semisLocal(uCamPos,e),row);
     vK=ivec4(1,row,k,int(e.side)); vId=id;
   }
 #endif
   else return;
+  // face tournée vers l'arrière (la caméra du côté intérieur de son plan) : rien, et avant tout calcul. La face avant couvre
+  // les mêmes pixels et sa marche y trouve la forme ; c'était la moitié des fragments, chacun marchant son rayon pour rien.
+  // Caméra dans la boîte : toutes les faces.
+  bool dedans=all(lessThan(abs(cl),hb));
+  vec3 m=vec3(equal(ivec3(ax),ivec3(0,1,2)));
+  if(!dedans && dot(cl,u*m)<dot(hb,m)) return;
+  vec3 lp=coin(u,hb,cl);                                      // un seul coin pour toutes les familles
+#if PF==0 || PF==1
+  if(rs>=0){ W=primMonde(lp,rs,false);
+#if !PATE
+    if(vK.x==1) W=semisMonde(W,e);
+#endif
+  }
+#endif
+#if PF!=1
+  if(rs<0) W=O+vec3(lp.xz*Mr,lp.y).xzy;
+#endif
+  float diam=2.*length(hb);
+#if (PF==0 || PF==1) && !PATE
+  if(vK.x==1) diam*=e.s*max(1.,e.sy);
+#endif
   vec4 pos; float dist, ang;
   projette(W,3.13,pos,dist,ang);
   gl_Position=pos; vW=W;
-  vPrx=vec2(all(lessThan(abs(cl),hb))?1.:0.,diam);
+  vPrx=vec2(dedans?1.:0.,diam);
 }`, FS_V3PROCHES = `#version 300 es
 // Moteur v3 : les éléments proches (voir v3_proches.vert). Chaque pixel de la boîte englobante suit son rayon (même
 // fisheye que l'ombrage) et cherche la forme exacte par la distance du lanceur de rayons (sdPrim et le repère de
@@ -14281,6 +14326,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
     d=max(d,max(-max(abs(f)-.28*P,.08*s.z-abs(q.z))*.8,(abs(q.z)-s.z*(1.-x*x))*.6));
   }
   return d;
+}
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
 }
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
@@ -14671,13 +14721,18 @@ int NEV=0, NFR=0;
    - bosse (partie fractionnaire de la matière, 0 à 0,4) : bosses molles à l'échelle de la forme, dans son repère (elles
      tournent avec elle quand on la roule).
    Une seule boucle sur les formes de l'objet, un seul appel de sdPrim : borné par le nombre de formes de l'objet (24 au plus),
-   évalué seulement dans les boîtes des formes de l'objet. */
+   évalué seulement dans les boîtes des formes de l'objet, et seulement pour les formes dont la boîte croise le rayon (msk).
+   Un pixel couvert par plusieurs boîtes d'un même objet ne marche l'objet qu'une fois : la boîte « propriétaire » (la première
+   que croise le rayon, test analytique rayon-boîte dans le repère de chaque forme : sans projection, donc sans souci de boîte
+   derrière la caméra) ; les autres jettent leur fragment dès qu'une boîte d'avant croise le rayon. La marche est bornée à
+   [entrée, sortie] de la réunion des boîtes croisées. */
 float smaxP(float a, float b, float k){ return -smin(-a,-b,k); }
 float bosseP(vec3 q){ return sin(q.x*1.9+1.3*sin(q.z*1.6))*sin(q.y*2.2+1.1+.8*sin(q.x*1.2))*sin(q.z*2.0+.7*sin(q.y*1.7)); }
-float sdMou(vec3 p, int st, int cn, bool mou, out float brow){
+float sdMou(vec3 p, int st, int cn, bool mou, int msk, out float brow){
   float so=1e5, ha=1e5, cr=1e5, kS=0., kC=0., bs=1e5, bh=1e5, rs=float(st), rh=float(st), wb=1e5;
   for(int j=0;j<24+uZ;j++){
     if(j>=cn) break;
+    if(((msk>>j)&1)==0) continue;                                    // sa boîte ne croise pas le rayon : elle ne compte pas
     int row=st+j;
     vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
     vec3 q=primLocal(p,row);
@@ -14716,6 +14771,31 @@ void main(){
   if(vK.x==2){ if(!blocGres(vId,B)) JETER }
 #endif
   float t0=length(vW-uCamPos), t=vPrx.x>.5?.02:max(.02,t0-.05), tmax=t0+vPrx.y, d=1.;
+#if PATE
+  int msk=1;
+  if(vK.x==5){                                                // objet mou : propriétaire, formes croisées, intervalle
+    float T0=1e5, T1=-1e5; int own=-1; msk=0;
+    for(int j=0;j<24+uZ;j++){
+      if(j>=vK.z) break;
+      int r=vK.y+j;
+      vec4 ja=texelFetch(uShapes,ivec2(0,r),0), jb=texelFetch(uShapes,ivec2(1,r),0), je=texelFetch(uShapes,ivec2(3,r),0);
+      vec3 hb=boiteP(ja.w,jb.xyz,je.y)+vId.x+fract(texelFetch(uShapes,ivec2(2,r),0).w)*min(jb.x,min(jb.y,jb.z));
+      vec3 ro=primLocal(uCamPos,r), rl=primLocal(uCamPos+rd,r)-ro;
+#if PRXCOMPTE
+      NFR++;
+#endif
+      rl=mix(rl,vec3(1e-6),lessThan(abs(rl),vec3(1e-6)));
+      vec3 t1=(-hb-ro)/rl, t2=(hb-ro)/rl, tn=min(t1,t2), tf=max(t1,t2);
+      float a0=max(tn.x,max(tn.y,tn.z)), a1=min(tf.x,min(tf.y,tf.z));
+      if(a1>max(a0,0.)){
+        if(own<0 && je.x>=0.){ own=r; if(r!=vK.w) break; }   // une boîte d'avant tient ce pixel : rien à faire ici
+        msk|=1<<j; T0=min(T0,a0); T1=max(T1,a1);
+      }
+    }
+    if(own!=vK.w) JETER
+    t=max(.02,T0); tmax=T1;
+  }
+#endif
   bool touche=false; vec4 gv=vec4(0.); const vec2 k=vec2(1.,-1.);
   int nn=0; float brow=float(row);
   for(int i=0;i<24+uZ;i++){                                    // jusqu'à 20 pas de marche, puis 4 évaluations pour la normale
@@ -14727,7 +14807,7 @@ void main(){
     NEV++;
 #endif
 #if PATE
-    if(vK.x==0 || vK.x==5){ float br; dd=sdMou(p,row,vK.x==5?vK.z:1,vK.x==5,br)*(vK.x==5?.7:.8); if(!touche) brow=br; }   // un seul appel de sdMou
+    if(vK.x==0 || vK.x==5){ float br; dd=sdMou(p,row,vK.x==5?vK.z:1,vK.x==5,msk,br)*(vK.x==5?.7:.8); if(!touche) brow=br; }   // un seul appel de sdMou
 #elif PF==0 || PF==1
     if(vK.x<=1) dd=(sdPrim(primLocal(vK.x==0?p:semisLocal(p,e),row),a.w,b.xyz)-ee.y)*(vK.x==0?.8:sc);   // un seul appel de sdPrim
 #endif
@@ -15895,6 +15975,7 @@ function v3Init(){                                             // rend vrai quan
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   }
+  if(OMB.e.socle&&OMB.e.socle.p&&V3.gp.grainsF) v3Mou();        // après les formes : la pâte (petite, celle des gestes), compilée d'office avant la variante complète
   const r=v3Ombrage();
   if(OMB.e.socle&&OMB.e.socle.p) v3Formes();                   // après le socle : les variantes FORMES, puis (v3Ombrage) la complète
   return r;
@@ -15937,7 +16018,7 @@ function v3Mou(){
   const x=V3.lance.prochesM;
   if(!x){ if(compLibre(true)) V3.lance.prochesM=v3Lancer("prochesM"); return false; }
   if(!fini(x)) return false;
-  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; return true;
+  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; if(!ouvRepos) V3.chaufferMou=true; return true;   // premier dessin (vide) au calme, pas au premier geste
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
@@ -16209,6 +16290,12 @@ function gpuImage(){                                           // fin d'une imag
    de la cible) pendant trois secondes, on remonte. Mesure : temps de la puce quand il est connu, sinon intervalle entre images.
    Niveaux, dans l'ordre : feuilles proches moins recouvertes et plus petites, moins de grains, moins de pas de rais,
    résolution interne plus basse. Option regulateur:false (défaut des captures d'essai, window.__CFG) pour le couper. */
+/* Un geste lourd à l'écran (effort accroupi, ramassage, façonnage : mains et pâte de près, cadrage zoomé) : le régulateur
+   réagit plus vite, réduit d'abord grains, feuilles et rais (ce qui ne se voit pas alors) et garde la résolution ; la carte
+   d'ombres n'est refaite qu'une image sur six. */
+const enGeste=()=>!!mainsObj||cam.zoom>1.05||!!(queue[0]&&/^(effort|ramasser|faconner)$/.test(queue[0].type));
+const REG_G=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:.7, fG:.5, fMax:48, rais:.5, res:1}, {g:.5, fG:.4, fMax:32, rais:0, res:1},
+  {g:.35, fG:.4, fMax:28, rais:0, res:1}, {g:.28, fG:.4, fMax:28, rais:0, res:.85}, {g:.22, fG:.4, fMax:24, rais:0, res:.7} ];
 const REG_N=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:1, fG:.6, fMax:64, rais:1, res:1}, {g:.75, fG:.5, fMax:48, rais:1, res:1},
   {g:.55, fG:.5, fMax:40, rais:.5, res:1}, {g:.4, fG:.4, fMax:32, rais:.3, res:.85}, {g:.32, fG:.4, fMax:28, rais:0, res:.7} ];
 const REG={ on:CFG.regulateur!==undefined?!!CFG.regulateur:!window.__CFG, niveau:0, ms:0, haut:0, bas:0, t:0, change:0, vu:{}, quand:{} };
@@ -16219,9 +16306,11 @@ function regMesure(dt,dtBrut){                                 // après chaque 
   // on remonte alors dès qu'on tient la cible, au lieu d'attendre une marge qu'on ne peut pas voir).
   const puce=GT.ext&&GT.total>0, m=puce?GT.total:dtBrut; if(!(m>0)||m>2000) return;
   REG.ms=REG.ms?REG.ms*.85+m*.15:m;
-  const c=regCible(), now=performance.now();
-  if(REG.ms>c*1.1) { REG.haut+=dt; REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
-  if(now-REG.change<1500) return;                              // le temps que le niveau précédent se mesure
+  const c=regCible(), now=performance.now(), g=enGeste();
+  if(REG.geste&&!g){ REG.vu={}; }                              // fin du geste : la scène a changé, les niveaux quittés pendant le geste se retentent
+  if(g!==REG.geste){ REG.geste=g; regNiveau(REG.niveau); }      // l'échelle change (REG_G / REG_N) au même niveau
+  if(REG.ms>c*1.1) { REG.haut+=dt*(g?4:1); REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
+  if(now-REG.change<(g?400:1500)) return;                      // le temps que le niveau précédent se mesure (geste : vite)
   let k=REG.niveau;
   /* Pas de pompage : on ne remonte pas vers un niveau qu'on vient de quitter parce qu'il dépassait la cible (mesuré au-dessus
      de 100 % il y a moins de 20 s). Passé ce temps (la scène a pu changer), on réessaie. */
@@ -16233,9 +16322,9 @@ function regNiveau(k){
   const avant=REG_N[REG.niveau]; REG.vu[REG.niveau]=REG.ms; REG.quand[REG.niveau]=performance.now();   // ce que coûtait le niveau quitté
   REG.niveau=k; REG.haut=REG.bas=0; REG.change=performance.now(); REG.ms=0;
   etapeGL("régulateur : niveau "+k);
-  if(avant.res!==REG_N[k].res){ REG_RES=REG_N[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
+  const L=REG.geste?REG_G:REG_N; if(REG_RES!==L[k].res){ REG_RES=L[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
 }
-const regEtat=()=>REG_N[REG.on?REG.niveau:0];
+const regEtat=()=>(REG.on&&REG.geste?REG_G:REG_N)[REG.on?REG.niveau:0];
 /* Montée progressive au démarrage : les premières images ne sèment qu'une part du budget (la puce compile peut-être encore,
    et la première seconde ne doit pas cumuler compilation et rendu plein pot). Pas dans les captures d'essai (window.__CFG). */
 function v3Budget(){
@@ -16309,7 +16398,7 @@ function v3Image(p){
   // (1) carte d'ombres
   // En marche, la carte n'est refaite qu'une image sur trois : le soleil ne bouge pas, et c'était une grosse part du coût mesuré sur téléphone.
   if(BANC.on) V3.smP=null;                                    // banc d'essai : la carte d'ombres à chaque image (mesurée)
-  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%3===0));
+  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%(enGeste()&&!BANC.on?6:3)===0));   // geste : une image sur six
   let u;
   if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w}; gpuDebut("ombre");
   const Ns=V3.ombre||Math.round(v3Budget()*.6);
@@ -16496,7 +16585,7 @@ function frame(now){
   if(!(exposure>0)||!Number.isFinite(exposure)){ exposure=1.2; if(!(expTarget>0)) expTarget=1.2; }
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
   gpuFin(); gpuImage();
-  if(chauffe) v3ChaufferFroids();
+  if(chauffe||V3.chaufferMou){ V3.chaufferMou=false; v3ChaufferFroids(); }   // ouverture, ou la pâte vient d'être prête : premier dessin au calme
   premiersDessins();
   if(BANC.on&&BANC.vi>=0&&!GT.ext){ syncPuce(); const t=performance.now(); if(BANC.tFin) BANC.rec.push({v:BANC.vi,nom:"image",ms:t-BANC.tFin,img:V3.nImg}); BANC.tFin=t; }   // sans chronomètre de la puce : intervalle entre deux fins d'image (syncPuce, ici seulement)
   if(now-t00<10000&&lastT0>0) LONGUE.max=Math.max(LONGUE.max,dtBrut);   // plus longue image des dix premières secondes (diagnostic)
@@ -17572,6 +17661,13 @@ function objetMains(Hs,quelles=[0,1]){
     peau("boule",P,n,[pt[0],pt[1],pt[2]]);
     // quatre doigts : de l'index (côté pouce) à l'auriculaire, fléchis à la jointure vers la paume
     const V=H.v;
+    // loin de la caméra (main au sol, hors gros plan) : les quatre doigts en une seule forme et le pouce d'une pièce (5 formes
+    // au lieu de 9 : moins de formes évaluées à chaque pas, aucune différence à cette taille une fois l'image salie)
+    if(Math.hypot(...v3s(P,e))>.55){ const fl=(V[0]+V[1]+V[2]+V[3])/4*rad, dir=v3n(v3a(v3a([0,0,0],d,Math.cos(fl)),n,Math.sin(fl))), Lm=(DL[1]||.08);
+      peau("capsule",v3a(v3a(P,d,pt[2]/2-.008),dir,Lm/2),dir,[pas*3.4,Math.max(.006,Lm-pas*1.7),2*dr],dg.couleur,dg.matiere);
+      const Bp=v3a(v3a(Wr,d,.03),uT,pt[0]*.36), d1=v3n(v3a(v3a([0,0,0],d,Math.cos(V[5]*rad+.35)),uT,Math.sin(V[5]*rad+.35))), Lp=PL[0]+PL[1]*.8;
+      peau("capsule",v3a(Bp,d1,Lp/2),d1,[2*pr,Math.max(.006,Lp-2*pr),2*pr],po.couleur,po.matiere);
+      objs.push(o); return; }
     for(let j=0;j<4;j++){ const K=v3a(v3a(v3a(P,d,pt[2]/2-.008),uT,pas*(1.5-j)),n,.002), ea=V[4]*(1.5-j)*rad, c=V[j]*rad;
       const dj=v3n(v3a(v3a([0,0,0],d,Math.cos(ea)),uT,Math.sin(ea))), dir=v3n(v3a(v3a([0,0,0],dj,Math.cos(c)),n,Math.sin(c))), Lj=DL[j]||.07;
       peau("capsule",v3a(K,dir,Lj/2),dir,[2*dr*(j===3?.88:1),Math.max(.006,Lj-2*dr),2*dr*(j===3?.88:1)],dg.couleur,dg.matiere); }

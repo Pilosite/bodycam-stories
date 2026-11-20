@@ -354,6 +354,11 @@ float sdPrim(vec3 q, float ty, vec3 s){
   }
   return d;
 }
+vec3 boiteP(float ty, vec3 b, float ar){                  // demi-tailles de la boîte englobante d'une forme (repère de la forme) : éléments proches
+  ty=mod(ty,8.);                                             // dents du peigne : même boîte
+  if(ty>1.5 && ty<4.5){ float r=b.x+ar; return vec3(r,b.y+(ty>3.5?r:ar),r); }
+  return b+ar;
+}
 vec3 primLocal(vec3 p, int row){
   vec4 a=texelFetch(uShapes,ivec2(0,row),0), b=texelFetch(uShapes,ivec2(1,row),0), e=texelFetch(uShapes,ivec2(3,row),0);
   vec3 q=p-a.xyz; float c=cos(b.w), s=sin(b.w);

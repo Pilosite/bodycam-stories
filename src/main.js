@@ -1144,6 +1144,7 @@ function v3Init(){                                             // rend vrai quan
   V3.semisT=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,V3.semisT); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA32F,1,SH_ROWS);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
   }
+  if(OMB.e.socle&&OMB.e.socle.p&&V3.gp.grainsF) v3Mou();        // après les formes : la pâte (petite, celle des gestes), compilée d'office avant la variante complète
   const r=v3Ombrage();
   if(OMB.e.socle&&OMB.e.socle.p) v3Formes();                   // après le socle : les variantes FORMES, puis (v3Ombrage) la complète
   return r;
@@ -1186,7 +1187,7 @@ function v3Mou(){
   const x=V3.lance.prochesM;
   if(!x){ if(compLibre(true)) V3.lance.prochesM=v3Lancer("prochesM"); return false; }
   if(!fini(x)) return false;
-  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; return true;
+  V3.gp.prochesM=finir(x); delete V3.lance.prochesM; if(!ouvRepos) V3.chaufferMou=true; return true;   // premier dessin (vide) au calme, pas au premier geste
 }
 function v3Cibles(){                                          // tampon G (2 textures + profondeur), carte d'ombres, accumulation
   if(!V3.gb||V3.gb.w!==W||V3.gb.h!==H){
@@ -1458,6 +1459,12 @@ function gpuImage(){                                           // fin d'une imag
    de la cible) pendant trois secondes, on remonte. Mesure : temps de la puce quand il est connu, sinon intervalle entre images.
    Niveaux, dans l'ordre : feuilles proches moins recouvertes et plus petites, moins de grains, moins de pas de rais,
    résolution interne plus basse. Option regulateur:false (défaut des captures d'essai, window.__CFG) pour le couper. */
+/* Un geste lourd à l'écran (effort accroupi, ramassage, façonnage : mains et pâte de près, cadrage zoomé) : le régulateur
+   réagit plus vite, réduit d'abord grains, feuilles et rais (ce qui ne se voit pas alors) et garde la résolution ; la carte
+   d'ombres n'est refaite qu'une image sur six. */
+const enGeste=()=>!!mainsObj||cam.zoom>1.05||!!(queue[0]&&/^(effort|ramasser|faconner)$/.test(queue[0].type));
+const REG_G=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:.7, fG:.5, fMax:48, rais:.5, res:1}, {g:.5, fG:.4, fMax:32, rais:0, res:1},
+  {g:.35, fG:.4, fMax:28, rais:0, res:1}, {g:.28, fG:.4, fMax:28, rais:0, res:.85}, {g:.22, fG:.4, fMax:24, rais:0, res:.7} ];
 const REG_N=[ {g:1, fG:.6, fMax:128, rais:1, res:1}, {g:1, fG:.6, fMax:64, rais:1, res:1}, {g:.75, fG:.5, fMax:48, rais:1, res:1},
   {g:.55, fG:.5, fMax:40, rais:.5, res:1}, {g:.4, fG:.4, fMax:32, rais:.3, res:.85}, {g:.32, fG:.4, fMax:28, rais:0, res:.7} ];
 const REG={ on:CFG.regulateur!==undefined?!!CFG.regulateur:!window.__CFG, niveau:0, ms:0, haut:0, bas:0, t:0, change:0, vu:{}, quand:{} };
@@ -1468,9 +1475,11 @@ function regMesure(dt,dtBrut){                                 // après chaque 
   // on remonte alors dès qu'on tient la cible, au lieu d'attendre une marge qu'on ne peut pas voir).
   const puce=GT.ext&&GT.total>0, m=puce?GT.total:dtBrut; if(!(m>0)||m>2000) return;
   REG.ms=REG.ms?REG.ms*.85+m*.15:m;
-  const c=regCible(), now=performance.now();
-  if(REG.ms>c*1.1) { REG.haut+=dt; REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
-  if(now-REG.change<1500) return;                              // le temps que le niveau précédent se mesure
+  const c=regCible(), now=performance.now(), g=enGeste();
+  if(REG.geste&&!g){ REG.vu={}; }                              // fin du geste : la scène a changé, les niveaux quittés pendant le geste se retentent
+  if(g!==REG.geste){ REG.geste=g; regNiveau(REG.niveau); }      // l'échelle change (REG_G / REG_N) au même niveau
+  if(REG.ms>c*1.1) { REG.haut+=dt*(g?4:1); REG.bas=0; } else if(REG.ms<c*(puce?.65:.95)) { REG.bas+=dt; REG.haut=0; } else { REG.haut=0; REG.bas=0; }
+  if(now-REG.change<(g?400:1500)) return;                      // le temps que le niveau précédent se mesure (geste : vite)
   let k=REG.niveau;
   /* Pas de pompage : on ne remonte pas vers un niveau qu'on vient de quitter parce qu'il dépassait la cible (mesuré au-dessus
      de 100 % il y a moins de 20 s). Passé ce temps (la scène a pu changer), on réessaie. */
@@ -1482,9 +1491,9 @@ function regNiveau(k){
   const avant=REG_N[REG.niveau]; REG.vu[REG.niveau]=REG.ms; REG.quand[REG.niveau]=performance.now();   // ce que coûtait le niveau quitté
   REG.niveau=k; REG.haut=REG.bas=0; REG.change=performance.now(); REG.ms=0;
   etapeGL("régulateur : niveau "+k);
-  if(avant.res!==REG_N[k].res){ REG_RES=REG_N[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
+  const L=REG.geste?REG_G:REG_N; if(REG_RES!==L[k].res){ REG_RES=L[k].res; REG.redim=true; }   // au début de l'image suivante (frame) : pas au milieu de celle-ci
 }
-const regEtat=()=>REG_N[REG.on?REG.niveau:0];
+const regEtat=()=>(REG.on&&REG.geste?REG_G:REG_N)[REG.on?REG.niveau:0];
 /* Montée progressive au démarrage : les premières images ne sèment qu'une part du budget (la puce compile peut-être encore,
    et la première seconde ne doit pas cumuler compilation et rendu plein pot). Pas dans les captures d'essai (window.__CFG). */
 function v3Budget(){
@@ -1558,7 +1567,7 @@ function v3Image(p){
   // (1) carte d'ombres
   // En marche, la carte n'est refaite qu'une image sur trois : le soleil ne bouge pas, et c'était une grosse part du coût mesuré sur téléphone.
   if(BANC.on) V3.smP=null;                                    // banc d'essai : la carte d'ombres à chaque image (mesurée)
-  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%3===0));
+  const refaire=!V3.smP||V3.smP.w!==V3.sm.w||(!V3.sansOmbre&&(!bouge||f%(enGeste()&&!BANC.on?6:3)===0));   // geste : une image sur six
   let u;
   if(refaire){ V3.smP={C,soleilM,soleilE,sd,w:V3.sm.w}; gpuDebut("ombre");
   const Ns=V3.ombre||Math.round(v3Budget()*.6);
@@ -1745,7 +1754,7 @@ function frame(now){
   if(!(exposure>0)||!Number.isFinite(exposure)){ exposure=1.2; if(!(expTarget>0)) expTarget=1.2; }
   display(v2pret?V2.out||hist:V3.on?V3.hist||dummy:hist||dummy,(now-startT)/1000);
   gpuFin(); gpuImage();
-  if(chauffe) v3ChaufferFroids();
+  if(chauffe||V3.chaufferMou){ V3.chaufferMou=false; v3ChaufferFroids(); }   // ouverture, ou la pâte vient d'être prête : premier dessin au calme
   premiersDessins();
   if(BANC.on&&BANC.vi>=0&&!GT.ext){ syncPuce(); const t=performance.now(); if(BANC.tFin) BANC.rec.push({v:BANC.vi,nom:"image",ms:t-BANC.tFin,img:V3.nImg}); BANC.tFin=t; }   // sans chronomètre de la puce : intervalle entre deux fins d'image (syncPuce, ici seulement)
   if(now-t00<10000&&lastT0>0) LONGUE.max=Math.max(LONGUE.max,dtBrut);   // plus longue image des dix premières secondes (diagnostic)
@@ -2821,6 +2830,13 @@ function objetMains(Hs,quelles=[0,1]){
     peau("boule",P,n,[pt[0],pt[1],pt[2]]);
     // quatre doigts : de l'index (côté pouce) à l'auriculaire, fléchis à la jointure vers la paume
     const V=H.v;
+    // loin de la caméra (main au sol, hors gros plan) : les quatre doigts en une seule forme et le pouce d'une pièce (5 formes
+    // au lieu de 9 : moins de formes évaluées à chaque pas, aucune différence à cette taille une fois l'image salie)
+    if(Math.hypot(...v3s(P,e))>.55){ const fl=(V[0]+V[1]+V[2]+V[3])/4*rad, dir=v3n(v3a(v3a([0,0,0],d,Math.cos(fl)),n,Math.sin(fl))), Lm=(DL[1]||.08);
+      peau("capsule",v3a(v3a(P,d,pt[2]/2-.008),dir,Lm/2),dir,[pas*3.4,Math.max(.006,Lm-pas*1.7),2*dr],dg.couleur,dg.matiere);
+      const Bp=v3a(v3a(Wr,d,.03),uT,pt[0]*.36), d1=v3n(v3a(v3a([0,0,0],d,Math.cos(V[5]*rad+.35)),uT,Math.sin(V[5]*rad+.35))), Lp=PL[0]+PL[1]*.8;
+      peau("capsule",v3a(Bp,d1,Lp/2),d1,[2*pr,Math.max(.006,Lp-2*pr),2*pr],po.couleur,po.matiere);
+      objs.push(o); return; }
     for(let j=0;j<4;j++){ const K=v3a(v3a(v3a(P,d,pt[2]/2-.008),uT,pas*(1.5-j)),n,.002), ea=V[4]*(1.5-j)*rad, c=V[j]*rad;
       const dj=v3n(v3a(v3a([0,0,0],d,Math.cos(ea)),uT,Math.sin(ea))), dir=v3n(v3a(v3a([0,0,0],dj,Math.cos(c)),n,Math.sin(c))), Lj=DL[j]||.07;
       peau("capsule",v3a(K,dir,Lj/2),dir,[2*dr*(j===3?.88:1),Math.max(.006,Lj-2*dr),2*dr*(j===3?.88:1)],dg.couleur,dg.matiere); }
