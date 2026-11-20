@@ -20,6 +20,9 @@ vec3 smp(vec2 uv){
   return mix(mix(texelFetch(uTex,a,0).rgb,texelFetch(uTex,ivec2(b.x,a.y),0).rgb,f.x),
              mix(texelFetch(uTex,ivec2(a.x,b.y),0).rgb,texelFetch(uTex,b,0).rgb,f.x),f.y);
 }
+/* Valeur invalide ou démesurée (débordement d'un tampon demi-flottant, NaN d'un pilote) : jamais de teinte au hasard.
+   +inf devient très clair, NaN devient noir (les comparaisons avec NaN sont fausses). */
+vec3 sain(vec3 x){ return vec3(x.r>=6e4?6e4:x.r>=0.?x.r:0.,x.g>=6e4?6e4:x.g>=0.?x.g:0.,x.b>=6e4?6e4:x.b>=0.?x.b:0.); }
 vec3 tone(vec3 c){
   c*=EX;
   float l=dot(c,vec3(.2126,.7152,.0722)); const float W=5.5;
@@ -51,11 +54,17 @@ void main(){
     add+=g1*vec3(.55,.75,.45)*.11+g2*vec3(.75,.45,.9)*.05;
     hdr+=add*uFlare; nb+=add*uFlare;
   }
+  hdr=sain(hdr); nb=sain(nb); bl=sain(bl);
   vec3 c=tone(mix(hdr,bl,.11)), cn=tone(mix(nb,bl,.11));
   c+=(c-cn)*(uGrainPx>1.?.45:.70)*(1.-min(uSoft,1.));          // grand écran : la netteté d'un téléphone en 1080p, sans liseré noir
   c=max(c,0.);
+  /* Écrêtage du capteur : un photosite saturé ne garde pas sa teinte, tout ce qui dépasse le blanc part vers le blanc (un
+     soleil brûlé est blanc, à peine chaud au bord). Borné à 1 avant la courbe en S : au-delà, c*c*(3-2c) devient négatif
+     et éteignait les canaux les plus forts (soleil bleu vif sur le PC, où l'exposition montait davantage). */
+  float pk=max(c.r,max(c.g,c.b));
+  c=mix(min(c,vec3(1.)),vec3(1.),smoothstep(1.,3.,pk)*.9);
   float l=dot(c,vec3(.299,.587,.114)); c=mix(vec3(l),c,.94);
-  c=pow(max(c,0.),vec3(1./2.2));
+  c=pow(clamp(c,0.,1.),vec3(1./2.2));
   c=mix(c,c*c*(3.-2.*c),.30);
   float v=r2/(.25*(asp*asp+1.)); c*=1.-.46*v*v*v;
   float lg=clamp(dot(c,vec3(.333)),0.,1.);
