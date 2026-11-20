@@ -561,6 +561,9 @@ const libreJS=(x,z)=>degage(x,z)||MJ.troue(x,z);                // cleared() de 
 const cam={ x:0, z:0, yaw:0, pitch:-.03, haut:1, elev:0, pied:null, perche:null, zoom:1, zoomCible:1 };   // zoom : zoom numérique du téléphone (cadrer une petite chose)
 const look={ yaw:0, pitch:0 };                   // le regard du joueur, libre autour de la caméra
 const queue=[];                                  // actions en attente : tourner, marcher, regarder, attendre
+/* Éblouissement (camera.frag, uEbl) : v = force 0..1 montrée (le regard près du soleil, poussée à 1 quand il le fixe), tache =
+   persistance rétinienne ; force = ce que le geste « regarder le soleil » impose, cible = où elle va ; jy, jp : à-coups. */
+const EBL={ v:0, force:0, cible:0, tache:0, jy:0, jp:0, t:0 };
 let sons=null, compteurSons=0;                    // les bruitages (src/son.js), créés plus bas ; compteur : deux gestes, deux tirages
 let pauseQuand=null;                                            // essais : {type, t} (balade.pauseQuand)
 let frozen=false, hold=false, pauseTest=false, walkDist=0, walking=false;   // pauseTest : balade.pause (captures d'essai), le corps s'arrête net
@@ -572,6 +575,7 @@ function pose(){
     bob+=k*.012*Math.sin(t*2.1); }
   const env=sons?sons.enveloppe():0;               // le bruit de l'effort secoue le téléphone (son enveloppe, force comprise), même sans son
   if(env>.01){ const t=performance.now()/1000; ty+=env*(.007*Math.sin(t*71.3)+.004*Math.sin(t*113.7+.4)); tp+=env*(.01*Math.sin(t*83.1+1.1)+.005*Math.sin(t*131.9)); bob+=env*.008*Math.sin(t*97.3); }
+  ty+=EBL.jy; tp+=EBL.jp;                         // ébloui : petits à-coups de tête
   const yw=cam.yaw+look.yaw+ty, pt=Math.max(-1.2,Math.min(1.35,cam.pitch+look.pitch+tp));
   const cy=Math.cos(yw),sy=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
   const f=[sy*cp,sp,cy*cp], r=[cy,0,-sy], u=[f[1]*r[2]-f[2]*r[1],f[2]*r[0]-f[0]*r[2],f[0]*r[1]-f[1]*r[0]];
@@ -691,6 +695,7 @@ function simulate(dt){
     if(a.type==="tourner"){ const d=Math.sign(a.rest)*Math.min(Math.abs(a.rest),1.5*(a.libre?1:gesteK())*dt); cam.yaw+=d; a.rest-=d; if(Math.abs(a.rest)<1e-3) queue.shift(); }
     else if(a.type==="marcher"&&cam.elev>.01) queue.unshift({type:"descendre"});   // perché : il descend avant de marcher
     else if(a.type==="marcher"){ cam.zoomCible=1; v=Math.sign(a.rest)*Math.min(a.libre?1.35:1.35*vitK(),Math.abs(a.rest)/Math.max(dt,1e-3)); a.rest-=v*dt; if(Math.abs(a.rest)<1e-4) queue.shift(); }   // pas plus loin que demandé, même avec une image lente
+    else if(a.type==="soleil") soleilPas(a,dt);
     else if(a.type==="regarder"){ const d=a.pitch-cam.pitch; cam.pitch+=Math.sign(d)*Math.min(Math.abs(d),1.1*gesteK()*dt); if(Math.abs(d)<.012) queue.shift(); }
     else if(a.type==="posture"){ const d=a.h-cam.haut; cam.haut+=Math.sign(d)*Math.min(Math.abs(d),.55*gesteK()*dt); if(Math.abs(d)<.005){ cam.haut=a.h; queue.shift(); } }   // se baisser, se relever
     else if(a.type==="viser"){ queue.shift(); const v=viserObjet(a.objet,a.cadre);   // vers un objet : la page calcule cap et inclinaison
@@ -864,6 +869,8 @@ function display(src,t,cible){
   gl.uniform1f(u.uExp,CFG.expoFixe>0?+CFG.expoFixe:exposure);   // mise au point : expoFixe impose l'exposition du capteur
   gl.uniform1f(u.uTime,still?0:t); gl.uniform1f(u.uSoft,0); gl.uniform1i(u.uLin,src.lin&&!OPT.capteur4?1:0);
   gl.uniform1f(u.uFlare||null,QUAL.full&&S.atmo&&S.atmo[0]?(CFG.flare!==undefined?+CFG.flare:1):0);   // optique face au soleil : grand écran, modèle atmosphère
+  if(!cible) eblMaj(t);
+  gl.uniform2f(u.uEbl||null,EBL.v,EBL.tache);                                                        // éblouissement, persistance rétinienne
   gl.uniform1f(u.uGrainPx||null,QUAL.full?Math.max(1,canvas.height/620):1);                          // grain d'une vidéo, pas d'un écran
   gl.uniform1f(u.uGain,Math.min(2.2,1+.28*Math.max(0,Math.log2(exposure))));   // gain élevé = davantage de bruit capteur
   if(still) gl.uniform3f(u.uShake,0,0,0);                     // sinon : dérive de la main et balancement de la marche
@@ -1844,6 +1851,7 @@ function enqueue(actions){
     if(!a||typeof a!=="object") continue;
     if(a.type==="tourner") queue.push({type:"tourner",rest:clampN(a.degres,-180,180,0)*Math.PI/180});
     else if(a.type==="marcher") queue.push({type:"marche",metres:clampN(a.metres,-10,30,0)});   // « avance de N m » : le trajet est calculé au moment de partir (§18)
+    else if(a.type==="regarder"&&a.vers==="soleil") queue.push({type:"soleil",t:0,dire:typeof a.dire==="string"?a.dire.slice(0,160):""});   // la page sait où est le soleil
     else if(a.type==="regarder") queue.push({type:"regarder",pitch:clampN(a.degres,-60,75,0)*Math.PI/180});
     else if(a.type==="attendre"){ const s=clampN(a.secondes,0,5,1); queue.push({type:"attendre",rest:vitK()>1?(s<=1?Math.min(s,.2):s*.4):s}); }   // démo : pas de temps morts
     else if(a.type==="posture") queue.push({type:"posture",h:clampN(a.hauteur,.35,1,1)});
@@ -2897,6 +2905,37 @@ function ramasserPas(a,dt){
   const so=v3a(a.sol,[0,1,0],EP()+.01), H=[rep[0],main(rep[1].p.map((v,i)=>v+(so[i]-v)*k+(i===1&&u>.45&&u<.62?.01*Math.sin(u*80):0)),[0,-1,0],u>.5&&u<.75?"poing":"ouverte",f)];
   mainsVers(H,dt,[1]); buildShapes(fiche,true);
   if(a.rest<=0){ queue.shift(); mainsObj=null; mainsEtat.H=null; buildShapes(fiche,true); }
+}
+/* Regarder le soleil (« fais deux pas et regarde le soleil ») : il tourne le corps et lève la tête vers le vrai soleil de la
+   fiche (0,75 s), le fixe ébloui (1,4 s, à-coups), détourne la tête d'un coup (75°, vers le sol, 0,4 s) en disant sa phrase,
+   cligne, puis revient le long du sentier. La nuit ou sous l'horizon : rien. */
+const lisse=x=>{ x=Math.min(1,Math.max(0,x)); return x*x*(3-2*x); }, angN=d=>Math.atan2(Math.sin(d),Math.cos(d));
+function soleilPas(a,dt){
+  const R=LUMIERE.regardSoleil(S.sunDir,S.nuit);
+  if(!R.visible){ queue.shift(); return; }
+  if(!a.t){ a.y0=cam.yaw; a.p0=cam.pitch; a.dy=angN(R.cap-look.yaw-cam.yaw); a.pc=Math.min(1.3,R.hauteur-look.pitch);
+    const route=S.kit!==1?pathYaw(cam.z+Math.cos(cam.yaw)*6)+(Math.cos(cam.yaw)<0?Math.PI:0):cam.yaw;
+    a.cote=angN(route-R.cap)>=0?1:-1; a.route=route; }
+  a.t+=dt; const T1=.75, T2=T1+1.4, T3=T2+.4, T4=T3+1.1, t=a.t;
+  if(t<=T1){ const k=lisse(t/T1); cam.yaw=a.y0+a.dy*k; cam.pitch=a.p0+(a.pc-a.p0)*k; EBL.cible=lisse((t-T1*.5)/(T1*.5)); }
+  else if(t<=T2){ EBL.cible=1; const k=EBL.force, w=t*1000;
+    EBL.jy=k*(.010*Math.sin(w*.019)+.006*Math.sin(w*.047+1.3))*(Math.sin(w*.0071)>.3?1.6:.5);
+    EBL.jp=k*(.008*Math.sin(w*.023+.4)+.005*Math.sin(w*.061)); }
+  else if(t<=T3){ if(!a.dit){ a.dit=true; a.y1=cam.yaw; a.p1=cam.pitch; EBL.cible=0; EBL.tache=1; EBL.jy=EBL.jp=0;
+      if(a.dire){ say(a.dire); direVoix(a.dire); notePensee(a.dire,"soleil"); } }
+    const k=lisse((t-T2)/(T3-T2)); cam.yaw=a.y1+a.cote*1.3*k; cam.pitch=a.p1+(-.55-a.p1)*k; }
+  else if(t>T4){ queue.shift(); queue.unshift({type:"tourner",rest:angN(a.route-cam.yaw)},{type:"regarder",pitch:-.03}); }
+}
+function eblMaj(t){                                             // à chaque image montrée : la force suit sa cible (l'exposition met un temps à rattraper)
+  const dt=Math.max(0,Math.min(.1,t-EBL.t)); EBL.t=t;
+  const p=lastPose; if(!p) return;
+  const f=[p.mat[6],p.mat[7],p.mat[8]], s=S.sunDir, c=f[0]*s[0]+f[1]*s[1]+f[2]*s[2];
+  EBL.force+=(EBL.cible-EBL.force)*(1-Math.exp(-dt/(EBL.cible>EBL.force?.3:.7)));
+  if(!queue[0]||queue[0].type!=="soleil"){ EBL.cible=0; EBL.jy=EBL.jp=0; }
+  EBL.tache*=Math.exp(-dt/1.8); if(EBL.tache<.01) EBL.tache=0;
+  const vu=S.nuit||s[1]<=.005?0:sstep(Math.cos(40*Math.PI/180),Math.cos(6*Math.PI/180),c);
+  EBL.v=Math.max(LUMIERE.eblouissement(f,s,S.nuit),EBL.force*Math.max(vu,EBL.cible>0?0:.6));
+  if(EBL.v<.004) EBL.v=0;
 }
 function viserObjet(id,cadre){                                 // cap (relatif au corps) et inclinaison vers un objet de la fiche ou un support
   const q=cibleMonde(id); if(!q) return null;
