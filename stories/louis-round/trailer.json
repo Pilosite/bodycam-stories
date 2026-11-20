@@ -12,7 +12,7 @@
   },
   "labels": {
     "en": {
-      "title_1": "Bodycam", "title_2": "Stories", "preview": "Private preview", "exit": "Exit trailer",
+      "title_1": "Bodycam", "title_2": "Stories", "preview": "Private preview", "exit": "Exit",
       "clock_now": "Now", "clock_scene": "The scene", "clock_story": "The story",
       "decisions": "live decisions", "by_reflex": "reflex (code)", "by_model": "model", "rules": "written rules fired",
       "rule": "rule", "absolute": "absolute held", "your_promise": "your promise, run as a rule", "pattern": "pattern",

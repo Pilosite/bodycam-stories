@@ -157,7 +157,7 @@ const CSS = `
 #tr .tr-strip span{display:flex;align-items:center;gap:7px;opacity:.72;transition:opacity .3s}
 #tr .tr-strip i{width:8px;height:8px;border-radius:50%;background:rgba(243,240,232,.45);transition:background .25s,box-shadow .25s}
 #tr .tr-strip span.hot{opacity:1}#tr .tr-strip span.hot i{background:#ff3b30;box-shadow:0 0 12px #ff3b30}
-#tr .tr-fast{color:#ff4a3d;opacity:0;transition:opacity .3s}#tr .tr-fast.on{opacity:1}
+#tr .tr-strip .tr-fast{color:#ff4a3d;opacity:0;transition:opacity .3s}#tr .tr-strip .tr-fast.on{opacity:1}
 #tr .tr-side{position:absolute;left:max(16px,4vw);top:calc(env(safe-area-inset-top,0px) + 84px);display:flex;flex-direction:column;gap:7px;align-items:flex-start;max-width:min(calc(100vw - 32px),620px)}
 #tr .tr-tally,#tr .tr-prom{opacity:0;transition:opacity .6s}
 #tr .on-panel{opacity:1!important}
@@ -193,7 +193,7 @@ const CSS = `
 #tr button.tr-b:hover,#tr button.tr-b:focus-visible{background:#ff3b30;border-color:#ff3b30;color:#fff;outline:none}
 #tr .tr-pt{width:9px;height:9px;border-radius:50%;background:#ff3b30;box-shadow:0 0 10px #ff3b30;display:inline-block}
 #tr .tr-preview{position:absolute;right:max(18px,5vw);top:calc(env(safe-area-inset-top,0px) + 22px);font-size:clamp(10px,1.1vw,13px);opacity:.82}
-#tr .tr-exit{position:absolute;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);pointer-events:auto;padding:8px 13px;min-height:0;font:500 11px/1 "DM Mono",monospace;letter-spacing:.16em;text-transform:uppercase;
+#tr .tr-exit{position:absolute;right:max(16px,4vw);top:calc(env(safe-area-inset-top,0px) + 80px);pointer-events:auto;padding:8px 13px;min-height:0;font:500 11px/1 "DM Mono",monospace;letter-spacing:.16em;text-transform:uppercase;
   background:rgba(8,8,8,.6);color:rgba(243,240,232,.8);border:1px solid rgba(243,240,232,.3);border-radius:0;cursor:pointer}
 #tr.clean button{display:none!important}
 #tr.ending .tr-side,#tr.ending .tr-strip,#tr.ending .tr-exit,#tr.ending .tr-cap{opacity:0!important;transition:opacity .6s}
@@ -204,7 +204,7 @@ const marks = s => esc(s).replace(/\*([^*]+)\*/g, '<b>$1</b>');
 
 export function createTrailer(T) {
   const d = T.doc, w = T.win, script = T.script, L = () => Object.assign({}, script.labels.en || {}, script.labels[T.lang] || {});
-  const st = { on: false, i: -1, timers: [], unsub: null, fast: 0, wish: null, raf: 0, t0: 0, readout: null, real: 0, decided: { model: 0, reflex: 0 }, card: null };
+  const st = { on: false, i: -1, timers: [], unsub: null, flashes: [], flashing: false, fast: 0, wish: null, raf: 0, t0: 0, readout: null, real: 0, decided: { model: 0, reflex: 0 }, card: null };
   let root = null, el = {};
 
   function build() {
@@ -234,13 +234,20 @@ export function createTrailer(T) {
   function decLabel() { const l = L(), n = st.decided; el.declabel.textContent = (l.decisions || 'live decisions') + ' · ' + (n.model ? (l.by_model || 'model') + (n.reflex ? ' + ' + (l.by_reflex || 'reflex (code)') : '') : (l.by_reflex || 'reflex (code)')); }
   const pulse = c => { const s = el.strip.querySelector('[data-c="' + c + '"]'); if (!s) return; s.classList.add('hot'); w.clearTimeout(s._t); s._t = w.setTimeout(() => s.classList.remove('hot'), 900); };
   function icon(cls) { const i = d.createElement('i'); i.className = cls; el.icons.appendChild(i); while (el.icons.children.length > 28) el.icons.firstChild.remove(); }
-  function flash(sig) {
+  /* Rules that fire together are shown one after the other, each long enough to be read. */
+  function flash(sig) { st.flashes.push(sig); if (!st.flashing) nextFlash(); }
+  function nextFlash() {
+    const sig = st.flashes.shift();
+    if (!sig) { st.flashing = false; el.flash.classList.remove('on'); return; }
+    st.flashing = true; showFlash(sig); later(nextFlash, st.flashes.length ? 2.8 : 4.2);
+  }
+  function showFlash(sig) {
     const l = L(), k = el.flash.children;
     k[0].innerHTML = '<i class="tr-d"></i>' + esc(sig.kind === 'absolute' ? (l.absolute || 'absolute held') : sig.by === 'player' ? (l.your_promise || 'your promise, as a rule') : (l.rule || 'rule') + (sig.author ? ' · ' + sig.author : ''));
     k[1].textContent = sig.text || sig.id;
     k[2].textContent = sig.pattern ? (l.pattern || 'pattern') + ' · ' + pick(sig.pattern.name, T.lang) : '';
     k[2].style.display = sig.pattern ? '' : 'none';
-    el.flash.classList.add('on'); w.clearTimeout(el.flash._t); el.flash._t = w.setTimeout(() => el.flash.classList.remove('on'), 4200);
+    el.flash.classList.add('on');
   }
   function promise(sig) {
     const l = L(); let p = el.prom.querySelector('[data-id="' + CSS_ID(sig.id) + '"]');
@@ -345,7 +352,7 @@ export function createTrailer(T) {
   function start() {
     build(); stop(true);
     hideCard(); T.gameUi(false); root.classList.remove('ending');
-    st.on = true; st.decided = { model: 0, reflex: 0 }; st.readout = createReadout({ patterns: script.patterns });
+    st.on = true; st.decided = { model: 0, reflex: 0 }; st.flashes = []; st.flashing = false; el.flash.classList.remove('on'); st.readout = createReadout({ patterns: script.patterns });
     el.dec.textContent = '0'; el.rules.textContent = '0'; el.icons.innerHTML = ''; el.prom.innerHTML = ''; el.cap.innerHTML = ''; el.cap.className = 'tr-cap'; decLabel();
     for (const k of ['strip', 'tally', 'prom']) el[k].classList.remove('on-panel');
     st.unsub = T.story.on('entry', onEntry);
