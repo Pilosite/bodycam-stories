@@ -4,8 +4,8 @@
 //
 // Usage : node tools/banc-objet.mjs <modèle> [dossier] [variante]
 // Variables : FICHES='8,0' (indices des fiches : 09 aube, 01 plein jour), TAILLES='0.12,0.5,0.9', QUAL='mobile,pc',
-//   CADRES='pres,entier', PASSES (images accumulées, 8), W, H (portrait 300 × 534 ; pc : 640 × 400), GRAINE (graine du
-//   modèle, pour ses variantes), PAGE (une autre page que dist/index.html), PLANCHE=0 (pas de planche).
+//   CADRES='pres,entier', PASSES (images accumulées, 5), W, H (portrait 240 × 426 ; pc : 560 × 350), GRAINE (graine du
+//   modèle, pour ses variantes), MODELES (une autre bibliothèque), PAGE (une autre page que dist/index.html), PLANCHE=0 (pas de planche).
 // Sortie : <dossier>/<fiche>-<qualité>-<taille>-<cadre>.png et <dossier>/planche.png (python3 + PIL).
 import { chromium } from 'playwright';
 import { mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
@@ -16,7 +16,7 @@ import { formesModele } from '../src/meneur.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const [,, nomModele, dir = 'out/banc', variante = ''] = process.argv;
-const BIB = JSON.parse(readFileSync(join(root, 'src/modeles.json'), 'utf8'));
+const BIB = JSON.parse(readFileSync(process.env.MODELES || join(root, 'src/modeles.json'), 'utf8'));
 const M = BIB.modeles[nomModele];
 if (!M) { console.error('modèle inconnu :', nomModele, Object.keys(BIB.modeles).join(' ')); process.exit(1); }
 const out = join(root, dir); mkdirSync(out, { recursive: true });
@@ -24,7 +24,7 @@ const FICHES = (process.env.FICHES || '8,0').split(',').map(Number);
 const TAILLES = (process.env.TAILLES || '0.12,0.5,0.9').split(',').map(Number);
 const QUAL = (process.env.QUAL || 'mobile,pc').split(',');
 const CADRES = (process.env.CADRES || 'pres,entier').split(',');
-const PASSES = +(process.env.PASSES || 8);
+const PASSES = +(process.env.PASSES || 5);
 const fichiers = readdirSync(join(root, 'scenes')).filter(f => f.endsWith('.json')).sort();
 const ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'];
 
@@ -42,7 +42,7 @@ async function lire(page) {
 
 const faites = [];
 for (const fi of FICHES) for (const q of QUAL) {
-  const pc = q === 'pc', W = +(process.env.W || (pc ? 640 : 300)), H = +(process.env.H || (pc ? 400 : 534));
+  const pc = q === 'pc', W = +(process.env.W || (pc ? 560 : 240)), H = +(process.env.H || (pc ? 350 : 426));
   const fiche = JSON.parse(readFileSync(join(root, 'scenes', fichiers[fi]), 'utf8'));
   const f0 = formesA(TAILLES[0]);
   // l'objet, hors du sentier, là où aucun élément de semis ne le touche (cherché dans la page)
@@ -75,9 +75,9 @@ for (const fi of FICHES) for (const q of QUAL) {
         cam.x = q.x - Math.sin(az) * d; cam.z = q.z - Math.cos(az) * d; cam.yaw = az; cam.haut = haut; cam.elev = 0;
         const v = viserObjet('banc', true); cam.yaw += v.yaw; cam.pitch = v.pitch;
         const eye = S.eye * haut, dist = Math.hypot(d, eye - T * .3);
-        const frac = cadre === 'pres' ? 1.5 : .55;                   // part de la hauteur d'image (portrait) que prend l'envergure
+        const frac = cadre === 'pres' ? .9 : .45;                   // part de la hauteur d'image (portrait) que prend l'envergure
         const demi = 1.09 * (ratio > 1 ? 1 / ratio : 1);             // demi-angle vertical sans zoom (rad)
-        const z = Math.max(1, Math.min(8, (T / dist) / (2 * demi * frac)));
+        const z = Math.max(1, Math.min(8, frac * 2 * demi * dist / T));
         cam.zoom = cam.zoomCible = z; look.yaw = 0; look.pitch = 0; sceneDirty = true;
         return { d: +d.toFixed(2), zoom: +z.toFixed(2), haut };
       }, [T, cadre, W / H]);

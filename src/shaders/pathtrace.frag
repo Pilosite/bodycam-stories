@@ -189,7 +189,7 @@ vec3 lightSurf(vec3 p, vec3 gn, vec3 n, vec3 alb, float spec, vec3 rd){
     if(vis>0.){
       vis*=canopyT(po,sd);
       vec3 h=normalize(sd-rd);
-      col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),28.));
+      col+=SUN*vis*ndl*(alb+spec*2.*pow(max(dot(n,h),0.),gSpecE)*(gSpecE+8.)/36.);
       if(uAtmo2.y>0.){ float fr=1.-abs(dot(n,rd)); fr*=fr; fr*=fr;   // rebord en contre-jour (modèle atmosphère), comme v3_ombrage.frag
         col+=SUN*vis*uAtmo2.y*fr*smoothstep(-.1,.7,dot(rd,sd))*smoothstep(-.35,.25,dot(n,sd))*(alb*1.6+.025); }
     }
