@@ -1,0 +1,66 @@
+# Bodycam Stories — founding principles
+
+This is the constitution of the project. It comes before the architecture, the plan and the code, and it outlives any conversation. A change here needs an ADR and Toine's explicit agreement. Every brief, every review and every milestone is checked against it.
+
+Source: Toine's statements of 19 and 20 November 2026, restated. Where a principle is my reading rather than his words, it is marked *(reading)*.
+
+## What Bodycam Stories is
+
+A place where people come to **tell themselves stories**: to enter an atmosphere, a universe, a situation, and see what happens. Its value is the richness of what can be imagined and lived, not reaction speed. The agents, the language and the engine exist to serve that, and are replaceable; the experience below is not.
+
+Under it lies one bet: **semantic engineering**. We are building a system that translates what a story is, and what a game is, into something a machine can run, starting from words.
+
+## A. The experience
+
+**P1. You act indirectly.** The player never acts on the world and never steers the character. They speak to someone who is in the world. This is the identity of the game, not a limitation to work around. *Check: there is no input that moves the character or touches a thing directly.*
+
+**P2. The lens is imposed on purpose.** One body camera, one subjective view, the look of phone footage. The frame constrains what can be asked and seen, and that constraint is the art direction: it is what makes an open world of possibilities elegant and tractable. *Check: nothing is shown that the camera could not have filmed.*
+
+**P3. The world is a bubble around the carrier.** The world exists where the character is, as far as the camera reaches, and is made as it is needed. The character can move, and the bubble moves with her. We do not build maps; we build what surrounds a person in a situation. *(reading)* v1 uses the smallest bubble (a few stations); autonomy and range grow version by version.
+
+**P4. You arrive in a story.** A story is something you drop into: a place, a moment, a person already in the middle of something. Stories can be short and self-contained, like episodes, and a player can go from one to another. Arriving, working out where you are and who you are with, is part of the play. *(reading, from the Quantum Leap reference: the player is the companion who can see and speak but cannot touch; we take the structure, never the show's characters or plots.)*
+
+**P5. The character is a person.** She has a will, a voice, limits and a past. She understands, agrees, argues, refuses, gets things wrong, and can break her word. The imprecision of the models is absorbed here and becomes character.
+
+**P6. Foresight is the player's lever.** Because the player cannot act, their power is to prepare: to agree with the character on what to do if something happens. These commitments are recorded in the story and honoured or broken later.
+
+**P7. Richness before reactivity.** We optimise atmosphere, coherence and the feeling that anything can be told. Time that the system needs to think is given to the character as time to act or hesitate. We never trade depth for twitch speed.
+
+## B. Authoring: for players and creators alike
+
+**P8. Everything that is not forbidden is possible.** There is no list of features. A player may ask for anything; a creator may establish anything. The system's default answer is to make it happen within the world's laws, and it refuses only what a principle forbids or what cannot physically be shown. *Check: the validator repairs before it rejects, and every rejection cites the principle or bound that caused it.*
+
+**P9. Principles, not features.** The systems people know from other games (a law that reacts to the player, reputation, needs, factions, an economy, day and night, stealth, relationships) are never coded as features. They are stated as principles and emerge from them. A narrator writes "if he comes round too often, the police start to take an interest", and that is enough. *Check, the litmus: a wanted-level system, a reputation system and a guard-and-crime system can each be written in the authoring language alone, with no new code.*
+
+**P10. The whole spectrum, from hard to fuzzy.** Players and creators can both state things that must hold (deterministic, run by code), things that tend to hold (fuzzy, weighed by a model in context) and things left open (decided in the moment). Fuzzy notions such as "too often", "close", "late", "angry" are first-class: they are named quantities that rise and fade, and principles refer to them in words. No one should have to write a complicated rule to get a simple effect.
+
+**P11. Creators are the point.** The project lives if people come and write stories in it. Every mechanism must be something a creator can state in words, see at work, and adjust. Most creators talk to an assistant; a few open the backend. A player who makes commitments is already writing rules: the path from player to creator is continuous.
+
+**P12. The narrative space is shared.** Stories are made by several hands. Everything in a story keeps its author, so that contributions can be layered, merged, credited and revised.
+
+## C. The engine
+
+**P13. Procedural at the root.** Everything shown is made by code from a description. Nothing is predefined: no asset, no hard-coded object, place or line. When a request fails, the vocabulary grows; a special case is never added.
+
+**P14. Cost does not depend on content.** The budget per frame is fixed. A richer world is rendered more coarsely, not more slowly.
+
+**P15. The camera's flaws are our cover.** Grain, compression, exposure and motion blur make it credible and hide the engine's shortcuts. Credible beats beautiful.
+
+**P16. One channel, replayable.** Nothing changes the world except a transaction in the intermediate language. Decisions are indeterminate; their execution is deterministic. A session can be replayed from its journal.
+
+**P17. What happened can be read.** Those who keep a story alive must be able to see what players did, how the world and its principles reacted, and why, in order to refine them.
+
+## D. How we go
+
+**P18. Crescendo.** Each version shows less than we imagine and does it for real. What is too hard is written down as later, not faked. Dynamism (movement, initiative, range, persistence) is introduced step by step.
+
+**P19. Nothing staged.** A demonstration may be simple; it may not pretend. If a panel shows agents at work, agents are at work.
+
+## What these principles rule out
+
+- A control scheme, a cursor on the world, a "use" button.
+- A camera that leaves the body.
+- A feature built for one kind of object, creature or situation.
+- A rule language so precise that only a programmer can write it.
+- Refusing a request because nobody planned for it.
+- Speed bought at the cost of the character's time to be a person.

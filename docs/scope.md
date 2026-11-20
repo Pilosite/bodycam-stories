@@ -18,6 +18,8 @@ Why: it is the bodycam constraint taken seriously (we never drive her), it lets 
 
 | Capability | v1 (POC) | v2 | Target |
 |---|---|---|---|
+| The bubble (P3) and arriving in a story (P4) | one story, one arrival, a bubble of a few stations | several short stories one can drop into; the bubble follows an autonomous character | any situation from a prompt; stories as episodes shared by creators |
+| Fuzzy systems (P9, P10) | gauges and principles; one gauge at work in the story | the litmus: a wanted level, a reputation and a guard-and-crime system written in the authoring language only | creators' libraries of systems |
 | Movement | transitions between 4 to 6 stations on one path | autonomous movement on the path, then off it | free roaming with real obstacle handling |
 | Camera | free look at a station, sensor look | look while moving | — |
 | Places | one place, described by a pack | several places, travel between them | any place from a prompt, live |

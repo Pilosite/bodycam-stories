@@ -1,5 +1,7 @@
 # Bodycam Stories — POC architecture (v0)
 
+**This page serves `docs/principles.md`, the project's constitution. If the two disagree, the principles win and this page is wrong.**
+
 This is the shared contract for the real proof of concept. It follows `docs/poc-principes.md` (why) and `docs/plan-poc.md` (plan), and adds what Toine asked on 20 Nov: PDL as a transaction language over three horizons, model-written rules executed by code, narrative patterns, light and strong characters, collaboration, creator-facing logs, and language policy.
 
 **Language policy.** Backend, code, data keys, logs, journals and tool UI are in English. What a character says is in the story's language, shown as subtitles. A player setting can force everything into one language. Existing engine code stays in French until touched; new POC code is English.
@@ -95,6 +97,22 @@ The player never acts on the world, but can ask the character to **prepare**: "i
 5. When it fires, the journal links the act back to the commitment, and she can say so ("You told me to stop if the jay called.").
 
 Commitments are what makes the indirect control a game: the player's lever is foresight, not steering. They are also the first authoring tool: a player who writes commitments is already writing rules, which is the path from player to creator.
+
+### Gauges: fuzzy quantities anyone can name
+
+Principle P10 asks that notions like "too often", "close", "angry" or "wanted" be first-class, so that classic game systems emerge from principles instead of features (P9). The mechanism is one generic thing, the **gauge**:
+
+```
+gauge { id, label, value 0..1, author, layer, scope
+        rises:  [ { on: event pattern, by } ]     // what feeds it
+        fades:  { per_minute }                     // how it decays
+        words:  { low, medium, high }              // the vocabulary principles use
+}
+```
+
+A creator (or a player, through a commitment) names a gauge in words and says what feeds it. Hard statements can test it (`when heat is high -> …`, thresholds from `words`); soft statements mention it and the models receive its current value and word (`~ when heat is high, the police take an interest`). Reputation, suspicion, trust, fatigue, a wanted level, disturbance near an animal: all are gauges plus principles. The engine knows none of these names.
+
+**Default permissive (P8).** The validator's order is: accept; else repair toward what was asked; reject only when a `!!` statement or a physical bound forbids it, and say which.
 
 ### Vocabulary (closed, typed)
 

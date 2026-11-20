@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"   # Playwright is only for local screenshots; CI never needs a browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No lockfile yet, so `npm install`; scripts are off and browser download is skipped.
+      - run: npm install --no-audit --no-fund --ignore-scripts
+      - run: npm test
+      - run: npm run build
+      # dist/ is committed: it must match what the sources build.
+      - run: git diff --exit-code -- dist
