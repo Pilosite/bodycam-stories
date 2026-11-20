@@ -1599,7 +1599,7 @@ function frame(now){
   if(vide){ vide.push(dtBrut); return; }                         // mesure de la cadence que la page obtient sans rien calculer
   COMP.img++;
   if(REG.redim){ REG.redim=false; resize(); }
-  if(ouvRepos){ prechauffer(); return; } 
+  if(ouvRepos){ prechauffer(); if(dbgOn&&now-lastHud>250){ lastHud=now; dbgMaj(); } return; } 
   // Page cachée ou sans le focus (vue embarquée dans une application, l'utilisateur est ailleurs) : au repos, dix images par
   // seconde au plus et pas de gros programme lancé (compLibre) ; le processus graphique est partagé avec l'application hôte.
   if(!window.__CFG||CFG.repos){ if(document.hidden) return; if(!document.hasFocus()&&now-REPOS.t<100) return; REPOS.t=now; }                         // l'ouverture pose sa question : rien n'est rendu derrière, mais tout se compile, un programme à la fois (docs/ouverture.md)
@@ -1637,7 +1637,7 @@ function hud(now){
   $("rec").textContent=p2(Math.floor(s/60))+":"+p2(s%60);
   $("clock").textContent=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
   $("camid").textContent="CAM 07 · GRAINE "+seedN;
-  if(dbgOn&&!meneur) dbgEl.textContent=V3.on?ombDiag():"";
+  if(dbgOn&&!meneur) dbgMaj();
   $("stat").textContent=V3.on&&!(V3.gp&&V3.omb)?"V3 · PRÉPARATION…":!V3.on&&ptEnCours()?"PRÉPARATION…":V3.on?"V3 · "+Math.round((V3.parts?V3.parts.total:V3.grains)/1000)+" K GRAINS · "+Math.round(V3.msMoy)+" MS"+(ombPrepa()?" · IMAGE COMPLÈTE…":""):V2.on?"V2 · "+V2.panos.filter(o=>o.n>=V2.passes).length+" PANOS"+(V2.cur?" · TOURNAGE "+Math.round(100*(V2.cur.n+V2.row/V2.ph)/V2.passes)+" %":"")
     :frozen?"FIGÉ · "+n+" PASSES":walking?"EN MARCHE":n>=MAXS?"NET":n+" PASSES";
   window.__state={n:CFG.auto?frames:V2.on?v2Prets():V3.on?V3.n:n,
@@ -2783,7 +2783,7 @@ function ticMeneur(){
   if(!meneur) return;
   const now=performance.now(), dt=Math.min(5,(now-meneurT)/1000); meneurT=now;
   meneur.tic(dt,percevoirMeneur(),{gel:frozen});
-  if(dbgOn) dbgEl.textContent=meneur.debug()+(V3.on?"\n"+ombDiag():"");
+  if(dbgOn) dbgMaj();
   if(meneur.fini()) clearInterval(meneurTimer);
 }
 function meneurEntendre(texte){ say("…");
@@ -2845,9 +2845,21 @@ function quitterHistoire(garderLieu){
    sur le chrono REC (réglage gardé dans le navigateur) : utile dans l'artefact sur téléphone, sans console. */
 let dbgOn=!!CFG.debug; try{ if(localStorage.getItem("bodycam-debug")==="1") dbgOn=true; }catch(_){}
 const dbgEl=document.body.appendChild(document.createElement("div")); dbgEl.id="debug-meneur"; dbgEl.setAttribute("aria-hidden","true"); dbgEl.hidden=!dbgOn;
-{ const chip=document.querySelector(".hud.top .chip"); let n=0,t=0; chip.style.pointerEvents="auto";
-  chip.addEventListener("pointerdown",()=>{ const now=performance.now(); n=now-t<450?n+1:1; t=now; if(n<3) return; n=0;
-    dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=dbgOn?(meneur?meneur.debug()+"\n":"")+(V3.on?ombDiag():""):""; try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }); }
+/* Pendant l'écran d'ouverture (« Quel monde veux-tu filmer ? », au-dessus de tout), les mêmes trois touches se font sur la ligne
+   « CAM 07 » au point rouge, ou dans le coin haut gauche de l'écran : le diagnostic s'affiche par-dessus, avec la file de
+   compilation en direct (dbgMaj, appelée aussi quand le moteur se repose et ne fait que compiler). */
+function dbgTexte(){ return (meneur?meneur.debug()+"\n":"")+(V3.on?ombDiag():"Moteur à rayons"+(ptEnCours()?" : compilation en cours":""))+compFile(); }
+function dbgMaj(){ const o=!!(ouverture&&ouverture.ouvert()); dbgEl.classList.toggle("sur-ouv",o); if(dbgOn) dbgEl.textContent=dbgTexte(); }
+function dbgBascule(){ dbgOn=!dbgOn; dbgEl.hidden=!dbgOn; dbgEl.textContent=""; dbgMaj(); try{ localStorage.setItem("bodycam-debug",dbgOn?"1":"0"); }catch(_){} }
+function compFile(){                                            // la file de compilation, en direct (diagnostic)
+  const t=performance.now(), x=COMP.envol.filter(e=>!e.note);
+  return "\nFile : "+(x.length?x.map(e=>e.nom+" depuis "+((t-e.t0)/1000).toFixed(1)+" s").join(", "):"rien en compilation")+(ouvRepos?" · ouverture (le moteur ne fait que compiler)":""); }
+{ const triple=()=>{ let n=0,t=0; return ()=>{ const now=performance.now(); n=now-t<450?n+1:1; t=now; if(n<3) return false; n=0; return true; }; };
+  const chip=document.querySelector(".hud.top .chip"), tc=triple(), to=triple(); chip.style.pointerEvents="auto";
+  chip.addEventListener("pointerdown",()=>{ if(tc()) dbgBascule(); });
+  addEventListener("pointerdown",ev=>{ if(!(ouverture&&ouverture.ouvert())) return;
+    const coin=ev.clientX<72&&ev.clientY<72, sur=ev.target&&ev.target.closest&&ev.target.closest(".ouv-sur");
+    if((coin||sur)&&to()) dbgBascule(); },true); }
 if(HIST.some(x=>MENEUR.ficheDe(x))){ const b=document.createElement("button"); b.type="button"; b.id="histoire"; b.textContent="Jouer l'histoire";
   $("outils").prepend(b); b.onclick=()=>{ fermerOutils(); jouerHistoire(); }; }
 /* Journal de partie : ce que le joueur peut copier et envoyer. Chaque tour : ce qu'il a dit, le verdict du sas,
