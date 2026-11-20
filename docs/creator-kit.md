@@ -23,6 +23,7 @@ Four slash commands in `.claude/commands/` wrap the loop for Claude Code: `/stor
 | `audit <journal>` | what the player asked, what was repaired or rejected and by which principle, rules fired, never fired and blocked, commitments with their course, gauges' course, judge verdicts (`auditSummary`), model calls, late answers | works; judge verdicts appear only when the journal has `audit` entries (no judge pass yet) |
 | `journal <journal> [--all] [--lang l]` | a journal, one readable line per entry; her lines in the asked language | works |
 | `new <pack-id> [--author id]` | a new pack from `stories/_template/` | works |
+| `sketch "<sentence>" --place <place file> [--answer <file>] [--answers <json>] [--out dir] [--prompt]` | conception before play (`core/sketch.js`, ADR 0011): a story sketch written as a pack folder (model layer `base`, creator's answers in layer `creator`). `--prompt` prints what the large tier is asked, so an assistant can write the answer to a file for `--answer`; without an answer, the code fallback, said so | works |
 | `node tools/pack-check.mjs <pack> [--json]` | alias of `check`, kept for habits and scripts | works |
 
 ### Play scripts

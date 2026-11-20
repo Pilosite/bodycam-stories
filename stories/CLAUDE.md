@@ -48,4 +48,4 @@ In a `facts` file, `!` is a fact that can be revealed (`reveal(f.x)`), `!!` cano
 
 ## Commands
 
-`node tools/story.mjs` (or `npm run story -- …`): `check`, `build`, `explain`, `play`, `replay`, `whatif`, `audit`, `journal`, `new <pack-id>`. Every command takes `--json`. Details and worked examples: `docs/creator-kit.md`. Slash commands in Claude Code: `/story-check`, `/story-play`, `/story-whatif`, `/story-new`.
+`node tools/story.mjs` (or `npm run story -- …`): `check`, `build`, `explain`, `play`, `replay`, `whatif`, `audit`, `journal`, `new <pack-id>`, `sketch "<sentence>" --place <file>` (a first story from a sentence: print the prompt with `--prompt`, write the answer yourself, pass it with `--answer`). Every command takes `--json`. Details and worked examples: `docs/creator-kit.md`. Slash commands in Claude Code: `/story-check`, `/story-play`, `/story-whatif`, `/story-new`.

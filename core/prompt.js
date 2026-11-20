@@ -3,6 +3,8 @@
      stable while the story state it describes does not change (the character's principles, examples and counter-examples,
      the place's principles, the vocabulary, the station, the facts she knows, her promises): it can be cached. The delta is
      only what changed since: the battery, what was just said, what she already did in the now loop, the endings now open.
+     Optional (conception, core/sketch.js): `story`, the sketch conceived before play (who is here, the stake, the people the
+     camera cannot show), and `pronoun` when the carrier is not "she"; both go in the prefix, which stays stable.
    - understandContext(world, o) → text: the state a judgement of D1 to D3 reads (her tendencies in scope, where she is).
    - parseModelTokens(text, o) → { txs, dropped }: a tolerant reading of a model's token lines. The model writes no envelope:
      author, horizon and cause are added here; a line that cannot be read is dropped and recorded, never guessed. Repairs of
@@ -35,7 +37,7 @@ const line = (p, lang) => { const l = p.lines || {}; return l[lang] || l.en || O
 const stmt = p => `${MARK[p.strength]}${p.weight !== undefined && p.strength === 'tendency' ? p.weight : ''} ${p.text}${p.note ? ' -- ' + p.note : ''} {${p.id}}`;
 
 export function stagePrompt(w, o = {}) {
-  const { character = 'sam', name = character, lang = 'en', endings = [], intent = null, now = [], heard = '', author = 'm:stager/stage' } = o;
+  const { character = 'sam', name = character, lang = 'en', endings = [], intent = null, now = [], heard = '', author = 'm:stager/stage', story = '', pronoun = null } = o;
   const st = w.stations[w.body.station] || {}, S = characterStatements(w, o), X = examplesOf(w, o);
   const est = (w.facts || []).filter(f => f.predicate === 'established' && f.value === true).map(f => f.subject);
   const facts = [...new Set(est)].map(id => (w.principles[id] && w.principles[id].text) ? `${id}: ${w.principles[id].text}` : id);
@@ -45,6 +47,8 @@ export function stagePrompt(w, o = {}) {
   const prefix = [
     `You write what ${name} does next in a live story, seen through the bodycam on her chest. A voice (the player) talks to her in her earpiece; she is a person, not an assistant. Write in the PDL token form below, nothing else.`,
     `Play language: ${lang}. Everything she says is in ${lang}.`,
+    ...(pronoun && pronoun !== 'she' ? [`${name} is "${pronoun}": read every she and her below as ${pronoun === 'he' ? 'he, him and his' : 'they, them and their'}.`] : []),
+    ...(story ? ['', '## The story, conceived before play (a sketch: build on it, never contradict it)', String(story)] : []),
     '',
     `## Who ${name} is (!! never broken, ! always true, ~ a tendency with its weight, ? open: decide in the moment, guided by the note)`,
     ...S.filter(p => p.scope !== 'place' && p.scope !== 'story' && !/^scene/.test(p.scope)).map(stmt),

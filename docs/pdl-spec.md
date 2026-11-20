@@ -79,7 +79,7 @@ A statement without `{id}` gets `<doc-id>.<section>.<n>` (stable while the file'
 | `@lang` | language code | of the prose (`fr` for Sam's voice examples, `en` for rules) |
 | `@scope` | `story`, `place`, `scene`, `character` | `character` means `character:<doc-id>` |
 | `@horizon` | `scene`, `story` | of what the statements compile to |
-| `@strength`, `@name`, `@presence` | character files | `strong`/`light`/`role`, a light character's name, `absent` |
+| `@strength`, `@name`, `@presence` | character files | `strong`/`light`/`role`, a light character's name, `absent` (not here, by the story) or `unseen` (here, but the engine cannot film them: played by voice and traces; conception lot) |
 | `@pattern` | pattern id | in a pattern instance |
 
 ### 2.3 Strengths
@@ -216,6 +216,14 @@ audit { type: "audit", principle, ref_seq, relevant: bool, respected: bool | nul
 | 13 | Parser | `tools/pack-check.mjs` had its own | `core/source.js` is the only parser; `tools/story.mjs check` (and its alias `tools/pack-check.mjs`) compiles through `compilePack` and adds the cross-file checks | one parser (done in the creator-kit lot) |
 
 ---
+
+### 2.11 Sketches: a pack written by a model before play (ADR 0011, conception lot, additive)
+
+`core/sketch.js` writes a pack from the creator's sentence and the built place (`docs/creation-pipeline.md` §6). Three additive points of the pack format:
+
+- **An author's role `model`.** `pack.json` `authors` may list `{ id, role: "model" }`; every statement whose author has that role gets `author.kind = "model"` in its principle record (§2.8), every other author stays `creator`. A sketch's base layer is the model's (`sketcher`); the creator's answers are a second layer (`creator`, file `answers.pdl`) that reuses the ids of the model's guesses, so the merge records what each answer replaced (`overrides`, `story explain`).
+- **`"stage": "sketch"`** in `pack.json`: the pack is a first draft; the strong carrier's minimums are warnings instead of errors (`tools/story.mjs check`). Everything else is checked as for any pack.
+- **`"sketch"`** in `pack.json`: `{ format, sentence, source: model | repaired | fallback, about { title, lang, carrier, pronoun, who, stake, absence }, cannot_show, questions [{ id, target, text, options }], answers? }`. `cannot_show` is also stated once to every model call as a story-scope tendency (`rules/engine.pdl`, `{engine.cannot-show}`). The stage prompt (`stagePrompt`, §9.1.1) takes two optional fields: `story` (the sketch: who is here, the stake, the other people and their presence) and `pronoun` (when the carrier is not "she"); `createClocks({ stage: { story, pronoun } })` passes them.
 
 ## 3. The transaction envelope and the canonical form
 

@@ -21,7 +21,7 @@ import { judge, readAnswers, understandQuestions, readUnderstanding, absoluteQue
 import { stagePrompt, understandContext, parseModelTokens, openEndings } from './prompt.js';
 
 export function createClocks({ session, model, character = null, name = null, clock = () => 0, sleep = ms => new Promise(ok => setTimeout(ok, ms)),
-  lines = {}, thresholds = {}, classes = {}, endings = [], judgeWaitMs = 350, absolutes = true } = {}) {
+  lines = {}, thresholds = {}, classes = {}, endings = [], judgeWaitMs = 350, absolutes = true, stage = {} } = {}) {
   const translator = { kind: 'model', id: 'translator', tier: 'translate' }, stager = { kind: 'model', id: 'stager', tier: 'stage' };
   const TH = Object.assign({ act_from: 0.8, ask_below: 0.5 }, thresholds);
   const can = what => model.available ? !!model.available(what) : what === 'invent' ? typeof model.generate === 'function' : false;
@@ -45,7 +45,7 @@ export function createClocks({ session, model, character = null, name = null, cl
   function invent({ intent, now, text, lang, t0, n }) {
     const call = callNote({ tier: 'stage', purpose: 'react', loop: 'scene', status: 'pending', instrument: 'invention' });
     const lastSay = [...now].reverse().find(x => x.status !== 'rejected' && x.tx && x.tx.kind === 'act' && x.tx.body.op === 'say');
-    const prompt = stagePrompt(w, { character, name: name || character, lang, endings, intent: intent.tx.body, heard: text,
+    const prompt = stagePrompt(w, { story: stage.story, pronoun: stage.pronoun, character, name: name || character, lang, endings, intent: intent.tx.body, heard: text,
       now: now.filter(x => x.status !== 'rejected').map(x => serializeLine(x.tx)) });
     const done = Promise.resolve().then(() => model.generate({ tier: 'stage', purpose: 'react', context: { intent: intent.seq, call: call.seq, now: now.map(x => x.seq) }, prompt, lang }))
       .then(ans => ans || { failed: 'empty' }, e => ({ failed: String(e && e.message || e) }));

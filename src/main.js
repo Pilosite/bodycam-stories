@@ -2120,7 +2120,7 @@ async function prendreVignette(id){
 function creerMonde(texte){                                     // « Décrire un monde » : la fabrication part en tâche de fond
   if(!atelier.creer(texte)) return Promise.resolve(null);
   say("Je fabrique ce monde. Tu peux suivre la fabrication en haut de l'écran.",true);
-  return atelier.attendre().then(j=>j&&j.doc?j.doc.fiche:null);
+  return atelier.attendre().then(j=>{ if(j&&j.doc&&!j.erreur) conceptionApres(texte,j.doc.fiche); return j&&j.doc?j.doc.fiche:null; });   // conception: block at the end
 }
 
 /* ------------------------------------------------------------------ panneau de parole : au clavier ou à la voix */
@@ -3796,3 +3796,21 @@ if(TRAILER_ON) setTimeout(()=>lancerTrailer(!!CFG.trailerDirect),0);   // ?trail
 window.balade.ouverture=()=>{ lancerOuverture(); return ouverture; };
 window.balade.ouvertureMesure=()=>ouvMesure;                    // tools/ouverture.mjs : attente entre la fin du rejeu et le fondu
 window.balade.arrivee=()=>({ errance, file:queue.map(a=>a.type), pensee:$("pensee").textContent });
+
+/* ---- conception before play (ADR 0011, briefs/conception.md, src/conception.js, core/sketch.js): keep this block apart ----
+   After « Décrire un monde » has built a place, the large tier writes a story sketch and asks the creator a few questions;
+   « Play » runs the world on the narrative core (story mode) with the generated pack; « Free walk » keeps the legacy free
+   mode (src/meneur.js) exactly as before. Switch: « Conception » in « Plus », ?conception=0|1, CFG.conception (capture tools:
+   off unless asked). */
+var conceptionOn=CFG.conception!==undefined?!!CFG.conception:/[?&]conception=1/.test(location.search)?true:/[?&]conception=0/.test(location.search)?false:(window.__CFG?false:reglage("bodycam-conception",undefined,true));
+const conception=CONCEPTION.createConception({ doc:document, win:window, CORE, library:PATTERN_LIBRARY, base:SKETCH_BASE,
+  sample:()=>sampler, forgetSample:()=>{ sampler=null; },
+  play:pk=>{ STORY_PACKS[pk.id]=pk; lancerStory(pk.id,{lang:pk.lang}); },
+  free:()=>{} });
+function conceptionApres(texte,f){ if(!conceptionOn||!f||(storyMode&&storyMode.on())) return; conception.open({ sentence:texte, place:f }); }
+{ const b=document.createElement("button"); b.type="button"; b.id="conception-on"; b.className="ghost";
+  const maj=()=>{ b.textContent="Conception : "+(conceptionOn?"oui":"non"); b.setAttribute("aria-pressed",String(conceptionOn)); }; maj();
+  b.onclick=()=>{ conceptionOn=!conceptionOn; memoriser("bodycam-conception",conceptionOn); if(!conceptionOn) conception.close(); maj(); };
+  $("outils").appendChild(b); }
+window.conception={ open:(t,f)=>conception.open({ sentence:t, place:f||fiche }), state:()=>conception.state(), close:()=>conception.close(), on:()=>conceptionOn };
+/* ---- end of the conception block ---- */

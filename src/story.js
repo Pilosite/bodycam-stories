@@ -161,7 +161,7 @@ export function createStoryMode(P) {
     st.summarized = false;
     st.model = makeModel(pk);
     const R = P.reflexes || {}, A = pk.anchors || {};
-    st.clocks = P.CORE.createClocks({ session: st.session, model: st.model, character: pk.carrier, name: pk.carrier.charAt(0).toUpperCase() + pk.carrier.slice(1), clock: () => P.now(),
+    st.clocks = P.CORE.createClocks({ session: st.session, model: st.model, character: pk.carrier, name: pk.name || pk.carrier.charAt(0).toUpperCase() + pk.carrier.slice(1), stage: pk.stage || {}, clock: () => P.now(),   // name, stage: a conceived pack (core/sketch.js playable)
       lines: { ask: R.ask_line, doubt: R.doubt_line, hold: R.hold_line }, thresholds: { act_from: R.act_from, ask_below: R.ask_below },
       classes: { intent: Object.keys(A.intent_classes || {}), commit: Object.keys(A.commit_classes || {}) }, endings: pk.endings || [] });
     st.clocks.attach(input);
