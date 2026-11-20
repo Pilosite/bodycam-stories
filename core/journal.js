@@ -63,7 +63,7 @@ export function modelSummary(journal) {
     const k = (e.adapter || e.tier || '?') + '/' + (e.instrument || '?') + (e.status === 'failed' ? '/failed' : '');
     calls[k] = (calls[k] || 0) + 1;
     const m = e.timings && typeof e.timings.model_ms === 'number' ? e.timings.model_ms : e.latency_ms;
-    if (e.status !== 'failed') (lat[e.instrument || '?'] = lat[e.instrument || '?'] || []).push(m);
+    if (e.status !== 'failed') (lat[(e.adapter || e.tier || '?') + '/' + (e.instrument || '?')] = lat[(e.adapter || e.tier || '?') + '/' + (e.instrument || '?')] || []).push(m);
   }
   const first = [], full = E.filter(e => e.type === 'model_call' && e.status === 'landed' && e.instrument === 'invention' && !e.stale).map(e => e.latency_ms);
   for (const i of E.filter(e => e.type === 'tx' && e.kind === 'intent' && e.loop === 'now')) {

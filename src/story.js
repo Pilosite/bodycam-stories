@@ -244,7 +244,7 @@ export function createStoryMode(P) {
     const lang = mk('button', { type: 'button', className: 'ghost', id: 'story-lang', textContent: L().lang }, tools);
     lang.onclick = () => { st.lang = st.lang === 'en' ? 'fr' : 'en'; P.storeLang(st.lang); lang.textContent = L().lang; makeVoices(); P.labels(L()); panel(); };
     const models = mk('div', { id: 'story-models' });
-    models.setAttribute('style', 'position:fixed;top:8px;right:10px;z-index:30;font:400 10px/1.3 ui-monospace,monospace;color:rgba(243,240,232,.75);background:rgba(10,12,9,.45);padding:2px 6px;border-radius:6px;pointer-events:none');
+    models.setAttribute('style', 'position:fixed;top:62px;left:18px;z-index:30;font:400 10px/1.3 ui-monospace,monospace;color:rgba(243,240,232,.75);background:rgba(10,12,9,.45);padding:2px 6px;border-radius:6px;pointer-events:none');
     st.ui = { els, box, pre, models };
     indicator();
   }

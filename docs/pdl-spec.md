@@ -481,7 +481,7 @@ JSON lines, English keys, append-only. Every entry has `seq`, `t`, `type`.
 | `observe` | event, data | yes |
 | `principles` | records | yes |
 | `model_call` | loop, status (done, pending, landed, failed), ref_seq, tier, purpose, character, adapter (home, host, reflex, …), instrument (judgement, invention: P22), principles (ids of soft principles in scope), gauges ([{ id, value, word, mentioned_by }] for gauges those principles mention), p, play (act, doubt, ask), latency_ms (since the utterance), timings ({ model_ms, first_ms }), error, stale, dropped (lines a model wrote that were not transactions) | yes |
-| `summary` | calls ({ "adapter/instrument[/failed]": n }), median_ms per instrument, first_reaction_ms, full_reaction_ms, reactions, repaired, rejected, rejected_by, dropped (`modelSummary` in `core/journal.js`, once at the end of a page session) | no (derived) |
+| `summary` | calls ({ "adapter/instrument[/failed]": n }), median_ms per adapter and instrument, first_reaction_ms, full_reaction_ms, reactions, repaired, rejected, rejected_by, dropped (`modelSummary` in `core/journal.js`, once at the end of a page session) | no (derived) |
 | `start` | — | yes (emits `session.started`) |
 | `audit` | principle, ref_seq, relevant, respected, note, judge | yes |
 | `hash` | hash | yes (re-computed) |

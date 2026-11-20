@@ -23076,7 +23076,8 @@ function storyChoice(){                                           // the launch 
 }
 { const o=$("outils"); for(const id of Object.keys(STORY_PACKS)){ const b=document.createElement("button"); b.type="button"; b.className="ghost"; b.textContent="Story: "+(STORY_PACKS[id].title.en||id); b.onclick=()=>lancerStory(id); o.prepend(b); } }
 window.story={ start:(id,o)=>lancerStory(id,o), hear:t=>storyMode.hear(t), advance:n=>storyMode.advance(n), look:(t,s)=>storyMode.look(t,s), state:()=>storyMode.state(), journal:()=>storyMode.journal(),
-  gaps:()=>storyMode.gaps(), commands:()=>storyMode.commands(), stop:()=>storyMode.stop(), checkpoint:()=>storyMode.checkpoint() };
+  gaps:()=>storyMode.gaps(), commands:()=>storyMode.commands(), stop:()=>storyMode.stop(), checkpoint:()=>storyMode.checkpoint(),
+  models:()=>storyMode.models(), summary:()=>storyMode.summary(), homeNode:c=>storyMode.homeNode(c) };
 
 /* ------------------------------------------------------------------ ouverture de démo et arrivée dans un lieu
    Le code est dans src/ouverture.js (OUVERTURE) et ouvertures/*.json (OUVERTURES, journaux de préparation réels) ; ici, les
