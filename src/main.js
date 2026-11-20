@@ -3405,11 +3405,31 @@ const activite=(()=>{
     +"opacity:0;transition:opacity .8s;white-space:pre-wrap;word-break:break-word;display:flex;flex-direction:column;justify-content:flex-end}#activite.on{opacity:.8}"
     +"#activite .l{display:flex;gap:6px}#activite .h{flex:none;width:2.6em;color:#7d8a74;font-size:10.5px;padding-top:1px}#activite .s{flex:none;width:1em}"
     +"#activite .k-gt .s,#activite .k-gt{color:#fff}#activite .k-lt{color:#a9d6f0}#activite .k-ex{color:#f0b47a}#activite .k-go{color:#e8e39a}#activite .k-ok{color:#8fbf7f}#activite .k-ti{color:#9ab}"
+    +"#activite.tr .l:not(.k-tr):not(.k-pe):not(.lie){font-size:9.5px;opacity:.5!important}#activite .k-tr{display:block;margin:2px 0;color:#f3f0e8;font-size:11px;line-height:1.35}#activite .k-tr .s{color:#e5352b}"
+    +"#activite .k-pe,#activite.tr .l.k-pe{opacity:1;color:#f3f0e8;font-size:10.5px}#activite .k-pe .s{color:#e5352b}#activite .l.lie{border-left:2px solid #e5352b;padding-left:4px;margin-left:-6px;opacity:1}#activite.tr .l.lie{font-size:11px;opacity:1}"
+    +"#activite .tj{margin-right:.45em}#activite .tj.p3{color:#fff;font-weight:500}#activite .tj.p2{color:#e6e2d8}#activite .tj.p1{color:#9c988f}#activite .tj.sg{color:#e5352b}#activite .lg{display:block;font-size:10.5px;color:#9c988f;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
     +"#activite .c{display:inline-block;width:.55em;background:#cfd8c4;animation:actc 1s steps(1) infinite}@keyframes actc{50%{opacity:0}}@media (max-width:760px),(orientation:portrait){#activite{display:none}}";
   document.head.appendChild(st);
   const el=document.body.appendChild(document.createElement("div")); el.id="activite"; el.setAttribute("aria-hidden","true");
-  const classe={">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
-  let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false;
+  const classe={"⇢":"k-pe",">":"k-gt"," ":"","~":"k-ti","<":"k-lt","·":"","!":"k-ex","▶":"k-go","✓":"k-ok"};
+  let L=[], t0=0, timer=0, sale=false, appel=null, fab=null, act=null, finQ=0, tFin=0, repondu=false, tTrad=-1e9, trAct=0;
+  // une trame PDL (src/pdl.js) : ses jetons s'écrivent comme une ligne ; dessous, la traduction en clair (anglais) de 2 jetons défile
+  // le profil du personnage : les vrais réglages issus de la recherche de l'ouverture (ouvertures/*.json, section personnage)
+  const PERSO=(()=>{ try{ const r=(typeof OUVERTURES!=="undefined"?OUVERTURES:[]).find(r=>r.personnage&&r.personnage.reglages); return r?r.personnage.reglages:null; }catch(_){ return null; } })();
+  let persona=null;
+  function ajouterPersona(texte){ if(!PERSO||typeof PDL==="undefined") return;
+    const t=String(texte||""), m=MENEUR.modeleDe?MENEUR.modeleDe(MODELES,t):null, tm=MENEUR.modeleDe?MENEUR.modeleDe(MODELES,t,{transforme:true}):null, mm=m||tm;
+    const fm=m&&MENEUR.formesModele?MENEUR.formesModele(m.modele,t):null, ex=MENEUR.exploitDe?MENEUR.exploitDe(MODELES):null;
+    const nature={ repugnance:mm&&mm.modele?+mm.modele.repugnance||0:0, facteur:fm?fm.facteur:1, effort:fm&&ex&&MENEUR.dureeEffort&&mm.modele.origine==="corps"?MENEUR.dureeEffort(fm.facteur,ex):0,
+      chercher:/cherch|ramass|rapport|trouve/i.test(t), faconner:!!tm };
+    const r=PDL.reactionAttendue(PERSO,nature); if(!r) return;
+    const l=ajouter({k:"◈",t:r.trame.texte}); l.tr=r.trame; l.pe=1;
+    ajouter({k:"⇢",t:"expected reaction · translated by JEV : "+r.texte}).pe=1; persona={lie:false}; tTrad=performance.now(); }
+  function ajouterTrame(tr){ if(!tr||!tr.jetons.length) return; const l=ajouter({k:"◈",t:tr.texte}); l.tr=tr; el.classList.add("tr"); tTrad=performance.now(); }
+  function rendreTrame(l,curseur){ const tr=l.tr, J=[{s:tr.entete,poids:3,sg:1},...tr.jetons,{s:tr.somme,poids:1,sg:1}]; let c=0, h="";
+    for(const j of J){ if(c>=l.n) break; c+=j.s.length+1; h+='<span class="tj p'+j.poids+(j.sg?' sg':'')+'">'+esc(j.s)+'</span>'; }
+    const k=Math.floor((performance.now()-t0)/1400)%tr.jetons.length, a=tr.jetons[k], b=tr.jetons[(k+1)%tr.jetons.length];
+    return h+(curseur?'<span class="c">&nbsp;</span>':'')+'<span class="lg">'+esc(PDL.traduire(a))+(b!==a?'   '+esc(PDL.traduire(b)):'')+'</span>'; }
   const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"})[c]);
   const ms=()=>Math.round(performance.now()-t0);
   function ajouter(x){ if(!x) return null; const l={k:x.k,t:x.t,n:0,h:ms()}; L.push(l); if(L.length>40) L.shift(); sale=true; tFin=0; return l; }
@@ -3417,26 +3437,30 @@ const activite=(()=>{
     // frappe : la première ligne pas encore écrite avance ; s'il y en a beaucoup en retard, les anciennes s'écrivent d'un coup
     const att=L.filter(l=>l.n<l.t.length); att.slice(0,Math.max(0,att.length-3)).forEach(l=>l.n=l.t.length);
     if(att.length){ const l=att.find(l=>l.n<l.t.length); l.n=Math.min(l.t.length,l.n+14); sale=true; }
+    if(L.some(l=>l.tr)) sale=true;   // la légende des trames défile
     if(!sale) return; sale=false;
     const V=L.slice(-16), dern=V.findIndex(l=>l.n<l.t.length);
-    el.innerHTML=V.map((l,i)=>'<div class="l '+(classe[l.k]||"")+'" style="opacity:'+(.45+.55*Math.min(1,(i+1)/(V.length-6||1)))+'"><span class="h">'+(l.h/1000).toFixed(1)+'</span><span class="s">'+esc(l.k)+'</span><span>'
+    el.innerHTML=V.map((l,i)=>l.tr?'<div class="l k-tr'+(l.pe?' pe':'')+'"><span class="s">'+(l.pe?'●':'◈')+'</span> '+rendreTrame(l,i===dern)+'</div>'
+      :'<div class="l '+(classe[l.k]||"")+(l.pe?' k-pe':'')+(l.lie?' lie':'')+'" style="opacity:'+(.45+.55*Math.min(1,(i+1)/(V.length-6||1)))+'"><span class="h">'+(l.h/1000).toFixed(1)+'</span><span class="s">'+esc(l.k)+'</span><span>'
       +esc(l.t.slice(0,l.n))+(i===dern||(dern<0&&i===V.length-1&&tFin===0)?'<span class="c">&nbsp;</span>':'')+'</span></div>').join("");
   }
   function pas(){
     const now=performance.now();
     if(meneur){
       const v=meneur.enVol(), a=meneur.atelier&&meneur.atelier();
-      if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interprète",0))};
-        appel.l.t=ACTIVITE.ligneAppel("interprète",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
-      else if(appel){ appel.l.k="✓"; appel.l.t="interprète  répondu en "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true; }
-      if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("accessoiriste",0))};
-        fab.l.t=ACTIVITE.ligneAppel("accessoiriste",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
-      else if(fab){ fab.l.k="✓"; fab.l.t="accessoiriste  rendu en "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
+      if(v&&v.type==="voix"){ if(!appel||appel.id!==v.id) appel={id:v.id,d:now,l:ajouter(ACTIVITE.ligneAppel("interpreter",0))};
+        appel.l.t=ACTIVITE.ligneAppel("interpreter",(now-appel.d)/1000).t; appel.l.n=Math.max(appel.l.n,appel.l.t.length-4); sale=true; }
+      else if(appel){ appel.l.k="✓"; appel.l.t="interpreter  answered in "+((now-appel.d)/1000).toFixed(1)+" s"; appel.l.n=appel.l.t.length; appel=null; repondu=true; sale=true;
+        if(typeof PDL!=="undefined"&&queue.length&&!trAct) try{ trAct=1; ajouterTrame(PDL.trameActions(queue)); }catch(_){} }
+      if(a){ if(!fab||fab.id!==a.id) fab={id:a.id,d:now,l:ajouter(ACTIVITE.ligneAppel("prop master",0))};
+        fab.l.t=ACTIVITE.ligneAppel("prop master",(now-fab.d)/1000).t; fab.l.n=Math.max(fab.l.n,fab.l.t.length-4); sale=true; }
+      else if(fab){ fab.l.k="✓"; fab.l.t="prop master  done in "+((now-fab.d)/1000).toFixed(1)+" s"; fab.l.n=fab.l.t.length; fab=null; sale=true; }
     }
     const q=queue[0];
     if(q!==(act&&act.a)){
       if(act){ act.l.k="✓"; act.l.t=act.l.t.replace(/ [█░]+$/,""); act.l.n=act.l.t.length; }
       act=null;
+      if(q&&!trAct&&!appel&&typeof PDL!=="undefined"){ trAct=1; try{ ajouterTrame(PDL.trameActions(queue)); }catch(_){} }   // réponse sans appel (secours) : la trame des actions au premier geste
       if(q){ const t=ACTIVITE.ligneAction(q), p=L[L.length-1];
         // pas d'un même trajet (tourner, marcher, tourner…) : une seule ligne qui compte
         if(p&&p.k==="✓"&&p.type===q.type&&/^(marcher|tourner)$/.test(q.type)){ p.k="▶"; p.x=(p.x||1)+1; p.t=t+" ×"+p.x; p.n=p.t.length; act={a:q,l:p,r0:q.rest}; }
@@ -3453,11 +3477,13 @@ const activite=(()=>{
   }
   return {
     entendre(texte){ if(!on||typeof ACTIVITE==="undefined") return; t0=performance.now(); L=[]; appel=fab=act=null; finQ=tFin=0; repondu=false;
-      try{ ACTIVITE.analyser(texte,MENEUR,MODELES).forEach(ajouter); }catch(e){ console.warn("activité",e); }
+      el.classList.remove("tr"); persona=null; trAct=0;
+      try{ const A=ACTIVITE.analyser(texte,MENEUR,MODELES); A.forEach(ajouter); if(typeof PDL!=="undefined") ajouterTrame(PDL.trameDemande(texte,A)); ajouterPersona(texte); }catch(e){ console.warn("activité",e); }
       el.classList.add("on"); if(!timer) timer=setInterval(pas,100); pas(); },
-    evt(e){ if(!on||!timer) return; const x=ACTIVITE.ligneEvenement(e); if(x) ajouter(x); },
+    evt(e){ if(!on||!timer) return; const x=ACTIVITE.ligneEvenement(e); if(!x) return; const l=ajouter(x);
+      if(persona&&!persona.lie&&e.type==="pensee"){ persona.lie=true; l.lie=1; } },   // la pensée dite, reliée à la réaction attendue
     bascule(){ on=!on; try{ localStorage.setItem("bodycam-activite",on?"1":"0"); }catch(_){} if(!on){ clearInterval(timer); timer=0; el.classList.remove("on"); } return on; },
-    on:()=>on, lignes:()=>L.map(l=>l.k+" "+l.t)
+    on:()=>on, lignes:()=>L.map(l=>l.k+" "+l.t), traduit:()=>performance.now()-tTrad
   };
 })();
 { const b=document.createElement("button"); b.type="button"; b.id="activite-bouton"; b.className="ghost";
@@ -3471,11 +3497,11 @@ window.balActivite=activite;   // essais : balActivite.lignes()
 const regie=(()=>{
   if(window.__CFG&&!CFG.regie) return null;
   const el=document.createElement("div"); el.id="regie"; el.setAttribute("aria-hidden","true");
-  const L=[["ciel","Sky · light"],["monde","World · terrain"],["histoire","Story"],["evenements","Events"],["corps","Behavior"],["son","Audio · voice"]];
+  const L=[["ciel","Sky · light"],["monde","World · terrain"],["histoire","Story"],["evenements","Events"],["corps","Behavior"],["son","Audio · voice"],["traduction","Translation · PDL"]];
   el.innerHTML='<p class="rg-t">Agents · live</p>'+L.map(([k,n])=>'<p class="rg-l" data-k="'+k+'"><i></i><span>'+n+'</span><b></b></p>').join("");
   document.body.appendChild(el);
   const N={}; for(const p of el.querySelectorAll(".rg-l")) N[p.dataset.k]={p,b:p.querySelector("b"),n:0,t:0};
-  const etats={ciel:["idle","exposure","haze"],monde:["idle","seeding","terrain"],histoire:["listening","writing","deciding"],evenements:["idle","staging","firing"],corps:["rest","planning","acting"],son:["silent","mixing","playing"]};
+  const etats={ciel:["idle","exposure","haze"],monde:["idle","seeding","terrain"],histoire:["listening","writing","deciding"],evenements:["idle","staging","firing"],corps:["rest","planning","acting"],son:["silent","mixing","playing"],traduction:["idle","listening","translating"]};
   let i=0;
   setInterval(()=>{ i++;
     const jeu=!(ouverture&&ouverture.ouvert())&&!document.hidden&&innerWidth>=760&&activite.on()&&!CFG.nohud;
@@ -3483,7 +3509,7 @@ const regie=(()=>{
     const attente=$("pensee").textContent==="…", q=queue.length, type=q?queue[0].type:"", parle=$("pensee").classList.contains("on")&&!attente;
     const sonne=!!(window.balSon&&window.balSon.occupe&&window.balSon.occupe());
     const v={ ciel:(i%23<3)||Math.abs(exposure-expTarget)>.08?1:0, monde:walking?2:(i%17<2?1:0), histoire:attente?2:parle?1:0,
-      evenements:/effort|poser|faconner|chercher/.test(type)?2:q>2?1:0, corps:q?(/attendre|penser/.test(type)?1:2):0, son:sonne?2:parle||listening?1:0 };
+      evenements:/effort|poser|faconner|chercher/.test(type)?2:q>2?1:0, traduction:activite.traduit()<1500?2:attente?1:0, corps:q?(/attendre|penser/.test(type)?1:2):0, son:sonne?2:parle||listening?1:0 };
     for(const k in N){ const o=N[k], n=v[k]; if(n!==o.n){ o.n=n; o.p.dataset.n=n; o.b.textContent=etats[k][n]; } }
   },250);
   for(const k in N){ N[k].p.dataset.n=0; N[k].b.textContent=etats[k][0]; }
@@ -3653,7 +3679,7 @@ function lancerOuverture(){
   if(meneur&&!meneurLibre) quitterHistoire(false);
   setFrozen(false); voixP.taire(); voixInter(true);                         // la démo se joue avec la voix
   const voulue=id=>FICHES.find(f=>f.id===id);
-  ouverture=OUVERTURE.creerOuverture({ rejeux:OUVERTURES, fiches:FICHES, C:CONSTRUCTEUR, recettes:Object.keys(MAT_LIB.recettes), mention:mentionRejeu,
+  ouverture=OUVERTURE.creerOuverture({ rejeux:OUVERTURES, fiches:FICHES, C:CONSTRUCTEUR, PDL, recettes:Object.keys(MAT_LIB.recettes), mention:mentionRejeu,
     ficheDe:r=>voulue(r.fiche)||voulue(r.ficheSecours)||null,
     appliquer:f=>{ if(f!==ouvCoulisse){ const i=FICHES.indexOf(f); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f)); } ouvCoulisse=null; arriveeJeton++; },   // l'arrivée attend la fin du fondu
     pret:()=>pretOuverture(), etat:etatPrep,

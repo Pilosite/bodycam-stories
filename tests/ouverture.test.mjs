@@ -81,7 +81,7 @@ test('programme : 15 à 25 s avant le fondu, des durées irrégulières, tout le
     assert.deepEqual(lignes.filter(e => e.genre === 'requete' && e.etape === 'personnage').map(e => e.texte), R.personnage.requetes);
     assert.deepEqual(lignes.filter(e => e.genre === 'source').map(e => e.texte), [...R.lecture.sources, ...R.personnage.sources].map(s => s.titre));
     assert.deepEqual(lignes.filter(e => e.genre === 'constat').map(e => e.texte), [...R.constats.liste, ...R.personnage.constats].map(s => s.texte));
-    assert.ok(lignes.filter(e => e.genre === 'constat' && e.montre).length <= 8 && lignes.filter(e => e.genre === 'source' && e.montre).length <= 6);
+    assert.ok(lignes.filter(e => e.genre === 'constat' && e.montre).length <= 8 && lignes.filter(e => e.genre === 'source' && e.montre).length <= 12);   // le journal défile plus (6 sources montrées par étape)
     assert.deepEqual(ev.filter(e => e.type === 'etape').map(e => e.id), ['recherche', 'constats', 'personnage', 'p-constats', 'pdl', 'controle']);
   }
   // irrégulier : les écarts entre deux requêtes ne sont pas tous égaux, et deux graines ne donnent pas le même rythme

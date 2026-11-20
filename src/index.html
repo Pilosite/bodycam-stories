@@ -309,8 +309,47 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .ouv-reseau text{fill:var(--ink-dim);font:400 10px var(--f-mono);letter-spacing:.08em}
 .ouv-nd{fill:#0b0b0b;stroke:rgba(243,240,232,.45);stroke-width:1.2;transition:transform .25s ease,opacity .25s ease}
 .ouv-nd.on{fill:var(--ink);transform:scale(1.35)}
-.ouv-nd.o.on,.ouv-reseau.pdl .ouv-nd.o{fill:var(--rec);stroke:var(--rec)}
+.ouv-nd.o.on{fill:var(--rec);stroke:var(--rec)}
 .ouv-imp circle{fill:var(--rec);transition:transform .55s cubic-bezier(.3,.6,.3,1),opacity .55s ease}
+.ouv-ar line.web{stroke-dasharray:2 4;stroke:rgba(243,240,232,.1)}
+.ouv-chaud line{stroke:var(--ink);stroke-width:2.2;opacity:0;transition:opacity .4s ease}
+.ouv-reseau.pdl .ouv-chaud line[data-k^="o"]{stroke:var(--rec)}
+.ouv-nd.fait{fill:rgba(243,240,232,.38);stroke:rgba(243,240,232,.8)}
+.ouv-nd.recoit{fill:#4cc77a;stroke:#4cc77a;fill-opacity:.55}
+.ouv-nd.recoit.flash{animation:ouvFlash .16s ease-in-out 4 alternate}
+.ouv-nd.emet{fill:var(--rec);stroke:var(--rec);fill-opacity:1;animation:ouvPulse .3s ease-out both}
+.ouv-nd.t{stroke-dasharray:2 1.5}
+@keyframes ouvPulse{from{transform:scale(1)}to{transform:scale(1.3)}}
+@keyframes ouvFlash{from{opacity:1}to{opacity:.25}}
+.ouv-reseau text.ouv-mc{font-size:9px;fill:var(--ink)}
+.ouv-reseau text.ouv-tr{fill:var(--rec)}
+.ouv-reseau text.ouv-tr2{font-size:8.5px;opacity:.7}
+.ouv-reseau text.ouv-mn{font-size:9.5px;fill:var(--ink)}
+.ouv-eti text{fill:var(--ink);font:400 9.5px var(--f-mono);animation:ouvEti 1.2s ease-out forwards}
+@keyframes ouvEti{0%{opacity:0;transform:translateY(4px)}15%{opacity:1;transform:none}70%{opacity:.9}100%{opacity:0;transform:translateY(-8px)}}
+.ouv-imp circle.g{fill:var(--ink)}
+.ouv-leg i.t{width:5px;height:5px;border-style:dashed}.ouv-leg i.em{background:var(--rec);border-color:var(--rec)}.ouv-leg i.re{background:#4cc77a;border-color:#4cc77a}.ouv-leg i.fa{background:rgba(243,240,232,.38)}
+.ouv-etat-r{margin:3px 0 0;font:400 11px/1.3 var(--f-mono);color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.ouv-etat-r b{color:var(--ink);font-weight:400}
+.ouv-planche.ouv-replie{display:none}
+.ouv-apercu{animation:ouvApparait .4s ease both;border-left:2px solid var(--rec);padding:2px 0 4px 10px}
+.ouv-flux{max-height:30vh;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;font:400 13px/1.55 var(--f-mono);color:var(--ink);word-break:break-all}
+.ouv-trame{display:block}
+.ouv-tj{display:inline-block;margin-right:.5em;animation:ouvTj .18s ease-out both}
+.ouv-tj.p3{color:#fff;font-weight:500}.ouv-tj.p2{color:var(--ink);opacity:.85}.ouv-tj.p1{color:var(--ink-dim)}
+.ouv-tj.ent,.ouv-tj.som{color:var(--rec)}
+.ouv-tj.faux{color:var(--rec);opacity:.6}
+.ouv-tj.corr{animation:ouvCorr .4s ease-out}
+@keyframes ouvTj{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+@keyframes ouvCorr{from{opacity:.3;transform:scale(1.15)}to{opacity:1;transform:none}}
+.ouv-lien{display:none}
+.ouv-cur{display:inline-block;width:.55em;height:1em;vertical-align:-2px;background:var(--rec);animation:ouvCur 1s steps(1) infinite}
+@keyframes ouvCur{50%{opacity:0}}
+.ouv-pdl-leg{margin:4px 0 0;font:400 11px/1.35 var(--f-mono);color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ouv-pdl-cpt{margin:2px 0 0;font:400 11px/1.3 var(--f-mono);color:var(--ink-dim)}
+.ouv-pdl-cpt b{color:var(--ink);font-weight:400}
+.ouv-it.ouv-pdl-j{font:400 11px/1.4 var(--f-mono);color:var(--ink-dim);word-break:break-all;border-left:2px solid var(--rec);padding-left:8px;margin-left:-10px}
+.ouv-it.ouv-pdl-j .ouv-tj{margin-right:.4em}
 .ouv-leg{margin:4px 0 0;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font:400 11px/1.3 var(--f-mono);color:var(--ink-dim)}
 .ouv-leg i{display:inline-block;width:7px;height:7px;border-radius:50%;border:1px solid var(--ink);margin-right:5px;vertical-align:middle}
 .ouv-leg i.o{background:var(--rec);border-color:var(--rec)}
@@ -344,7 +383,7 @@ button.danger{border-color:var(--rec);color:#ffb3ab}
 .ouv-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @keyframes ouvTourne{to{transform:rotate(360deg)}}
 @keyframes ouvApparait{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.ouv-roue,.ouv-etape,.ouv-it,.ouv-vg,.ouv-epingle,.ouv-vg-img::after{animation:none}.ouv-rail,.ouv-imp circle,.ouv-reseau svg{transition:none}.ouv{transition:opacity .4s}}
+@media (prefers-reduced-motion:reduce){.ouv-roue,.ouv-etape,.ouv-it,.ouv-vg,.ouv-epingle,.ouv-vg-img::after{animation:none}.ouv-rail,.ouv-imp circle,.ouv-reseau svg{transition:none}.ouv-nd.emet,.ouv-nd.flash,.ouv-tj,.ouv-eti text{animation:none}.ouv{transition:opacity .4s}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 @media (prefers-reduced-motion:reduce){button.pulse{animation:none}}
 </style>
