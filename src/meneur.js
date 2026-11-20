@@ -1121,6 +1121,59 @@ export function gesteExploit(facteur, ex, tirer = l => l[0]) {
   out.push({ type: 'posture', hauteur: 1 });
   return out;
 }
+/* Les conséquences d'ambiance d'un exploit (§24) : des DONNÉES (`exploit.consequences` de la bibliothèque). Pour une chose
+   d'un modèle (palier et facteur de démesure, origine, répugnance), rend le plan de ce qui tombe du ciel autour d'elle, ou null :
+   { modele (id d'un modèle d'ambiance), chutes: [{ t (s après la pose), hauteur, chute_s, tours, angle (rad, par rapport à la
+   direction de la caméra), distance (m au-delà du bord), son {recette, duree, f0, force, rates, vibrato, impact_kg}, pensee }] }.
+   rnd : un tirage 0..1 (la graine de la partie). */
+export function planConsequences(bib, { palier, facteur = 1, modele } = {}, rnd = Math.random) {
+  const ex = exploitDe(bib), md = isObj(modele) ? modele : {};
+  if (!ex || !isObj(bib.modeles)) return null;
+  const entre = (p, d) => { const [a, b] = Array.isArray(p) && p.length >= 2 ? [num(p[0], -1e4, 1e4, d[0]), num(p[1], -1e4, 1e4, d[1])] : typeof p === 'number' ? [p, p] : d; return a + (b - a) * rnd(); };
+  for (const c of liste(ex.consequences).filter(isObj)) {
+    const si = isObj(c.si) ? c.si : {}, mc = isObj(bib.modeles[c.modele]) ? bib.modeles[c.modele] : null;
+    if (!mc || !mc.ambiance || !liste(mc.formes).length) continue;
+    if (Array.isArray(si.paliers) && !si.paliers.includes(palier)) continue;
+    if (si.origine && md.origine !== si.origine) continue;
+    if (num(facteur, 0, 1e3, 1) < num(si.facteur_min, 0, 1e3, 0)) continue;
+    if (num(md.repugnance, 0, 1, 0) < num(si.repugnance_min, 0, 1, 0)) continue;
+    const n = Math.round(entre(c.nombre, [3, 5])), S = isObj(c.son) ? c.son : {}, A = num(c.angle_deg, 0, 180, 90) * Math.PI / 180;
+    const pz = liste(c.pensees).filter(x => typeof x === 'string' && x.trim()), ia = Math.min(n, Math.max(1, Math.round(entre(c.pensee_a, [1, 2])))) - 1;
+    const texte = pz.length ? pz[Math.floor(rnd() * pz.length)] : null;
+    const chutes = []; let t = entre(c.debut_s, [1, 1]);
+    for (let i = 0; i < n; i++) {
+      if (i) t += entre(c.ecart_s, [0.6, 2]);
+      // de part et d'autre de la direction de la caméra, en alternant les côtés : elles tombent dans le champ, autour de la chose
+      const cote = i % 2 ? 1 : -1, ang = cote * A * (0.15 + 0.85 * rnd());
+      chutes.push({ t: Math.round(t * 100) / 100, hauteur: Math.round(entre(c.hauteur_m, [6, 10]) * 100) / 100, chute_s: Math.round(entre(c.chute_s, [0.8, 1.3]) * 100) / 100,
+        tours: Math.round(entre(c.tours, [1, 3]) * 100) / 100 * (rnd() < 0.5 ? -1 : 1), angle: Math.round(ang * 1000) / 1000, distance: Math.round(entre(c.distance_m, [0.3, 1.4]) * 100) / 100,
+        son: S.recette ? { recette: str(S.recette, 40), duree: Math.round(entre(S.duree_s, [0.4, 0.8]) * 100) / 100, f0: Math.round(entre(S.hauteur_hz, [2500, 3200])),
+          force: Math.round(entre(S.force, [0.45, 0.45]) * 100) / 100, rates: Math.round(entre(S.rates, [1, 1]) * 100) / 100, vibrato: Math.round(entre(S.vibrato, [1, 1]) * 100) / 100,
+          impact_kg: num(S.impact_kg, 0.005, 5, 0.08) } : null,
+        pensee: i === ia ? texte : null });
+    }
+    return { modele: c.modele, chutes };
+  }
+  return null;
+}
+/* Où tombent les choses d'une conséquence (§24) : autour de la chose (centre x, z, rayon r), du côté de la caméra (cam x, z),
+   au-delà de son bord, jamais sur elle, ni sur le corps, ni dans un obstacle connu ({x, z, r}), ni l'une sur l'autre ; occupe(p)
+   : ce que la page sait en plus (semis). rayon : celui de la chose qui tombe. */
+export function placesChute(chose, cam, chutes, obstacles = [], rayon = 0.12, occupe = null) {
+  const c = { x: num(chose.x, -1e4, 1e4, 0), z: num(chose.z, -1e4, 1e4, 0), r: num(chose.r, 0, 30, 0.3) }, out = [];
+  const a0 = Math.atan2(cam.x - c.x, cam.z - c.z), A = liste(obstacles).filter(o => isObj(o) && Number.isFinite(o.x));
+  const libre = p => Math.hypot(p.x - c.x, p.z - c.z) >= c.r + rayon + 0.05 && Math.hypot(p.x - cam.x, p.z - cam.z) >= REGLAGES.MARGE_CORPS + rayon + 0.2
+    && A.every(o => Math.hypot(p.x - o.x, p.z - o.z) >= num(o.r, 0, 30, 0) + rayon + 0.05) && out.every(q => Math.hypot(p.x - q.x, p.z - q.z) >= 2 * rayon + 0.05)
+    && !(typeof occupe === 'function' && occupe(p));
+  for (const ch of liste(chutes)) {
+    let p = null;
+    for (const dd of [0, 0.25, 0.5, 0.9, 1.4]) { for (const da of [0, 0.25, -0.25, 0.5, -0.5, 0.8, -0.8]) {
+      const a = a0 + num(ch.angle, -4, 4, 0) + da, d = c.r + rayon + 0.1 + num(ch.distance, 0, 5, 0.5) + dd, q = { x: c.x + Math.sin(a) * d, z: c.z + Math.cos(a) * d };
+      if (libre(q)) { p = q; break; } } if (p) break; }
+    out.push(p ? { x: Math.round(p.x * 1000) / 1000, z: Math.round(p.z * 1000) / 1000 } : null);
+  }
+  return out;
+}
 
 /* ------------------------------------------------------------------ le dégoût du corps (§22)
    Manipuler à mains nues une chose répugnante le dégoûte. Tout vient des données (`degout` de la bibliothèque, `repugnance`
@@ -2154,6 +2207,8 @@ export function creerMeneur(o) {
       if (v.apres && source !== 'ia') fautes.apres = v.apres;
     }
     if (apres) v.fabrique.etonne = { palier: pal, texte: apres, source };
+    const pc = planConsequences(BIB, { palier: pal, facteur: fm.facteur, modele: md }, () => alea(partie));   // §24 : ce que la démesure fait autour d'elle
+    if (pc) v.fabrique.consequences = pc;
     if (Object.keys(fautes).length) log('exploit_corrige', Object.assign({ modele: mf.id }, fautes));
     log('exploit', { modele: mf.id, facteur: fm.facteur, palier: pal, corps, effort_s: corps ? dureeEffort(fm.facteur, EX) : 0, apres: source });
   }
@@ -2460,6 +2515,7 @@ export function creerMeneur(o) {
       if (!idObjet) suite = null;                                // une suite sans son objet n'a plus de sens
     }
     if (suite) programmer(suite, { '@': idObjet }, source);
+    if (idObjet && dem.fabrique && dem.fabrique.consequences) lancerConsequences(idObjet, dem.fabrique.consequences);
     if (dem.fabrique) lancerFaconnageAttendu(id, idObjet);
   }
   /* Le modèle que nomme une chose fabriquée : par son premier nom (« crotte de 5 kg » ; pas « tas de pierres », qui n'est pas
@@ -2528,6 +2584,19 @@ export function creerMeneur(o) {
     return id;
   }
   const vivant = id => partie.monde.crees.find(c => c.id === id && !c.retire);
+  /* §24 : les choses d'une conséquence d'ambiance (planConsequences) : créées tout de suite, comptées comme ambiance (jamais
+     visées, recyclées d'abord) ; la page les fait tomber autour de la chose, chacune à son instant après la pose (« chute »). */
+  function lancerConsequences(id, pc) {
+    const mc = isObj(BIB) && isObj(BIB.modeles) && isObj(BIB.modeles[pc.modele]) ? BIB.modeles[pc.modele] : null; if (!mc) return;
+    const ids = [];
+    for (const ch of liste(pc.chutes)) {
+      const idc = creer({ nom: str(mc.nom, 60) || 'chose', formes: clone(mc.formes), degage: 0 }, { pres_de: id, decale: [0, 0], chute: clone(ch) }, 'ambiance', false);
+      if (!idc) break;
+      ids.push(idc); const cv = vivant(idc); cv.repugnance = num(mc.repugnance, 0, 1, 0); cv.facteur = 1;
+      if (ch.pensee) noter('porteur', ch.pensee);
+    }
+    log('consequence', { id, modele: pc.modele, ids, instants: liste(pc.chutes).map(c => c.t) });
+  }
   function modifier(id, ch) {
     const c = vivant(id); if (!c) return;
     if (ch.retirer) { c.retire = true; partie.monde.transitions = partie.monde.transitions.filter(t => t.id !== id); emettre({ type: 'objet', op: 'retirer', id }); log('objet_retire', { id }); return; }

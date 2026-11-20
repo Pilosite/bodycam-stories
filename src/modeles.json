@@ -35,12 +35,12 @@
    "demesure": ["{masse} ? T'es malade. … Bon. Je m'accroupis. On verra bien.", "C'est absurde. Ça peut pas sortir de moi. … Bon. J'essaie quand même.", "Énorme… comme ça, d'un coup ? Je vais y laisser ma peau. … Allez.", "N'importe quoi. … Bon. Je pousse. Si je meurs, c'est ta faute."]
   },
   "consequences": [
-   {"_doc": "Les conséquences d'ambiance d'un exploit (docs/meneur-de-jeu.md §24). Des DONNÉES, aucun nom de modèle dans le code : quand la chose faite répond à « si » (palier de démesure, origine, répugnance minimale du modèle), des choses d'un modèle d'ambiance de la bibliothèque (« modele », marqué ambiance) tombent du ciel autour d'elle, pendant qu'il se relève et la cadre. nombre ; debut_s : le premier après la pose ; ecart_s : entre deux ; hauteur_m : d'où elles tombent ; chute_s : la durée de la chute ; tours : combien de tours sur elles-mêmes ; distance_m : au-delà du bord de la chose ; angle_deg : de part et d'autre de la direction de la caméra. son : la recette (src/bruitages.json) du cri pendant la chute (duree_s, hauteur_hz, force, rates, vibrato), et la masse de la chute (impact_kg). pensees : une courte, dite à l'atterrissage de la n-ième (pensee_a, tirée), qui ne retarde rien.",
-    "si": {"paliers": ["demesure"], "origine": "corps", "repugnance_min": 0.5},
+   {"_doc": "Les conséquences d'ambiance d'un exploit (docs/meneur-de-jeu.md §24). Des DONNÉES, aucun nom de modèle dans le code : quand la chose faite répond à « si » (palier et facteur minimal de démesure : « énorme », 20 kg, pas 5 kg ; origine, répugnance minimale du modèle), des choses d'un modèle d'ambiance de la bibliothèque (« modele », marqué ambiance) tombent du ciel autour d'elle, pendant qu'il se relève et la cadre. nombre ; debut_s : le premier après la pose ; ecart_s : entre deux ; hauteur_m : d'où elles tombent ; chute_s : la durée de la chute ; tours : combien de tours sur elles-mêmes ; distance_m : au-delà du bord de la chose ; angle_deg : de part et d'autre de la direction de la caméra. son : la recette (src/bruitages.json) du cri pendant la chute (duree_s, hauteur_hz, force, rates, vibrato), et la masse de la chute (impact_kg). pensees : une courte, dite à l'atterrissage de la n-ième (pensee_a, tirée), qui ne retarde rien.",
+    "si": {"paliers": ["demesure"], "facteur_min": 5, "origine": "corps", "repugnance_min": 0.5},
     "modele": "oiseau",
     "nombre": [3, 5], "debut_s": [0.8, 1.6], "ecart_s": [0.6, 2], "hauteur_m": [6, 10], "chute_s": [0.8, 1.3], "tours": [1, 3],
     "distance_m": [0.3, 1.4], "angle_deg": 100,
-    "son": {"recette": "cri_mourant", "duree_s": [0.4, 0.8], "hauteur_hz": [2400, 3400], "force": [0.35, 0.55], "rates": [0.5, 1.5], "vibrato": [0.8, 1.5], "impact_kg": 0.08},
+    "son": {"recette": "cri_mourant", "duree_s": [0.4, 0.8], "hauteur_hz": [2400, 3400], "force": [0.35, 0.55], "rates": [1, 2], "vibrato": [0.8, 1.5], "impact_kg": 0.08},
     "pensee_a": [1, 2],
     "pensees": ["Ah. Les oiseaux aussi.", "C'est moi qui ai fait ça ?", "Non… Pas les oiseaux.", "Oh. Pardon, les petits.", "C'est l'odeur ? … C'est l'odeur."]
    }
