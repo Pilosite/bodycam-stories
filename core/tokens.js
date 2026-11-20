@@ -41,7 +41,7 @@ function head(tx) {
   const a = tx.author || {};
   h.push(AUTH[a.kind] + ':' + a.id + (a.tier ? '/' + a.tier : '') + (a.layer ? '+' + a.layer : ''));
   h.push(tx.horizon, tx.kind + (tx.body && typeof tx.body.op === 'string' && (tx.kind === 'act' || tx.kind === 'effect') ? '.' + tx.body.op : ''));
-  if (tx.cause) h.push('^' + (tx.cause.tx ?? '') + (tx.cause.rule ? '/' + tx.cause.rule : '') + (tx.cause.commit ? '!' + tx.cause.commit : ''));
+  if (tx.cause) h.push('^' + (tx.cause.tx ?? '') + (tx.cause.rule ? '/' + tx.cause.rule : '') + (tx.cause.commit ? '!' + tx.cause.commit : '') + (tx.cause.amends !== undefined ? '=' + tx.cause.amends : ''));
   if (tx.ttl !== undefined) h.push('~' + tx.ttl);
   return h;
 }
@@ -132,9 +132,9 @@ function parseHead(toks, n) {
     const t = toks.shift();
     if (t[0] === '~') tx.ttl = Number(t.slice(1));
     else {
-      const m = /^\^(\d*)(?:\/([^!]+))?(?:!(.+))?$/.exec(t);
+      const m = /^\^(\d*)(?:\/([^!=]+))?(?:!([^=]+))?(?:=(\d+))?$/.exec(t);
       if (!m) throw new SyntaxError(`line ${n}: bad cause ${t}`);
-      tx.cause = {}; if (m[1]) tx.cause.tx = Number(m[1]); if (m[2]) tx.cause.rule = m[2]; if (m[3]) tx.cause.commit = m[3];
+      tx.cause = {}; if (m[1]) tx.cause.tx = Number(m[1]); if (m[2]) tx.cause.rule = m[2]; if (m[3]) tx.cause.commit = m[3]; if (m[4]) tx.cause.amends = Number(m[4]);
     }
   }
   fields(toks, n, tx.body);

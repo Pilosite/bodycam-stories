@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { EXECUTOR_METHODS, createWorld, snapshot, rngFor } from '../core/world.js';
 import { EVENTS } from '../core/vocab.js';
 import { createSession } from '../core/session.js';
-import { LOUIS, SCENARIOS } from './core-fixture.mjs';
+import { LOUIS, SCENARIOS, louisPack } from './core-fixture.mjs';
 
 const OBSERVATIONS = ['body.pose', 'body.held'];
 const ARGS = {
@@ -13,7 +13,8 @@ const ARGS = {
   wait: { seconds: 1 }, stop: {}, say: { line: { fr: 'Bon.', en: 'Right.' }, lang: 'fr', tone: 'dry' },
   placeThing: { id: 'x', name: 'x', shapes: [{ shape: 'ball', p: [0, 0.1, 0], size: [0.2, 0.2, 0.2], color: '#777777' }], mass_kg: 1, pos: [0, 2], size_m: 0.2 },
   changeThing: { id: 'x', scale: 2 }, removeThing: { id: 'x', reason: 'removed' }, playSound: { cue: 'jay_alarm', recipe: 'jay_alarm', pos: [0, 0], gain: 0.5 },
-  setPlace: { fog: 0.02, lamp: false, sun_height: 4, weather: 'clear' }, setCamera: { battery: 0.5, degrade: 0, shake: 0 }, startScene: { id: 'path' },
+  setPlace: { fog: 0.02, lamp: false, sun_height: 4, weather: 'clear' }, setCamera: { battery: 0.5, degrade: 0, shake: 0, off: false }, startScene: { id: 'path' },
+  setSpeech: { volume: 'whisper', shorten: 0 }, endStory: { id: 'battery-dies' },
 };
 
 export function executorContract(make) {
@@ -31,9 +32,9 @@ export function executorContract(make) {
     if (m === 'go') assert.ok((r || []).some(e => e.event === 'station.entered' && e.data.id === 'path'), 'go reports the station entered');
   }
   assert.equal(snapshot(w), before, 'calls never change the core world');
-  // a whole session through this executor: the commitment of p9 is kept
-  const s = createSession({ scene: LOUIS, seed: 7, executor: make() });
-  SCENARIOS['p9-commitment'](s);
+  // a whole session through this executor: the real pack's jay commitment is kept at the approach
+  const c = louisPack(), s = createSession({ scene: c.scene, seed: 7, executor: make() });
+  SCENARIOS['p8-louis-pack'](s, c);
   assert.equal(s.world.commitments['c.jay'].status, 'kept');
-  assert.equal(s.world.body.station, 'platiere');
+  assert.equal(s.world.body.station, 'approach');
 }

@@ -7,7 +7,7 @@ export function createPaperWorld() {
   const ex = { calls };
   for (const m of EXECUTOR_METHODS) ex[m] = (args) => { calls.push([m, args]); return []; };
   const r2 = x => Math.round(x * 100) / 100;
-  ex.go = (a) => { calls.push(['go', a]); return [{ event: 'station.left', data: { id: a.from } }, { event: 'station.entered', data: { id: a.station } }]; };
+  ex.go = (a) => { calls.push(['go', a]); return [{ event: 'station.left', data: { id: a.from } }, { event: 'station.entered', data: { id: a.station } }, ...(a.posture !== undefined ? [{ event: 'body.pose', data: { height: a.posture } }] : [])]; };
   ex.look = (a, ctx) => {
     calls.push(['look', a]);
     const w = ctx.world, pose = {};

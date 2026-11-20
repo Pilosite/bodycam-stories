@@ -4,7 +4,8 @@
 import { readFileSync } from 'node:fs';
 import { createSession } from '../core/session.js';
 import { createPaperWorld } from '../core/paper-world.js';
-import { parseSource } from '../core/source.js';
+import { parseSource, principlesOf, compilePack, attachCompiled, approve } from '../core/source.js';
+import { loadPack, loadLibrary } from '../tools/pack-check.mjs';
 import { parseTokens } from '../core/pdl.js';
 
 const MATIERES = JSON.parse(readFileSync(new URL('../src/matieres.json', import.meta.url), 'utf8'));
@@ -40,28 +41,21 @@ export const LOUIS = {
   },
 };
 
-export const SOURCE = `@pack louis-round
-@author creator:toine
-@layer base
-@scope character:sam
-@lang en
+// A small source in the pack grammar (docs/pdl-spec.md §2), for the fixture place: a gauge, a rule on its word, a tendency
+// that mentions it, an explicit absolute.
+export const SOURCE = `# fixture-hide — rules near the hide (fixture)
+@kind rules  @layer base  @author toine  @lang en  @scope story  @horizon story
 
-sam.dry: ~0.8 Dry, funny when uneasy. Short sentences.
-  > "C'est un pin sylvestre. Malade, celui-là."
-  x "Oh my god, I am so scared, what should I do?"
-sam.climb: ? Would she climb? Yes if asked twice, and she complains.
-sam.no-harm: !! Sam never harms an animal.
-sam.hide-early: !! never go(station:hide) if not scene = platiere
-battery.low: when camera.battery < 10% once -> say(battery_low), image.degrade(0.3)
+## gauges
+gauge disturbance "how much the animals near the hide have been disturbed": rises sound(branch_snap) by 0.5; rises said.loud by 0.3 if near(body, hide, 30); fades 0.1/min; words 0.3 0.6 {disturbance}
 
-@scope story
-gauge disturbance "how much the animals near the hide have been disturbed": rises said by 0.2 if body within 30m of thing:hide; rises sound.played cue = branch_snap by 0.5; fades 0.1/min; words 0.3 0.6
-hide.quiet: when gauge.disturbance is high -> say(jay_stop), posture(0.5)
+## rules
+when gauge(disturbance, high) -> say(jay_stop), body.posture(0.5) {hide.quiet}
+!! never go(hide) if not scene(platiere) {sam.hide-early}
 
-@author creator:lea
-@layer lea
-@scope scene:platiere
-lea.fog: ~ The fog thickens when she lingers.
+## principles
+~0.8 When the disturbance is high, she whispers and stops moving. {sam.hush}
+? Would she go closer to the hide? -- only once the disturbance is low again. {sam.closer}
 `;
 
 const M = (id, tier) => ({ kind: 'model', id, tier });
@@ -121,37 +115,58 @@ export const SCENARIOS = {
     s.submit({ author: STAGE, horizon: 'now', kind: 'act', body: { op: 'say', ref: 'mark_line' } });   // a → b → a is cut: cycle
     for (const st of ['path', 'pines', 'platiere', 'hide-edge']) { s.advance(30); go(s, st); }
     s.submit({ author: ENGINE, horizon: 'now', kind: 'effect', body: { op: 'sound.play', cue: 'jay_alarm', at: 'thing:jay-oak' } });   // no model call: the rule fires
-    s.checkpoint();
-  },
-  /* Pillar 8: principles from PDL source; an absolute rejects, a gauge rises, a hard rule fires, soft ones are in scope and audited. */
-  'p8-principles'(s) {
-    s.loadPrinciples(parseSource(SOURCE, { file: 'stories/louis-round/rules/sam.pdl' }).statements);
-    const m = s.modelCall({ tier: 'stage', purpose: 'answer the player', character: 'sam', timings: { model_ms: 2300 } });
-    go(s, 'path'); go(s, 'pines'); go(s, 'platiere');
-    s.submit({ author: STAGE, horizon: 'now', kind: 'act', body: { op: 'go', to: 'station:hide-edge' } });
-    s.submit({ author: STAGE, horizon: 'now', kind: 'act', body: { op: 'go', to: 'station:hide' } });   // !! sam.hide-early: not in the platiere scene
-    const l = s.submit(say('Pas un bruit. Enfin, presque.', 'Not a sound. Well, almost.'));
-    s.submit({ author: ENGINE, horizon: 'now', kind: 'effect', body: { op: 'sound.play', cue: 'branch_snap' } });   // gauge: medium → high → hide.quiet fires
-    s.advance(500);                                                  // battery under 10 %: battery.low fires once
-    s.audit([
-      { principle: 'sam.dry', ref_seq: l.seq, relevant: true, respected: true, judge: { kind: 'model', id: 'judge', tier: 'background' } },
-      { principle: 'sam.climb', ref_seq: m.seq, relevant: false, respected: null, judge: { kind: 'model', id: 'judge', tier: 'background' } },
-    ]);
-    s.checkpoint();
-  },
-  /* Pillar 9: a commitment made at an early station, honoured two stations later, linked in the journal. */
-  'p9-commitment'(s) {
-    go(s, 'path');
-    const i = s.submit({ author: TRANSLATE, horizon: 'now', kind: 'intent', body: { text: 'si tu entends le geai, arrête-toi et baisse-toi', lang: 'fr', verb: 'commit', condition: 'you hear the jay', behaviour: 'stop and get down', commit: 'c.jay' } });
-    s.modelCall({ tier: 'stage', purpose: 'answer a commitment', character: 'sam' });
-    s.submit(Object.assign(say('Je m’arrête. Je ne me couche pas dans cette boue.', 'I’ll stop. I’m not lying down in that mud.'), { cause: { tx: i.seq } }));
-    const P = { kind: 'player', id: 'player' };
-    s.submit({ author: P, horizon: 'story', kind: 'fact', cause: { tx: i.seq, commit: 'c.jay' }, body: { subject: 'sam', predicate: 'promised', value: 'stop and crouch if the jay calls (not lie down)', commit: { id: 'c.jay', party: 'sam', status: 'amended', strength: 'hard' } } });
-    s.submit({ author: P, horizon: 'story', kind: 'rule', cause: { tx: i.seq, commit: 'c.jay' }, body: { id: 'c.jay', commit: 'c.jay', when: { event: 'sound.played', match: { cue: 'jay_alarm' } },
-      then: [{ horizon: 'now', kind: 'act', body: { op: 'stop' } }, { horizon: 'now', kind: 'act', body: { op: 'posture', height: 0.55 } }, { horizon: 'now', kind: 'act', body: { op: 'say', ref: 'commit_recall', tone: 'whisper' } }] } });
-    s.advance(40); go(s, 'pines'); s.advance(40); go(s, 'platiere');
-    s.submit({ author: ENGINE, horizon: 'now', kind: 'effect', body: { op: 'sound.play', cue: 'jay_alarm', at: 'thing:jay-oak' } });
+    // a gauge from PDL source: two sounds near the hide make it high; its rule fires; a model call sees its word
+    s.loadPrinciples(compileSource(SOURCE));
+    s.submit({ author: ENGINE, horizon: 'now', kind: 'effect', body: { op: 'sound.play', cue: 'branch_snap' } });
+    s.submit({ author: ENGINE, horizon: 'now', kind: 'effect', body: { op: 'sound.play', cue: 'branch_snap' } });
+    s.modelCall({ tier: 'stage', purpose: 'answer the player', character: 'sam' });
+    s.submit({ author: STAGE, horizon: 'now', kind: 'act', body: { op: 'go', to: 'station:hide' } });   // !! sam.hide-early
     s.checkpoint();
   },
 };
-export function runScenario(name, seed = 7) { const s = newSession(seed); SCENARIOS[name](s); return s; }
+export function compileSource(text) {
+  const d = parseSource(text, { file: 'tests/fixture.pdl' });
+  if (d.errors.length) throw new Error(JSON.stringify(d.errors));
+  return principlesOf(d, { ctx: { things: new Set(LOUIS.things.map(t => t.id)), clocks: { battery: 'camera.battery' } } }).principles;
+}
+
+/* ---------------------------------------------------------------- the real pack: stories/louis-round */
+const ROOT = new URL('../', import.meta.url).pathname;
+export function louisPack() {
+  const pack = loadPack(ROOT + 'stories/louis-round'), library = loadLibrary(ROOT + 'patterns');   // store adapter (I/O)
+  const c = compilePack(pack, library);
+  // pack build: a model compiled one prose absolute (canned answer), the creator approved it
+  const harm = c.principles.find(p => p.id === 'sam.never.harm');
+  attachCompiled(harm, { forbid: { kind: 'effect', op: 'sound.play', fields: { at: 'thing:terrier' } } }, { by: 'model:compiler' });
+  approve(harm, 'creator:toine');
+  return c;
+}
+/* Pillars 8, 9, 10 on the real pack: two layers merged with provenance, explicit and pattern rules registered, the jay
+   commitment made at the third station and kept at the fifth, an absolute rejecting, a model call with principles in scope. */
+SCENARIOS['p8-louis-pack'] = (s, c) => {
+  s.loadPrinciples(c.principles);
+  s.start();
+  const P = { kind: 'player', id: 'player' }, T = TRANSLATE;
+  const call = s.modelCall({ tier: 'stage', purpose: 'greet', character: 'sam', loop: 'scene', status: 'done', timings: { model_ms: 2100 } });
+  s.submit({ author: STAGE, horizon: 'now', kind: 'act', body: { op: 'say', ref: 'greet.first' } }, { loop: 'scene', latency_ms: 2100 });
+  go(s, 'first-mark');
+  const i = s.submit({ author: T, horizon: 'now', kind: 'intent', body: { text: 'regarde ce trait orange', lang: 'fr', verb: 'look', target: 'thing:marque-1' } }, { loop: 'now', latency_ms: 240 });
+  s.submit({ author: T, horizon: 'now', kind: 'act', cause: { tx: i.seq }, body: { op: 'look', target: 'thing:marque-1' } }, { loop: 'now', latency_ms: 260 });   // louis-marks.sign-read.1
+  go(s, 'fallen-pine');
+  const k = s.submit({ author: T, horizon: 'now', kind: 'intent', body: { text: 'si le geai crie, arrête-toi et couche-toi', lang: 'fr', verb: 'commit', class: 'jay', condition: 'the jay calls', behaviour: 'stop and lie down', commit: 'c.jay' } }, { loop: 'now', latency_ms: 900 });
+  s.submit({ author: STAGE, horizon: 'now', kind: 'act', cause: { tx: k.seq }, body: { op: 'say', ref: 'commit.amend' } }, { loop: 'scene', latency_ms: 2600 });
+  s.submit({ author: P, horizon: 'story', kind: 'fact', cause: { tx: k.seq, commit: 'c.jay' }, body: { subject: 'sam', predicate: 'promised', value: 'stop and crouch if the jay calls (not lie down)', commit: { id: 'c.jay', party: 'sam', status: 'amended', strength: 'hard' } } });
+  s.submit({ author: P, horizon: 'story', kind: 'rule', cause: { tx: k.seq, commit: 'c.jay' }, body: { id: 'c.jay', commit: 'c.jay', when: { event: 'sound.played', match: { cue: 'jay.alarm' } },
+    then: [{ horizon: 'now', kind: 'act', body: { op: 'stop' } }, { horizon: 'now', kind: 'act', body: { op: 'posture', height: 0.55 } }, { horizon: 'now', kind: 'act', body: { op: 'say', ref: 'commit.keeping' } }] } });
+  s.submit({ author: STAGE, horizon: 'now', kind: 'effect', body: { op: 'sound.play', cue: 'bracken.rustle', at: 'thing:terrier' } }, { loop: 'scene', latency_ms: 3100 });   // !! sam.never.harm
+  go(s, 'platiere');
+  s.submit({ author: STAGE, horizon: 'now', kind: 'act', body: { op: 'go', to: 'station:approach', via: 'tape' } });   // r.jay-first → c.jay kept
+  s.advance(400);                                                  // battery under half: battery-clock.half
+  s.audit([{ principle: 'sam.voice.dry', ref_seq: call.seq + 1, relevant: true, respected: true, judge: { kind: 'model', id: 'judge', tier: 'background' } },
+    { principle: 'sam.word.keeps', ref_seq: s.journal.entries.find(e => e.type === 'rule' && e.rule === 'c.jay').seq, relevant: true, respected: true, judge: { kind: 'model', id: 'judge', tier: 'background' } }]);
+  s.checkpoint();
+};
+export function runScenario(name, seed = 7) {
+  if (name === 'p8-louis-pack') { const c = louisPack(); const s = createSession({ scene: c.scene, seed, executor: createPaperWorld() }); SCENARIOS[name](s, c); return s; }
+  const s = newSession(seed); SCENARIOS[name](s); return s;
+}

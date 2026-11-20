@@ -26,11 +26,12 @@ export function replay(journal, executor, seed, { edit } = {}) {
   for (const e0 of E.slice(1)) {
     if (!e0.input) continue;
     const e = edit ? edit(e0) || e0 : e0;
-    if (e.type === 'tx') S.submit(e.proposed, { timings: e.timings });
+    if (e.type === 'tx') S.submit(e.proposed, { timings: e.timings, loop: e.loop, latency_ms: e.latency_ms });
     else if (e.type === 'advance') S.advance(e.dt);
+    else if (e.type === 'start') S.start();
     else if (e.type === 'observe') S.observe({ event: e.event, data: e.data });
     else if (e.type === 'principles') S.loadPrinciples(e.records);
-    else if (e.type === 'model_call') S.modelCall({ tier: e.tier, purpose: e.purpose, character: e.character, timings: e.timings });
+    else if (e.type === 'model_call') S.modelCall({ tier: e.tier, purpose: e.purpose, character: e.character, timings: e.timings, loop: e.loop, status: e.status, ref_seq: e.ref_seq, latency_ms: e.latency_ms });
     else if (e.type === 'audit') { const a = Object.assign({}, e); for (const k of ['seq', 't', 'type', 'input']) delete a[k]; S.audit([a]); }
     else if (e.type === 'hash') S.checkpoint();
   }

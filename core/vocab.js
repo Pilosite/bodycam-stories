@@ -67,7 +67,7 @@ export const SHAPE_KINDS = ['box', 'ball', 'cylinder', 'cone', 'capsule', 'roof'
    `$one`: at least one of these fields. `primary`: the field a bare positional argument fills (source calls, §2.4).
    `intent`: where a missing required field is completed from the player's intent (§8.2). */
 export const ACT = {
-  go: { primary: 'to', fields: { to: T.ref(['station'], { req: true, intent: 'target' }) } },
+  go: { primary: 'to', fields: { to: T.ref(['station'], { req: true, intent: 'target' }), via: T.id() } },
   look: { primary: 'target', $one: ['target', 'pitch', 'yaw'], fields: { target: T.ref(['thing', 'dir', 'station'], { intent: 'target' }), pitch: T.num(-60, 75), yaw: T.num(-180, 180) } },
   turn: { primary: 'degrees', fields: { degrees: T.num(-180, 180, { req: true, dec: 0, intent: 'params.degrees' }) } },
   posture: { primary: 'height', fields: { height: T.num(0.35, 1, { req: true, dec: 2, intent: 'params.height' }) } },
@@ -92,8 +92,12 @@ export const EFFECT = {
   'sound.play': { primary: 'cue', fields: { cue: T.cue({ req: true }), at: T.ref(['thing', 'body', 'station'], { def: 'body' }), gain: T.num(0, 0.9, { def: 0.5 }) } },
   'place.set': { primary: 'fog', $one: ['fog', 'lamp', 'sun_height', 'weather'], fields: {
     fog: T.num(0, 0.06, { dec: 4 }), lamp: T.bool(), sun_height: T.num(-20, 90, { dec: 1 }), weather: T.enum(['clear', 'veil']) } },
-  'camera.set': { primary: 'degrade', $one: ['battery', 'degrade', 'shake'], fields: { battery: T.num(0, 1), degrade: T.num(0, 1), shake: T.num(0, 1) } },
+  'camera.set': { primary: 'degrade', $one: ['battery', 'degrade', 'shake', 'off'], fields: { battery: T.num(0, 1), degrade: T.num(0, 1), shake: T.num(0, 1), off: T.bool() } },
+  'light.raise': { primary: 'degrees', fields: { degrees: T.num(-30, 30, { req: true, dec: 1 }) } },
+  'speech.set': { primary: 'volume', $one: ['volume', 'shorten'], fields: { volume: T.enum(['whisper', 'low', 'normal']), shorten: T.num(0, 1) } },
   'scene.start': { primary: 'id', fields: { id: T.id({ req: true }) } },
+  'beat.set': { primary: 'id', fields: { id: T.id({ req: true }) } },
+  'story.end': { primary: 'id', fields: { id: T.id({ req: true }) } },
 };
 
 export const SHAPE = {
@@ -113,7 +117,7 @@ export const INTENT = { fields: {
   text: T.text(300, { req: true }), lang: T.id({ req: true }), verb: T.enum(INTENT_VERBS, { req: true }),
   target: T.ref(['thing', 'dir', 'station', 'body']),
   params: T.obj({ degrees: T.num(-180, 180), height: T.num(0.35, 1), seconds: T.num(0, 60), size_m: T.num(0.01, 50), mass_kg: T.num(0.001, 5000), what: T.text(60) }),
-  condition: T.text(200), behaviour: T.text(200), commit: T.id() } };
+  class: T.id(), loud: T.bool(), condition: T.text(200), behaviour: T.text(200), commit: T.id() } };
 
 export const RULE = { fields: {
   id: T.id({ req: true }),
@@ -126,7 +130,9 @@ export const CANCEL = { fields: { target: T.text(80, { req: true }), reason: T.t
 
 /* ---------------------------------------------------------------- events (§7.1): name → fields a `match` may test */
 export const EVENTS = {
-  'intent.heard': ['verb', 'target', 'text'],
+  'session.started': [],
+  'intent.heard': ['verb', 'target', 'text', 'class', 'loud'],
+  'look.at': ['target', 's'],
   'act.done': ['op', 'target', 'to'],
   'said': ['text', 'lang', 'ref'],
   'sound.played': ['cue', 'at'],
@@ -136,7 +142,8 @@ export const EVENTS = {
   'place.changed': ['fog', 'lamp', 'sun_height', 'weather'],
   'station.entered': ['id'], 'station.left': ['id'],
   'scene.started': ['id'],
-  'clock.tick': ['t', 'scene_t'],
+  'clock.tick': ['t', 'scene_t', 'station', 'dwell_s', 'silent_s'],
+  'beat.entered': ['id'], 'story.ended': ['id'], 'speech.changed': ['volume', 'shorten'],
   'commitment.due': ['commit', 'rule'],
   'gauge.changed': ['id', 'value', 'word'],
 };
@@ -153,6 +160,10 @@ export const CONDS = {
   state: { path: T.enum(Object.keys(STATE_PATHS), { req: true }), eq: T.atom(), ne: T.atom(), lt: T.num(-1e6, 1e6), le: T.num(-1e6, 1e6), gt: T.num(-1e6, 1e6), ge: T.num(-1e6, 1e6) },
   scene: { id: T.id({ req: true }) },
   station: { id: T.id({ req: true }) },
+  beat: { id: T.id({ req: true }) },
+  reach: { target: T.ref(['thing'], { req: true }) },
+  ending: { id: T.id() },
+  promised: { class: T.id({ req: true }) },
   gauge: { id: T.id({ req: true }), word: T.enum(['low', 'medium', 'high']), gt: T.num(0, 1), lt: T.num(0, 1) },
 };
 export const GAUGE_WORDS = ['low', 'medium', 'high'];
@@ -164,11 +175,13 @@ export function emitsOf(kind, body) {
     const out = [['act.done', { op: body.op }]];
     if (body.op === 'say') out.push(['said', { ref: body.ref }]);
     if (body.op === 'go') out.push(['station.left', {}], ['station.entered', { id: refId(body.to) }]);
+    if (body.op === 'look') out.push(['look.at', { target: body.target }]);
     return out;
   }
   if (kind === 'effect') {
     const m = { 'thing.place': ['thing.placed', { id: body.id }], 'thing.change': ['thing.changed', {}], 'thing.remove': ['thing.removed', {}],
-      'sound.play': ['sound.played', { cue: body.cue }], 'place.set': ['place.changed', {}], 'camera.set': ['camera.changed', {}], 'scene.start': ['scene.started', { id: body.id }] }[body.op];
+      'sound.play': ['sound.played', { cue: body.cue }], 'place.set': ['place.changed', {}], 'camera.set': ['camera.changed', {}], 'scene.start': ['scene.started', { id: body.id }],
+      'light.raise': ['place.changed', {}], 'speech.set': ['speech.changed', {}], 'beat.set': ['beat.entered', { id: body.id }], 'story.end': ['story.ended', { id: body.id }] }[body.op];
     return m ? [m] : [];
   }
   return [];

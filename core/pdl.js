@@ -31,7 +31,7 @@ export function canonical(tx) {
   for (const k of ['v', 'id', 't', 'author', 'horizon', 'kind', 'body', 'cause', 'ttl', 'status', 'repair', 'reasons']) {
     if (tx[k] === undefined) continue;
     if (k === 'author') out.author = orderKeys(tx.author, ['kind', 'id', 'tier', 'layer']);
-    else if (k === 'cause') out.cause = orderKeys(tx.cause, ['tx', 'rule', 'commit']);
+    else if (k === 'cause') out.cause = orderKeys(tx.cause, ['tx', 'rule', 'commit', 'amends']);
     else if (k === 'body') out.body = canonicalBody(tx.kind, tx.body);
     else out[k] = canonValue(tx[k]);
   }

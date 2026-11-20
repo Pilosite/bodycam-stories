@@ -24,8 +24,10 @@ export const EXECUTOR = {
   removeThing: '{ id, reason }',
   playSound: '{ cue, recipe, pos: [x,z], gain, seed, key }',
   setPlace: 'effective place values after the change: { fog, lamp, sun_height, weather }',
-  setCamera: 'effective camera values: { battery, degrade, shake }',
+  setCamera: 'effective camera values: { battery, degrade, shake, off }',
+  setSpeech: 'how she speaks from now on: { volume: whisper | low | normal, shorten 0..1 }',
   startScene: '{ id }',
+  endStory: 'an ending family: { id }',
 };
 export const EXECUTOR_METHODS = Object.keys(EXECUTOR);
 
@@ -36,19 +38,21 @@ const r4 = x => Math.round(x * 1e4) / 1e4;
 export function createWorld(scene, { seed = 1 } = {}) {
   const sc = clone(scene || {});
   const stations = {};
-  for (const s of sc.stations || []) stations[s.id] = { id: s.id, pos: s.pos || [0, 0], heading: s.heading || 0, reach_m: s.reach_m ?? 2.5, next: s.next || [] };
+  for (const s of sc.stations || []) stations[s.id] = Object.assign({ id: s.id, pos: s.pos || [0, 0], heading: s.heading || 0, reach_m: s.reach_m ?? 2.5,
+    next: s.next || [...new Set((s.edges || []).map(e => e.to))] }, s.edges ? { edges: s.edges } : {}, s.within ? { within: s.within } : {}, s.beat ? { beat: s.beat } : {}, s.posture !== undefined ? { posture: s.posture } : {});
   const first = sc.start || (sc.stations && sc.stations[0] && sc.stations[0].id) || null;
   const things = {};
   for (const t of sc.things || []) things[t.id] = { id: t.id, name: t.name || t.id, shapes: t.shapes || [], mass_kg: t.mass_kg ?? null, pos: t.pos || [0, 0], size_m: t.size_m ?? 1, fixed: true, horizon: 'story', expires: null, scene: null, tx: 0, author: { kind: 'creator', id: sc.author || 'pack' } };
   const place = Object.assign({ fog: 0.011, lamp: false, sun_height: 4, weather: 'clear' }, sc.place || {});
-  const cam = Object.assign({ battery: 1, drain_per_s: 0, degrade: 0, shake: 0 }, sc.camera || {});
+  const cam = Object.assign({ battery: 1, drain_per_s: 0, degrade: 0, shake: 0, off: false }, sc.camera || {});
+  const story = Object.assign({ beat: null, ending: null, beats: [], endings: [] }, sc.story || {});
   return {
     v: 0, seed, langs: sc.langs || ['en'],
     vocab: { materials: (sc.vocab && sc.vocab.materials) || [], cues: (sc.vocab && sc.vocab.cues) || {}, lines: (sc.vocab && sc.vocab.lines) || {} },
-    clock: { t: 0, scene: sc.scene || 'start', scene_t0: 0 },
-    stations, body: { station: first, yaw: first ? stations[first].heading : 0, pitch: 0, height: 1, held: [] },
+    clock: { t: 0, scene: sc.scene || 'start', scene_t0: 0, station_t0: 0, voice_t: 0 }, story,
+    stations, body: { station: first, yaw: first ? stations[first].heading : 0, pitch: 0, height: 1, held: [], speech: { volume: 'normal', shorten: 0 } },
     base: { place, camera: { degrade: cam.degrade, shake: cam.shake } },
-    place: clone(place), camera: { battery: cam.battery, drain_per_s: cam.drain_per_s, degrade: cam.degrade, shake: cam.shake },
+    place: clone(place), camera: { battery: cam.battery, drain_per_s: cam.drain_per_s, degrade: cam.degrade, shake: cam.shake, off: cam.off },
     overlays: [], things, facts: [], rules: {}, constraints: {}, principles: {}, commitments: {}, gauges: {},
     forbidden: sc.forbidden || [], intents: {}, said: [], sounds: [],
   };
@@ -71,6 +75,7 @@ export function inReach(w, thingId) {
   const t = w.things[thingId], s = station(w);
   if (!t || !s || !live(t, w.clock.t)) return false;
   if (w.body.held.includes(thingId)) return true;
+  if (Array.isArray(s.within)) return s.within.includes(thingId);
   return dist(t.pos, s.pos) <= s.reach_m + (t.size_m || 0) / 2;
 }
 /* First step from the current station toward `to` along adjacency (breadth-first, ties by declaration order). */
@@ -107,6 +112,10 @@ export function evalCond(w, c) {
   if (c.fact) { const f = factOf(w, c.fact.subject, c.fact.predicate); return !!f && (c.fact.value === undefined || f.value === c.fact.value) && (c.fact.min_certainty === undefined || f.certainty >= c.fact.min_certainty); }
   if (c.scene) return w.clock.scene === c.scene.id;
   if (c.station) return w.body.station === c.station.id;
+  if (c.beat) return w.story.beat === c.beat.id;
+  if (c.reach) return inReach(w, refId(c.reach.target));
+  if (c.ending) return c.ending.id ? w.story.ending === c.ending.id : !!w.story.ending;
+  if (c.promised) return Object.values(w.commitments).some(m => m.class === c.promised.class && ['accepted', 'amended', 'due'].includes(m.status));
   if (c.gauge) { const g = w.gauges[c.gauge.id]; if (!g) return false; return (c.gauge.word === undefined || gaugeWord(g) === c.gauge.word) && (c.gauge.gt === undefined || g.value > c.gauge.gt) && (c.gauge.lt === undefined || g.value < c.gauge.lt); }
   if (c.state) return compare(readPath(w, c.state.path), c.state);
   return false;
@@ -193,14 +202,30 @@ export function applyEffect(w, body, meta) {
       const group = body.op === 'place.set' ? 'place' : 'camera', data = {};
       for (const [k, v] of Object.entries(body)) {
         if (k === 'op') continue;
-        if (k === 'battery') { w.camera.battery = v; continue; }                     // physical: never an overlay
+        if (k === 'battery' || k === 'off') { w.camera[k] = v; continue; }           // physical: never an overlay
         if (meta.horizon === 'story') w.base[group][k] = v;
         else w.overlays.push(Object.assign({ group, key: k, value: v }, own));
       }
       recompute(w);
-      const eff = group === 'place' ? clone(w.place) : { battery: w.camera.battery, degrade: w.camera.degrade, shake: w.camera.shake };
+      const eff = group === 'place' ? clone(w.place) : { battery: w.camera.battery, degrade: w.camera.degrade, shake: w.camera.shake, off: w.camera.off };
       Object.assign(data, eff);
       return { events: [{ event: group + '.changed', data }], call: [group === 'place' ? 'setPlace' : 'setCamera', eff] };
+    }
+    case 'light.raise': {
+      w.base.place.sun_height = r4(Math.min(90, w.base.place.sun_height + body.degrees)); recompute(w);
+      return { events: [{ event: 'place.changed', data: clone(w.place) }], call: ['setPlace', clone(w.place)] };
+    }
+    case 'speech.set': {
+      for (const k of ['volume', 'shorten']) if (body[k] !== undefined) w.body.speech[k] = body[k];
+      return { events: [{ event: 'speech.changed', data: clone(w.body.speech) }], call: ['setSpeech', clone(w.body.speech)] };
+    }
+    case 'beat.set': {
+      w.story.beat = body.id;
+      return { events: [{ event: 'beat.entered', data: { id: body.id } }], call: null };
+    }
+    case 'story.end': {
+      w.story.ending = body.id;
+      return { events: [{ event: 'story.ended', data: { id: body.id } }], call: ['endStory', { id: body.id }] };
     }
     case 'scene.start': {
       const old = w.clock.scene; w.clock.scene = body.id; w.clock.scene_t0 = t;
@@ -222,7 +247,7 @@ export function spanOf(shapes) {
 /* Applies the events an executor reported about the body (the engine owns the body; the core mirrors it). */
 export function observe(w, e) {
   const d = e.data || {};
-  if (e.event === 'station.entered' && w.stations[d.id]) { w.body.station = d.id; w.body.yaw = w.stations[d.id].heading; }
+  if (e.event === 'station.entered' && w.stations[d.id]) { w.body.station = d.id; w.body.yaw = w.stations[d.id].heading; w.clock.station_t0 = w.clock.t; }
   if (e.event === 'body.pose') { for (const k of ['yaw', 'pitch', 'height']) if (typeof d[k] === 'number') w.body[k] = r4(d[k]); }
   if (e.event === 'body.held' && typeof d.id === 'string' && w.things[d.id] && !w.body.held.includes(d.id)) w.body.held.push(d.id);
 }

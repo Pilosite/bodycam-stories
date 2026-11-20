@@ -13,7 +13,7 @@ const run = name => { const g = GOLDEN[name], r = replay(g, createPaperWorld());
 const txs = E => E.filter(e => e.type === 'tx');
 
 test('golden journals replay identically, same seed, same hash', () => {
-  assert.ok(Object.keys(GOLDEN).length >= 3 && Object.keys(GOLDEN).length <= 5);
+  assert.ok(Object.keys(GOLDEN).length >= 3 && Object.keys(GOLDEN).length <= 5);   // docs/sdlc.md §3: three to five
   for (const name of Object.keys(GOLDEN)) {
     const { g, r } = run(name), d = diff(g, r.journal);
     assert.ok(d.equal, `${name}: first difference at seq ${d.first}: ${JSON.stringify(d.changes[0])}`);
@@ -54,23 +54,38 @@ test('p3 a model-written rule fires later in code, with no model call; cycles ar
   assert.ok(!d.equal && d.rules.a.includes('jay.stop') && !d.rules.b.includes('jay.stop'));
 });
 
-test('p8 principles: absolute rejects, hard rules fire, soft ones are in scope and audited, provenance kept', () => {
-  const { E, w } = run('p8-principles');
-  assert.ok(txs(E).some(e => e.status === 'rejected' && e.reasons.some(r => r.why === 'constraint' && r.value === 'sam.hide-early')));
-  assert.deepEqual(E.filter(e => e.type === 'rule' && e.status === 'fired').map(e => e.rule), ['hide.quiet', 'battery.low']);
-  assert.deepEqual(E.find(e => e.type === 'model_call').principles, ['sam.dry', 'sam.climb']);
-  assert.deepEqual(auditSummary(E)['sam.dry'], { relevant: 1, respected: 1, broken: 0, rate: 1, breaks: [] });
-  for (const f of w.facts) assert.ok(f.author && f.author.kind && Number.isInteger(f.tx));
-  for (const r of Object.values(w.rules)) assert.ok(r.author && r.author.kind && Number.isInteger(r.tx) && r.principle);
-  assert.equal(w.rules['battery.low'].layer, 'base');
-  assert.equal(w.principles['lea.fog'].layer, 'lea');
+test('p3 bis a gauge named in source rises, its word fires a rule, a model call sees it, an absolute rejects', () => {
+  const { E } = run('p3-model-rule');
+  assert.deepEqual(E.filter(e => e.type === 'event' && e.event === 'gauge.changed').map(e => e.data.word), ['medium', 'high']);
+  assert.ok(E.some(e => e.type === 'rule' && e.rule === 'hide.quiet' && e.status === 'fired'));
+  const mc = E.filter(e => e.type === 'model_call').pop();
+  assert.deepEqual(mc.gauges, [{ id: 'disturbance', value: 1, word: 'high', mentioned_by: ['sam.hush', 'sam.closer'] }]);
+  assert.deepEqual(mc.principles, ['sam.hush', 'sam.closer']);
+  assert.ok(txs(E).some(e => e.reasons && e.reasons[0].value === 'sam.hide-early'));
 });
 
-test('p9 commitment: made at an early station, kept two stations later, linked by cause', () => {
-  const { E, w } = run('p9-commitment');
+test('p8 the real pack: layers merged with provenance, explicit and pattern rules in code, an absolute, a commitment kept', () => {
+  const { E, w } = run('p8-louis-pack');
+  const P = w.principles;
+  assert.equal(P['f.sett'].layer, 'ranger-notes');
+  assert.deepEqual(P['f.sett'].overrides.map(o => o.layer), ['base']);
+  assert.equal(w.rules['rn.rule.last-line'].author.id, 'contributor-a');
+  assert.equal(w.rules['louis-marks.sign-read.1'].principle, 'louis-marks.sign-read.1');
+  assert.equal(P['louis-marks.sign-read.1'].pattern, 'trail-of-signs');
+  assert.ok(txs(E).some(e => e.status === 'rejected' && e.reasons.some(r => r.why === 'constraint' && r.value === 'sam.never.harm')));
+  assert.equal(P['sam.never.harm'].compiled.approved_by, 'creator:toine');
+  const fired = E.filter(e => e.type === 'rule' && e.status === 'fired').map(e => e.rule);
+  for (const r of ['louis-marks.sign-read.1', 'r.jay-first', 'c.jay', 'battery-clock.half']) assert.ok(fired.includes(r), r + ' fired');
+  // the commitment: made at the third station, kept at the fifth, every act linked to it
   const c = w.commitments['c.jay'];
   assert.deepEqual(c.history.map(h => h.status), ['proposed', 'amended', 'due', 'kept']);
-  const fired = txs(E).filter(e => e.cause && e.cause.commit === 'c.jay' && e.author.kind === 'engine');
-  assert.deepEqual(fired.map(e => e.body.op || e.body.predicate), ['stop', 'posture', 'say', 'kept']);
-  assert.equal(E[c.intent].body.verb, 'commit');
+  assert.equal(E[c.intent].body.class, 'jay');
+  assert.deepEqual(txs(E).filter(e => e.cause && e.cause.commit === 'c.jay' && e.author.kind === 'engine').map(e => e.body.op || e.body.predicate), ['stop', 'posture', 'say', 'kept']);
+  // soft principles in scope of a model call, and the audit
+  assert.ok(E.find(e => e.type === 'model_call').principles.includes('sam.voice.dry'));
+  assert.deepEqual(auditSummary(E)['sam.word.keeps'], { relevant: 1, respected: 1, broken: 0, rate: 1, breaks: [] });
+  // the three clocks: every tx has its loop, the late one is flagged
+  assert.ok(txs(E).every(e => ['now', 'scene', 'story'].includes(e.loop)));
+  assert.deepEqual(txs(E).filter(e => e.late).map(e => e.body.verb), ['commit']);
+  for (const f of w.facts) assert.ok(f.author && f.author.kind && Number.isInteger(f.tx));
 });
