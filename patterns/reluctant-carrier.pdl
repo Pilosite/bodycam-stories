@@ -1,0 +1,24 @@
+# reluctant-carrier — pattern
+@id reluctant-carrier  @kind pattern  @layer library  @author toine  @lang en
+
+## summary
+~ The carrier did not choose to be here. She starts by doubting the voice and the place; trust is earned request by request, and it changes how she obeys.
+
+## roles
+role carrier : character : who wears the camera
+role threshold : station : the place she hesitates to leave
+role please_line : line : what she says to a bare order
+role trust_fact : fact : established when she trusts the voice
+
+## principles
+~0.8 $carrier does what is asked, but a bare order costs a remark.
+? When does she trust the voice? -- after it has been right once and kind once.
+
+## rules
+when said.matches(bare_order) cooldown 60s if not fact($trust_fact) -> say($please_line) {please}
+
+## beats_hint
+hint the first beat starts at the threshold and ends when she crosses it
+
+## variations
+variation eager : she wants to go, the voice must hold her back

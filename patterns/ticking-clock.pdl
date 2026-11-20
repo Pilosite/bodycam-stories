@@ -1,0 +1,38 @@
+# ticking-clock — pattern
+@id ticking-clock  @kind pattern  @layer library  @author toine  @lang en
+
+## summary
+~ A visible resource runs down with session time. It gives the session a length, makes every request cost something, and offers an ending of its own when it runs out.
+
+## roles
+role clock : clock : the resource that runs down (declared in pack.json clocks)
+role keeper : character : who notices and says it
+role half_line : line : said once at half
+role low_line : line : said once at the low threshold
+role critical_line : line : said once at the critical threshold
+role warning_cue : cue : the sound the resource makes when it is low
+role run_out : ending : the ending family when it runs out
+
+## params
+param half = 0.5 : fraction for the first notice
+param low = 0.25 : fraction for the low notice
+param critical = 0.10 : fraction where the keeper talks less
+param degrade = 0.35 : image degradation at critical
+
+## principles
+! $keeper mentions $clock at most once per threshold, never as a countdown.
+~0.6 The closer to the end, the fewer words.
+
+## rules
+when clock.below($clock, $half) once -> say($half_line) {half}
+when clock.below($clock, $low) once -> say($low_line), sound($warning_cue), image.degrade(0.15) {low}
+when clock.below($clock, $critical) once -> say($critical_line), image.degrade($degrade), speech.shorten(0.5) {critical}
+when clock.below($clock, 0) once if not ending.any -> ending($run_out) {run-out}
+
+## beats_hint
+hint the clock is seen before it is mentioned
+hint the last beat should be reachable at the low threshold, not after
+
+## variations
+variation generous : half = 0.4, low = 0.15, critical = 0.05; the clock is atmosphere more than pressure
+variation hidden : the keeper never mentions it; only the image and the cue tell

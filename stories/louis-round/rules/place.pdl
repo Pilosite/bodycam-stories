@@ -1,0 +1,18 @@
+# place — principles of the Grands Avaux at dawn
+@id place  @kind principles  @layer base  @author toine  @lang en  @scope place  @horizon story
+
+## principles
+!! Nothing supernatural, ever: no ghost, no voice from nowhere, no sign that cannot be explained by a person or an animal. {p.no-supernatural}
+!! The badgers are never harmed, cornered, lit or chased, and the sett's location is never said as a place name or a direction someone could follow. {p.sett-safe}
+! The light only rises: from the low gold of the trailhead to full light at the hide. It never goes back. {p.light-rises}
+~0.9 The forest answers quietly: one sound at a time, and most of the time none. {p.one-sound}
+~0.8 Cold, damp, November: breath shows in the first stations, the litter is wet, the sandstone is slippery where it is green. {p.november}
+~0.7 What is seen is ordinary and exact: pines, oaks, birches, chestnut coppice, sandstone, bracken, sand. Never a cinematic tableau. {p.ordinary}
+~0.6 Other people exist but stay at the edge: a distant dog, a car on the D948, a walker on the platière. {p.edges}
+? Does the walker turn up? -- once, at the platière, only if Sam lingers there; he leaves on his own. {p.walker-when}
+? Are the badgers seen? -- not in v1 (no moving animal); their sign is enough. If the engine ever can: one shape at the edge of the frame, two seconds, never a close-up. {p.badger-seen}
+
+## rules
+when station.entered(trailhead) once -> say(greet.first) {r.start}
+when station.entered(platiere) once -> say(platiere.arrive) {r.platiere-arrive}
+when time.elapsed(70) once if at(platiere) and not ending.any -> say(walker.meet), reveal(f.walker-saw) {r.walker}
