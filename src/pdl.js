@@ -94,16 +94,18 @@ export function reactionAttendue(perso, nature = {}) {
   if (!(rp > 0 || fa >= 3 || ef >= 4 || n.chercher || n.faconner)) return null;
   const F = perso.genre === 'F', e = s => F ? s + 'e' : s, ton = [].concat(perso.ton || []);
   const R = [];
-  if (ton.includes('sec')) R.push('râle, court');
+  if (ton.includes('sec')) R.push('râle');
   R.push('obéit');
   if (rp >= .5) R.push(fa >= 3 || rp >= .85 ? 'dégoût marqué, se retient' : 'dégoût marqué');
   else if (rp > 0) R.push('grimace');
-  if (fa >= 5) R.push(e('incrédule') + ' devant la taille');
+  if (fa >= 5) R.push('incrédule devant la taille');
   if (ef >= 4) R.push('souffle, effort long');
   if (n.chercher) R.push((perso.sait || []).length ? 'cherche en ' + (F ? 'connaisseuse' : 'connaisseur') : 'cherche sans discuter');
   if ((+perso.peur || 0) <= 1) R.push('pas ' + e('impressionné'));
   else R.push(e('inquiet'));
-  if (ton.includes('drôle') || perso.humour) R.push('humour à froid');
+  const H = ton.includes('drôle') || perso.humour;
+  R.splice(H ? 4 : 5);                                     // court : trois lignes au plus dans le panneau
+  if (H) R.push('humour à froid');
   const profil = [perso.id ? perso.id[0].toUpperCase() + perso.id.slice(1) : 'perso', (perso.genre || '') + (perso.age || ''), (perso.pays || '') + (perso.annee || ''), perso.metier, ton.length ? 'ton ' + ton.join(', ') : ''].filter(Boolean).join(' · ');
   const tr = trame('personnage', { id: perso.id, genre: perso.genre, age: perso.age, pays: perso.pays, annee: perso.annee, ton, peur: perso.peur, demande: { repugnance: rp || undefined, facteur: fa !== 1 ? fa : undefined, effort: ef || undefined } }, 2);
   return { profil, reaction: R, texte: profil + ' → ' + R.join(', '), trame: tr };
