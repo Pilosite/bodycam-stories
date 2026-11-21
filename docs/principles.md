@@ -59,7 +59,7 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 
 ## C. The engine
 
-**P13. Procedural at the root.** Everything shown is made by code from a description. Nothing is predefined: no asset, no hard-coded object, place or line. When a request fails, the vocabulary grows; a special case is never added.
+**P13. Procedural at the root, frozen when it helps.** Nothing is imported: at the start there is no asset, and everything shown or heard is generated from a description. That does not mean generating everything again on every player's device. When a narrator settles a world, its scenes can be **frozen**: generated once, kept as ready-made assets with the description and seed that produced them, and delivered to players as they are, so the experience starts at once. What stays live is what play can change: what the player and the characters do in that world, what happens to it, what is added to it. A frozen scene remains editable, because its recipe is kept; a narrator may also define assets of their own in the same way. When a request fails, the vocabulary grows; a special case is never added. *Check: every asset a story ships can be traced to the description that generated it and regenerated from it; nothing in a story comes from outside.*
 
 **P14. Cost does not depend on content.** The budget per frame is fixed. A richer world is rendered more coarsely, not more slowly.
 

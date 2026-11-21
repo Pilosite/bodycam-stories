@@ -46,6 +46,7 @@ Later: the satire moved behind `SATIRE=1` · phone · autonomous movement (v2).
 | Q9 | When the player is a ghost, an object or an idea, is there still one in-world camera (P2), and whose is it? | yes: always one subjective camera carried by someone or something in the world; the player's identity is free, the lens is not | medium |
 | Q10 | What players improvise in someone's story: who may reuse it? | only that story's author sees it as proposals; the engine's owner sees counts and what was missing, without the sentences | medium: it is a rule of the platform |
 | Q11 | Powers (ADR 0012): does « Louis's Round » grant the voice any power over the world, or does it stay a pure voice? | none in « Louis's Round »; one or two powers (weather, a sound) in prompted stories, as the first demonstration | low |
+| Q12 | Frozen scenes (P13): in what form is a frozen scene delivered (the description plus a prepared cache, pre-computed views, geometry)? | left to the engine decision; the contract only says a story ships frozen scenes with their recipe | high: it weighs on the choice of rendering engine |
 | Q5 | The story of « Louis's Round »: Louis watched a badger sett and died there of his heart; discreet, nothing supernatural. Keep it? | kept | medium: the pack is written around it |
 
 ## Assumptions adopted without an answer
