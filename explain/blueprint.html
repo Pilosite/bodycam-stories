@@ -12,17 +12,7 @@
   --f-mono:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
   color-scheme:dark;
 }
-@media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]){
-    --bg:#f4efe6; --bg-2:#fbf8f2; --bg-3:#ebe5da; --bg-code:#f7f3ec;
-    --ink:#1c1a17; --ink-2:rgba(28,26,23,.76); --ink-3:rgba(28,26,23,.55);
-    --line:rgba(28,26,23,.13); --line-2:rgba(28,26,23,.26);
-    --red:#ff3b30; --red-ink:#c4261b; --red-soft:rgba(255,59,48,.1); --red-line:rgba(212,42,30,.45);
-    --on-red:#fff;
-    color-scheme:light;
-  }
-}
-:root[data-theme="light"]{
+:root[data-bp="light"]{
   --bg:#f4efe6; --bg-2:#fbf8f2; --bg-3:#ebe5da; --bg-code:#f7f3ec;
   --ink:#1c1a17; --ink-2:rgba(28,26,23,.76); --ink-3:rgba(28,26,23,.55);
   --line:rgba(28,26,23,.13); --line-2:rgba(28,26,23,.26);
@@ -551,11 +541,11 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
 <script>
 (function(){
   var root=document.documentElement, btn=document.getElementById('theme');
-  function cur(){var t=root.getAttribute('data-theme');if(t)return t;return (window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';}
+  function cur(){return root.getAttribute('data-bp')==='light'?'light':'dark';}
   function label(){btn.textContent=cur()==='light'?'Sombre':'Clair';}
-  try{var s=localStorage.getItem('bcs-blueprint-theme');if(s==='light'||s==='dark')root.setAttribute('data-theme',s);}catch(e){}
+  try{var s=localStorage.getItem('bcs-blueprint-theme');if(s==='light')root.setAttribute('data-bp','light');}catch(e){}
   label();
-  btn.addEventListener('click',function(){var n=cur()==='light'?'dark':'light';root.setAttribute('data-theme',n);label();try{localStorage.setItem('bcs-blueprint-theme',n);}catch(e){}});
+  btn.addEventListener('click',function(){var n=cur()==='light'?'dark':'light';if(n==='light')root.setAttribute('data-bp','light');else root.removeAttribute('data-bp');label();try{localStorage.setItem('bcs-blueprint-theme',n);}catch(e){}});
   var bar=document.getElementById('prog');
   function upd(){var h=document.documentElement.scrollHeight-window.innerHeight;bar.style.width=(h>0?Math.min(100,window.scrollY/h*100):0)+'%';}
   window.addEventListener('scroll',upd,{passive:true});window.addEventListener('resize',upd);upd();
