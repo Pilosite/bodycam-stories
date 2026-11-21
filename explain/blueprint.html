@@ -1,0 +1,1085 @@
+<title>Bodycam Stories Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
+<style>
+:root{
+  --bg:#0c0b0a; --bg-2:#141311; --bg-3:#1c1a17; --bg-code:#100f0d;
+  --ink:#f3f0e8; --ink-2:rgba(243,240,232,.74); --ink-3:rgba(243,240,232,.5);
+  --line:rgba(243,240,232,.13); --line-2:rgba(243,240,232,.26);
+  --red:#ff3b30; --red-2:#ff4a3d; --red-ink:#ff6b5e; --red-soft:rgba(255,59,48,.13); --red-line:rgba(255,59,48,.5);
+  --on-red:#fff;
+  --f-text:"DM Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-mono:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4efe6; --bg-2:#fbf8f2; --bg-3:#ebe5da; --bg-code:#f7f3ec;
+    --ink:#1c1a17; --ink-2:rgba(28,26,23,.76); --ink-3:rgba(28,26,23,.55);
+    --line:rgba(28,26,23,.13); --line-2:rgba(28,26,23,.26);
+    --red:#ff3b30; --red-2:#e8372c; --red-ink:#c4261b; --red-soft:rgba(255,59,48,.1); --red-line:rgba(212,42,30,.45);
+    --on-red:#fff;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f4efe6; --bg-2:#fbf8f2; --bg-3:#ebe5da; --bg-code:#f7f3ec;
+  --ink:#1c1a17; --ink-2:rgba(28,26,23,.76); --ink-3:rgba(28,26,23,.55);
+  --line:rgba(28,26,23,.13); --line-2:rgba(28,26,23,.26);
+  --red:#ff3b30; --red-2:#e8372c; --red-ink:#c4261b; --red-soft:rgba(255,59,48,.1); --red-line:rgba(212,42,30,.45);
+  --on-red:#fff;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.62 var(--f-text);overflow-x:hidden}
+a{color:inherit;text-decoration-color:var(--red-line);text-underline-offset:3px}
+a:hover{text-decoration-color:var(--red)}
+:focus-visible{outline:2px solid var(--red);outline-offset:2px;border-radius:3px}
+code,pre,kbd{font-family:var(--f-mono);font-weight:500}
+code{font-size:.84em;overflow-wrap:anywhere;background:var(--bg-3);padding:1px 5px;border-radius:4px}
+.mono{font:500 11.5px/1.5 var(--f-mono);letter-spacing:.12em;text-transform:uppercase}
+.dim{color:var(--ink-3)}
+
+/* sticky bar: the camera overlay */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.bar-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;padding-block:10px}
+.rec{display:inline-flex;align-items:center;gap:7px;color:var(--red-ink)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);flex:none}
+.rec .dot{animation:blink 1.6s steps(2,start) infinite}
+@keyframes blink{to{visibility:hidden}}
+.bar-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
+.tc{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.theme{font:500 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;background:transparent;color:var(--ink-2);border:1px solid var(--line-2);border-radius:999px;padding:5px 10px;cursor:pointer}
+.theme:hover{color:var(--ink);border-color:var(--ink-3)}
+
+/* outer wrapper carries the gutter */
+.outer{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.page{max-width:1180px;margin:0 auto;padding-block:8px 72px;display:grid;grid-template-columns:minmax(0,1fr);gap:0 48px}
+@media (min-width:1100px){.page{grid-template-columns:220px minmax(0,1fr)}}
+main{min-width:0;max-width:820px}
+
+/* table of contents */
+.toc{min-width:0}
+.toc-in{border-bottom:1px solid var(--line);padding:18px 0 16px;margin-bottom:8px}
+.toc h2{margin:0 0 8px;color:var(--ink-3)}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0 18px}
+.toc a{display:flex;gap:10px;padding:4px 0;text-decoration:none;color:var(--ink-2);font-size:14.5px;line-height:1.35}
+.toc a span{font:500 11px var(--f-mono);color:var(--ink-3);padding-top:.2em;letter-spacing:.06em;flex:none;width:20px}
+.toc a:hover{color:var(--ink)}
+.toc a.on{color:var(--ink)}
+.toc a.on span{color:var(--red-ink)}
+@media (min-width:1100px){
+  .toc-in{position:sticky;top:calc(env(safe-area-inset-top,0px) + 64px);border-bottom:0;padding-top:40px}
+  .toc ol{grid-template-columns:1fr}
+  .toc a{border-left:2px solid transparent;padding-left:10px;margin-left:-12px}
+  .toc a.on{border-left-color:var(--red)}
+}
+
+/* hero */
+.hero{padding:40px 0 20px;position:relative}
+.kick{color:var(--red-ink);margin:0 0 18px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+h1{font-weight:700;font-size:clamp(46px,10vw,96px);line-height:.9;letter-spacing:-.04em;margin:0 0 24px}
+h1 .o{display:block;color:transparent;-webkit-text-stroke:2px var(--ink);font-weight:700}
+@supports not (-webkit-text-stroke:1px black){h1 .o{color:var(--ink)}}
+.motto{font-weight:600;font-size:clamp(24px,4.4vw,38px);line-height:1.15;letter-spacing:-.02em;margin:0 0 6px}
+.hl{display:inline;background:var(--red);color:var(--on-red);padding:.02em .22em;box-decoration-break:clone;-webkit-box-decoration-break:clone;border-radius:3px}
+.lede{font-size:18px;color:var(--ink-2);max-width:62ch;margin:22px 0 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;margin:22px 0 0;padding:14px 0 0;border-top:1px solid var(--line);color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.dia{display:inline-block;width:9px;height:9px;transform:rotate(45deg);background:var(--ink);flex:none}
+
+/* sections */
+.sec{padding:56px 0 8px;border-top:1px solid var(--line);margin-top:40px}
+.sec-n{color:var(--ink-3);display:flex;align-items:center;gap:10px;margin:0 0 12px}
+.sec-n b{color:var(--red-ink);font-weight:500}
+h2.h{font-weight:600;font-size:clamp(26px,4vw,36px);line-height:1.12;letter-spacing:-.022em;margin:0 0 18px;max-width:24ch}
+h3{font-weight:600;font-size:19px;letter-spacing:-.01em;margin:30px 0 8px}
+p{margin:0 0 14px;max-width:66ch}
+.sec ul{padding-left:20px;max-width:66ch}
+.sec li{margin:4px 0}
+.key{margin:22px 0 18px;font-weight:600;font-size:clamp(19px,2.6vw,23px);line-height:1.3;letter-spacing:-.01em}
+.meta{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;margin:10px 0 0;font-size:14px;color:var(--ink-2)}
+.meta .lbl{font:500 11px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);min-width:118px}
+.meta > div{min-width:0;flex:1 1 300px}
+.metas{margin-top:26px;padding-top:12px;border-top:1px dashed var(--line-2)}
+
+/* status badges */
+.st{display:inline-flex;align-items:center;gap:7px;font:500 10.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line-2);border-radius:999px;padding:5px 9px 5px 8px;margin:2px 6px 2px 0;white-space:nowrap;color:var(--ink)}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;flex:none}
+.st.ok::before{background:var(--ink)}
+.st.nm::before{background:linear-gradient(90deg,var(--ink) 50%,transparent 50%);border:1px solid var(--ink)}
+.st.dz::before{border:1px solid var(--ink)}
+.st.tg{border-style:dashed;color:var(--ink-2)}
+.st.tg::before{border:1px dashed var(--ink-3)}
+.stn{font-size:13px;color:var(--ink-3);margin-right:12px}
+
+/* figures */
+.fig{margin:26px 0 24px;padding:0}
+.frame{position:relative;border:1px solid var(--line);border-radius:10px;background:var(--bg-2);padding:18px}
+.frame::before,.frame::after{content:"";position:absolute;width:16px;height:16px;border-color:var(--ink-3);border-style:solid;pointer-events:none}
+.frame::before{top:-1px;left:-1px;border-width:2px 0 0 2px;border-top-left-radius:10px}
+.frame::after{bottom:-1px;right:-1px;border-width:0 2px 2px 0;border-bottom-right-radius:10px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll svg{display:block;width:100%;height:auto;min-width:640px}
+.scroll.narrow svg{min-width:520px}
+figcaption{font-size:13.5px;color:var(--ink-3);margin-top:10px;max-width:70ch}
+.hint{display:none;font:500 10px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+@media (max-width:700px){.hint{display:block}}
+
+/* svg language */
+svg{color:var(--ink-3)}
+.dl{stroke:var(--ink-3);fill:none;stroke-width:1.2}
+.dl2{stroke:var(--line-2);fill:none;stroke-width:1}
+.dd{stroke-dasharray:4 4}
+.dr{stroke:var(--red);fill:none;stroke-width:1.8}
+.db{fill:var(--bg-3);stroke:var(--line-2);stroke-width:1}
+.dbr{fill:var(--red-soft);stroke:var(--red);stroke-width:1.4}
+.dfr{fill:var(--red)}
+.dfi{fill:var(--ink)}
+.dah{fill:var(--ink-3)}
+.dt{fill:var(--ink);font:500 13px var(--f-text)}
+.dts{fill:var(--ink-2);font:400 12px var(--f-text)}
+.dm{fill:var(--ink-3);font:500 10.5px var(--f-mono);letter-spacing:.1em}
+.dmr{fill:var(--red-ink);font:500 10.5px var(--f-mono);letter-spacing:.1em}
+.dc{fill:var(--ink);font:500 11.5px var(--f-mono)}
+.dbig{fill:var(--ink);font:600 15px var(--f-text)}
+
+/* code */
+pre{margin:0;background:var(--bg-code);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:1.55;overflow-x:auto;white-space:pre;color:var(--ink)}
+pre.wrap{white-space:pre-wrap;overflow-wrap:anywhere}
+pre .c{color:var(--ink-3)}
+pre .r{color:var(--red-ink)}
+.cap{font:500 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px;display:flex;gap:4px 10px;align-items:baseline;flex-wrap:wrap}
+.cap b{color:var(--red-ink);font-weight:500}
+
+/* section 1 figure */
+.flow1{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:760px){.flow1{grid-template-columns:minmax(0,1fr) minmax(0,300px);align-items:center}}
+.prompt{border:1px solid var(--line-2);border-radius:8px;padding:12px 14px;background:var(--bg-3);min-width:0}
+.prompt .mono{color:var(--red-ink);margin-right:8px}
+.prompt i{font-style:italic;color:var(--ink)}
+.down{display:flex;justify-content:center;color:var(--red);height:24px}
+.four{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.four div{border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:var(--bg);min-width:0}
+.four .mono{display:flex;align-items:center;gap:7px;color:var(--red-ink);font-size:10.5px}
+.four p{margin:3px 0 0;font-size:13.5px;color:var(--ink-2);line-height:1.4}
+.cam{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line-2);aspect-ratio:9/16;max-height:520px;margin:0 auto;width:100%;max-width:300px;background:#000}
+.cam img{display:block;width:100%;height:100%;object-fit:cover;filter:contrast(1.04) saturate(.92)}
+.cam .ov{position:absolute;inset:0;padding:12px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;font:500 10.5px var(--f-mono);letter-spacing:.1em;text-shadow:0 1px 2px rgba(0,0,0,.7);background:linear-gradient(180deg,rgba(0,0,0,.35),transparent 22%,transparent 62%,rgba(0,0,0,.6))}
+.cam .top{display:flex;justify-content:space-between;gap:8px}
+.cam .sub{font:500 14px/1.35 var(--f-text);letter-spacing:0;text-align:center}
+.cam .sub small{display:block;font:500 9.5px var(--f-mono);letter-spacing:.14em;opacity:.8;margin-bottom:4px}
+.cam .voice{align-self:flex-start;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 8px;font:500 10px var(--f-mono);letter-spacing:.06em;margin-top:auto;margin-bottom:10px}
+.cam .br{position:absolute;width:18px;height:18px;border:2px solid rgba(255,255,255,.75)}
+.cam .br.a{top:8px;left:8px;border-width:2px 0 0 2px}.cam .br.b{top:8px;right:8px;border-width:2px 2px 0 0}
+.cam .br.c{bottom:8px;left:8px;border-width:0 0 2px 2px}.cam .br.d{bottom:8px;right:8px;border-width:0 2px 2px 0}
+.cam .rd{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:5px}
+
+/* spectrum (section 2) */
+.spec-axis{display:flex;justify-content:space-between;gap:12px;margin:0 0 10px;color:var(--ink-3)}
+.spec-axis span:first-child{color:var(--red-ink)}
+.spec-bar{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--red),var(--line-2) 55%,var(--ink));margin-bottom:14px}
+.spec{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+@media (min-width:700px){.sp{display:grid!important;grid-template-columns:44px minmax(0,1.5fr) minmax(0,1fr);align-items:start;gap:4px 16px!important}.sp .mk{grid-row:1/3}.sp .nm{grid-column:2}.sp q{grid-column:2}.sp .who{grid-column:3;grid-row:1/3;margin-top:0!important}}
+.sp{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--bg);min-width:0;display:flex;flex-direction:column;gap:8px}
+.sp .mk{font:500 22px/1 var(--f-mono);color:var(--ink)}
+.sp.live .mk{color:var(--red-ink)}
+.sp .nm{font:500 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sp q{font:500 12px/1.45 var(--f-mono);color:var(--ink);quotes:none;overflow-wrap:anywhere;display:block;border-left:2px solid var(--line-2);padding-left:8px}
+.sp .who{font-size:13.5px;color:var(--ink-2);line-height:1.4;margin-top:auto}
+.sp .who b{color:var(--ink);font-weight:600}
+
+/* generic grids */
+.g3{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+@media (min-width:760px){.g3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.g2{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+@media (min-width:760px){.g2{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--bg);min-width:0}
+.card h4{margin:0 0 4px;font-weight:600;font-size:16px}
+.card .mono{color:var(--red-ink);font-size:10.5px}
+.card p{font-size:14px;color:var(--ink-2);margin:6px 0 0}
+.steps{counter-reset:s;list-style:none;padding:0!important;margin:0;display:grid;gap:12px;max-width:none!important}
+.steps > li{counter-increment:s;display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;margin:0!important}
+.steps > li::before{content:counter(s);font:500 11px/22px var(--f-mono);width:22px;height:22px;border-radius:50%;border:1px solid var(--red-line);color:var(--red-ink);text-align:center}
+.steps > li > div{min-width:0}
+.steps p{margin:0 0 6px;font-size:14.5px}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;margin:22px 0 8px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{font:500 10.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);background:var(--bg-2)}
+td code{white-space:nowrap}
+td.n{font:500 12px var(--f-mono);color:var(--red-ink);white-space:nowrap}
+.t-min{min-width:640px}
+
+/* lexicon */
+dl.lex{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:22px 0 0}
+@media (min-width:760px){dl.lex{grid-template-columns:180px minmax(0,1fr)}}
+dl.lex dt{font:500 12px var(--f-mono);letter-spacing:.06em;color:var(--red-ink);padding:10px 0 0}
+dl.lex dd{margin:0;padding:4px 0 10px;border-bottom:1px solid var(--line);font-size:14.5px;color:var(--ink-2)}
+@media (min-width:760px){dl.lex dt{border-bottom:1px solid var(--line);padding:10px 0}dl.lex dd{padding:10px 0}}
+.links{display:grid;gap:10px;margin-top:22px}
+.links a{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--line-2);border-radius:8px;padding:14px;text-decoration:none;min-width:0}
+.links a:hover{border-color:var(--red)}
+.links a span:first-child{min-width:0}
+.links small{display:block;color:var(--ink-3);font:500 11px var(--f-mono);overflow-wrap:anywhere}
+.foot{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);color:var(--ink-3);font-size:13px}
+
+@media (prefers-reduced-motion:reduce){
+  .rec .dot{animation:none}
+  html{scroll-behavior:auto}
+}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+
+<header class="bar">
+  <div class="outer"><div class="bar-in">
+    <span class="rec mono"><span class="dot" aria-hidden="true"></span>REC</span>
+    <span class="bar-title mono">Bodycam Stories · Blueprint</span>
+    <span class="tc mono" id="tc" aria-hidden="true">00:00:00:00</span>
+    <button class="theme" id="theme" type="button" aria-label="Changer de thème">Thème</button>
+  </div></div>
+</header>
+
+<div class="outer">
+<div class="page">
+
+<nav class="toc" aria-label="Sommaire">
+  <div class="toc-in">
+    <h2 class="mono">Sommaire</h2>
+    <ol>
+      <li><a href="#s1"><span>01</span>En une minute</a></li>
+      <li><a href="#s2"><span>02</span>Le postulat</a></li>
+      <li><a href="#s3"><span>03</span>Un seul canal : le PDL</a></li>
+      <li><a href="#s4"><span>04</span>Le temps</a></li>
+      <li><a href="#s5"><span>05</span>Inventer et juger</a></li>
+      <li><a href="#s6"><span>06</span>Trois tailles de modèle</a></li>
+      <li><a href="#s7"><span>07</span>L'hexagone</a></li>
+      <li><a href="#s8"><span>08</span>Une histoire est un dossier</a></li>
+      <li><a href="#s9"><span>09</span>De la phrase à l'histoire</a></li>
+      <li><a href="#s10"><span>10</span>Le jeu grandit du jeu</a></li>
+      <li><a href="#s11"><span>11</span>Où on en est</a></li>
+      <li><a href="#s12"><span>12</span>Petit lexique</a></li>
+    </ol>
+  </div>
+</nav>
+
+<main>
+
+<div class="hero">
+  <p class="kick mono"><span>An agentic game</span><span class="dim">Blueprint · état au 21 novembre 2026</span></p>
+  <h1>Bodycam<span class="o">Stories</span></h1>
+  <p class="motto">Imagine any story.</p>
+  <p class="motto"><span class="hl">Live it through a bodycam.</span></p>
+  <p class="lede">Cette page explique tout le projet, dans l'ordre où il se comprend : ce qu'est le jeu, ses principes, son architecture, et où il en est vraiment. Chaque section tient en une idée, une image et deux lignes : les fichiers du dépôt qui la portent, et son état. Lecture : un quart d'heure.</p>
+  <div class="legend mono">
+    <span><span class="dot" aria-hidden="true"></span>généré en direct</span>
+    <span><span class="dia" aria-hidden="true"></span>écrit par un auteur</span>
+  </div>
+  <div class="legend" style="border-top:0;padding-top:6px;margin-top:6px">
+    <span class="st ok">construit et testé</span>
+    <span class="st nm">construit, pas mesuré</span>
+    <span class="st dz">conçu</span>
+    <span class="st tg">cible</span>
+  </div>
+</div>
+
+<!-- 1 -->
+<section class="sec" id="s1" aria-labelledby="h1t">
+  <div class="sec-n mono"><b>01</b> En une minute</div>
+  <h2 class="h" id="h1t">Une phrase entre, un monde vivant sort, et on le vit par la caméra de quelqu'un.</h2>
+  <p>Bodycam Stories est un jeu d'histoires. On voit le monde par la caméra-piéton (la <em>bodycam</em>) d'un personnage. On ne le pilote pas. On est la voix dans sa tête, ou au bout du fil, et on lui parle. Elle comprend, accepte, discute, refuse, se trompe.</p>
+  <p>Le monde part d'une phrase, le <em>prompt</em>. Le lieu, les sons, les gens et l'histoire sont fabriqués à partir d'elle, par du code et par des modèles. Il n'y a ni décor importé, ni objet en dur, ni réplique écrite d'avance, sauf ce qu'un auteur choisit de fixer.</p>
+  <p>Le héros est donc un personnage non joueur. Le joueur, lui, n'agit jamais : il parle avec celui qui agit. Le projet le dit ainsi : <em>the player is not the player</em>. Le modèle de référence est la table de jeu de rôle : on dit ce qu'on veut, un meneur tranche, quoi qu'on ait demandé.</p>
+  <p>Il y a trois façons de jouer, et les trois sont des jeux : <strong>vivre</strong> une histoire, en <strong>écrire</strong> une, ou <strong>mener la table</strong>, c'est-à-dire tenir la place du meneur de jeu pendant une partie, à la place des modèles ou avec eux. Seul ou à plusieurs.</p>
+
+  <figure class="fig">
+    <div class="frame">
+      <div class="flow1">
+        <div style="min-width:0">
+          <div class="prompt"><span class="mono">Prompt ›</span><i>Dawn. Sam walks her brother's last round, his camera on her chest.</i></div>
+          <div class="down" aria-hidden="true"><svg width="12" height="24" viewBox="0 0 12 24"><line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1.6"/><path d="M1 14 L6 22 L11 14" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <div class="four">
+            <div><span class="mono"><span class="dot" aria-hidden="true"></span>Environnement</span><p>pins, grès, feuilles, lumière d'aube : tout est calculé par code</p></div>
+            <div><span class="mono"><span class="dot" aria-hidden="true"></span>Sons</span><p>vent, pas, un geai quelque part</p></div>
+            <div><span class="mono"><span class="dot" aria-hidden="true"></span>Personnes</span><p>Sam, sa voix, son caractère, ses doutes</p></div>
+            <div><span class="mono"><span class="dot" aria-hidden="true"></span>Histoire</span><p>la dernière tournée de son frère, ce qu'elle va y trouver</p></div>
+          </div>
+          <div class="down" aria-hidden="true"><svg width="12" height="24" viewBox="0 0 12 24"><line x1="6" y1="0" x2="6" y2="18" stroke="currentColor" stroke-width="1.6"/><path d="M1 14 L6 22 L11 14" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <p style="font-size:14px;color:var(--ink-2);margin:0">Le tout est filmé comme par un téléphone moyen : grain, compression, exposition, bougé. Ces défauts rendent l'image crédible et cachent les raccourcis du moteur.</p>
+        </div>
+        <div class="cam" role="img" aria-label="Image réelle du moteur : un pin marqué d'un trait orange, vu par la bodycam de Sam, avec sa réplique en sous-titre.">
+          <img src="data:image/jpeg;base64,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" alt="" width="270" height="480">
+          <div class="ov">
+            <div class="top"><span><span class="rd"></span>REC 06:41:07</span><span>CAM 07</span></div>
+            <div class="voice">VOIX › regarde ce trait orange</div>
+            <div class="sub"><small>SAM</small>« Ça, c'est pas l'ONF. Un trait orange, à hauteur de poitrine. C'est sa main. »</div>
+          </div>
+          <span class="br a"></span><span class="br b"></span><span class="br c"></span><span class="br d"></span>
+        </div>
+      </div>
+    </div>
+    <figcaption>À gauche, l'idée du teaser redessinée. À droite, une vraie image du moteur à la station « first-mark », une phrase du joueur tirée d'un script de jeu de la pack, et une réplique d'exemple de la fiche de Sam.</figcaption>
+  </figure>
+
+  <h3>L'histoire qui sert d'exemple partout</h3>
+  <p>« Louis's Round » (« La tournée de Louis »). Sam, 30 ans, élagueuse, rallume la caméra-piéton de son frère Louis, garde forestier mort il y a trois semaines, et refait sa dernière tournée dans les Grands Avaux, à l'aube. Quelqu'un est encore en ligne : le joueur. La v1 se joue comme un jeu d'aventure des années 1990 à vues précalculées : un lieu, six <em>stations</em> (des points de vue) le long d'un chemin, regard libre à chaque station, transitions entre elles.</p>
+
+  <p class="key"><span class="hl">Nothing is scripted. Everything is generated.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/principles.md</code> <code>docs/scope.md</code> <code>stories/louis-round/</code> <code>src/story.js</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">l'histoire jouée dans la page, sans modèle</span><span class="st ok">construit et testé</span><br><span class="stn">une histoire entière à partir d'une phrase</span><span class="st nm">construit, pas mesuré</span><br><span class="stn">n'importe quelle situation, en direct</span><span class="st tg">cible</span></div></div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="sec" id="s2" aria-labelledby="h2t">
+  <div class="sec-n mono"><b>02</b> Le postulat : procédural et non déterministe</div>
+  <h2 class="h" id="h2t">Agentic by default, deterministic by exception.</h2>
+  <p>D'habitude, un jeu est écrit, et l'IA comble les trous. Ici l'ordre est inversé. Des agents (des modèles qui décident) font vivre le monde par défaut. Un auteur fixe seulement ce qui doit tenir.</p>
+  <p>Pour cela, un auteur écrit des <em>énoncés</em> dans une seule langue texte, le PDL source. Chaque énoncé porte une <em>force</em>, marquée par un signe en tête de ligne. Les forces vont du plus ouvert au plus dur. Les notions floues comme « trop souvent », « près », « en colère » sont permises telles quelles : personne ne doit écrire une règle compliquée pour obtenir un effet simple.</p>
+
+  <figure class="fig">
+    <div class="frame">
+      <div class="spec-axis mono"><span>agentique</span><span>déterministe</span></div>
+      <div class="spec-bar" aria-hidden="true"></div>
+      <div class="spec">
+        <div class="sp live"><span class="mk">?</span><span class="nm">ouvert</span><q>? Does the walker turn up? -- once, at the platière, only if Sam lingers there; he leaves on his own.</q><span class="who"><b>Un modèle décide sur le moment</b>, guidé par la note après <code>--</code>.</span></div>
+        <div class="sp live"><span class="mk">~</span><span class="nm">tendance</span><q>~0.9 Dry, funny when uneasy. Short sentences, often verbless.</q><span class="who"><b>Un modèle la pèse</b> en contexte, avec son poids. Un juge la note après la partie.</span></div>
+        <div class="sp"><span class="mk">!</span><span class="nm">dur</span><q>! She does not shout within 30 m of the hide.</q><span class="who"><b>Du code l'exécute</b>, une fois compilé en règle et approuvé par l'auteur.</span></div>
+        <div class="sp"><span class="mk">→</span><span class="nm">when … -&gt; …</span><q>when station.dwell(hide, 40) once -&gt; sound(bracken.rustle), reveal(f.rustle)</q><span class="who"><b>Du code l'exécute</b> tel qu'écrit, sans appeler de modèle.</span></div>
+        <div class="sp"><span class="mk">!!</span><span class="nm">absolu</span><q>!! Sam never says or hopes that Louis is alive.</q><span class="who"><b>Rien ne passe outre.</b> Le validateur rejette toute transaction qui le viole, quel qu'en soit l'auteur.</span></div>
+      </div>
+      <p style="margin:14px 0 0;font-size:14px;color:var(--ink-2)">Deux signes calibrent les forces douces : <code>&gt;</code> un exemple, <code>x</code> un contre-exemple avec sa raison. Ils servent aussi de cas de test.</p>
+      <pre class="wrap" style="margin-top:8px"><span class="c">// characters/sam.pdl, section counter-examples</span>
+x [any moment] fr: Je ressens une profonde tristesse face à l'absence de mon frère. | why: she never names the feeling in full sentences; she names a tree.</pre>
+    </div>
+    <figcaption>Les cinq forces, avec de vraies lignes de la pack « Louis's Round » (<code>rules/place.pdl</code>, <code>characters/sam.pdl</code>, <code>rules/hide.pdl</code>). Du premier au dernier, la décision passe des modèles au code.</figcaption>
+  </figure>
+
+  <p>Une précision honnête. Les règles <code>when … -&gt; …</code> et les absolus écrits sous forme explicite sont compilés par du code, aujourd'hui. Les <code>!</code> et <code>!!</code> écrits en prose attendent un compilateur, un modèle qui les traduira en règles au moment de construire la pack, avec l'accord de l'auteur. En attendant, les modèles les reçoivent comme texte, et une invention qui contredit un absolu en prose est rejetée par un jugement (section 5). La pack compte 44 énoncés qui attendent ce compilateur.</p>
+  <p>À quoi sert un auteur, alors ? Ce qu'il écrit (un personnage, un motif, un moment qui doit arriver) est une intention vers laquelle le monde travaille. Ce n'est jamais une clôture autour du joueur. Tout ce qui n'est pas interdit est possible, pour le joueur comme pour le créateur.</p>
+
+  <p class="key"><span class="hl">Un auteur n'est pas là pour poser des limites, mais pour guider l'imagination.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/principles.md</code> (P8 à P11) <code>docs/adr/0002-pdl-source-and-strength-spectrum.md</code> <code>docs/pdl-spec.md</code> §2 <code>core/source.js</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">parseur, règles explicites, absolus explicites</span><span class="st ok">construit et testé</span><br><span class="stn">compilateur des <code>!</code> et <code>!!</code> en prose, audit par un juge</span><span class="st dz">conçu</span></div></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="sec" id="s3" aria-labelledby="h3t">
+  <div class="sec-n mono"><b>03</b> Un seul canal : le PDL</div>
+  <h2 class="h" id="h3t">Rien ne change le monde sans une transaction, et toute transaction est écrite au journal.</h2>
+  <p>Le PDL est le langage intermédiaire du projet. Une phrase du joueur devient une <em>transaction</em> : un petit message typé (qui, quand, à quel horizon, quelle sorte, quel contenu). Les modèles répondent eux aussi par des transactions. Il n'y a pas de porte de côté, même pour une démo.</p>
+  <p>Chaque transaction passe par le <em>validateur</em>. Son ordre est fixe : accepter ; sinon réparer vers ce que le joueur a demandé ; rejeter seulement si un absolu ou une borne physique l'interdit, et toujours dire lequel. Puis l'<em>exécuteur</em> l'applique de façon déterministe. Les décisions sont incertaines, leur exécution ne l'est pas.</p>
+
+  <figure class="fig">
+    <div class="frame">
+      <div class="hint">Faire défiler →</div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 270" role="img" aria-label="Le trajet d'une phrase : traduite en intention, validée, exécutée, et chaque étape écrite au journal, qui permet le rejeu et le what-if.">
+          <defs>
+            <marker id="m3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dah"/></marker>
+            <marker id="m3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
+          </defs>
+          <rect x="10" y="30" width="118" height="64" rx="7" class="db"/>
+          <text x="22" y="52" class="dmr">LA VOIX</text>
+          <text x="22" y="72" class="dts">une phrase dite</text>
+          <text x="22" y="86" class="dts">ou tapée</text>
+          <rect x="160" y="30" width="126" height="64" rx="7" class="dbr"/>
+          <text x="172" y="52" class="dmr">INTENT</text>
+          <text x="172" y="72" class="dts">traduite en</text>
+          <text x="172" y="86" class="dts">vocabulaire fermé</text>
+          <rect x="318" y="30" width="136" height="64" rx="7" class="dbr"/>
+          <text x="330" y="52" class="dmr">VALIDER</text>
+          <text x="330" y="72" class="dts">accepte · répare</text>
+          <text x="330" y="86" class="dts">· rejette</text>
+          <rect x="486" y="30" width="118" height="64" rx="7" class="dbr"/>
+          <text x="498" y="52" class="dmr">EXÉCUTEUR</text>
+          <text x="498" y="72" class="dts">applique,</text>
+          <text x="498" y="86" class="dts">déterministe</text>
+          <rect x="636" y="30" width="114" height="64" rx="7" class="db"/>
+          <text x="648" y="52" class="dm">LE MONDE</text>
+          <text x="648" y="72" class="dts">image, son,</text>
+          <text x="648" y="86" class="dts">corps, paroles</text>
+          <line x1="128" y1="62" x2="158" y2="62" class="dr" marker-end="url(#m3r)"/>
+          <line x1="286" y1="62" x2="316" y2="62" class="dr" marker-end="url(#m3r)"/>
+          <line x1="454" y1="62" x2="484" y2="62" class="dr" marker-end="url(#m3r)"/>
+          <line x1="604" y1="62" x2="634" y2="62" class="dr" marker-end="url(#m3r)"/>
+          <text x="160" y="20" class="dm">LES MODÈLES PROPOSENT AUSSI ICI : ACT · EFFECT · FACT · RULE</text>
+          <line x1="223" y1="94" x2="223" y2="146" class="dl" marker-end="url(#m3a)"/>
+          <line x1="386" y1="94" x2="386" y2="146" class="dl" marker-end="url(#m3a)"/>
+          <line x1="545" y1="94" x2="545" y2="146" class="dl" marker-end="url(#m3a)"/>
+          <text x="394" y="116" class="dts">rejet : la raison</text>
+          <text x="394" y="130" class="dts">et le principe cités</text>
+          <rect x="160" y="150" width="590" height="44" rx="7" class="db"/>
+          <text x="174" y="171" class="dm">JOURNAL</text>
+          <text x="174" y="186" class="dts">chaque transaction, acceptée ou non, avec son auteur, sa boucle, sa latence</text>
+          <line x1="300" y1="194" x2="300" y2="222" class="dl" marker-end="url(#m3a)"/>
+          <line x1="600" y1="194" x2="600" y2="222" class="dl" marker-end="url(#m3a)"/>
+          <text x="170" y="242" class="dt">Rejeu</text>
+          <text x="170" y="259" class="dts">même journal + même graine = même hash</text>
+          <text x="470" y="242" class="dt">What if</text>
+          <text x="470" y="259" class="dts">la pack modifiée, on rejoue, on compare</text>
+        </svg>
+      </div>
+    </div>
+    <figcaption>Le trajet rouge est celui d'une phrase en direct. Tout ce qui passe s'écrit au journal, qui sert à la fois de source de rejeu, de journal de débogage et de source d'analyse.</figcaption>
+  </figure>
+
+  <h3>Trois visages pour une même chose</h3>
+  <p>Le PDL a trois formes, qui disent exactement la même chose. La <strong>source</strong> est pour les personnes : du texte avec des forces. La forme <strong>canonique</strong> est pour le validateur et le journal : du JSON à clés ordonnées. La forme <strong>jetons</strong> est pour les modèles : une transaction par ligne, compacte, avec un aller-retour exact vers la forme canonique. Voici une promesse suivie de bout en bout.</p>
+  <ol class="steps">
+    <li><div><p>La voix dit : « <em>si tu entends le geai, arrête-toi et baisse-toi</em> ». La traduction l'écrit en jetons :</p>
+<pre class="wrap">m:translator/translate now intent text="si tu entends le geai, arrête-toi et baisse-toi" lang=fr verb=commit condition="you hear the jay" behaviour="stop and get down" commit=c.jay</pre></div></li>
+    <li><div><p>Sam répond dans son caractère et amende la promesse :</p>
+<pre class="wrap">m:stager/stage now act.say line.fr="Je m’arrête. Je ne me couche pas dans cette boue." tone=dry</pre></div></li>
+    <li><div><p>La promesse devient une règle, dont l'auteur est le joueur. La même règle, sous ses trois visages :</p>
+      <div class="g3" style="margin-top:6px">
+        <div style="min-width:0"><p class="cap"><b>Source</b> pour les personnes</p><pre class="wrap">when sound(jay.alarm) -&gt; body.stop, body.posture(0.55), say(commit.keeping)</pre></div>
+        <div style="min-width:0"><p class="cap"><b>Jetons</b> pour les modèles</p><pre class="wrap">p:player story rule id=c.jay on.ev=sound.played on.m.cue=jay_alarm commit=c.jay
+  then now act.stop
+  then now act.posture height=0.55
+  then now act.say ref=commit_recall tone=whisper</pre></div>
+        <div style="min-width:0"><p class="cap"><b>Canonique</b> validateur, journal</p><pre class="wrap">{"author":{"kind":"player","id":"player"},"horizon":"story","kind":"rule","body":{"id":"c.jay","when":{"event":"sound.played","match":{"cue":"jay_alarm"}},"then":[{"horizon":"now","kind":"act","body":{"op":"stop"}},{"horizon":"now","kind":"act","body":{"op":"posture","height":0.55}},{"horizon":"now","kind":"act","body":{"op":"say","ref":"commit_recall","tone":"whisper"}}],"commit":"c.jay"}}</pre></div>
+      </div>
+      <p style="font-size:13px;color:var(--ink-3);margin-top:8px">Source : le script de jeu <code>stories/louis-round/scripts/jay.txt</code>. Jetons et canonique : exemple 9 de <code>docs/pdl-spec.md</code> §11, écrit sur la place simplifiée du spec ; d'où les noms un peu différents (<code>jay.alarm</code> et <code>jay_alarm</code>, <code>commit.keeping</code> et <code>commit_recall</code>).</p>
+    </div></li>
+    <li><div><p>Deux stations plus loin, le geai crie. La règle se déclenche dans le code, sans modèle. Le journal relie l'arrêt, la posture et la réplique à la promesse <code>c.jay</code>, puis écrit le fait « tenue ».</p></div></li>
+  </ol>
+
+  <p class="key"><span class="hl">Les décisions sont incertaines ; leur exécution est déterministe.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/adr/0001-pdl-is-the-only-channel.md</code> <code>docs/pdl-spec.md</code> §3, §8, §10 <code>core/pdl.js</code> <code>core/tokens.js</code> <code>core/journal.js</code> <code>tests/golden/</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">transactions, validation, réparation, journal, rejeu doré, aller-retour des jetons</span><span class="st ok">construit et testé</span></div></div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="sec" id="s4" aria-labelledby="h4t">
+  <div class="sec-n mono"><b>04</b> Le temps</div>
+  <h2 class="h" id="h4t">Le monde n'attend pas le joueur, et une couche lente ne fait jamais attendre une couche rapide.</h2>
+  <p>Comme un film, une histoire a ce qui se passe maintenant, ce qui se prépare dans la scène, et ce qui se prépare loin devant. Chaque niveau a sa propre horloge et ses propres moyens. Une voie lente peut enrichir ou corriger ce qu'une voie rapide a fait. Elle ne peut jamais la faire attendre.</p>
+  <p>L'ADR 0010 propose quatre temporalités. Tout ce qui existe dans une histoire (un événement, un fait, une règle, une jauge, une promesse) appartient à exactement une.</p>
+
+  <figure class="fig">
+    <div class="frame">
+      <div class="hint">Faire défiler →</div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 360" role="img" aria-label="Quatre voies de temps, de l'immédiat au long terme, avec un exemple de Louis's Round pour chacune ; les voies lentes enrichissent les rapides sans les bloquer.">
+          <defs>
+            <marker id="m4r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
+          </defs>
+          <rect x="10" y="12" width="640" height="70" rx="7" class="dbr"/>
+          <text x="24" y="38" class="dbig">Immédiat</text>
+          <text x="24" y="56" class="dmr">DIXIÈMES DE SECONDE</text>
+          <text x="210" y="38" class="dts">ce qui arrive, en réponse, tout de suite</text>
+          <text x="210" y="60" class="dt">elle se tourne, dit « Attends. », regarde où on a dit</text>
+          <rect x="10" y="94" width="640" height="70" rx="7" class="db"/>
+          <text x="24" y="120" class="dbig">Conséquence</text>
+          <text x="24" y="138" class="dm">SECONDES</text>
+          <text x="210" y="120" class="dts">ce que cela déclenche : règles, promesses échues, mise en scène</text>
+          <text x="210" y="142" class="dt">la marque lue révèle un fait ; la promesse du geai arrive à échéance</text>
+          <rect x="10" y="176" width="640" height="70" rx="7" class="db"/>
+          <text x="24" y="202" class="dbig">Environnement</text>
+          <text x="24" y="220" class="dm">CONTINU</text>
+          <text x="210" y="202" class="dts">ce que le monde fait seul, sur l'horloge du monde, qu'on parle ou non</text>
+          <text x="210" y="224" class="dt">la lumière monte, la batterie baisse, un promeneur arrive</text>
+          <rect x="10" y="258" width="640" height="70" rx="7" class="db"/>
+          <text x="24" y="284" class="dbig">Long terme</text>
+          <text x="24" y="302" class="dm">MINUTES ET AU-DELÀ</text>
+          <text x="210" y="284" class="dts">où va l'histoire : motifs, temps forts, préparation</text>
+          <text x="210" y="306" class="dt">la piste des signes, l'absent, ce qui est prêt à la station suivante</text>
+          <line x1="690" y1="300" x2="690" y2="52" class="dr dd" marker-end="url(#m4r)"/>
+          <text x="702" y="160" class="dmr" transform="rotate(-90 702 160)" text-anchor="middle">ENRICHIT SANS BLOQUER</text>
+          <text x="10" y="352" class="dm">AUJOURD'HUI DANS LE CODE : NOW · SCENE · STORY. LA VOIE ENVIRONNEMENT EST PROPOSÉE.</text>
+        </svg>
+      </div>
+    </div>
+    <figcaption>Les quatre temporalités de l'ADR 0010, avec les exemples que l'ADR donne pour « Louis's Round ». Le code actuel a trois boucles : « now » couvre l'immédiat, « scene » mêle conséquence et environnement, « story » le long terme.</figcaption>
+  </figure>
+
+  <h3>Le présent a des temps</h3>
+  <p>Une réaction n'est pas une réponse unique. C'est une courte suite, et chaque pas a ses moyens. Ce sont des cibles, pas des mesures. Le journal note chaque temps avec sa latence : le jour où les modèles seront plus rapides, la même histoire se jouera simplement plus serrée.</p>
+  <div class="tw"><table class="t-min">
+    <thead><tr><th>Temps</th><th>Cible</th><th>Moyen</th><th>Ce que perçoit le joueur</th></tr></thead>
+    <tbody>
+      <tr><td class="n">0</td><td>moins de 100 ms</td><td>du code</td><td>elle a entendu : un geste, un souffle, un regard</td></tr>
+      <tr><td class="n">demi-temps</td><td>quelques centaines de ms</td><td>un choix parmi des options préparées</td><td>un premier mot ou un premier geste, choisi</td></tr>
+      <tr><td class="n">1</td><td>une à deux secondes</td><td>l'invention, en sortie compacte</td><td>la réponse que personne n'a écrite</td></tr>
+      <tr><td class="n">pendant ce temps</td><td>en parallèle</td><td>les voies lentes</td><td>les prochaines demandes probables se préparent</td></tr>
+    </tbody>
+  </table></div>
+  <p>Dans le code d'aujourd'hui, la boucle « now » a un budget de 500 ms pour son premier effet visible. Quand le réflexe est sûr, il agit seul. Sinon, un jugement est demandé ; s'il n'arrive pas en 350 ms, Sam temporise (« Hm. Attends. ») et la réponse jugée arrive ensuite par la boucle « scene ». La boucle « story » n'existe pas encore dans le code.</p>
+
+  <p class="key"><span class="hl">Le temps dont le système a besoin pour réfléchir est donné au personnage, jamais au joueur comme attente.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/adr/0010-four-temporalities.md</code> <code>core/clocks.js</code> <code>core/session.js</code> <code>docs/pdl-spec.md</code> §9.3</div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">boucles now et scene, horloge du monde qui tourne seule</span><span class="st nm">construit, pas mesuré</span><br><span class="stn">quatre voies, temps du présent</span><span class="st dz">conçu</span><span class="stn">(ADR proposé, en attente de Toine)</span><br><span class="stn">boucle story</span><span class="st dz">conçu</span></div></div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="sec" id="s5" aria-labelledby="h5t">
+  <div class="sec-n mono"><b>05</b> Deux instruments : inventer et juger</div>
+  <h2 class="h" id="h5t">Un modèle génératif invente. Un modèle de décision juge, et ne parle jamais.</h2>
+  <p>L'IA sert l'histoire de deux façons, qu'on ne mélange pas. L'<strong>invention</strong> écrit ce que personne n'a écrit : c'est le rôle des modèles génératifs. Le <strong>jugement</strong> transforme quelque chose d'ouvert (une phrase, une situation, une notion floue) en une réponse typée que le code peut utiliser : oui ou non, l'une de ces options, combien. Avec une probabilité. Jamais du texte.</p>
+  <p>Ces modèles de décision forment une classe récente (Jev, Clef de Cloudflare, des équivalents open source). Dans le noyau, ils tiennent en une méthode : <code>decide({ question, options, state }) → { answer, p }</code>. Le code pose ses questions à dix endroits précis.</p>
+
+  <figure class="fig">
+    <div class="tw" style="margin-top:0"><table class="t-min">
+      <thead><tr><th>#</th><th>Horloge</th><th>La question</th><th>Type</th><th>Ce que fait le code</th></tr></thead>
+      <tbody>
+        <tr><td class="n">D1</td><td>now</td><td>Que demande le joueur ?</td><td>choix</td><td>construit l'intention</td></tr>
+        <tr><td class="n">D2</td><td>now</td><td>Pour maintenant, ou pour plus tard sous condition ?</td><td>oui/non</td><td>fait une promesse au lieu d'un acte</td></tr>
+        <tr><td class="n">D3</td><td>now</td><td>Est-ce qu'elle suit ? (accepte, amende, refuse, discute)</td><td>choix</td><td>choisit la famille de réaction</td></tr>
+        <tr><td class="n">D4</td><td>scene</td><td>Cette transaction viole-t-elle un principe que le code ne vérifie pas ?</td><td>oui/non</td><td>accepte, ou répare ; sur <code>!!</code>, deux ordres</td></tr>
+        <tr><td class="n">D5</td><td>scene</td><td>Cette condition floue est-elle vraie ? (« trop souvent »)</td><td>oui/non, niveau</td><td>déclenche ou retient une règle</td></tr>
+        <tr><td class="n">D6</td><td>scene</td><td>Ce que le joueur avait prévu vient-il d'arriver ?</td><td>oui/non</td><td>la promesse est échue</td></tr>
+        <tr><td class="n">D7</td><td>scene</td><td>A-t-elle tenu parole ?</td><td>choix</td><td>tenue ou rompue, raison au journal</td></tr>
+        <tr><td class="n">D8</td><td>story</td><td>Ce temps fort a-t-il atteint son but ?</td><td>oui/non</td><td>l'histoire avance</td></tr>
+        <tr><td class="n">D9</td><td>story</td><td>Quelles demandes sont probables aux stations suivantes ?</td><td>niveau</td><td>ordonne ce que le grand modèle prépare</td></tr>
+        <tr><td class="n">D10</td><td>story</td><td>Chaque principe a-t-il été respecté dans cette fenêtre ?</td><td>niveau</td><td>l'audit des principes pour l'auteur</td></tr>
+      </tbody>
+    </table></div>
+    <div class="frame" style="margin-top:14px">
+      <div class="hint">Faire défiler →</div>
+      <div class="scroll narrow">
+        <svg viewBox="0 0 760 150" role="img" aria-label="La confiance d'un jugement est jouée : sous 0,5 elle redemande, entre 0,5 et 0,8 elle agit avec le doute visible, au-dessus de 0,8 elle agit.">
+          <text x="20" y="22" class="dm">CONFIANCE DU JUGEMENT (SEUILS PAR DÉFAUT, RÉGLABLES)</text>
+          <rect x="20" y="40" width="360" height="14" rx="3" class="db"/>
+          <rect x="380" y="40" width="204" height="14" class="dbr"/>
+          <rect x="584" y="40" width="156" height="14" rx="3" class="dfi"/>
+          <text x="20" y="72" class="dm">0</text>
+          <text x="380" y="72" class="dm" text-anchor="middle">0,5</text>
+          <text x="584" y="72" class="dm" text-anchor="middle">0,8</text>
+          <text x="740" y="72" class="dm" text-anchor="end">1</text>
+          <text x="30" y="100" class="dt">elle redemande</text>
+          <text x="30" y="120" class="dts">« Pardon, quoi ? Redis-moi ça. »</text>
+          <text x="392" y="100" class="dt">elle agit, le doute se voit</text>
+          <text x="392" y="120" class="dts">« Si je t'ai bien compris… »</text>
+          <text x="596" y="100" class="dt">elle agit</text>
+          <text x="596" y="120" class="dts">sans hésiter</text>
+        </svg>
+      </div>
+    </div>
+    <figcaption>En haut, les dix points de décision de <code>docs/architecture.md</code>, traduits. En bas, la confiance jouée dans le personnage, avec les vraies répliques de <code>lines/fr.json</code>. L'incertitude devient du caractère, jamais un message d'erreur.</figcaption>
+  </figure>
+
+  <p>Deux règles de prudence. Sur un absolu (<code>!!</code>), une question oui/non est posée deux fois, dans les deux ordres des options, car ces modèles peuvent changer d'avis quand l'ordre change ; un désaccord compte comme « incertain ». Et la même chaîne de repli vaut partout : un modèle de décision s'il est joignable, sinon le modèle génératif rapide avec une sortie structurée plate, sinon une heuristique de code (lexique, plus proche voisin). Le journal note qui a répondu, avec quelle probabilité et en combien de temps. Ce que le code sait déjà (une jauge, une règle compilée) n'est jamais demandé à un modèle.</p>
+
+  <p class="key"><span class="hl">On ne demande jamais à un modèle génératif de juger quand un jugement suffit, et un jugement n'écrit jamais.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/principles.md</code> (P22) <code>docs/architecture.md</code> (points de décision) <code>docs/adr/0004-model-tiers.md</code> <code>core/judge.js</code> <code>core/clocks.js</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">règle de confiance, deux ordres, D1 à D3 en un appel, D4 sur les inventions</span><span class="st nm">construit, pas mesuré</span><span class="stn">(testé avec des réponses figées)</span><br><span class="stn">un vrai modèle de décision, D5 à D10</span><span class="st dz">conçu</span></div></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="sec" id="s6" aria-labelledby="h6t">
+  <div class="sec-n mono"><b>06</b> Trois tailles de modèle, et où ils tournent</div>
+  <h2 class="h" id="h6t">Choisir avant d'écrire, écrire court avant d'écrire long.</h2>
+  <p>Un modèle lit vite et écrit lentement : il lit son entrée d'un coup, mais produit sa sortie un jeton après l'autre. Dans nos boucles, c'est donc la sortie que le joueur attend. L'ADR 0009 en tire une économie : chaque horloge a sa taille de modèle et sa façon de répondre. Les tailles sont nommées par rôle (<em>fast</em>, <em>mid</em>, <em>large</em>), jamais par marque ; le fournisseur est un réglage.</p>
+
+  <figure class="fig">
+    <div class="g3">
+      <div class="card"><span class="mono">Fast · horloge du présent</span><h4>Il choisit</h4><p>L'identifiant d'une option préparée (une entrée de la frontière, une réplique de la banque, une classe d'intention) et au plus trois cases typées. Avec un modèle de décision, aucun texte généré.</p></div>
+      <div class="card"><span class="mono">Mid · horloge de la scène</span><h4>Il écrit compact</h4><p>La forme jetons du PDL : une transaction par ligne, vocabulaire fermé, valeurs par défaut omises. Quelques dizaines de jetons au lieu de quelques centaines. La première ligne est ce qu'elle fait d'abord.</p></div>
+      <div class="card"><span class="mono">Large · horloge de l'histoire</span><h4>Il écrit long</h4><p>Du PDL source, lisible et relu par une personne, et les entrées de la frontière : les demandes probables, avec leur réplique et leur PDL déjà prêts.</p></div>
+    </div>
+    <p style="margin:12px 0 0;font-size:14px;color:var(--ink-2)">L'ADR 0004 et l'architecture emploient d'anciens noms pour les mêmes rôles : <em>reflex</em> (le code), <em>translation</em> (fast), <em>staging</em> (mid), <em>background</em> (large). Le format de sortie reste le choix de chaque adaptateur : si un modèle est meilleur en JSON avec schéma, il garde le JSON. Le banc de M3 tranchera.</p>
+
+    <div class="frame" style="margin-top:16px">
+      <div class="hint">Faire défiler →</div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 230" role="img" aria-label="Le port modèle de la page résout chaque appel en chaîne : le nœud maison s'il répond à /health, sinon le modèle de l'hôte dans un artifact, sinon le code.">
+          <defs>
+            <marker id="m6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dah"/></marker>
+            <marker id="m6r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
+          </defs>
+          <rect x="10" y="70" width="130" height="70" rx="7" class="dbr"/>
+          <text x="22" y="94" class="dmr">PORT MODÈLE</text>
+          <text x="22" y="114" class="dts">juger : coupé à 6 s</text>
+          <text x="22" y="130" class="dts">inventer : à 20 s</text>
+          <rect x="175" y="30" width="170" height="70" rx="7" class="db"/>
+          <text x="187" y="54" class="dm">1 · NŒUD MAISON</text>
+          <text x="187" y="74" class="dts">le PC de Toine, par tunnel</text>
+          <text x="187" y="90" class="dts">embed · decide · generate</text>
+          <rect x="400" y="30" width="170" height="70" rx="7" class="db"/>
+          <text x="412" y="54" class="dm">2 · MODÈLE DE L'HÔTE</text>
+          <text x="412" y="74" class="dts">dans un artifact claude.ai</text>
+          <text x="412" y="90" class="dts">window.claude, tier quick</text>
+          <rect x="626" y="30" width="128" height="70" rx="7" class="db"/>
+          <text x="636" y="54" class="dm">3 · LE CODE</text>
+          <text x="636" y="74" class="dts">réflexe lexical,</text>
+          <text x="636" y="90" class="dts">répliques, banque</text>
+          <path d="M140 95 C158 95 155 65 173 65" class="dr" marker-end="url(#m6r)"/>
+          <line x1="345" y1="65" x2="398" y2="65" class="dl" marker-end="url(#m6a)"/>
+          <line x1="570" y1="65" x2="624" y2="65" class="dl" marker-end="url(#m6a)"/>
+          <text x="372" y="56" class="dm" text-anchor="middle">SINON</text>
+          <text x="597" y="56" class="dm" text-anchor="middle">SINON</text>
+          <rect x="175" y="132" width="170" height="80" rx="7" fill="none" class="dl2 dd"/>
+          <text x="187" y="154" class="dm">DÉTECTION</text>
+          <text x="187" y="172" class="dts">GET /health, 1,5 s max,</text>
+          <text x="187" y="188" class="dts">au chargement, toutes les</text>
+          <text x="187" y="204" class="dts">30 s, et après un échec</text>
+          <line x1="260" y1="100" x2="260" y2="130" class="dl dd"/>
+          <text x="400" y="154" class="dm">CE QUE LE JOURNAL NOTE</text>
+          <text x="400" y="174" class="dts">pour chaque appel : l'adaptateur qui a répondu,</text>
+          <text x="400" y="190" class="dts">invention ou jugement, la probabilité, la latence.</text>
+          <text x="400" y="206" class="dts">Un témoin en haut à droite le montre en direct.</text>
+        </svg>
+      </div>
+    </div>
+    <figcaption>La chaîne de <code>src/model-port.js</code>. Un nœud qui tombe pendant une partie dégrade l'appel suivant ; il ne bloque jamais.</figcaption>
+  </figure>
+
+  <h3>Ce qu'un artifact peut faire, et ce qu'il ne peut pas</h3>
+  <div class="g2">
+    <div class="card"><span class="mono">Peut</span><p>Appeler le modèle de l'hôte (tiers <code>quick</code>, <code>default</code>, <code>complex</code>). Garder des données dans un magasin partagé (c'est là que vont les fiches de récolte). Faire tourner toute la page : moteur, noyau, histoire.</p></div>
+    <div class="card"><span class="mono">Ne peut pas</span><p>Sortir sur le réseau : ni le nœud maison, ni le web. Fixer un prompt système, imposer un schéma, piloter le cache. Lancer plus de deux appels à la fois environ. Et donc prouver les latences des tiers : l'artifact est une vitrine, la mesure se fera avec le nœud maison.</p></div>
+  </div>
+  <p style="margin-top:14px">Le nœud maison est un petit serveur prévu sur le PC de Toine, exposé par un tunnel. L'adresse et le jeton sont saisis une fois par appareil, ou ouverts depuis un lien, et restent dans ce navigateur. Le côté page existe ; le serveur, lui, n'est pas encore écrit.</p>
+
+  <p class="key"><span class="hl">Le vrai travail du grand modèle : transformer l'écriture de demain en choix d'aujourd'hui.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/adr/0004-model-tiers.md</code> <code>docs/adr/0008-home-node.md</code> <code>docs/adr/0009-model-output-economy.md</code> <code>src/model-port.js</code> <code>src/reflex-model.js</code> <code>core/prompt.js</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">port modèle de la page, chaîne, témoin, journal</span><span class="st nm">construit, pas mesuré</span><br><span class="stn">serveur du nœud maison, économie de sortie</span><span class="st dz">conçu</span><span class="stn">(ADR proposés)</span></div></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="sec" id="s7" aria-labelledby="h7t">
+  <div class="sec-n mono"><b>07</b> L'hexagone</div>
+  <h2 class="h" id="h7t">Le noyau narratif ne sait rien du moteur, des modèles, de l'entrée ni du stockage.</h2>
+  <p>Au centre, le <em>noyau</em> : l'état de l'histoire, les principes, les jauges, les promesses, les règles, la validation, les boucles. Autour, quatre <em>ports</em>, des interfaces. Derrière chaque port, des <em>adaptateurs</em> interchangeables. C'est ce qui permet au rendu, aux modèles et aux outils d'évoluer pendant que le jeu reste le même.</p>
+
+  <figure class="fig">
+    <div class="frame">
+      <div class="hint">Faire défiler →</div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 420" role="img" aria-label="Architecture hexagonale : le noyau au centre, quatre ports (modèle, moteur, entrée, stockage) et les adaptateurs qui les servent aujourd'hui.">
+          <polygon points="380,95 500,160 500,280 380,345 260,280 260,160" class="dbr"/>
+          <text x="380" y="168" class="dmr" text-anchor="middle">NOYAU NARRATIF</text>
+          <text x="380" y="192" class="dts" text-anchor="middle">état du monde · principes</text>
+          <text x="380" y="210" class="dts" text-anchor="middle">jauges · promesses · règles</text>
+          <text x="380" y="228" class="dts" text-anchor="middle">valider, réparer le PDL</text>
+          <text x="380" y="246" class="dts" text-anchor="middle">journal · rejeu</text>
+          <text x="380" y="270" class="dm" text-anchor="middle">NOW · SCENE · STORY</text>
+          <text x="380" y="300" class="dm" text-anchor="middle">core/ · SANS DOM</text>
+          <!-- ports -->
+          <line x1="260" y1="190" x2="200" y2="120" class="dl"/>
+          <line x1="500" y1="190" x2="560" y2="120" class="dl"/>
+          <line x1="260" y1="250" x2="200" y2="320" class="dl"/>
+          <line x1="500" y1="250" x2="560" y2="320" class="dl"/>
+          <rect x="10" y="30" width="230" height="110" rx="7" class="db"/>
+          <text x="22" y="52" class="dmr">PORT MODÈLE</text>
+          <text x="22" y="70" class="dc">embed · decide · generate</text>
+          <text x="22" y="92" class="dts">tests : canned-model, figé</text>
+          <text x="22" y="108" class="dts">code : reflex-model (lexique)</text>
+          <text x="22" y="124" class="dts">page : model-port (nœud, hôte)</text>
+          <rect x="520" y="30" width="230" height="110" rx="7" class="db"/>
+          <text x="532" y="52" class="dmr">PORT MOTEUR</text>
+          <text x="532" y="70" class="dc">go · look · say · placeThing…</text>
+          <text x="532" y="92" class="dts">tests : paper-world, en mémoire</text>
+          <text x="532" y="108" class="dts">page : adaptateur-core → story.js</text>
+          <text x="532" y="124" class="dts">image, son, corps (WebGL2)</text>
+          <rect x="10" y="300" width="230" height="100" rx="7" class="db"/>
+          <text x="22" y="322" class="dmr">PORT ENTRÉE</text>
+          <text x="22" y="340" class="dc">parole · texte · regard</text>
+          <text x="22" y="362" class="dts">page : voix ou clavier ;</text>
+          <text x="22" y="378" class="dts">un regard posé 1,5 s puis 3 s</text>
+          <text x="22" y="394" class="dts">sur une chose est une observation</text>
+          <rect x="520" y="300" width="230" height="100" rx="7" class="db"/>
+          <text x="532" y="322" class="dmr">PORT STOCKAGE</text>
+          <text x="532" y="340" class="dc">packs · journal</text>
+          <text x="532" y="362" class="dts">outils : fichiers (story.mjs)</text>
+          <text x="532" y="378" class="dts">page : packs embarqués au build,</text>
+          <text x="532" y="394" class="dts">journal copiable</text>
+        </svg>
+      </div>
+    </div>
+    <figcaption>Le même noyau joue dans un monde de papier pour les tests et dans le vrai moteur dans la page. Une suite de contrat vérifie que les deux exécuteurs se comportent pareil.</figcaption>
+  </figure>
+
+  <h3>Le plan du dépôt</h3>
+  <div class="tw"><table>
+    <tbody>
+      <tr><td><code>core/</code></td><td>le noyau, pur et sans navigateur : PDL, validation, règles, session, horloges, jugement, prompts, sketch, récolte</td></tr>
+      <tr><td><code>src/</code></td><td>le moteur existant (shaders, capteur, voix, sons) et ses adaptateurs vers le noyau</td></tr>
+      <tr><td><code>stories/</code></td><td>les packs d'histoires, dont <code>louis-round/</code> et un gabarit <code>_template/</code></td></tr>
+      <tr><td><code>patterns/</code></td><td>la bibliothèque de motifs narratifs : absent-one, ticking-clock, trail-of-signs…</td></tr>
+      <tr><td><code>tools/</code></td><td>la ligne de commande <code>story</code>, le build, la récolte, les captures</td></tr>
+      <tr><td><code>guide/</code></td><td>le guide interactif, avec le vrai noyau qui tourne dans la page</td></tr>
+      <tr><td><code>docs/</code></td><td>la constitution (principes), l'architecture, le spec PDL, les ADR, le tableau de bord</td></tr>
+      <tr><td><code>harvest/</code></td><td>les journaux récoltés et leurs rapports</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="key"><span class="hl">Le moteur, les modèles, l'entrée et le stockage se remplacent sans toucher au noyau.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/principles.md</code> (P21) <code>core/ports.js</code> <code>core/world.js</code> <code>core/paper-world.js</code> <code>src/adaptateur-core.js</code> <code>tests/core-executor.contract.mjs</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">noyau, quatre ports, monde de papier, adaptateur moteur</span><span class="st ok">construit et testé</span></div></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="sec" id="s8" aria-labelledby="h8t">
+  <div class="sec-n mono"><b>08</b> Une histoire est un dossier</div>
+  <h2 class="h" id="h8t">Une histoire est une pack : des fichiers texte qu'on écrit, versionne, partage et rejoue.</h2>
+  <p>Une <em>pack</em> est un dossier. Elle déclare des <em>couches</em> : <code>base</code>, puis des couches de contributeurs, fusionnées dans l'ordre. Chaque fait, chaque règle, chaque champ de personnage garde sa couche et son auteur : c'est la <em>provenance</em>. La collaboration v0, c'est Git : une contribution est une pull request.</p>
+
+  <figure class="fig">
+    <div class="g2">
+      <div style="min-width:0">
+        <p class="cap"><b>stories/louis-round/</b></p>
+<pre>pack.json            <span class="c">titre, couches, motifs</span>
+place.json           <span class="c">le lieu</span>
+stations.json        <span class="c">six points de vue</span>
+beats.json           <span class="c">temps forts et fins</span>
+characters/
+  sam.pdl            <span class="c">forte (strong)</span>
+  walker.pdl         <span class="c">légère (light)</span>
+  louis.pdl  voice.pdl
+facts/
+  base.pdl           <span class="c">couche base, toine</span>
+  ranger-notes.pdl   <span class="c">couche contributor-a</span>
+rules/   hide · place · voice
+patterns/ louis · battery · marks
+lines/   fr.json · en.json
+tests/requests.json  <span class="c">60 demandes libres</span>
+scripts/jay.txt      <span class="c">une partie scriptée</span></pre>
+      </div>
+      <div style="min-width:0">
+        <p class="cap"><b>Personnage léger</b> trois lignes</p>
+<pre class="wrap"><span class="c"># characters/walker.pdl  @strength light  @name Bernard</span>
+~ Retired, walks the platière every morning, knew Louis by sight as "the ranger with the orange paint".
+~ Talks too much about mushrooms and the weather, kind, a little deaf; leaves on his own after a minute.
+~ Never knew about the sett; can say he saw the ranger "going down there, towards the sand" more than once.</pre>
+        <p style="font-size:14px;color:var(--ink-2);margin-top:10px">Un personnage <strong>fort</strong> comme Sam a une fiche complète : identité, voix, ce qu'elle sait et ne sait pas, limites, secrets, arc, parole donnée, corps, exemples et contre-exemples.</p>
+      </div>
+    </div>
+
+    <div class="frame" style="margin-top:16px">
+      <p class="cap" style="margin-bottom:10px"><b>Une promesse de bout en bout</b> c.jay</p>
+      <div class="hint">Faire défiler →</div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 250" role="img" aria-label="La promesse du geai : invitée à la station fallen-pine, amendée par Sam, devenue règle, tenue à la station approach quand le geai crie.">
+          <defs>
+            <marker id="m8r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
+          </defs>
+          <line x1="40" y1="60" x2="720" y2="60" class="dl"/>
+          <g>
+            <circle cx="40" cy="60" r="5" class="dfi"/><text x="40" y="40" class="dm" text-anchor="middle">TRAILHEAD</text>
+            <circle cx="176" cy="60" r="5" class="dfi"/><text x="176" y="40" class="dm" text-anchor="middle">FIRST-MARK</text>
+            <circle cx="312" cy="60" r="8" class="dfr"/><text x="312" y="40" class="dmr" text-anchor="middle">FALLEN-PINE</text>
+            <circle cx="448" cy="60" r="5" class="dfi"/><text x="448" y="40" class="dm" text-anchor="middle">PLATIÈRE</text>
+            <circle cx="584" cy="60" r="8" class="dfr"/><text x="584" y="40" class="dmr" text-anchor="middle">APPROACH</text>
+            <circle cx="720" cy="60" r="5" class="dfi"/><text x="720" y="40" class="dm" text-anchor="middle">HIDE</text>
+          </g>
+          <rect x="196" y="84" width="236" height="150" rx="7" class="db"/>
+          <rect x="204" y="98" width="8" height="8" transform="rotate(45 208 102)" class="dfi"/>
+          <text x="220" y="106" class="dts">l'auteur invite : Sam se souvient</text>
+          <text x="220" y="122" class="dts">« le geai, c'est la sirène du bois »</text>
+          <circle cx="208" cy="142" r="4" class="dfr"/>
+          <text x="220" y="146" class="dts">la voix : « si le geai crie,</text>
+          <text x="220" y="162" class="dts">arrête-toi et couche-toi »</text>
+          <circle cx="208" cy="182" r="4" class="dfr"/>
+          <text x="220" y="186" class="dts">Sam amende : accroupie, pas</text>
+          <text x="220" y="202" class="dts">dans la boue → un fait + une règle,</text>
+          <text x="220" y="218" class="dts">auteur : le joueur</text>
+          <rect x="474" y="84" width="236" height="150" rx="7" class="dbr"/>
+          <rect x="482" y="98" width="8" height="8" transform="rotate(45 486 102)" class="dfi"/>
+          <text x="498" y="106" class="dts">règle de l'auteur r.jay-first :</text>
+          <text x="498" y="122" class="dts">en arrivant, le geai crie</text>
+          <text x="486" y="146" class="dmr">CODE, SANS MODÈLE</text>
+          <text x="498" y="166" class="dts">c.jay se déclenche : stop,</text>
+          <text x="498" y="182" class="dts">posture 0,55, « Comme t'as dit.</text>
+          <text x="498" y="198" class="dts">Je le fais. »</text>
+          <text x="498" y="218" class="dts">fait au journal : tenue</text>
+          <path d="M432 160 C452 160 452 160 472 160" class="dr" marker-end="url(#m8r)"/>
+          <line x1="312" y1="68" x2="312" y2="82" class="dr"/>
+          <line x1="584" y1="68" x2="584" y2="82" class="dr"/>
+        </svg>
+      </div>
+    </div>
+    <figcaption>La première promesse de l'histoire, telle que <code>beats.json</code> l'invite et que le journal doré <code>p8-louis-pack</code> la tient. Losanges : ce qu'un auteur a écrit. Points rouges : ce qui naît en jouant.</figcaption>
+  </figure>
+
+  <h3>Motifs et jauges</h3>
+  <p>Un <em>motif</em> est une forme d'histoire réutilisable, écrite comme des données, avec des rôles à lier. « Louis's Round » en assemble trois : l'absent (<code>absent-one</code>), le compte à rebours (<code>ticking-clock</code>, lié à la batterie de la caméra) et la piste de signes (<code>trail-of-signs</code>, les marques orange). Une <em>jauge</em> est une quantité floue nommée en mots, qui monte et s'efface ; c'est ainsi que réputation, soupçon ou fatigue naissent de principes, sans fonctionnalité dédiée. Le spec donne l'exemple <code>gauge disturbance "how much the animals near the hide have been disturbed": rises sound(branch_snap) by 0.5; … fades 0.1/min</code>, testé dans le noyau ; la pack de Louis n'en déclare pas encore.</p>
+
+  <h3>La boucle du créateur</h3>
+  <p>La plupart des créateurs parlent à un assistant, qui écrit et modifie la pack pour eux. Le dépôt sert de kit : ouvert dans Claude Code, Codex ou un outil semblable, il donne à l'assistant une ligne de commande, <code>node tools/story.mjs</code>. Le créateur relit le diff et son effet, pas le code.</p>
+  <div class="tw"><table>
+    <tbody>
+      <tr><td><code>check</code></td><td>lit toute la pack, fusionne les couches, vérifie chaque référence, compte ce qui n'est pas encore appliqué</td></tr>
+      <tr><td><code>play</code></td><td>joue une partie scriptée dans le monde de papier et écrit le journal</td></tr>
+      <tr><td><code>whatif</code></td><td>rejoue un journal avec la pack telle qu'éditée, et montre ce qui change : règles, promesses, fin</td></tr>
+      <tr><td><code>audit</code></td><td>ce que le joueur a demandé, ce qui a été réparé ou rejeté et par quel principe, les promesses</td></tr>
+      <tr><td><code>sketch</code></td><td>une esquisse d'histoire à partir d'une phrase (section 9)</td></tr>
+      <tr><td><code>harvest</code></td><td>le rapport de récolte d'un ensemble de sessions (section 10)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Un exemple réel de <code>docs/creator-kit.md</code> : « le geai ne devrait crier que si Sam fait du bruit en descendant ». On change une ligne de <code>rules/hide.pdl</code>, <code>whatif</code> rejoue, et répond : dans une partie calme, la promesse <code>c.jay</code> n'est plus jamais mise à l'épreuve. Le créateur décide si c'est voulu.</p>
+
+  <p class="key"><span class="hl">Écrire un monde doit se jouer comme vivre une histoire : vite essayé, visible tout de suite.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/adr/0006-collaboration-layered-packs-in-git.md</code> <code>docs/creator-kit.md</code> <code>tools/story.mjs</code> <code>stories/CLAUDE.md</code> <code>AGENTS.md</code> <code>patterns/</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">pack, couches, provenance, motifs, promesses, kit en ligne de commande</span><span class="st ok">construit et testé</span><br><span class="stn">passe de juge, vue créateur dans une page</span><span class="st dz">conçu</span></div></div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="sec" id="s9" aria-labelledby="h9t">
+  <div class="sec-n mono"><b>09</b> De la phrase à l'histoire</div>
+  <h2 class="h" id="h9t">On conçoit l'histoire avant de la jouer, et ce qu'on ne peut pas montrer se joue tel quel.</h2>
+  <p>Le 20 novembre, Toine a décrit un monde sur son téléphone : une famille autour d'un feu de camp, la nuit. Le lieu s'est construit, avec quatre chaises. Le moteur ne sait pas encore montrer des personnes : les chaises sont restées vides. Le modèle a bien joué le porteur et a improvisé une femme absente et deux enfants, Léo et Manon. Mais rien n'avait été conçu avant : ni personnage, ni relation, ni enjeu.</p>
+  <p>D'où l'ADR 0011. Quand on décrit un monde, le grand modèle écrit d'abord une <em>esquisse</em> (le <em>sketch</em>) dans la langue d'auteur : qui est là, leurs liens, ce que le porteur sait et ignore, l'enjeu, quelques questions ouvertes, les motifs sur lesquels elle s'appuie. Il peut poser au créateur jusqu'à trois questions, comme « Où est la mère ? ». Le créateur répond d'un mot, choisit une suggestion, ou dit « Surprise me ».</p>
+
+  <figure class="fig">
+    <div class="frame">
+      <div class="hint">Faire défiler →</div>
+      <div class="scroll">
+        <svg viewBox="0 0 760 260" role="img" aria-label="Conception avant le jeu : la phrase construit un lieu, le grand modèle écrit une esquisse et pose des questions, le code vérifie et répare, un repli garantit le départ, puis l'histoire se joue sur le noyau.">
+          <defs>
+            <marker id="m9a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dah"/></marker>
+            <marker id="m9r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
+          </defs>
+          <rect x="10" y="40" width="120" height="70" rx="7" class="db"/>
+          <text x="22" y="62" class="dm">LA PHRASE</text>
+          <text x="22" y="82" class="dts">« une famille</text>
+          <text x="22" y="98" class="dts">autour d'un feu »</text>
+          <rect x="160" y="40" width="130" height="70" rx="7" class="db"/>
+          <text x="172" y="62" class="dm">LE LIEU</text>
+          <text x="172" y="82" class="dts">plan, fiche, contrôle,</text>
+          <text x="172" y="98" class="dts">relecture en image</text>
+          <rect x="320" y="40" width="150" height="70" rx="7" class="dbr"/>
+          <text x="332" y="62" class="dmr">SKETCH · LARGE</text>
+          <text x="332" y="82" class="dts">personnes, faits,</text>
+          <text x="332" y="98" class="dts">questions, motifs</text>
+          <rect x="500" y="40" width="110" height="70" rx="7" class="db"/>
+          <text x="512" y="62" class="dm">CONTRÔLE</text>
+          <text x="512" y="82" class="dts">code, puis une</text>
+          <text x="512" y="98" class="dts">réparation</text>
+          <rect x="640" y="40" width="110" height="70" rx="7" class="dbr"/>
+          <text x="652" y="62" class="dmr">JEU</text>
+          <text x="652" y="82" class="dts">sur le noyau,</text>
+          <text x="652" y="98" class="dts">trois horloges</text>
+          <line x1="130" y1="75" x2="158" y2="75" class="dl" marker-end="url(#m9a)"/>
+          <line x1="290" y1="75" x2="318" y2="75" class="dl" marker-end="url(#m9a)"/>
+          <line x1="470" y1="75" x2="498" y2="75" class="dl" marker-end="url(#m9a)"/>
+          <line x1="610" y1="75" x2="638" y2="75" class="dr" marker-end="url(#m9r)"/>
+          <rect x="320" y="160" width="150" height="80" rx="7" class="db"/>
+          <rect x="332" y="174" width="8" height="8" transform="rotate(45 336 178)" class="dfi"/>
+          <text x="348" y="182" class="dm">LE CRÉATEUR</text>
+          <text x="332" y="202" class="dts">un mot, une suggestion,</text>
+          <text x="332" y="218" class="dts">« Surprise me »</text>
+          <text x="332" y="234" class="dts">dans sa propre couche</text>
+          <path d="M370 110 L370 158" class="dr" marker-end="url(#m9r)"/>
+          <path d="M420 158 L420 112" class="dl" marker-end="url(#m9a)"/>
+          <text x="376" y="138" class="dmr">Q</text>
+          <text x="426" y="138" class="dm">R</text>
+          <rect x="500" y="160" width="250" height="80" rx="7" fill="none" class="dl2 dd"/>
+          <text x="512" y="182" class="dm">REPLI SI AUCUN MODÈLE</text>
+          <text x="512" y="202" class="dts">un porteur, les choses du lieu en faits,</text>
+          <text x="512" y="218" class="dts">deux questions génériques ; le panneau</text>
+          <text x="512" y="234" class="dts">le dit. Le jeu part toujours.</text>
+          <line x1="555" y1="160" x2="555" y2="112" class="dl dd"/>
+          <text x="10" y="150" class="dm">PERSONNES NON FILMABLES :</text>
+          <text x="10" y="168" class="dts">présence « unseen » dans</text>
+          <text x="10" y="184" class="dts">l'esquisse ; jouées par la</text>
+          <text x="10" y="200" class="dts">voix et les traces, chaises</text>
+          <text x="10" y="216" class="dts">vides comprises</text>
+        </svg>
+      </div>
+    </div>
+    <figcaption>La conception avant le jeu, étapes C1 à C6 de <code>docs/creation-pipeline.md</code> §6. La première question s'affiche pendant que le reste s'écrit. L'esquisse a pour auteur un modèle, les réponses ont pour auteur le créateur ; les deux restent modifiables comme n'importe quelle pack.</figcaption>
+  </figure>
+
+  <p>Ce qui est vrai aujourd'hui. Les étapes de conception C1 à C7 sont réelles, mais aucune n'a encore tourné avec un vrai modèle : le test de fumée utilise un échantillonneur de substitution (première question à 0,4 s, esquisse finie à 4,5 s). L'esquisse ne fait qu'une station, sans temps forts multiples ni fins. L'ouverture de démo, qui montre une recherche sur le lieu et le personnage, reste en grande partie un rejeu : sur ses 17 étapes, 3 sont réelles, 7 le sont en partie, 4 sont mises en scène et 3 ne sont pas conçues. La recherche web est prévue en v2, par le nœud maison, puisqu'un artifact n'a pas de réseau.</p>
+
+  <p class="key"><span class="hl">Ce que le moteur ne sait pas montrer est dit dans l'esquisse et joué tel quel, jamais caché.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/adr/0011-harvest-and-conception.md</code> <code>docs/creation-pipeline.md</code> <code>core/sketch.js</code> <code>src/conception.js</code> <code>docs/field/2026-11-20-free-session-phone.md</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">esquisse, questions, contrôle, repli, jeu sur le noyau</span><span class="st nm">construit, pas mesuré</span><br><span class="stn">recherche sur le lieu et le personnage</span><span class="st dz">conçu</span><span class="stn">(v2)</span><br><span class="stn">une histoire complète à partir d'une phrase</span><span class="st tg">cible</span></div></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="sec" id="s10" aria-labelledby="h10t">
+  <div class="sec-n mono"><b>10</b> Le jeu grandit de ce qu'on y joue</div>
+  <h2 class="h" id="h10t">Chaque partie nourrit chaque couche, mais rien ne change sans le oui d'une personne.</h2>
+  <p>Puisque rien n'est déterministe, ce que les gens font vraiment dans le jeu est sa matière première. Chaque session, dans chaque mode, produit une <em>fiche de récolte</em> (le <em>harvest record</em>) : le journal, les versions de tout ce qui règle le comportement, l'appareil, et trois listes qui disent quoi construire ensuite.</p>
+  <ul>
+    <li><strong>Demandé et pas faisable</strong> : ce que le moteur ou le vocabulaire n'a pas pu servir. Cela nourrit le vocabulaire du moteur.</li>
+    <li><strong>Improvisé</strong> : faits, noms, lieux, personnes inventés en jeu. Cela nourrit l'histoire.</li>
+    <li><strong>Lent ou douteux</strong> : appels hors budget, jugements peu sûrs, réparations, rejets. Cela nourrit le cadre : où préparer, compiler, régler.</li>
+  </ul>
+  <p>Un outil transforme les fiches en <em>propositions</em>, chacune adressée à la couche qu'elle enrichirait et à la personne qui la possède. Une proposition acceptée entre comme donnée, avec sa provenance. Les phrases d'un joueur sont personnelles : une fiche n'est gardée qu'après un avis clair dans la page, et le magasin partagé ne reçoit que des fiches dépouillées des phrases.</p>
+
+  <figure class="fig">
+    <div class="frame">
+      <p class="cap" style="margin-bottom:10px"><b>Le vrai rapport</b> harvest/2026-11-20-free-session-phone.md</p>
+      <div class="g2">
+        <div style="min-width:0">
+<pre class="wrap"><span class="c">## Sessions</span>
+free-217113628 · free · legacy · Mali-G77
+model yes · 6 turns · 114 s
+
+<span class="c">## Asked and not doable</span>
+sas:monde · 1 · refused
+« T es qui dans l histoire ? »
+
+<span class="c">## Latency by adapter, instrument and purpose</span>
+host/invention/voix  n 6
+p50 5000 ms · p95 7500 ms · budget 8000 ms</pre>
+        </div>
+        <div style="min-width:0">
+<pre class="wrap"><span class="c">### 2. Story · decides: the story's author</span>
+- [ ] Les enfants s'appellent Léo (4 ans)
+      et Manon (7 ans).
+<span class="r">? Les enfants s'appellent Léo (4 ans) et
+  Manon (7 ans). -- improvised in play;
+  promote to ! to make it canon, or leave open</span>
+
+<span class="c">### 4. Framework · decides: the engine's owner</span>
+- [ ] no visible reaction before the model
+      answered (host/invention/voix) · seen 5×
+<span class="r">prepared option: a reflex gesture or hold
+  line for these sentences (now budget 500 ms)</span></pre>
+        </div>
+      </div>
+    </div>
+    <figcaption>Extraits du premier rapport, tiré de la partie de Toine sur son téléphone. Chaque proposition est déjà écrite comme une donnée (ici une ligne PDL source), avec une case à cocher et le nom de qui décide. Rien n'est appliqué tout seul.</figcaption>
+  </figure>
+
+  <p>Le corollaire : tout se pilote de l'extérieur. Vocabulaire, modèles et leurs tiers, prompts, seuils, budgets, principes et packs sont des données qu'on peut lire, changer, versionner et annuler. Chaque session note les versions sur lesquelles elle a tourné. Pour tout comportement vu, on doit pouvoir montrer la donnée qui l'a produit et la changer sans toucher au code du moteur. Une exception reconnue : les prompts de l'esquisse sont encore dans le code ; les passer en données est noté comme suite.</p>
+
+  <p class="key"><span class="hl">The game grows from play, and everything can be steered.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/principles.md</code> (P17, P23) <code>docs/adr/0011-harvest-and-conception.md</code> <code>core/harvest.js</code> <code>src/harvest.js</code> <code>tools/harvest.mjs</code> <code>harvest/</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">fiche, avis, magasin, outil, rapport, propositions</span><span class="st ok">construit et testé</span><br><span class="stn">boucle régulière de récolte sur de vrais joueurs</span><span class="st tg">cible</span></div></div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="sec" id="s11" aria-labelledby="h11t">
+  <div class="sec-n mono"><b>11</b> Où on en est</div>
+  <h2 class="h" id="h11t">Chaque version montre moins qu'on imagine, et le fait pour de vrai.</h2>
+  <p>Le projet avance en crescendo : ce qui est trop dur est écrit « plus tard », jamais simulé. Une démonstration peut être simple ; elle ne peut pas faire semblant. Voici l'état au 21 novembre 2026, sans arrondi.</p>
+
+  <figure class="fig">
+    <div class="tw" style="margin-top:0"><table class="t-min">
+      <thead><tr><th>Ce qui existe</th><th>État</th><th>Ce qu'on en sait</th></tr></thead>
+      <tbody>
+        <tr><td>« Louis's Round » jouée dans la page, sans modèle</td><td><span class="st ok">construit et testé</span></td><td>une partie scriptée atteint l'affût en 5 transitions, deux promesses tenues, 0 erreur console ; son journal se rejoue au même hash (M2)</td></tr>
+        <tr><td>Vrais modèles branchés : juge, invention de scène, fins choisies par Sam</td><td><span class="st nm">construit, pas mesuré</span></td><td>testé avec des réponses figées ; aucune latence ni qualité mesurée en direct</td></tr>
+        <tr><td>Mode bande-annonce (trailer), joué par le moteur</td><td><span class="st nm">construit, pas mesuré</span></td><td>une vraie session avec sous-titres tirés du journal ; à régler sur GPU</td></tr>
+        <tr><td>Guide interactif, avec le vrai noyau</td><td><span class="st ok">construit et testé</span></td><td>publié en artifact</td></tr>
+        <tr><td>Kit créateur (<code>story</code> en ligne de commande)</td><td><span class="st ok">construit et testé</span></td><td>check, play, whatif, audit, sketch, harvest sur le vrai noyau</td></tr>
+        <tr><td>Conception avant le jeu</td><td><span class="st nm">construit, pas mesuré</span></td><td>jamais lancée avec un vrai modèle</td></tr>
+        <tr><td>Récolte et rapports</td><td><span class="st ok">construit et testé</span></td><td>deux rapports dans <code>harvest/</code></td></tr>
+        <tr><td>Serveur du nœud maison</td><td><span class="st dz">conçu</span></td><td>ADR 0008 proposé, en attente des réponses de Toine</td></tr>
+        <tr><td>Boucle story, frontière, règle écrite par un modèle (M4)</td><td><span class="st dz">conçu</span></td><td></td></tr>
+        <tr><td>Compilateur des <code>!</code> et <code>!!</code> en prose</td><td><span class="st dz">conçu</span></td><td>44 énoncés de la pack l'attendent</td></tr>
+        <tr><td>Vue créateur dans une page (M5)</td><td><span class="st dz">conçu</span></td><td>la ligne de commande lit déjà les mêmes journaux</td></tr>
+        <tr><td>Téléphone, mouvement autonome, meneur humain, plusieurs joueurs</td><td><span class="st tg">cible</span></td><td>v2 ou au-delà, selon <code>docs/scope.md</code></td></tr>
+      </tbody>
+    </table></div>
+    <figcaption>Ce qui a été mesuré, en tout et pour tout : la course de fumée de M2 ; 322 tests qui passent (<code>npm test</code>, sans navigateur ni modèle, relancés le 21 novembre) ; et, sur le terrain, des réponses en 4 à 7,5 s sur l'ancien mode libre, au téléphone, en six tours. Les performances du moteur sur un vrai GPU de téléphone ne sont pas mesurées.</figcaption>
+  </figure>
+
+  <h3>Les jalons</h3>
+  <p>M0 fondations · M1 noyau et histoire sur papier · <strong>M2 jouable sans modèle (mesuré le 20 novembre)</strong> · M3 tiers de modèles, première partie construite, rien de mesuré en direct · M4 arrière-plan et règles · M5 boucle du créateur · M6 la preuve (banc de 50 demandes, quatre mesures, vidéo de trois minutes). Les vérifications de M0 et M1 passent (tests verts, rejeux dorés), mais leur colonne « Mesuré » n'est pas encore remplie. Prochaines étapes du tableau de bord : le serveur du nœud maison, M3 mesuré, puis M4 et M5.</p>
+
+  <h3>Les questions ouvertes, telles qu'elles sont</h3>
+  <div class="tw"><table class="t-min">
+    <thead><tr><th>#</th><th>Question</th><th>Hypothèse en vigueur</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Q1</td><td>Le PC de bureau : système, carte graphique, mémoire ?</td><td>un PC de jeu moyen de gamme ; le nœud sert <code>embed</code> et <code>decide</code> en local</td></tr>
+      <tr><td class="n">Q2</td><td>Hors artifact, quels modèles génératifs peut-on appeler ?</td><td>aucun ; les tiers mid et large ne tournent que dans l'artifact pour l'instant</td></tr>
+      <tr><td class="n">Q3</td><td>L'horloge du monde tourne-t-elle seule en v1, même de station en station ?</td><td>oui</td></tr>
+      <tr><td class="n">Q4</td><td>Le futur préparé est-il jamais montré au joueur ?</td><td>jamais en jeu ; visible dans la vue créateur</td></tr>
+      <tr><td class="n">Q5</td><td>L'histoire de Louis : mort de son cœur en veillant un terrier de blaireaux, rien de surnaturel. On la garde ?</td><td>gardée</td></tr>
+      <tr><td class="n">Q6</td><td>Le vrai pipeline fera-t-il de la recherche web sur le lieu et la personne ?</td><td>oui en v2, par le nœud maison ; photos lues pour la recherche, jamais montrées</td></tr>
+      <tr><td class="n">Q7</td><td>Meneur humain : un hôte et un joueur d'abord, ou une table entière ?</td><td>un hôte, un joueur, en v2 ; plusieurs joueurs en cible</td></tr>
+      <tr><td class="n">Q8</td><td>L'environnement est-il une voie à part entière, avec sa boucle ?</td><td>oui ; mis en œuvre une fois confirmé</td></tr>
+      <tr><td class="n">Q9</td><td>Quand le joueur est un fantôme, un objet ou une idée, y a-t-il toujours une caméra dans le monde ?</td><td>oui : toujours une caméra subjective portée par quelqu'un ou quelque chose</td></tr>
+      <tr><td class="n">Q10</td><td>Ce que les joueurs improvisent dans l'histoire d'un autre : qui peut le réutiliser ?</td><td>seul l'auteur de l'histoire le voit en propositions ; le propriétaire du moteur voit des comptes, sans les phrases</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="key"><span class="hl">Rien n'est mis en scène. Si un panneau montre des agents au travail, des agents sont au travail.</span></p>
+  <div class="metas">
+    <div class="meta"><span class="lbl">Dans le dépôt</span><div><code>docs/milestones.md</code> <code>docs/board.md</code> <code>docs/scope.md</code> <code>docs/adr/</code></div></div>
+    <div class="meta"><span class="lbl">État</span><div><span class="stn">jalons M0 à M2</span><span class="st ok">construit et testé</span><br><span class="stn">M3 (première partie)</span><span class="st nm">construit, pas mesuré</span><br><span class="stn">M3 mesuré à M6</span><span class="st dz">conçu</span></div></div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="sec" id="s12" aria-labelledby="h12t">
+  <div class="sec-n mono"><b>12</b> Petit lexique</div>
+  <h2 class="h" id="h12t">Quinze mots pour expliquer le projet à quelqu'un d'autre.</h2>
+  <dl class="lex">
+    <dt>Bodycam, porteur</dt><dd>La caméra-piéton portée par le personnage, et la personne qui la porte. Tout ce qu'on voit, cette caméra a pu le filmer.</dd>
+    <dt>Prompt</dt><dd>La phrase de départ qui décrit un monde ou une situation.</dd>
+    <dt>PDL</dt><dd>Le langage intermédiaire du projet, seul canal entre les modèles et le monde. Trois formes : source, canonique, jetons. Le nom vient de la notation d'affichage de la démo (« Procedural Diaphasic Language »), qui est une autre chose, sans rapport avec le format des transactions.</dd>
+    <dt>Transaction</dt><dd>Un changement typé du monde (intention, acte, effet, fait, règle, annulation), validé puis exécuté.</dd>
+    <dt>Force</dt><dd>Le signe d'un énoncé : <code>?</code> ouvert, <code>~</code> tendance, <code>!</code> dur, <code>when … -&gt; …</code> règle explicite, <code>!!</code> absolu.</dd>
+    <dt>Validateur</dt><dd>Le code qui accepte, répare vers la demande du joueur, ou rejette en citant la raison.</dd>
+    <dt>Journal, rejeu</dt><dd>La liste de tout ce qui s'est passé. Même journal et même graine redonnent la même partie, au hash près.</dd>
+    <dt>What if</dt><dd>Rejouer une partie enregistrée avec une pack modifiée, et voir la différence.</dd>
+    <dt>Pack</dt><dd>Le dossier d'une histoire : lieu, stations, personnages, règles, motifs, répliques, en couches avec leur auteur.</dd>
+    <dt>Station</dt><dd>Un point de vue de la v1, où l'on regarde librement ; on passe d'une station à l'autre par une transition.</dd>
+    <dt>Engagement</dt><dd>Une promesse demandée au personnage (« si… alors… »). Elle devient un fait et une règle, tenue ou rompue plus tard.</dd>
+    <dt>Jauge</dt><dd>Une quantité floue nommée en mots, qui monte et s'efface : trop souvent, près, en colère.</dd>
+    <dt>Motif</dt><dd>Une forme d'histoire réutilisable, avec des rôles à lier : l'absent, le compte à rebours, la piste de signes.</dd>
+    <dt>Judge, invention</dt><dd>Les deux instruments : un modèle de décision rend une réponse typée avec une probabilité ; un modèle génératif écrit.</dd>
+    <dt>Frontière</dt><dd>Les demandes probables à venir, préparées d'avance par le grand modèle pour que le présent n'ait qu'à choisir.</dd>
+    <dt>Port, adaptateur</dt><dd>Une interface du noyau, et ce qui la sert : nœud maison, modèle de l'hôte, code, monde de papier, moteur.</dd>
+    <dt>Nœud maison</dt><dd>Le serveur prévu sur le PC de Toine pour servir les modèles hors artifact.</dd>
+    <dt>Sketch</dt><dd>L'esquisse d'histoire écrite par un modèle avant le jeu, avec ses questions au créateur.</dd>
+    <dt>Harvest</dt><dd>La récolte : chaque session laisse une fiche, qui devient des propositions acceptées par une personne.</dd>
+  </dl>
+
+  <div class="links">
+    <a href="https://claude.ai/artifact/DEsrQ6mCDTbht7pdZFxtXP" target="_blank" rel="noopener"><span>Le jeu<small>claude.ai/artifact/DEsrQ6mCDTbht7pdZFxtXP</small></span><span class="dot" aria-hidden="true"></span></a>
+    <a href="https://claude.ai/artifact/1xjoRPRhuqEgjKU3hKKTqi" target="_blank" rel="noopener"><span>Le guide interactif<small>claude.ai/artifact/1xjoRPRhuqEgjKU3hKKTqi</small></span><span class="dot" aria-hidden="true"></span></a>
+  </div>
+  <p style="margin-top:12px;font-size:14px;color:var(--ink-3)">Ces deux liens sont privés tant que leur propriétaire ne les a pas partagés.</p>
+
+  <p class="foot">Bodycam Stories (nom de travail <code>bodycam-proc</code>). Tout ce qui est affirmé ici vient du dépôt : <code>docs/principles.md</code>, <code>docs/architecture.md</code>, <code>docs/scope.md</code>, <code>docs/milestones.md</code>, <code>docs/board.md</code>, <code>docs/adr/</code>, <code>docs/pdl-spec.md</code>, <code>docs/creator-kit.md</code>, <code>docs/creation-pipeline.md</code>, et les fichiers de <code>stories/louis-round/</code>. Une décision qui n'est pas dans ces fichiers n'existe pas.</p>
+</section>
+
+</main>
+</div>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('theme');
+  function cur(){var t=root.getAttribute('data-theme');if(t)return t;return (window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';}
+  function label(){btn.textContent=cur()==='light'?'Thème sombre':'Thème clair';}
+  try{var s=localStorage.getItem('bcs-blueprint-theme');if(s==='light'||s==='dark')root.setAttribute('data-theme',s);}catch(e){}
+  label();
+  btn.addEventListener('click',function(){var n=cur()==='light'?'dark':'light';root.setAttribute('data-theme',n);label();try{localStorage.setItem('bcs-blueprint-theme',n);}catch(e){}});
+
+  var tc=document.getElementById('tc'), t0=Date.now();
+  function pad(n){return (n<10?'0':'')+n;}
+  function tick(){var ms=Date.now()-t0,s=Math.floor(ms/1000),f=Math.floor((ms%1000)/1000*25);tc.textContent=pad(Math.floor(s/3600))+':'+pad(Math.floor(s/60)%60)+':'+pad(s%60)+':'+pad(f);}
+  var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  tick(); setInterval(tick, reduce?1000:80);
+
+  var links=[].slice.call(document.querySelectorAll('.toc a')), map={};
+  links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(l){l.classList.remove('on');l.removeAttribute('aria-current');});var a=map[e.target.id];if(a){a.classList.add('on');a.setAttribute('aria-current','true');}}});},{rootMargin:'-30% 0px -60% 0px'});
+    document.querySelectorAll('section.sec').forEach(function(s){io.observe(s);});
+  }
+})();
+</script>

@@ -53,3 +53,4 @@ npm run build   # assemble src/, scenes/, histoires/ into dist/index.html
 ```
 
 CI (`.github/workflows/ci.yml`) runs `npm test` and `npm run build` on every push and pull request, and checks that the committed `dist/` matches the build. Browser tools (`tools/shot.mjs`, `tools/demo.mjs`, `tools/partie.mjs`) are run by hand, small and few.
+- `../explain/blueprint.html`: the whole project explained step by step, in French, in the project's art direction (published as the artifact « Bodycam Stories Blueprint »; a fragment, wrapped at publish time).
