@@ -139,6 +139,8 @@ figcaption{font-size:13.5px;color:var(--ink-3);margin-top:10px}
 .kpis span{font-size:12.5px;color:var(--ink-3)}
 .ins{display:flex;gap:9px;align-items:baseline;font-size:14px;color:var(--ink-2);margin:10px 0 0}
 .ins .dot{transform:translateY(-1px)}
+.hint{display:none;margin:0 0 8px;color:var(--ink-3);font-size:10px}
+@media (max-width:900px){.hint{display:block}}
 /* era strip */
 .eras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (min-width:980px){.eras{grid-template-columns:repeat(4,minmax(0,1fr))}}
@@ -342,7 +344,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
   </div>
   <figure class="pic">
     <div class="frame">
-      <div class="scroll">
+      <p class="hint mono">Faire défiler →</p><div class="scroll">
         <svg viewBox="0 0 1000 330" role="img" aria-label="En haut, les temps du présent : moins de 100 ms elle a entendu, quelques centaines de ms un premier mot choisi, une à deux secondes la réponse inventée. En bas, quatre voies : immédiat, conséquence, environnement, long terme.">
           <defs><marker id="m5r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker></defs>
           <text x="10" y="20" class="dmr">LES TEMPS DU PRÉSENT</text>
@@ -406,7 +408,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
   </div>
   <figure class="pic">
     <div class="frame">
-      <div class="scroll"><svg class="w900" viewBox="0 0 1000 600" role="img" aria-label="Le réseau d'agents : à la conception, en jeu sur les quatre temporalités, et après la partie. Tous lisent l'état et écrivent des transactions PDL vers le validateur, qui écrit au journal.">
+      <p class="hint mono">Faire défiler →</p><div class="scroll"><svg class="w900" viewBox="0 0 1000 600" role="img" aria-label="Le réseau d'agents : à la conception, en jeu sur les quatre temporalités, et après la partie. Tous lisent l'état et écrivent des transactions PDL vers le validateur, qui écrit au journal.">
         <defs>
           <marker id="mAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
           <marker id="mAa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dah"/></marker>
@@ -428,7 +430,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
         <line x1="620" y1="258" x2="758" y2="258" class="dr" marker-end="url(#mAr)"/>
         <line x1="380" y1="276" x2="242" y2="276" class="dr" marker-end="url(#mAr)"/>
         <text x="258" y="268" class="dm">APPLIQUE</text>
-        <text x="500" y="324" class="dmr" text-anchor="middle">AUCUN AGENT N'EN APPELLE UN AUTRE</text>
+        
         <text x="10" y="356" class="dmr">EN JEU, SUR LES QUATRE TEMPORALITÉS</text>
         <g>
           <rect x="10" y="368" width="185" height="96" rx="7" class="db"/><text x="22" y="390" class="dt">Juger la phrase</text><text x="22" y="410" class="dts">quoi ? à qui : elle</text><text x="22" y="426" class="dts">ou le monde ? suit-elle ?</text><text x="22" y="452" class="tag">D · IMMÉDIAT</text>
@@ -440,10 +442,10 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
         <g class="dr">
           <line x1="102" y1="368" x2="420" y2="308" marker-end="url(#mAr)"/><line x1="299" y1="368" x2="445" y2="308" marker-end="url(#mAr)"/><line x1="496" y1="368" x2="485" y2="308" marker-end="url(#mAr)"/><line x1="693" y1="368" x2="530" y2="308" marker-end="url(#mAr)"/><line x1="894" y1="368" x2="560" y2="308" marker-end="url(#mAr)"/>
         </g>
-        <text x="10" y="500" class="dm">APRÈS LA PARTIE</text>
+        <text x="10" y="500" class="dm">APRÈS LA PARTIE · ILS LISENT LE JOURNAL</text><text x="990" y="500" class="dmr" text-anchor="end">AUCUN AGENT N'EN APPELLE UN AUTRE</text>
         <rect x="10" y="512" width="382" height="62" rx="7" class="db"/><text x="22" y="536" class="dt">Auditer les principes</text><text x="22" y="556" class="dts">chaque énoncé : pertinent, respecté, rompu</text><text x="330" y="536" class="tag">D</text>
         <rect x="404" y="512" width="382" height="62" rx="7" class="db"/><text x="416" y="536" class="dt">Récolter, proposer</text><text x="416" y="556" class="dts">manques, improvisations, doutes → propositions</text><text x="724" y="536" class="tag">M</text>
-        <path d="M875 304 L875 540 L788 540" class="dl dd" marker-end="url(#mAa)"/><text x="884" y="430" class="dm" transform="rotate(90 884 430)">ILS LISENT LE JOURNAL</text>
+        
         <text x="10" y="594" class="dm">S PETIT · M MOYEN · L GRAND · D DÉCISION (TYPE + PROBABILITÉ, JAMAIS DE TEXTE)</text>
       </svg></div>
     </div>
@@ -460,7 +462,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
   </div>
   <figure class="pic">
     <div class="frame">
-      <div class="scroll"><svg class="w900" viewBox="0 0 1000 520" role="img" aria-label="Deux transactions suivies de la phrase au pixel : la pluie devient un effet sur le lieu, suivre les marques devient une intention puis un acte ; validées, exécutées par le port moteur, traduites en vocabulaire procédural, rendues à budget fixe, filmées par le capteur ; les événements reviennent au noyau.">
+      <p class="hint mono">Faire défiler →</p><div class="scroll"><svg class="w900" viewBox="0 0 1000 520" role="img" aria-label="Deux transactions suivies de la phrase au pixel : la pluie devient un effet sur le lieu, suivre les marques devient une intention puis un acte ; validées, exécutées par le port moteur, traduites en vocabulaire procédural, rendues à budget fixe, filmées par le capteur ; les événements reviennent au noyau.">
         <defs>
           <marker id="mBr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
           <marker id="mBa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dah"/></marker>
@@ -513,7 +515,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
   </div>
   <figure class="pic">
     <div class="frame">
-      <div class="scroll"><svg class="w900" viewBox="0 0 1000 330" role="img" aria-label="La même phrase dans trois parties donne trois issues différentes ; la deuxième partie, rejouée depuis son journal, redonne exactement la même issue.">
+      <p class="hint mono">Faire défiler →</p><div class="scroll"><svg class="w900" viewBox="0 0 1000 330" role="img" aria-label="La même phrase dans trois parties donne trois issues différentes ; la deuxième partie, rejouée depuis son journal, redonne exactement la même issue.">
         <defs>
           <marker id="mCr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
           <marker id="mCa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dah"/></marker>
@@ -545,11 +547,11 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
   </div>
   <figure class="pic">
     <div class="frame">
-      <div class="scroll"><svg class="w900" viewBox="0 0 1000 330" role="img" aria-label="Le studio de conception en huit étapes, de la phrase au jeu, chacune passant ses trouvailles à la suivante ; l'auteur répond aux questions à l'étape sept.">
+      <p class="hint mono">Faire défiler →</p><div class="scroll"><svg class="w900" viewBox="0 0 1000 330" role="img" aria-label="Le studio de conception en huit étapes, de la phrase au jeu, chacune passant ses trouvailles à la suivante ; l'auteur répond aux questions à l'étape sept.">
         <defs><marker id="mDr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker></defs>
         <g>
           <rect x="10" y="20" width="225" height="104" rx="7" class="db"/><text x="22" y="44" class="dmr">1 · COMPRENDRE</text><text x="22" y="66" class="dts">la phrase, le lieu, l'époque,</text><text x="22" y="82" class="dts">ce qui est demandé</text><text x="22" y="110" class="tag">L</text>
-          <rect x="257" y="20" width="225" height="104" rx="7" class="db"/><text x="269" y="44" class="dmr">2 · RECHERCHE WEB</text><text x="269" y="66" class="dts">requêtes en rafale, pages lues,</text><text x="269" y="82" class="dts">sources gardées, constats → réglages</text><text x="269" y="110" class="tag">S × n · D TRIE</text>
+          <rect x="257" y="20" width="225" height="104" rx="7" class="db"/><text x="269" y="44" class="dmr">2 · RECHERCHE WEB</text><text x="269" y="66" class="dts">requêtes en rafale, pages lues,</text><text x="269" y="82" class="dts">sources gardées → réglages</text><text x="269" y="110" class="tag">S × n · D TRIE</text>
           <rect x="504" y="20" width="225" height="104" rx="7" class="db"/><text x="516" y="44" class="dmr">3 · BÂTIR LE LIEU</text><text x="516" y="66" class="dts">relief, végétation, lumière,</text><text x="516" y="82" class="dts">sons</text><text x="516" y="110" class="tag">M</text>
           <rect x="751" y="20" width="239" height="104" rx="7" class="db"/><text x="763" y="44" class="dmr">4 · CONCEVOIR LES GENS</text><text x="763" y="66" class="dts">qui ils sont, comment ils parlent,</text><text x="763" y="82" class="dts">ce qu'ils savent et cachent</text><text x="763" y="110" class="tag">M</text>
           <rect x="751" y="170" width="239" height="104" rx="7" class="db"/><text x="763" y="194" class="dmr">5 · INTERACTIONS</text><text x="763" y="216" class="dts">ce qu'on peut faire ici, ce qu'on</text><text x="763" y="232" class="dts">peut demander ; promesses, pouvoirs</text><text x="763" y="260" class="tag">M</text>
@@ -579,13 +581,13 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
   </div>
   <figure class="pic">
     <div class="frame">
-      <div class="scroll"><svg viewBox="0 0 600 300" role="img" aria-label="La boucle lean du narrateur : écrire, jouer, récolter, comprendre, proposer, décider, puis écrire à nouveau.">
+      <p class="hint mono">Faire défiler →</p><div class="scroll"><svg viewBox="0 0 600 300" role="img" aria-label="La boucle lean du narrateur : écrire, jouer, récolter, comprendre, proposer, décider, puis écrire à nouveau.">
         <defs><marker id="mLr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker></defs>
         <ellipse cx="300" cy="150" rx="230" ry="110" class="dl dd"/>
         <g>
           <circle cx="300" cy="40" r="6" class="dfi"/><text x="300" y="26" class="dt" text-anchor="middle">écrire</text>
           <circle cx="490" cy="88" r="6" class="dfr"/><text x="502" y="84" class="dt">jouer</text>
-          <circle cx="520" cy="182" r="6" class="dfr"/><text x="532" y="186" class="dt">récolter</text>
+          <circle cx="520" cy="182" r="6" class="dfr"/><text x="508" y="210" class="dt" text-anchor="end">récolter</text>
           <circle cx="400" cy="250" r="6" class="dfr"/><text x="410" y="276" class="dt">comprendre</text>
           <circle cx="200" cy="250" r="6" class="dfr"/><text x="190" y="276" class="dt" text-anchor="end">proposer</text>
           <circle cx="80" cy="182" r="6" class="dfi"/><text x="68" y="186" class="dt" text-anchor="end">décider</text>
@@ -624,7 +626,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
     <div><dt>Image</dt><dd>n'importe quelle époque et quelle caméra, de la Super 8 à la bodycam</dd></div>
     <div><dt>Moteur</dt><dd>procédural, sans aucun asset ; coût fixe par image</dd></div>
     <div><dt>Modèles</dt><dd>petits, moyens et grands, plus des modèles de décision</dd></div>
-    <div><dt>Temps</dt><dd>quatre temporalités ; une réaction en temps, dès 100 ms</dd></div>
+    <div><dt>Temps</dt><dd>quatre temporalités ; une réaction en plusieurs temps, dès 100 ms</dd></div>
     <div><dt>Langues</dt><dd>la langue de l'histoire, sous-titrée ; français et anglais</dd></div>
     <div><dt>Écriture</dt><dd>des mots simples, dans le jeu ou avec Claude Code, Codex, Antigravity</dd></div>
     <div><dt>Une session</dt><dd>un journal rejouable et une récolte qui fait grandir le jeu</dd></div>
