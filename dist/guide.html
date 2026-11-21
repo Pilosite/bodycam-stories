@@ -3943,7 +3943,7 @@ function arcOf(arc, { place = {}, lang, title, bank }) {
   if (bs[0].establish.indexOf('f.place') < 0) bs[0].establish.unshift('f.place');
   const endings = (arc.endings || []).filter(e => e && /^[a-z][a-z0-9-]{0,40}$/.test(e.id || '')).slice(0, 3)
     .map(e => ({ id: e.id, family: { [lang]: e.name || e.id }, requires: (e.requires || []).slice(0, 6), when: e.when || '', line: e.line || null, trigger: 'decision' }));
-  for (const s of st) if (!s.arrive_line || !bank[s.arrive_line]) s.arrive_line = s === st[0] ? 'greet' : s.arrive_line;
+  st[0].arrive_line = 'greet';                                   // the first arrival is the carrier greeting the voice
   return { stations: { version: 0, note: 'Stations laid by the arc stage of the studio (core/studio.js) along the place\'s path; things no station named go to the nearest one.', start: st[0].id, stations: st },
     beats: { version: 0, question: { [lang]: arc.question || '' }, beats: bs, endings } };
 }
