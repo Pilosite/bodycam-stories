@@ -44,6 +44,7 @@ background:rgba(10,12,9,.9);border-top:1px solid var(--line,rgba(243,240,232,.24
 #conception .cc-stages{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr auto;gap:2px 10px;font:400 12px/1.5 var(--f-mono,ui-monospace,monospace);color:var(--ink-dim,rgba(243,240,232,.72))}
 #conception .cc-stages .on{color:var(--ink,#f3f0e8)} #conception .cc-stages .ko{color:var(--rec,#ff4b3e)}
 #conception .cc-play[disabled]{opacity:.45}
+#conception[hidden]{display:none}
 #conception .cc-play{background:var(--ink,#f3f0e8);color:#000;padding:12px 26px;min-height:46px}`;
 
 export function createConception(D) {

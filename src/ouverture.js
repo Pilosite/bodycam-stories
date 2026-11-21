@@ -749,7 +749,7 @@ export function creerOuverture(deps) {
     return (R.nodes[agent] = { c: forme, x, y, agent });
   }
   function reseauVivant(R, e) {
-    if (e.status === 'writing') { const n = R.nodes[e.agent]; if (n) etiquette(R, n, e.wrote.length + ' l.', 12); return; }
+    if (e.status === 'writing') return;                              // the lines go to the language panel; the node says its total at the end
     const rang = e.instrument === 'search' ? 'search' : e.tier === 'code' || e.instrument === 'code' ? 'code' : R.RANGS[e.tier] ? e.tier : 'mid';
     const nom = rang === 'search' ? 'search' : e.agent.replace(/^research\./, '').replace(/\.repair$/, ' ⟲');
     const n = noeudVivant(R, rang === 'search' ? 'web.' + e.agent : e.agent, rang, nom);
