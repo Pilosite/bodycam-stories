@@ -1,0 +1,11 @@
+=== brief
+title: Le feu de camp
+lang: fr
+where: un camping sous les pins, en forêt
+when: une nuit d'été, aujourd'hui
+who: une famille : un père, sa femme, deux enfants ; le père porte la caméra
+kind: free
+story:
+player: une voix dans l'oreille du père, quelqu'un qu'il ne connaît pas
+powers: le vent, le feu
+topics: place: camper sous les pins la nuit, autour d'un feu; people: une famille de quatre en camping, les enfants petits

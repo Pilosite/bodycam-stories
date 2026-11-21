@@ -117,11 +117,11 @@ export function creerAtelier(deps) {
 
   /* ---------------------------------------------------------------- chantier : une fabrication à la fois */
   const ETAPES = [['plan', 'Plan'], ['fiche', 'Scène'], ['retouche', 'Retouche'], ['controle', 'Contrôle'], ['capture', 'Repérage'], ['relecture', 'Relecture'], ['banque', 'Banque']];
-  function lancer(titre, entree, apres) {
+  function lancer(titre, entree, apres, ecoute) {
     if (job && job.termine) { clearInterval(job.minuteur); job = null; }
     if (job) { alerte = 'Une scène est déjà en fabrication : attends la fin ou arrête-la.'; rendreEtat(); ouvrir(); return false; }
     const ctl = new AbortController();
-    job = { titre, entree, apres, ctl, t0: Date.now(), etape: 'plan', texte: 'Je commence…', fait: new Set(), vues: [], erreur: null, fini: false, tour: 0 };
+    job = { titre, entree, apres, ctl, t0: Date.now(), etape: 'plan', texte: 'Je commence…', fait: new Set(), vues: [], erreur: null, fini: false, tour: 0, ecoute: ecoute || null };
     if (entree.base || !deps.sample()) job.etape = entree.base ? 'retouche' : 'fiche';
     deps.occupe && deps.occupe(true); rendreChantier(); rendre(); rendrePuce();
     job.minuteur = setInterval(() => { const t = chantierEl.querySelector('.chantier-temps'); if (t) t.textContent = Math.round((Date.now() - job.t0) / 1000) + ' s'; rendrePuce(); }, 1000);   // l'horloge seule : les boutons restent en place
@@ -135,8 +135,8 @@ export function creerAtelier(deps) {
     j.images = images;
     try {
       const r = await C.construire(j.entree, { sample, images, moteur: deps.moteur, signal: j.ctl.signal, alea: Math.random,
-        etape: info => { if (j !== job) return; (j.etapes = j.etapes || []).push(info.etape); if (j.etape !== info.etape) j.fait.add(j.etape); j.etape = info.etape; j.texte = info.texte; if (info.tour) j.tour = info.tour; if (info.vues) j.vues = info.vues; rendreChantier(); rendrePuce(); },
-        journal: x => { (j.journal = j.journal || []).push(x); } });
+        etape: info => { if (j !== job) return; (j.etapes = j.etapes || []).push(info.etape); if (j.etape !== info.etape) j.fait.add(j.etape); j.etape = info.etape; j.texte = info.texte; if (info.tour) j.tour = info.tour; if (info.vues) j.vues = info.vues; rendreChantier(); rendrePuce(); if (j.ecoute) try { j.ecoute(info); } catch (_) {} },
+        journal: x => { (j.journal = j.journal || []).push(x); if (j.ecoute) try { j.ecoute({ etape: x.etape, texte: `${x.etape} : ${x.ok ? 'réponse' : 'échec' + (x.code ? ' (' + x.code + ')' : '')} en ${(x.ms / 1000).toFixed(1)} s`, ms: x.ms, ok: x.ok }); } catch (_) {} } });
       j.fait.add(j.etape); j.etape = 'banque'; j.texte = 'Vignette et enregistrement…'; rendreChantier();
       let vg = '';
       const v0 = (r.vues || []).find(v => v && v.vignette && v.moyenne > 2);
@@ -153,7 +153,7 @@ export function creerAtelier(deps) {
       const code = e && e.code || 'upstream_error';
       if (code === 'not_granted' && !j.relance) {                     // Claude refusé pour cette page : le lexique de secours prend le relais
         deps.oublierClaude && deps.oublierClaude(); clearInterval(j.minuteur); job = null; j.relaye = true;
-        const n = lancer(j.titre, j.entree, j.apres); if (n) { job.relance = true; job.texte = C.MESSAGES_ERREUR.not_granted; } return;
+        const n = lancer(j.titre, j.entree, j.apres, j.ecoute); if (n) { job.relance = true; job.texte = C.MESSAGES_ERREUR.not_granted; } return;
       }
       j.erreur = { code, etape: e && e.etape, message: C.MESSAGES_ERREUR[code] || (e && e.message) || 'Erreur.' };
       j.texte = code === 'cancelled' ? 'Arrêté. Rien n\'a été enregistré.' : 'Échec' + (e && e.etape ? ' (' + e.etape + ')' : '') + ' : ' + j.erreur.message;
@@ -202,7 +202,9 @@ export function creerAtelier(deps) {
     const doc = C.docDepuis({ id, description, fiche: r.fiche, vignette: vg, source: r.source === 'lexique' ? 'lexique' : source, parent, historique: [...(extraHist || []), ...r.historique, ...(r.notes.length ? [] : [])] });
     await banque.enregistrer(doc); return banque.get(id) || doc;
   };
-  function creer(description) { return lancer('« ' + description.slice(0, 60) + (description.length > 60 ? '…' : '') + ' »', { description }, enregistrerNouveau(description, 'claude', null)); }
+  /* o (conception studio, src/conception.js): { titre: the creator's sentence when the description carries research findings,
+     etape(info): each step of the chain, as the studio's environment stage reports it }. */
+  function creer(description, o = {}) { const t = o.titre || description; return lancer('« ' + t.slice(0, 60) + (t.length > 60 ? '…' : '') + ' »', { description }, enregistrerNouveau(description, 'claude', null), o.etape); }
   function retoucher(id, texte) {
     const d = banque.get(id); if (!d) return false;
     return lancer('Retouche : « ' + texte.slice(0, 50) + ' »', { description: d.description, base: d.fiche, retouche: texte, id: d.id }, async (r, vg) => {

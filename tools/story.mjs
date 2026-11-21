@@ -15,6 +15,10 @@
 //   node tools/story.mjs sketch  "<sentence>" --place <place file> [--answer <model answer>] [--answers <json>] [--out dir] [--prompt]
 //                                                               conception before play (core/sketch.js): a story sketch as a pack folder;
 //                                                               --prompt prints what the large tier is asked; with no answer, the code fallback
+//   node tools/story.mjs sketch  "<sentence>" --place <place file> --stages <dir> [--answers <json>] [--out dir]
+//                                                               the conception studio (core/studio.js, src/studio.json): each agent's prompt is
+//                                                               written to <dir>/<agent>.prompt.txt and its answer read from <dir>/<agent>.txt;
+//                                                               a missing answer is a stage that failed (soft); run again once answers are written
 //   node tools/story.mjs harvest <files or folders…> [--out f] [--strip]   harvest records or journals → the merged report and its proposals (tools/harvest.mjs)
 //
 // The pure functions are exported (tests/story.test.mjs); the I/O is in the loaders and in main() at the bottom.
@@ -31,6 +35,7 @@ import { replay, diff, fromJSONL, toJSONL } from '../core/journal.js';
 import { serializeTokens, DIRS, refId } from '../core/pdl.js';
 import { canonicalJSON, hashString } from '../core/world.js';
 import { conceive, sketchPrompt, withAnswers, guessLang } from '../core/sketch.js';
+import { runStudio } from '../core/studio.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const clone = o => o === undefined ? undefined : JSON.parse(JSON.stringify(o));
@@ -966,6 +971,7 @@ export function writePack(dir, pack) {
   const M = pack.manifest, out = [w('pack.json', M), w('place.json', pack.place), w('stations.json', pack.stations), w('beats.json', pack.beats), w('anchors.json', pack.anchors)];
   for (const [lang, f] of Object.entries(M.lines)) out.push(w(f, pack.lines[lang]));
   for (const [f, t] of Object.entries(pack.texts)) out.push(w(f, t));
+  if (pack.creation && M.creation) out.push(w(M.creation, pack.creation));   // the creation journal of the studio, kept with the pack
   return out;
 }
 /* `answer`: the large tier's answer as text (a file a model or an assistant wrote), or null: the code fallback. */
@@ -974,6 +980,29 @@ export async function sketchCommand({ sentence, place, answer = null, answers = 
   const ask = answer === null ? null : async prompt => { asked.push(prompt.length); if (asked.length > 1) throw new Error('no second answer given (--answer holds one)'); return answer; };
   const r = await conceive({ sentence, place, library, base, ask });
   return Object.assign(r, { pack: answers ? withAnswers(r.pack, answers) : r.pack });
+}
+
+export function loadStudio() { return JSON.parse(readFileSync(join(ROOT, 'src/studio.json'), 'utf8')); }
+/* The studio out of the page: every agent's prompt goes to <dir>/<agent>.prompt.txt, its answer comes from <dir>/<agent>.txt
+   (a model, an assistant or a person wrote it). The place is given (the world builder needs the engine: the page's job). */
+export async function studioCommand({ sentence, place, dir, answers = null, library, base = loadSketchBase(), data = loadStudio() }) {
+  mkdirSync(dir, { recursive: true });
+  const asked = [];
+  const ask = async (prompt, o) => {
+    writeFileSync(join(dir, o.agent + '.prompt.txt'), prompt);
+    const f = join(dir, o.agent + '.txt'); asked.push({ agent: o.agent, answered: existsSync(f) });
+    if (!existsSync(f)) throw new Error(`no answer: ${relative(process.cwd(), f)}`);
+    return readFileSync(f, 'utf8');
+  };
+  const r = await runStudio({ sentence, place, library, base, data, ask });
+  return Object.assign(r, { asked, pack: answers ? Object.assign(withAnswers(r.pack, answers), { creation: r.pack.creation }) : r.pack });
+}
+export function renderStudio(r) {
+  const L = [], st = r.creation.stages;
+  for (const s of Object.keys(st)) L.push(`  ${s.padEnd(13)} ${String(st[s].status).padEnd(9)}${st[s].latency_ms !== undefined ? ' ' + st[s].latency_ms + ' ms' : ''}${st[s].error ? ' · ' + st[s].error : ''}`);
+  const q = r.asked.filter(a => !a.answered).map(a => a.agent);
+  if (q.length) L.push(`  waiting for: ${q.map(a => a + '.txt').join(', ')} (prompts beside them)`);
+  return L.join('\n');
 }
 
 /* ================================================================ CLI */
@@ -1093,9 +1122,21 @@ export async function main(argv, { print = console.log } = {}) {
       return 0;
     }
     case 'sketch': {
-      const placeFile = opt(args, '--place'), answerFile = opt(args, '--answer'), answersFile = opt(args, '--answers'), outDir = opt(args, '--out'), promptOnly = flag(args, '--prompt');
+      const placeFile = opt(args, '--place'), answerFile = opt(args, '--answer'), answersFile = opt(args, '--answers'), outDir = opt(args, '--out'), promptOnly = flag(args, '--prompt'), stagesDir = opt(args, '--stages');
       const sentence = args.join(' ').trim(); if (!sentence || !placeFile) break;
       const place = JSON.parse(readFileSync(placeFile, 'utf8'));
+      if (stagesDir) {
+        const r = await studioCommand({ sentence, place, dir: stagesDir, library: lib(), answers: answersFile ? JSON.parse(readFileSync(answersFile, 'utf8')) : null });
+        const dir = outDir || join(ROOT, 'stories', r.pack.manifest.id);
+        if (existsSync(join(dir, 'pack.json')) && !outDir) { print(`stories/${r.pack.manifest.id} exists: pass --out <dir>`); return 1; }
+        const files = writePack(dir, r.pack), check = checkPack(loadPack(dir), lib());
+        out({ dir, source: r.source, stages: r.creation.stages, asked: r.asked, questions: r.questions, files, errors: check.errors, warnings: check.warnings },
+          [`wrote ${relative(process.cwd(), dir)} from the studio (${r.source}): ${r.creation.events.length} creation events in ${r.pack.manifest.creation}`, renderStudio(r),
+            ...r.questions.map(q => `  question ${q.id}: ${q.text} [${q.options.join(' | ')}] (the model's guess: ${q.target})`),
+            `  ${r.pack.stations.stations.length} station(s); ${files.length} files; check: ${check.errors.length} error(s), ${check.warnings.length} warning(s)`, ...check.errors.map(e => '  error: ' + e),
+            `next: node tools/story.mjs check ${relative(process.cwd(), dir)}`].join('\n'));
+        return check.errors.length ? 1 : 0;
+      }
       if (promptOnly) { print(sketchPrompt({ sentence, place, library: lib(), lang: guessLang(sentence) })); return 0; }
       const r = await sketchCommand({ sentence, place, library: lib(), answer: answerFile ? readFileSync(answerFile, 'utf8') : null, answers: answersFile ? JSON.parse(readFileSync(answersFile, 'utf8')) : null });
       const dir = outDir || join(ROOT, 'stories', r.pack.manifest.id);

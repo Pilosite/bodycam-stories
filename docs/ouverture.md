@@ -51,9 +51,13 @@ Toutes : recadrées et réduites. Ce que les photos contredisent ou ajoutent : l
 | Réglage | Par défaut | Où |
 |---|---|---|
 | Démarrer sur l'ouverture | **oui** dans la page ouverte par une personne ; non dans les outils de capture (`window.__CFG`) | `CFG.demo`, `#demo`, ou `localStorage["bodycam-demo"]="0"` pour l'éteindre ; « Passer » la saute ; « Plus » → « Démo » la relance |
-| Mention « Rejeu accéléré d'une génération enregistrée le … » | **éteinte** | « Plus » → « Mention rejeu » (mémorisé dans `bodycam-demo-mention`), ou `CFG.demoMention` |
+| Mention « Rejeu accéléré d'une génération enregistrée le … » | **allumée** (depuis le 21 novembre, W3 de `docs/creation-pipeline.md`, P19) | « Plus » → « Mention rejeu » (mémorisé dans `bodycam-demo-mention`), ou `CFG.demoMention` |
 
-La mention est éteinte par défaut à la demande de l'auteur (première démo, cercle proche). **Devant tout autre public, rallumez-la** : sans elle, rien à l'écran ne dit que la préparation montrée est un enregistrement et non un calcul en direct. Le contenu, lui, reste toujours celui de la séance réelle.
+La mention était éteinte par défaut pour la première démo (cercle proche). Elle est allumée depuis que l'ouverture sait aussi montrer une préparation en direct : un rejeu se dit rejeu, le direct se dit direct (« En direct · les agents du studio travaillent pour de vrai »). Le contenu d'un rejeu reste toujours celui de la séance réelle.
+
+## En direct : le studio de conception
+
+Une demande qu'aucun rejeu ne prépare part dans le studio de conception (`core/studio.js`, étapes dans `src/studio.json`, `docs/creation-pipeline.md` §7), quand la conception est allumée (« Plus » → « Conception »). L'ouverture reste alors ouverte et se nourrit des événements de création, un par un : chaque étape (comprendre, recherche, lieu, personnages, interactions, arc, questions, contrôle) devient un bloc du journal avec ce qu'elle a vraiment produit (requêtes, constats avec leur source, étapes du constructeur, lignes écrites, questions, erreurs et réparations) ; sur PC, le réseau d'agents ne dessine que les agents réellement appelés, rangés par palier (fast, mid, large, code), et le panneau du langage montre les lignes de source au moment où elles arrivent. Aucun nom de famille de modèle, aucun traducteur : ce qui n'a pas de contrepartie réelle n'est pas allumé. À la fin, le monde se construit, l'ouverture se fond, et le panneau de conception montre les questions et « Jouer ». Essai : `node tools/studio-smoke.mjs` (un passage, échantillonneur de remplacement).
 
 ## Correspondance demande → rejeu
 

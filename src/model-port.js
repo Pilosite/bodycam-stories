@@ -6,13 +6,18 @@
    Every answer says which adapter gave it (`adapter`) and how long it took (`model_ms`, `first_ms`); the core journals it.
    A slow or failing adapter is cut at its time limit and the next one is tried; the last resort is a clean failure the
    core plays as "no answer" (P20: a slow layer never blocks the present).
+   - creation (the conception studio, core/studio.js; briefs/conception-v2.md): `create` writes free text for one agent at
+     its tier (fast, mid, large), streamed when the adapter streams; `search` finds pages for a research worker. The home
+     node serves both when its /health says so (`capabilities.create`, `capabilities.search`); the host's model serves
+     `create` through the sampler (tiers `quick`, `default`, `complex`) and has no search (no web in an artifact).
    No key and no model name here: the home node's address and token live in the browser's storage only (never in the repo
    or the page), and the host's model is named by role (`quick`, `default`), as src/main.js does.
    Pure: no DOM, no import. Every capability of the browser (fetch, storage, timers, AbortController, the sampler) is given. */
 
 export const HOME_KEY = 'bodycam-home-node';
-export const LIMITS = { health_ms: 1500, health_every_ms: 30000, judge_ms: 6000, invent_ms: 20000 };
+export const LIMITS = { health_ms: 1500, health_every_ms: 30000, judge_ms: 6000, invent_ms: 20000, create_ms: 150000, search_ms: 15000 };
 export const HOST_TIERS = { translate: 'quick', stage: 'quick', background: 'default' };
+export const HOST_CREATE_TIERS = { fast: 'quick', mid: 'default', large: 'complex' };   // the studio's tiers (src/studio.json host_tiers)
 const GEN_TIER = { translate: 'fast', stage: 'mid', background: 'large' };
 
 /* ------------------------------------------------------------ the home node's address and token, per browser */
@@ -43,7 +48,7 @@ function limited(run, ms, env) {
 /* ------------------------------------------------------------ the home node (client side only; the server is a later lot)
    GET /health (1.5 s limit) on start, every 30 s, and again at once after a failed call; per-capability state. */
 export function createHomeNode({ fetch, storage, env, limits = LIMITS }) {
-  const S = { name: 'home', configured: false, up: false, node: null, caps: { embed: false, decide: false, generate: { fast: false, mid: false, large: false } }, checked: null, error: null };
+  const S = { name: 'home', configured: false, up: false, node: null, caps: { embed: false, decide: false, generate: { fast: false, mid: false, large: false }, create: false, search: false }, checked: null, error: null };
   let timer = null, cfg = null;
   const auth = () => cfg && cfg.token ? { Authorization: 'Bearer ' + cfg.token } : {};
   async function health() {
@@ -54,7 +59,7 @@ export function createHomeNode({ fetch, storage, env, limits = LIMITS }) {
       const j = r && r.ok ? await r.json() : null;
       const c = (j && j.capabilities) || {}, g = c.generate || {};
       S.up = !!(j && j.ok); S.node = j && j.node || null; S.error = S.up ? null : 'health ' + (r ? r.status : '?');
-      S.caps = { embed: !!c.embed, decide: !!c.decide, generate: { fast: !!g.fast, mid: !!g.mid, large: !!g.large } };
+      S.caps = { embed: !!c.embed, decide: !!c.decide, generate: { fast: !!g.fast, mid: !!g.mid, large: !!g.large }, create: !!c.create, search: !!c.search };
     } catch (e) { S.up = false; S.error = String(e && e.message || e); }
     S.checked = env.now();
     return S;
@@ -71,6 +76,14 @@ export function createHomeNode({ fetch, storage, env, limits = LIMITS }) {
     start() { health(); if (!timer && env.setInterval) timer = env.setInterval(health, limits.health_every_ms); return S; },
     stop() { if (timer) env.clearInterval(timer); timer = null; },
     can(cap, tier) { return S.up && (cap === 'decide' ? S.caps.decide : cap === 'generate' ? !!S.caps.generate[GEN_TIER[tier] || 'mid'] : !!S.caps[cap]); },
+    async create(req, signal) {
+      const r = await call('/v1/create', { tier: req.tier, purpose: req.purpose, prompt: req.prompt, lang: req.lang }, signal);
+      return { text: String(r.text || r.tokens || ''), first_ms: r.first_ms, node_ms: r.latency_ms };
+    },
+    async search(req, signal) {
+      const r = await call('/v1/search', { query: req.query, lang: req.lang }, signal);
+      return { results: (Array.isArray(r.results) ? r.results : []).map(x => ({ title: String(x.title || ''), url: String(x.url || ''), text: String(x.text || '') })) };
+    },
     async decide(req, signal) {
       const r = await call('/v1/decide', { tier: req.tier, question: req.question, questions: req.questions, state: req.state, text: req.text, lang: req.lang }, signal);
       return { answers: r.answers, answer: r.answer, p: r.p, node_ms: r.latency_ms };
@@ -110,7 +123,16 @@ export function createHostModel({ sample, lost = () => {}, tiers = HOST_TIERS })
   }
   return {
     name: 'host',
-    can: () => !!sample(),
+    can: cap => cap !== 'search' && !!sample(),
+    /* Free text for one agent of the studio, streamed through onText when the sampler streams. */
+    async create(req, signal) {
+      const s = sample(); if (!s) throw new Error('no host model');
+      try {
+        const r = await s(req.prompt, Object.assign({ modelTier: HOST_CREATE_TIERS[req.tier] || 'default', cache: false }, signal ? { signal } : {},
+          req.onText ? { onText: x => { if (x && typeof x.text === 'string') req.onText(x.text); } } : {}));
+        return { text: String(r && typeof r === 'object' ? r.text || '' : r || '') };
+      } catch (e) { if (e && e.code === 'not_granted') lost(); throw e; }
+    },
     async decide(req, signal) { const r = await ask(judgementText(req), req.tier, signal); return { answers: r && typeof r === 'object' ? r.answers : null }; },
     async generate(req, signal) {
       const r = await ask(stageText(req), req.tier, signal), t = r && typeof r === 'object' ? (r.tokens ?? r.pdl ?? r.lines) : r;
@@ -144,7 +166,10 @@ export function createModelPort({ reflex, adapters = [], env, limits = LIMITS })
       return chain('decide', req, L.judge_ms);
     },
     generate(req) { return chain('generate', req, L.invent_ms); },
-    available(what) { return what === 'judge' ? !!first('decide', 'translate') : what === 'invent' ? !!first('generate', 'stage') : false; },
+    /* The studio's two capabilities (additive): a failed chain is { failed } as everywhere. */
+    create(req) { return chain('create', req, L.create_ms); },
+    search(req) { return chain('search', req, L.search_ms); },
+    available(what) { return what === 'judge' ? !!first('decide', 'translate') : what === 'invent' ? !!first('generate', 'stage') : what === 'create' ? !!first('create', 'mid') : what === 'search' ? !!first('search') : false; },
     /* What serves each instrument right now: the indicator's text. */
     status() { const j = first('decide', 'translate'), i = first('generate', 'stage'); return { judge: j ? j.name : 'code', invent: i ? i.name : 'none' }; },
     arrival: () => reflex.arrival(),

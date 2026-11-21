@@ -1,0 +1,8 @@
+=== questions
+q f.claire-where | Où est Claire, la mère ? | Partie chercher du bois, elle tarde | Restée à la voiture après une dispute | Personne ne sait
+q f.voice | Qui est la voix dans l'oreille de Marc ? | Son frère, au téléphone | Quelqu'un qu'il ne connaît pas | Sa propre conscience
+=== file facts/questions.pdl
+# questions — the guesses
+@id question-facts  @kind facts  @lang fr  @scope story  @horizon story
+! Claire est partie chercher du bois vers le sentier, sans lampe. {f.claire-where}
+! La voix est quelqu'un que Marc ne connaît pas. {f.voice}

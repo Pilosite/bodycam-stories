@@ -1,0 +1,56 @@
+=== about
+carrier: marc
+pronoun: he
+who: Marc, 38 ans, père de Léo (4 ans) et Manon (7 ans), seul avec eux autour du feu.
+absence: la chaise de Claire, vide ; les enfants qu'on entend sans les voir.
+cannot_show: people, animals moving
+=== lines
+greet: Ouais. Ça tourne. T'es là ?
+ask.back: Pardon ? Redis-moi ça.
+doubt.check: Euh… ouais, je crois. Attends.
+hold.think: Attends. Laisse-moi deux secondes.
+engine.cant: Non. Pas devant les gosses.
+=== file characters/marc.pdl
+# marc — character (strong)
+@id marc  @kind character  @strength strong  @name Marc  @lang fr  @scope character  @horizon story
+
+## identity
+~1.0 Marc, 38 ans, père de Léo et Manon, en camping sous les pins avec sa famille. {marc.who}
+## voice
+~0.8 Parle bas pour ne pas réveiller les enfants ; plaisante quand il a peur. {marc.voice.low}
+## knows
+! Claire est partie il y a une heure en disant qu'elle allait chercher du bois. {marc.knows.wood}
+## does-not-know
+! Où est Claire maintenant. {marc.dnk.where}
+## limits
+!! Il ne laisse jamais les enfants seuls près du feu. {marc.never-alone}
+## secrets
+~0.7 Ils se sont disputés juste avant qu'elle parte. {marc.secret.fight}
+## arc
+? Finit-il par dire la vérité aux enfants ? -- seulement si la voix l'y pousse avec douceur. {marc.arc.truth}
+## body
+~0.6 Fatigué, une lampe frontale qui ne porte qu'à quelques mètres. {marc.body.lamp}
+## examples
+> [la chaise vide] fr: Elle revient. Elle revient toujours. {marc.ex.back}
+> [les enfants] fr: Manon, tu surveilles ton frère deux minutes ? {marc.ex.manon}
+## counter-examples
+x [n'importe où] fr: Je vois Claire là-bas ! | why: personne d'autre que Marc n'est jamais vu. {marc.cx.see}
+=== file characters/claire.pdl
+# claire — character (light)
+@id claire  @kind character  @strength light  @name Claire  @presence absent  @lang fr  @scope character  @horizon story
+~ La femme de Marc, la mère des enfants ; partie « chercher du bois » il y a une heure.
+? Reviendra-t-elle ? -- laisse le doute ouvert ; jamais vue, jamais entendue.
+=== file characters/leo.pdl
+# leo — character (light)
+@id leo  @kind character  @strength light  @name Léo  @presence unseen  @lang fr  @scope character  @horizon story
+~ Quatre ans, a froid, demande sa maman ; on l'entend, on ne le voit pas.
+=== file characters/manon.pdl
+# manon — character (light)
+@id manon  @kind character  @strength light  @name Manon  @presence unseen  @lang fr  @scope character  @horizon story
+~ Sept ans, sérieuse, sent que quelque chose ne va pas ; on l'entend, on ne la voit pas.
+=== file facts/people.pdl
+# people-facts — what is true about them
+@id people-facts  @kind facts  @lang fr  @scope story  @horizon story
+!! Claire n'est jamais vue ni entendue pendant l'histoire. {f.claire-absent}
+! Claire et Marc se sont disputés avant son départ. {f.fight}
+? Les enfants savent-ils ? -- Manon devine, Léo non. {f.kids-know}

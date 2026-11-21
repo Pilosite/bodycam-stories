@@ -2118,6 +2118,7 @@ async function prendreVignette(id){
   atelier.rafraichir();
 }
 function creerMonde(texte){                                     // « Décrire un monde » : la fabrication part en tâche de fond
+  if(conceptionEtudio()) return conceptionStudio(texte).then(r=>r&&r.place||null);   // conception studio: block at the end
   if(!atelier.creer(texte)) return Promise.resolve(null);
   say("Je fabrique ce monde. Tu peux suivre la fabrication en haut de l'écran.",true);
   return atelier.attendre().then(j=>{ if(j&&j.doc&&!j.erreur) conceptionApres(texte,j.doc.fiche); return j&&j.doc?j.doc.fiche:null; });   // conception: block at the end
@@ -3670,7 +3671,7 @@ const harvest=HARVEST.createHarvest({ core:CORE, db:capacite("db"), storage:(()=
   onError:(where,e)=>console.warn("harvest "+where+":",e&&(e.code||e.message)) });
 function harvestDevice(){ try{ const d=gl.getExtension("WEBGL_debug_renderer_info"); return d?String(gl.getParameter(d.UNMASKED_RENDERER_WEBGL)):""; }catch(_){ return ""; } }
 STORY_PAGE.harvest={
-  story(o){ return harvest.collect(o.journal,{ gaps:o.gaps, meta:{ id:o.id, mode:typeof TRAILER_ON!=="undefined"&&TRAILER_ON?"trailer":"story", device:harvestDevice(), lang:o.lang, pack:o.pack,
+  story(o){ return harvest.collect(o.journal,{ gaps:o.gaps, meta:{ id:o.id, mode:typeof TRAILER_ON!=="undefined"&&TRAILER_ON?"trailer":"story", device:harvestDevice(), lang:o.lang, pack:o.pack, creation:o.creation||undefined,
     versions:Object.assign({ engine_build:typeof ENGINE_BUILD!=="undefined"?ENGINE_BUILD:null },o.versions) } }); },
   panel:()=>harvest.panel(),
 };
@@ -3730,7 +3731,7 @@ window.trailer={ open:d=>lancerTrailer(d), get:()=>trailerMode };
 function reglage(cle,cfg,defaut){ if(cfg!==undefined) return !!cfg; try{ const v=localStorage.getItem(cle); if(v!==null) return v==="1"; }catch(_){} return defaut; }
 function memoriser(cle,on){ try{ localStorage.setItem(cle,on?"1":"0"); }catch(_){} }
 const DEMO=CFG.demo!==undefined?!!CFG.demo:/[?&#]demo(\b|=1)/.test(location.search+location.hash)||reglage("bodycam-demo",undefined,!window.__CFG);   // démarrer sur l'ouverture
-let mentionRejeu=reglage("bodycam-demo-mention",CFG.demoMention,false);   // « rejeu accéléré d'une génération enregistrée » : éteinte par défaut
+let mentionRejeu=reglage("bodycam-demo-mention",CFG.demoMention,true);    // « rejeu accéléré d'une génération enregistrée » : allumée par défaut (W3, P19)
 { const o=$("outils"), d=document.createElement("button"); d.type="button"; d.id="demo"; d.className="ghost"; d.textContent="Démo"; o.prepend(d); d.onclick=()=>{ fermerOutils(); lancerOuverture(); };
   const m=document.createElement("button"); m.type="button"; m.id="mention"; m.className="ghost"; o.appendChild(m);
   const maj=()=>{ m.setAttribute("aria-pressed",String(mentionRejeu)); m.textContent="Mention rejeu : "+(mentionRejeu?"oui":"non"); }; maj();
@@ -3811,7 +3812,8 @@ function lancerOuverture(){
     pret:()=>pretOuverture(), etat:etatPrep,
     dicteeDispo:capacite("dictation").then(d=>!!d), dicter:el=>{ if(!dict) return; dictEl=el; ecouter(); }, arreterDictee:()=>{ if(dict&&listening) dict.stop().catch(()=>{}); },
     surDebut:(t,rejeu)=>{ if(!rejeu) ouvRepos=false; },          // rejeu : le moteur reste au repos (il compile) jusqu'au fondu
-    surFin:o=>{ ouvRepos=false; if(o.constructeur){ creerMonde(o.texte); return; } const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1200); } });
+    studio:(t,surEv)=>conceptionEtudio()?conceptionStudio(t,surEv):null, studioData:STUDIO_DATA,   // en direct : le studio de conception (bloc conception)
+    surFin:o=>{ ouvRepos=false; if(o.studio){ conception.show(); return; } if(o.constructeur){ creerMonde(o.texte); return; } const k=++arriveeJeton; setTimeout(()=>tourHorizon(k),1200); } });
   ouverture.ouvrir(); ouvRepos=true; storyChoice();
   const r0=OUVERTURES.find(r=>r.suggestion), f0=r0&&(voulue(r0.fiche)||voulue(r0.ficheSecours));   // en coulisse : la fiche de la suggestion
   if(f0){ const i=FICHES.indexOf(f0); if(i>=0) ficheIdx=i; applyFiche(CONSTRUCTEUR.resoudreFiche(f0)); arriveeJeton++; ouvCoulisse=f0; }
@@ -3830,7 +3832,25 @@ window.balade.arrivee=()=>({ errance, file:queue.map(a=>a.type), pensee:$("pense
    mode (src/meneur.js) exactly as before. Switch: « Conception » in « Plus », ?conception=0|1, CFG.conception (capture tools:
    off unless asked). */
 var conceptionOn=CFG.conception!==undefined?!!CFG.conception:/[?&]conception=1/.test(location.search)?true:/[?&]conception=0/.test(location.search)?false:(window.__CFG?false:reglage("bodycam-conception",undefined,true));
-const conception=CONCEPTION.createConception({ doc:document, win:window, CORE, library:PATTERN_LIBRARY, base:SKETCH_BASE,
+/* The studio's calls go through a model port of their own (src/model-port.js create, search): the home node when one is
+   configured and healthy, else the host's model through the sampler. The world builder is the atelier's chain, fed by the
+   findings (environment stage); its steps are the studio's build events. */
+let conceptionPort=null;
+function portConception(){
+  if(conceptionPort) return conceptionPort;
+  const env={ now:()=>performance.now(), setTimeout:(f,ms)=>setTimeout(f,ms), clearTimeout:t=>clearTimeout(t), setInterval:(f,ms)=>setInterval(f,ms), clearInterval:t=>clearInterval(t), AbortController:window.AbortController };
+  let storage=null; try{ storage=localStorage; }catch(_){}
+  const home=MODELPORT.createHomeNode({ fetch:window.fetch?(u,o)=>window.fetch(u,o):null, storage, env }); home.health();
+  const host=MODELPORT.createHostModel({ sample:()=>sampler, lost:()=>{ sampler=null; } });
+  return conceptionPort=MODELPORT.createModelPort({ reflex:null, adapters:[home,host], env });
+}
+function conceptionEtudio(){ return conceptionOn&&!(storyMode&&storyMode.on()); }
+function batirPourStudio(texte,o){
+  if(!atelier.creer(o.description,{ titre:texte, etape:o.onStep })) return Promise.reject(new Error("a scene is already being built"));
+  return atelier.attendre().then(j=>{ if(!j||!j.doc||j.erreur) throw new Error(j&&j.erreur?j.erreur.message:"the builder failed"); return j.doc.fiche; });
+}
+function conceptionStudio(texte,onEvent){ return conception.open({ sentence:texte, build:o=>batirPourStudio(texte,o), onEvent, hidden:!!onEvent }); }   // from the opening: the panel shows at its end
+const conception=CONCEPTION.createConception({ doc:document, win:window, CORE, library:PATTERN_LIBRARY, base:SKETCH_BASE, studio:STUDIO_DATA, port:portConception,
   sample:()=>sampler, forgetSample:()=>{ sampler=null; },
   play:pk=>{ STORY_PACKS[pk.id]=pk; lancerStory(pk.id,{lang:pk.lang}); },
   free:()=>{} });
@@ -3839,5 +3859,5 @@ function conceptionApres(texte,f){ if(!conceptionOn||!f||(storyMode&&storyMode.o
   const maj=()=>{ b.textContent="Conception : "+(conceptionOn?"oui":"non"); b.setAttribute("aria-pressed",String(conceptionOn)); }; maj();
   b.onclick=()=>{ conceptionOn=!conceptionOn; memoriser("bodycam-conception",conceptionOn); if(!conceptionOn) conception.close(); maj(); };
   $("outils").appendChild(b); }
-window.conception={ open:(t,f)=>conception.open({ sentence:t, place:f||fiche }), state:()=>conception.state(), close:()=>conception.close(), on:()=>conceptionOn };
+window.conception={ open:(t,f)=>conception.open({ sentence:t, place:f||fiche }), studio:t=>conceptionStudio(t), state:()=>conception.state(), close:()=>conception.close(), on:()=>conceptionOn };
 /* ---- end of the conception block ---- */
