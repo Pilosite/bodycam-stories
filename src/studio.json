@@ -17,7 +17,7 @@
   ],
   "stages": [
     {
-      "id": "understand", "role": "reads the sentence and writes the brief", "tier": "mid", "instrument": "invention", "kind": "draft", "after": [],
+      "id": "understand", "title": { "en": "Understanding the request", "fr": "Comprendre la demande" }, "role": "reads the sentence and writes the brief", "tier": "mid", "instrument": "invention", "kind": "draft", "after": [],
       "prompt": [
         "You are the first agent of a studio that conceives a world before it is played. Read the creator's sentence and write the brief the other agents will work from.",
         "{{game}}",
@@ -41,7 +41,7 @@
       ]
     },
     {
-      "id": "research", "role": "finds what is worth knowing", "tier": "fast", "instrument": "invention", "kind": "finding", "after": ["understand"], "fanout": "topics",
+      "id": "research", "title": { "en": "Research", "fr": "La recherche" }, "role": "finds what is worth knowing", "tier": "fast", "instrument": "invention", "kind": "finding", "after": ["understand"], "fanout": "topics",
       "prompt": [
         "You are a researcher in a studio that conceives a world before it is played. Your topic: {{topic}}.",
         "The brief: {{brief}}",
@@ -55,7 +55,7 @@
       ]
     },
     {
-      "id": "environment", "role": "builds the place", "tier": "large", "instrument": "builder", "kind": "build", "after": ["understand", "research"],
+      "id": "environment", "title": { "en": "The place \u00b7 building", "fr": "Le lieu · construction" }, "role": "builds the place", "tier": "large", "instrument": "builder", "kind": "build", "after": ["understand", "research"],
       "description": [
         "{{sentence}}",
         "",
@@ -64,7 +64,7 @@
       ]
     },
     {
-      "id": "people", "role": "conceives the people", "tier": "mid", "instrument": "invention", "kind": "draft", "after": ["understand", "research"],
+      "id": "people", "title": { "en": "The people", "fr": "Les personnages" }, "role": "conceives the people", "tier": "mid", "instrument": "invention", "kind": "draft", "after": ["understand", "research"],
       "prompt": [
         "You conceive the people of a story before it is played: the carrier of the camera and everyone who matters, present, absent or unseen.",
         "{{game}}",
@@ -93,7 +93,7 @@
       ]
     },
     {
-      "id": "interactions", "role": "writes what can be done here", "tier": "mid", "instrument": "invention", "kind": "draft", "after": ["understand", "research", "environment", "people"],
+      "id": "interactions", "title": { "en": "What can be done here", "fr": "Ce qu'on peut faire ici" }, "role": "writes what can be done here", "tier": "mid", "instrument": "invention", "kind": "draft", "after": ["understand", "research", "environment", "people"],
       "prompt": [
         "You write what can be done in a place before it is played: the things in reach and what they afford, the rules of the place, the moments that invite a promise, and the powers the story grants the player.",
         "{{game}}",
@@ -126,7 +126,7 @@
       ]
     },
     {
-      "id": "arc", "role": "lays the narrative arc", "tier": "large", "instrument": "invention", "kind": "draft", "after": ["understand", "environment", "people"], "when": "story",
+      "id": "arc", "title": { "en": "The narrative arc", "fr": "L'arc narratif" }, "role": "lays the narrative arc", "tier": "large", "instrument": "invention", "kind": "draft", "after": ["understand", "environment", "people"], "when": "story",
       "prompt": [
         "You lay the narrative arc of a story before it is played: its question, its beats, the stations along the place's path where the carrier stops, what is found at each, and how it can end.",
         "{{game}}",
@@ -157,7 +157,7 @@
       ]
     },
     {
-      "id": "questions", "role": "asks the author", "tier": "mid", "instrument": "invention", "kind": "question", "after": ["understand", "people"],
+      "id": "questions", "title": { "en": "Questions for you", "fr": "Questions pour toi" }, "role": "asks the author", "tier": "mid", "instrument": "invention", "kind": "question", "after": ["understand", "people"],
       "prompt": [
         "You ask the creator of a story up to three questions before it is played: only questions whose answer would change the story. For each, you also write your own guess, which stands if the creator says \"surprise me\".",
         "The creator's sentence: {{sentence}}",
@@ -173,7 +173,7 @@
       ]
     },
     {
-      "id": "check", "role": "checks and compiles", "tier": "code", "instrument": "code", "kind": "check", "after": ["environment", "people", "interactions", "arc", "questions"]
+      "id": "check", "title": { "en": "Check and compile", "fr": "Contrôle et compilation" }, "role": "checks and compiles", "tier": "code", "instrument": "code", "kind": "check", "after": ["environment", "people", "interactions", "arc", "questions"]
     }
   ],
   "repair": [

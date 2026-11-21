@@ -3657,7 +3657,12 @@ const PORTS = {
        generate({ …, prompt: { prefix, delta }, lang })        the stage prompt assembled by the core (core/prompt.js)
        any answer may carry adapter, model_ms, first_ms (who answered, how fast), or { failed: reason } instead of throwing
        available('judge' | 'invent') → bool (optional): whether a model can judge or invent right now
-     Streaming is not part of this change (the host's model answers whole); see §9.1.1. */
+     Streaming is not part of this change (the host's model answers whole); see §9.1.1.
+     Additive (conception studio, core/studio.js, briefs/conception-v2.md), optional, used before play only:
+       create({ tier: fast|mid|large, purpose, prompt, lang?, onText? })   → Promise<{ text }>   free text for one agent, streamed
+                                                                              through onText(textSoFar) when the adapter can
+       search({ query, lang? })                                        → Promise<{ results: [{ title, url, text }] }>
+       available('create' | 'search')                                  the home node declares both in /health; the host has no search */
   model: ['embed', 'decide', 'generate'],
   /* input: what the player does, pushed to the clocks.
        subscribe(handler) with handler({ kind: 'speech', text, lang, loud? } | { kind: 'look', target, s }) → unsubscribe() */

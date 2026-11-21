@@ -2,7 +2,10 @@
 // (ouvertures/*.json : requêtes, sources, constats réellement faits) est rejouée en accéléré pendant que le moteur compile et
 // rend le lieu derrière ; une autre demande part dans la vraie chaîne du constructeur (atelier.js), en temps réel.
 // Rien n'est inventé : le rejeu ne montre que le journal enregistré, et la traduction et le contrôle sont calculés sur la
-// fiche embarquée au moment même. La mention « rejeu accéléré » est un réglage (docs/ouverture.md).
+// fiche embarquée au moment même. La mention « rejeu accéléré » est un réglage, allumé par défaut (docs/ouverture.md, W3).
+// En direct (briefs/conception-v2.md, W1, W2, W5) : une demande sans rejeu part dans le studio de conception (core/studio.js) ;
+// le journal défilant, le réseau d'agents et le panneau du langage sont alors tirés de ses événements de création, un à un :
+// qui travaille, ce qui a été trouvé, quelles lignes viennent d'être écrites. Aucun nœud sans agent réel derrière.
 // Partie pure (normaliser, correspond, programme, traduction) testée par tests/ouverture.test.mjs ; creerOuverture touche au DOM.
 
 export function normaliser(t) {
@@ -177,7 +180,8 @@ export function programme(r, f, hasard = Math.random, controle = null, enc = nul
 /* ------------------------------------------------------------------ interface (DOM)
    deps : { rejeux, fiches, C (constructeur), appliquer(fiche), pret(timeoutMs) → Promise, attendreGPU(),
             construire(texte) (vraie chaîne), mention (bool), dicteeDispo (Promise<bool>), dicter(el), arreterDictee(),
-            surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard } */
+            surDebut(texte, rejeu), surFin(fiche), etat() → texte de l'étape en cours, hasard,
+            studio(texte, surEvenement) → Promise du résultat, ou null (studio éteint) ; studioData (src/studio.json) } */
 const MOTEUR = ['image', 'audio', 'story'];
 const LARGE = '(min-width: 1000px) and (min-aspect-ratio: 5/4)';   // démo sur PC : planche de photos à côté du journal
 export function creerOuverture(deps) {
@@ -281,6 +285,8 @@ export function creerOuverture(deps) {
     if (deps.surDebut) deps.surDebut(t, !!(r && f));
     if (r && f) return rejouer(r, f);
     afficherMention(null);
+    const vivant = deps.studio ? deps.studio(t, ev => surEvenement(ev)) : null;
+    if (vivant) return vivre(vivant);
     // Pas de rejeu : la vraie chaîne du constructeur, en temps réel, suivie dans son chantier.
     $('ouv-pense').hidden = false; $('ouv-pense').textContent = 'Je prépare ce monde pour de vrai : compte quelques minutes. Tu peux suivre la fabrication.';
     timers.push(setTimeout(() => terminer(null, false, true), 2200));
@@ -612,12 +618,166 @@ export function creerOuverture(deps) {
     (blocP ? blocP.ul : log).appendChild(it);
   }
 
-  function terminer(fiche, passe, constructeur) {
+  /* ------------------------------------------------------------------ en direct : le studio de conception (core/studio.js)
+     Chaque événement de création (étape, agent, palier, instrument, genre, état, latence, lignes écrites) devient une ligne du
+     journal à gauche ; à droite (PC), le réseau ne dessine que les agents qui ont vraiment été appelés, et le panneau du langage
+     montre les lignes de source au moment où elles arrivent. */
+  const V = { blocs: {}, on: false, n: { appels: 0, constats: 0, lignes: 0 }, ouverts: {}, finis: new Set(), vus: {} };
+  const ETATS_FIN = ['done', 'failed', 'skipped', 'repaired', 'fallback'];
+  const MOT = { failed: 'échec', skipped: 'ignorée', fallback: 'repli', repaired: 'réparée' };
+  function vivre(promesse) {
+    V.on = true; V.t0 = Date.now();
+    const m = $('ouv-mention'); m.hidden = false; m.textContent = 'En direct · les agents du studio travaillent pour de vrai ; rien n\'est rejoué';
+    $('ouv-pense').hidden = false; $('ouv-pense').textContent = 'Le studio lit la demande…';
+    V.data = deps.studioData || { stages: [] };
+    if (window.matchMedia && matchMedia(LARGE).matches) {
+      racine.classList.add('ouv-large');
+      V.blocs.droite = d.createElement('div'); V.blocs.droite.className = 'ouv-droite'; racine.querySelector('.ouv-cadre').appendChild(V.blocs.droite);
+      V.res = creerReseauVivant(V.blocs.droite);
+      V.apercu = creerApercu(V.blocs.droite); V.apercu.el.querySelector('.ouv-planche-t').textContent = 'Source · the lines as they are written';
+    }
+    promesse.then(r => {
+      if (fini) return;
+      const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">Le monde se construit</span><span class="ouv-compte"></span></div>`);
+      const c = x.querySelector('.ouv-compte'), suivi = setInterval(() => { if (deps.etat) c.textContent = deps.etat(); }, 200);
+      if (!r) { clearInterval(suivi); c.textContent = 'le studio s\'est arrêté'; timers.push(setTimeout(() => terminer(null, false, false, true), 1600)); return; }
+      Promise.resolve(deps.pret ? deps.pret(6000) : null).catch(() => {}).then(() => { clearInterval(suivi); c.textContent = ''; if (fini) return; x.classList.remove('en-cours'); x.classList.add('fait'); racine.classList.add('ouv-fondu');
+        timers.push(setTimeout(() => terminer(null, false, false, true), 1400)); });
+    }, () => { if (!fini) terminer(null, false, false, true); });
+  }
+  const etapeDe = id => ((V.data && V.data.stages) || []).find(s => s.id === id) || { id, title: {}, role: '' };
+  function blocVivant(id) {
+    if (V.blocs[id]) return V.blocs[id];
+    const st = etapeDe(id), titre = (st.title || {}).fr || (st.title || {}).en || id;
+    const x = li('ouv-etape en-cours', `<div class="ouv-et"><span class="ouv-roue" aria-hidden="true"></span><span class="ouv-titre">${esc(titre)}</span><span class="ouv-compte"></span></div><p class="ouv-apport">${esc(st.role || '')}${st.tier ? ' · ' + esc(st.tier) + (st.instrument ? ' · ' + esc(st.instrument) : '') : ''}</p><ul class="ouv-items"></ul>`);
+    return (V.blocs[id] = { x, ul: x.querySelector('.ouv-items'), n: 0, cpt: {}, plus: null });
+  }
+  function itemVivant(b, cls, html) {
+    const it = d.createElement('li'); it.className = 'ouv-it ' + cls; it.innerHTML = html;
+    if (b.n >= 7 && !/ouv-fort/.test(cls)) {                      // au-delà de sept lignes : un compteur « +N »
+      if (!b.plus) { b.plus = d.createElement('li'); b.plus.className = 'ouv-it ouv-plus'; b.plus.k = 0; b.ul.appendChild(b.plus); }
+      b.plus.k++; b.plus.textContent = '+' + b.plus.k; return null;
+    }
+    b.ul.appendChild(it); b.n++; if (b.plus) b.ul.appendChild(b.plus);
+    it.scrollIntoView({ block: 'end', behavior: 'smooth' }); return it;
+  }
+  function compteVivant(b) {
+    const C = b.cpt, L = [];
+    if (C.requete) L.push(C.requete + ' requête' + (C.requete > 1 ? 's' : ''));
+    if (C.constat) L.push(C.constat + ' constat' + (C.constat > 1 ? 's' : ''));
+    if (C.ligne) L.push(C.ligne + ' ligne' + (C.ligne > 1 ? 's' : ''));
+    if (C.ms) L.push((C.ms / 1000).toFixed(1) + ' s');
+    b.x.querySelector('.ouv-compte').textContent = L.join(' · ');
+  }
+  function lignesApercu(lignes, agent) {
+    V.n.lignes += lignes.length;
+    if (V.res) V.res.cpt();
+    if (!V.apercu) return;
+    for (const l of lignes) {
+      const x = d.createElement('div'); x.className = 'ouv-trame'; x.innerHTML = `<span class="ouv-tj ent">${esc(agent)}</span>`;
+      const t = d.createElement('span'); t.className = 'ouv-tj p2'; x.appendChild(t); V.apercu.flux.appendChild(x); taper(t, l);
+    }
+    while (V.apercu.flux.children.length > 40) V.apercu.flux.firstChild.remove();
+    V.apercu.cpt.textContent = V.n.lignes + ' lines of source written';
+  }
+  function surEvenement(e) {
+    if (fini || !V.on || !e || !e.stage) return;
+    if (V.res) reseauVivant(V.res, e);
+    const b = blocVivant(e.stage), appel = e.latency_ms !== undefined;
+    if (e.status === 'pending') { V.ouverts[e.stage] = (V.ouverts[e.stage] || 0) + 1; V.n.appels++; }
+    else if (appel && (e.status === 'done' || e.status === 'failed')) V.ouverts[e.stage] = Math.max(0, (V.ouverts[e.stage] || 0) - 1);
+    if (appel) b.cpt.ms = (b.cpt.ms || 0) + e.latency_ms;
+    if (e.status === 'writing') {
+      b.cpt.ligne = (b.cpt.ligne || 0) + e.wrote.length; V.vus[e.agent] = true; lignesApercu(e.wrote, e.agent);
+      if (!b.courante) b.courante = itemVivant(b, 'ouv-pdl-j ouv-fort', '');
+      if (b.courante) b.courante.textContent = e.wrote[e.wrote.length - 1];
+      compteVivant(b); return;
+    }
+    if (e.stage === 'understand' && e.status === 'done' && e.wrote) {
+      const kv = Object.fromEntries(e.wrote.map(l => /^(\w+):\s*(.*)$/.exec(l)).filter(Boolean).map(m => [m[1], m[2]]));
+      const p = $('ouv-pense'); p.textContent = [kv.where, kv.when, kv.who].filter(Boolean).join(' · ') || 'Demande lue.';
+      const u = d.createElement('span'); u.className = 'ouv-reperes'; u.innerHTML = ['kind', 'player', 'powers'].filter(k => kv[k]).map(k => `<i>${esc(k + ' : ' + kv[k])}</i>`).join(''); p.appendChild(u);
+    }
+    if (e.kind === 'query' && e.text && !appel && (e.status === 'done' || (e.status === 'pending' && e.instrument === 'search'))) {
+      if (!b.grille) { b.grille = d.createElement('li'); b.grille.className = 'ouv-it ouv-grille'; b.ul.insertBefore(b.grille, b.ul.firstChild); }
+      const q = d.createElement('span'); q.className = 'ouv-q-puce'; q.textContent = (e.instrument === 'search' ? 'web · ' : '') + e.text; b.grille.appendChild(q);
+      b.cpt.requete = (b.cpt.requete || 0) + 1;
+    } else if (e.kind === 'finding' && e.status === 'done' && e.text && !appel) {
+      V.n.constats++; b.cpt.constat = (b.cpt.constat || 0) + 1;
+      itemVivant(b, 'ouv-constat', `<span class="ouv-c">${esc(e.text)}</span><span class="ouv-r">→ ${esc(e.supports || '')} · source : ${esc(e.source || '')}</span>`);
+    } else if (e.kind === 'build' && e.status === 'step' && e.text) itemVivant(b, 'ouv-valeur', `<span class="ouv-k">${esc(e.step || 'étape')}</span> ${esc(e.text)}`);
+    else if (e.kind === 'question' && e.status === 'done' && e.text && !appel) itemVivant(b, 'ouv-constat ouv-fort', `<span class="ouv-c">? ${esc(e.text)}</span><span class="ouv-r">→ à toi de répondre, à l'arrivée</span>`);
+    else if (e.kind === 'check' && e.text && e.status !== 'pending') itemVivant(b, 'ouv-controle' + (e.status === 'done' ? '' : ' ouv-fort'), esc((e.status === 'done' ? '' : (MOT[e.status] || e.status) + ' : ') + e.text) + (e.wrote && e.status !== 'done' ? `<br><span class="ouv-k">${esc(e.wrote.slice(0, 3).join(' · '))}</span>` : ''));
+    else if (appel && e.status === 'done' && e.wrote && e.wrote.length) {
+      b.courante = null;
+      if (!V.vus[e.agent] && e.kind !== 'finding') { lignesApercu(e.wrote.slice(0, 24), e.agent); b.cpt.ligne = (b.cpt.ligne || 0) + e.wrote.length; }
+      if (e.kind !== 'finding') itemVivant(b, 'ouv-pdl-j', `<span class="ouv-k">${esc(e.agent)} · ${e.wrote.length} lignes · ${(e.latency_ms / 1000).toFixed(1)} s</span> ${esc(e.wrote.slice(0, 2).join('  '))}`);
+    } else if (MOT[e.status] && e.text) itemVivant(b, 'ouv-controle ouv-fort', `<span class="ouv-k">${esc(e.agent)} · ${MOT[e.status]}</span> ${esc(e.text)}`);
+    const fin = e.stage === 'check' ? (e.status === 'done' && /files/.test(e.text || '')) || e.status === 'fallback' : ETATS_FIN.includes(e.status) && !V.ouverts[e.stage];
+    if (fin) { b.x.classList.remove('en-cours'); b.x.classList.add('fait'); V.finis.add(e.stage); }
+    compteVivant(b);
+  }
+  /* Le réseau en direct : un nœud par agent réellement appelé, rangé par palier (fast, mid, large, code), relié aux agents des
+     étapes qu'il lit (src/studio.json, after). Rouge tant qu'il travaille, vert à la réponse, gris ensuite ; pointillé rouge
+     s'il a échoué. Un rang « web » n'apparaît que si une recherche a vraiment eu lieu ; le moteur reçoit le lieu construit. */
+  function creerReseauVivant(hote) {
+    const W = 520, H = 300, RANGS = { search: 26, fast: 78, mid: 140, large: 202, code: 262 };
+    const el = d.createElement('div'); el.className = 'ouv-reseau ouv-vivant';
+    el.innerHTML = `<p class="ouv-planche-t">Agent network · live</p><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><g class="ouv-ar"></g><g class="ouv-nds"></g><g class="ouv-imp"></g><g class="ouv-eti"></g>`
+      + `<text x="4" y="${RANGS.fast + 4}">fast</text><text x="4" y="${RANGS.mid + 4}">mid</text><text x="4" y="${RANGS.large + 4}">large</text><text x="4" y="${RANGS.code + 4}">code</text></svg>`
+      + `<p class="ouv-leg"><span><i class="em"></i>working</span> <span><i class="re"></i>answered</span> <span><i class="fa"></i>done</span> · tiers by role, no model names</p><p class="ouv-etat-r"></p>`;
+    hote.appendChild(el);
+    const R = { el, svg: el.querySelector('svg'), ar: el.querySelector('.ouv-ar'), nds: el.querySelector('.ouv-nds'), imp: el.querySelector('.ouv-imp'), eti: el.querySelector('.ouv-eti'), rc: el.querySelector('.ouv-etat-r'),
+      RANGS, nodes: {}, parRang: {}, aretes: {} };
+    R.cpt = () => {
+      const act = Object.values(R.nodes).filter(n => n.c.classList.contains('emet')).length;
+      R.rc.innerHTML = `<b>${act}</b> active agent${act > 1 ? 's' : ''} · <b>${V.n.appels}</b> calls · ${V.n.constats} findings · ${V.n.lignes} lines written · ${Math.round((Date.now() - (V.t0 || Date.now())) / 1000)} s`;
+    };
+    R.cpt(); R.tic = setInterval(() => { if (fini || !el.isConnected) { clearInterval(R.tic); return; } R.cpt(); }, 1000);
+    return R;
+  }
+  function noeudVivant(R, agent, rang, nom) {
+    if (R.nodes[agent]) return R.nodes[agent];
+    const k = (R.parRang[rang] = (R.parRang[rang] || 0) + 1) - 1, x = 92 + (k % 6) * 72, y = R.RANGS[rang] + (k >= 6 ? 14 : 0);
+    const forme = d.createElementNS(NS, rang === 'code' ? 'rect' : 'circle');
+    if (rang === 'code') { forme.setAttribute('x', x - 8); forme.setAttribute('y', y - 8); forme.setAttribute('width', 16); forme.setAttribute('height', 16); forme.setAttribute('rx', 2); }
+    else { forme.setAttribute('cx', x); forme.setAttribute('cy', y); forme.setAttribute('r', rang === 'large' ? 12 : rang === 'mid' ? 9 : 6); }
+    forme.setAttribute('class', 'ouv-nd ' + (rang === 'large' ? 'o' : rang === 'mid' ? 's' : rang === 'code' ? 'm' : 'h')); forme.style.transformOrigin = x + 'px ' + y + 'px';
+    const t = d.createElementNS(NS, 'text'); t.setAttribute('x', x); t.setAttribute('y', y + 22); t.setAttribute('text-anchor', 'middle'); t.setAttribute('class', 'ouv-mc'); t.textContent = nom;
+    R.nds.appendChild(forme); R.nds.appendChild(t);
+    if (rang === 'search' && R.parRang.search === 1) { const tx = d.createElementNS(NS, 'text'); tx.setAttribute('x', 4); tx.setAttribute('y', R.RANGS.search + 4); tx.textContent = 'web'; R.nds.appendChild(tx); }
+    return (R.nodes[agent] = { c: forme, x, y, agent });
+  }
+  function reseauVivant(R, e) {
+    if (e.status === 'writing') { const n = R.nodes[e.agent]; if (n) etiquette(R, n, e.wrote.length + ' l.', 12); return; }
+    const rang = e.instrument === 'search' ? 'search' : e.tier === 'code' || e.instrument === 'code' ? 'code' : R.RANGS[e.tier] ? e.tier : 'mid';
+    const nom = rang === 'search' ? 'search' : e.agent.replace(/^research\./, '').replace(/\.repair$/, ' ⟲');
+    const n = noeudVivant(R, rang === 'search' ? 'web.' + e.agent : e.agent, rang, nom);
+    if (e.status === 'pending') {
+      poser(n.c, 'emet');
+      for (const a of etapeDe(e.stage).after || []) for (const m of Object.values(R.nodes)) {   // ce que l'agent lit : les agents des étapes d'avant
+        if (m === n || !(m.agent === a || m.agent.startsWith(a + '.') || (a === 'environment' && m.agent === 'builder'))) continue;
+        const k = m.agent + '>' + n.agent;
+        if (!R.aretes[k]) { const l = d.createElementNS(NS, 'line'); for (const [p, v] of [['x1', m.x], ['y1', m.y], ['x2', n.x], ['y2', n.y]]) l.setAttribute(p, v); R.ar.appendChild(l); R.aretes[k] = l; }
+        impulsion(R, m, n, 520);
+      }
+    } else if (ETATS_FIN.includes(e.status) && (e.latency_ms !== undefined || e.status !== 'done')) {
+      finir(n.c);
+      if (e.status === 'failed' || e.status === 'fallback') n.c.classList.add('ko');
+      else { poser(n.c, 'recoit', 900); if (e.wrote && e.wrote.length) etiquette(R, n, e.wrote.length + ' lines', 12); }
+      if (e.agent === 'builder' && e.status === 'done') {             // le lieu construit part vers le moteur, qui le compile
+        const m = noeudVivant(R, 'engine', 'code', 'engine'); impulsion(R, n, m, 600, 'g'); poser(m.c, 'recoit', 1500);
+      }
+    } else if (e.kind === 'finding' && e.text) etiquette(R, n, '+1 finding', 12);
+    R.cpt();
+  }
+
+  function terminer(fiche, passe, constructeur, studio) {
     if (fini) return; fini = true;
     timers.forEach(clearTimeout); timers = [];
     racine.classList.add('ouv-fondu');
     setTimeout(() => { racine.hidden = true; racine.remove(); d.body.classList.remove('ouverture-on'); }, passe ? 300 : 900);
-    if (deps.surFin) deps.surFin({ passe: !!passe, constructeur: !!constructeur, texte: $('ouv-demande').textContent });
+    if (deps.surFin) deps.surFin({ passe: !!passe, constructeur: !!constructeur, studio: !!studio || V.on, texte: $('ouv-demande').textContent });
   }
 
   return {
@@ -625,6 +785,7 @@ export function creerOuverture(deps) {
     mention(on) { mention = !!on; const m = $('ouv-mention'); if (m && m.textContent) m.hidden = !mention; return mention; },
     dictee(on) { const b = $('ouv-dicter'); if (b) { b.setAttribute('aria-pressed', String(!!on)); b.textContent = on ? 'J\'écoute' : 'Micro'; } },
     envoyer: t => { txt.value = t; envoyer(t); },
+    vivant: () => V.on ? { etapes: Object.keys(V.blocs).filter(k => k !== 'droite'), finies: [...V.finis], agents: V.res ? Object.keys(V.res.nodes) : [], appels: V.n.appels, constats: V.n.constats, lignes: V.n.lignes } : null,
     ouvert: () => !fini && !racine.hidden
   };
 }

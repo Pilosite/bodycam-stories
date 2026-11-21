@@ -327,6 +327,7 @@ export function createStoryMode(P) {
       if (!harvestIds.has(st.session)) harvestIds.set(st.session, st.id + '-' + w.seed + '-' + Date.now().toString(36));
       const status = st.model && st.model.status ? st.model.status() : { judge: 'code', invent: 'none' };
       P.harvest.story({ why, journal: st.session.journal.entries, gaps: st.ex ? st.ex.gaps.slice() : [], id: harvestIds.get(st.session), lang: st.lang,
+        creation: st.pk && st.pk.conception && st.pk.conception.creation || null,   // a prompted world: its creation journal (core/studio.js)
         pack: { id: st.id, version: st.pk && st.pk.version || null },
         versions: { pack: st.pk && st.pk.version || null, thresholds: { act_from: R.act_from ?? 0.8, ask_below: R.ask_below ?? 0.5 }, reflexes: C.hashString(C.canonicalJSON(R)),
           model: { judge: status.judge, invent: status.invent, home: st.home && st.home.state.configured ? (st.home.state.up ? 'up' : 'down') : 'off', host_tiers: M.HOST_TIERS || null, limits_ms: M.LIMITS || null } } });
