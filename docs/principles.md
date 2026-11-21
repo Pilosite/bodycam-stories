@@ -31,7 +31,7 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 
 ## A. The experience
 
-**P1. You act indirectly.** The player never acts on the world and never steers the character. They speak to someone who is in the world. This is the identity of the game, not a limitation to work around. Who the player is, is the author's choice: a voice on the line in one story, a ghost, an object, an idea that has to spread in another. What never changes is that the player holds no controller: they act through words, first of all spoken ones. *Check: there is no input that moves the character or touches a thing directly.*
+**P1. You never hold the character's controls.** The heart of the game is speaking in the head of someone who is in the world: they understand, agree, argue, refuse and act on their own. That is the main arc, and it is the identity of the game, not a limitation to work around. It is not the only lever. From where the player stands, they may also act on the world itself when the story grants it: change the weather or the hour, make a sound, move a thing, set off an event, so as to push a character toward something or to see what happens. Both levers are indirect with respect to the character: one persuades, the other changes the circumstances. Who the player is, is the author's choice: a voice on the line in one story, a ghost, an object, an idea that has to spread in another; and so is what they can do to the world (a **power**, granted or not, wide or narrow). *Check: there is no input that moves a character's body or makes them act; everything the player does to the world is a transaction in the one channel, allowed by a power the story grants, and journaled like any other.*
 
 **P2. The lens is imposed on purpose.** One body camera, one subjective view, the look of phone footage. The frame constrains what can be asked and seen, and that constraint is the art direction: it is what makes an open world of possibilities elegant and tractable. *Check: nothing is shown that the camera could not have filmed.*
 
@@ -85,7 +85,7 @@ They do not compete, because they do not live in the same layer. Like a film, a 
 
 ## What these principles rule out
 
-- A control scheme, a cursor on the world, a "use" button.
+- A control scheme for the character: a stick, a "use" button, a cursor that makes them act. (Acting on the world itself, where a story grants it, is not ruled out: P1.)
 - A camera that leaves the body.
 - A feature built for one kind of object, creature or situation.
 - A rule language so precise that only a programmer can write it.

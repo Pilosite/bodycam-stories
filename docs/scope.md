@@ -32,6 +32,7 @@ Why: it is the bodycam constraint taken seriously (we never drive her), it lets 
 | Anticipation | frontier of likely intents per station, measured | speculative pre-rendering of next views | continuous background world growth |
 | Creator tools | session viewer, rule what-if, principle audit, pack checker | assistant-driven authoring commands | hosted creator workspace |
 | Collaboration | layered packs in Git with provenance | shared packs, forks and merges with tooling | live shared narrative spaces |
+| Powers: what the player may do to the world itself (weather, hour, sounds, things, events), granted by the story | not built; the channel and the validator already carry it (an author's kind and a grant) | one or two powers in a prompted story, spoken like anything else ("make it rain") | a full range of roles, from a voice with no power to a ghost, a spirit of the place or a game master with all of them |
 | A human game master (hosting a session) | not built; the channel already allows it: an author of kind `creator` can submit transactions and rules mid-session | a host console on a live session of one player | several players at one table, a person or a model in the chair |
 | Languages | backend English; English is the primary play language, French fully available, speech with subtitles; one override setting | more languages | — |
 | Platform | desktop browser | phone | — |
