@@ -141,6 +141,21 @@ figcaption{font-size:13.5px;color:var(--ink-3);margin-top:10px}
 .ins .dot{transform:translateY(-1px)}
 .hint{display:none;margin:0 0 8px;color:var(--ink-3);font-size:10px}
 @media (max-width:900px){.hint{display:block}}
+.scroll svg.w1100{min-width:1000px}
+.fam{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+@media (min-width:760px){.fam{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:980px){.fam{grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,1fr))}}
+.card4{position:relative;border:1px solid var(--line-2);border-radius:10px;padding:16px;background:var(--bg-2);min-width:0}
+.card4.dec{border-color:var(--red);background:var(--red-soft)}
+.card4 .mono{color:var(--red-ink);font-size:10.5px;margin:0 0 8px}
+.card4 h3{font-weight:700;font-size:19px;line-height:1.2;letter-spacing:-.01em;margin:0 0 8px}
+.card4 p{font-size:14px;line-height:1.5;color:var(--ink-2);margin:0 0 8px}
+.card4 .where{color:var(--ink);margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line)}
+.card4 .where b{font-weight:600;color:var(--red-ink)}
+.why{display:grid;grid-template-columns:minmax(0,1fr);gap:4px 40px;margin-top:22px}
+@media (min-width:860px){.why{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}}
+.why p{margin:0 0 12px;color:var(--ink-2);max-width:62ch}
+.why strong{color:var(--ink);font-weight:600}
 /* era strip */
 .eras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (min-width:980px){.eras{grid-template-columns:repeat(4,minmax(0,1fr))}}
@@ -403,56 +418,99 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
 <section class="blk wide tech" aria-labelledby="bA">
   <div class="txt">
     <p class="lab mono"><b>06</b> Le réseau d'agents</p>
-    <h2 id="bA">Une équipe de modèles, et une règle : aucun ne parle directement à un autre.</h2>
-    <p>Chaque modèle regarde où en est l'histoire, puis propose ce qui doit se passer. Il l'écrit dans le PDL, une petite langue à nous que tous les modèles écrivent et que le moteur lit. Un vérificateur relit chaque proposition : il l'accepte, la corrige pour coller à ce que le joueur a demandé, ou la refuse en disant pourquoi, et tout ce qui passe est noté dans le journal de la partie. Un petit modèle rapide répond en une fraction de seconde, un grand modèle prend son temps pour préparer la suite, et des modèles spécialisés tranchent les questions fermées sans écrire une phrase.</p>
+    <h2 id="bA">Le réseau d'agents : une équipe de modèles, et aucun ne parle à un autre.</h2>
+    <p>Chaque agent a un métier, et un modèle choisi pour ce métier. Il lit l'état du monde, puis écrit ce qu'il propose dans le PDL, une petite langue à nous que tous les agents écrivent et que le moteur lit. Au milieu, un vérificateur accepte chaque proposition, la corrige pour coller à ce que le joueur a demandé, ou la refuse en disant pourquoi. Le journal de la partie note qui a décidé quoi, avec quel modèle, et avec quelle certitude.</p>
   </div>
   <figure class="pic">
     <div class="frame">
-      <p class="hint mono">Faire défiler →</p><div class="scroll"><svg class="w900" viewBox="0 0 1000 600" role="img" aria-label="Le réseau de modèles à la conception, pendant la partie et après. Tous lisent l'état de l'histoire et envoient leurs propositions au vérificateur, qui met l'histoire à jour et écrit le journal de la partie.">
+      <p class="hint mono">Faire défiler →</p><div class="scroll"><svg class="w1100" viewBox="0 0 1200 700" role="img" aria-label="Le réseau d'agents à la conception, pendant la partie et après. Chaque agent porte la famille de modèle qui le fait tourner. Tous lisent l'état du monde et envoient leurs propositions au vérificateur, qui met le monde à jour et écrit le journal de la partie.">
         <defs>
           <marker id="mAr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="dfr"/></marker>
         </defs>
         <text x="10" y="22" class="dmr">À LA CONCEPTION</text>
         <g>
-          <rect x="10" y="34" width="185" height="70" rx="7" class="db"/><text x="22" y="56" class="dt">Lire la phrase</text><text x="22" y="76" class="dts">ce qui est demandé</text><text x="22" y="94" class="tag">modèle moyen</text>
-          <rect x="207" y="34" width="185" height="70" rx="7" class="db"/><text x="219" y="56" class="dt">Recherche web</text><text x="219" y="76" class="dts">lieu, époque, gens, sources</text><text x="219" y="94" class="tag">petits modèles, en nombre</text>
-          <rect x="404" y="34" width="185" height="70" rx="7" class="db"/><text x="416" y="56" class="dt">Bâtir le lieu</text><text x="416" y="76" class="dts">relief, plantes, lumière, sons</text><text x="416" y="94" class="tag">modèle moyen</text>
-          <rect x="601" y="34" width="185" height="70" rx="7" class="db"/><text x="613" y="56" class="dt">Écrire les gens</text><text x="613" y="76" class="dts">voix, savoirs, secrets</text><text x="613" y="94" class="tag">modèle moyen</text>
-          <rect x="798" y="34" width="192" height="70" rx="7" class="db"/><text x="810" y="56" class="dt">Préparer l'histoire</text><text x="810" y="76" class="dts">l'arc, les questions à l'auteur</text><text x="810" y="94" class="tag">grand modèle</text>
+          <rect x="10" y="34" width="186" height="82" rx="7" class="db"/><text x="22" y="57" class="dt">Lire la phrase</text><text x="22" y="77" class="dts">ce qui est demandé, où</text><text x="22" y="103" class="tag">grand modèle · Opus</text>
+          <rect x="208" y="34" width="186" height="82" rx="7" class="db"/><text x="220" y="57" class="dt">Recherche web</text><text x="220" y="77" class="dts">pages lues, sources gardées</text><text x="220" y="103" class="tag">petits modèles · Haiku, ×n</text>
+          <rect x="406" y="34" width="186" height="82" rx="7" class="db"/><text x="418" y="57" class="dt">Bâtir le lieu</text><text x="418" y="77" class="dts">relief, plantes, lumière, sons</text><text x="418" y="103" class="tag">modèle moyen · Sonnet</text>
+          <rect x="604" y="34" width="186" height="82" rx="7" class="db"/><text x="616" y="57" class="dt">Gens et interactions</text><text x="616" y="77" class="dts">voix, secrets, gestes possibles</text><text x="616" y="103" class="tag">modèle moyen · Sonnet</text>
+          <rect x="802" y="34" width="186" height="82" rx="7" class="db"/><text x="814" y="57" class="dt">L'arc et les questions</text><text x="814" y="77" class="dts">temps forts, fins, l'auteur</text><text x="814" y="103" class="tag">grand modèle · Opus</text>
+          <rect x="1000" y="34" width="190" height="82" rx="7" class="db"/><text x="1012" y="57" class="dt">Trier, vérifier</text><text x="1012" y="77" class="dts">source utile ? cohérent ?</text><text x="1012" y="103" class="tag">modèle de décision</text>
         </g>
         <g class="dr">
-          <line x1="102" y1="104" x2="420" y2="226" marker-end="url(#mAr)"/><line x1="299" y1="104" x2="445" y2="226" marker-end="url(#mAr)"/><line x1="496" y1="104" x2="480" y2="226" marker-end="url(#mAr)"/><line x1="693" y1="104" x2="520" y2="226" marker-end="url(#mAr)"/><line x1="894" y1="104" x2="545" y2="226" marker-end="url(#mAr)"/>
+          <line x1="103" y1="116" x2="520" y2="262" marker-end="url(#mAr)"/><line x1="301" y1="116" x2="545" y2="262" marker-end="url(#mAr)"/><line x1="499" y1="116" x2="575" y2="262" marker-end="url(#mAr)"/><line x1="697" y1="116" x2="620" y2="262" marker-end="url(#mAr)"/><line x1="895" y1="116" x2="655" y2="262" marker-end="url(#mAr)"/><line x1="1095" y1="116" x2="680" y2="262" marker-end="url(#mAr)"/>
         </g>
-        <rect x="10" y="230" width="230" height="74" rx="8" class="db"/><text x="24" y="256" class="dm">OÙ EN EST L'HISTOIRE</text><text x="24" y="276" class="dts">ce qui est su, promis,</text><text x="24" y="292" class="dts">ce qui est en vue</text>
-        <rect x="380" y="230" width="240" height="74" rx="8" class="dbr"/><text x="394" y="256" class="dmr">LE VÉRIFICATEUR</text><text x="394" y="276" class="dts">accepte · corrige · refuse</text><text x="394" y="292" class="dts">et dit pourquoi</text>
-        <rect x="760" y="230" width="230" height="74" rx="8" class="db"/><text x="774" y="256" class="dm">LE JOURNAL DE LA PARTIE</text><text x="774" y="276" class="dts">tout, avec qui l'a proposé ;</text><text x="774" y="292" class="dts">la partie se rejoue à l'identique</text>
-        <line x1="620" y1="258" x2="758" y2="258" class="dr" marker-end="url(#mAr)"/>
-        <line x1="380" y1="276" x2="242" y2="276" class="dr" marker-end="url(#mAr)"/>
-        <text x="256" y="268" class="dm">MET À JOUR</text>
-        <text x="10" y="356" class="dmr">PENDANT LA PARTIE</text>
+        <rect x="10" y="266" width="300" height="100" rx="8" class="db"/><text x="24" y="292" class="dm">L'ÉTAT DU MONDE</text><text x="24" y="314" class="dts">le lieu, les gens, ce qui est su et promis,</text><text x="24" y="332" class="dts">ce qui est en vue ; chaque agent le lit</text><text x="24" y="350" class="dts">avant d'écrire</text>
+        <rect x="450" y="266" width="300" height="100" rx="8" class="dbr"/><text x="464" y="292" class="dmr">LE VÉRIFICATEUR</text><text x="464" y="314" class="dts">accepte · corrige · refuse, et dit pourquoi</text><text x="464" y="334" class="dts">un modèle de décision y relit chaque</text><text x="464" y="352" class="dts">réplique inventée contre les interdits</text>
+        <rect x="890" y="266" width="300" height="100" rx="8" class="db"/><text x="904" y="292" class="dm">LE JOURNAL DE LA PARTIE</text><text x="904" y="314" class="dts">qui a décidé quoi, avec quel modèle,</text><text x="904" y="332" class="dts">sûr à combien, en combien de temps ;</text><text x="904" y="350" class="dts">la partie se rejoue à l'identique</text>
+        <line x1="750" y1="300" x2="888" y2="300" class="dr" marker-end="url(#mAr)"/>
+        <line x1="450" y1="330" x2="312" y2="330" class="dr" marker-end="url(#mAr)"/>
+        <text x="330" y="322" class="dm">MET À JOUR</text><text x="768" y="292" class="dm">NOTE TOUT</text>
+        <text x="10" y="410" class="dmr">PENDANT LA PARTIE</text>
         <g>
-          <rect x="10" y="368" width="185" height="96" rx="7" class="db"/><text x="22" y="390" class="dt">Comprendre la phrase</text><text x="22" y="410" class="dts">que veut-on ? à qui : elle ou</text><text x="22" y="426" class="dts">le monde ? va-t-elle suivre ?</text><text x="22" y="452" class="tag">modèle qui tranche · 0,1 s</text>
-          <rect x="207" y="368" width="185" height="96" rx="7" class="db"/><text x="219" y="390" class="dt">Le premier mot</text><text x="219" y="410" class="dts">choisi parmi des répliques</text><text x="219" y="426" class="dts">préparées d'avance</text><text x="219" y="452" class="tag">petit modèle rapide</text>
-          <rect x="404" y="368" width="185" height="96" rx="7" class="db"/><text x="416" y="390" class="dt">La suite immédiate</text><text x="416" y="410" class="dts">ce que la phrase déclenche,</text><text x="416" y="426" class="dts">en quelques secondes</text><text x="416" y="452" class="tag">modèle moyen</text>
-          <rect x="601" y="368" width="185" height="96" rx="7" class="db"/><text x="613" y="390" class="dt">La vie du lieu</text><text x="613" y="410" class="dts">météo, lumière, sons,</text><text x="613" y="426" class="dts">passants</text><text x="613" y="452" class="tag">petits et moyens modèles</text>
-          <rect x="798" y="368" width="192" height="96" rx="7" class="db"/><text x="810" y="390" class="dt">Le fil long</text><text x="810" y="410" class="dts">où va l'histoire, ce qui</text><text x="810" y="426" class="dts">pourrait venir ensuite</text><text x="810" y="452" class="tag">grand modèle</text>
+          <rect x="10" y="422" width="186" height="104" rx="7" class="db"/><text x="22" y="445" class="dt">Comprendre la phrase</text><text x="22" y="465" class="dts">que veut-on ? à qui : elle</text><text x="22" y="481" class="dts">ou le monde ? suit-elle ?</text><text x="22" y="512" class="tag">modèle de décision</text>
+          <rect x="208" y="422" width="186" height="104" rx="7" class="db"/><text x="220" y="445" class="dt">Le premier mot</text><text x="220" y="465" class="dts">choisi parmi les répliques</text><text x="220" y="481" class="dts">préparées d'avance</text><text x="220" y="512" class="tag">petit modèle · Haiku</text>
+          <rect x="406" y="422" width="186" height="104" rx="7" class="db"/><text x="418" y="445" class="dt">La suite immédiate</text><text x="418" y="465" class="dts">ce que l'acte déclenche,</text><text x="418" y="481" class="dts">en une ligne courte</text><text x="418" y="512" class="tag">modèle moyen · Sonnet</text>
+          <rect x="604" y="422" width="186" height="104" rx="7" class="db"/><text x="616" y="445" class="dt">La vie du lieu</text><text x="616" y="465" class="dts">météo, lumière, sons,</text><text x="616" y="481" class="dts">passants</text><text x="616" y="512" class="tag">petit ou moyen modèle</text>
+          <rect x="802" y="422" width="186" height="104" rx="7" class="db"/><text x="814" y="445" class="dt">Promesses, flou</text><text x="814" y="465" class="dts">« trop souvent » ? « près » ?</text><text x="814" y="481" class="dts">promesse échue ? tenue ?</text><text x="814" y="512" class="tag">modèle de décision</text>
+          <rect x="1000" y="422" width="190" height="104" rx="7" class="db"/><text x="1012" y="445" class="dt">Le fil long</text><text x="1012" y="465" class="dts">où va l'histoire ; ce qui</text><text x="1012" y="481" class="dts">pourrait venir, préparé</text><text x="1012" y="512" class="tag">grand modèle · Opus</text>
         </g>
         <g class="dr">
-          <line x1="102" y1="368" x2="420" y2="308" marker-end="url(#mAr)"/><line x1="299" y1="368" x2="445" y2="308" marker-end="url(#mAr)"/><line x1="496" y1="368" x2="485" y2="308" marker-end="url(#mAr)"/><line x1="693" y1="368" x2="530" y2="308" marker-end="url(#mAr)"/><line x1="894" y1="368" x2="560" y2="308" marker-end="url(#mAr)"/>
+          <line x1="103" y1="422" x2="520" y2="370" marker-end="url(#mAr)"/><line x1="301" y1="422" x2="545" y2="370" marker-end="url(#mAr)"/><line x1="499" y1="422" x2="580" y2="370" marker-end="url(#mAr)"/><line x1="697" y1="422" x2="620" y2="370" marker-end="url(#mAr)"/><line x1="895" y1="422" x2="655" y2="370" marker-end="url(#mAr)"/><line x1="1095" y1="422" x2="680" y2="370" marker-end="url(#mAr)"/>
         </g>
-        <text x="10" y="500" class="dm">APRÈS LA PARTIE : ILS RELISENT LE JOURNAL</text>
-        <rect x="10" y="512" width="382" height="62" rx="7" class="db"/><text x="22" y="536" class="dt">Vérifier les règles de l'auteur</text><text x="22" y="556" class="dts">chacune : respectée ou non, et quand</text><text x="270" y="536" class="tag">modèle qui tranche</text>
-        <rect x="404" y="512" width="382" height="62" rx="7" class="db"/><text x="416" y="536" class="dt">Résumer les parties</text><text x="416" y="556" class="dts">ce qui a manqué, été improvisé, hésité</text><text x="680" y="536" class="tag">modèle moyen</text>
-        <text x="10" y="594" class="dmr">AUCUN MODÈLE N'EN APPELLE UN AUTRE : TOUS PASSENT PAR LE VÉRIFICATEUR</text>
+        <text x="10" y="566" class="dm">APRÈS LA PARTIE : ILS RELISENT LE JOURNAL</text>
+        <rect x="10" y="578" width="384" height="66" rx="7" class="db"/><text x="22" y="602" class="dt">Vérifier les règles de l'auteur</text><text x="22" y="624" class="dts">chacune : respectée ou non, et quand</text><text x="264" y="602" class="tag">modèle de décision</text>
+        <rect x="406" y="578" width="384" height="66" rx="7" class="db"/><text x="418" y="602" class="dt">Compter et résumer</text><text x="418" y="624" class="dts">ce qui a manqué, été improvisé, hésité</text><text x="654" y="602" class="tag">modèle moyen · Sonnet</text>
+        <rect x="802" y="578" width="388" height="66" rx="7" class="db"/><text x="814" y="602" class="dt">Analyses pour le narrateur</text><text x="814" y="624" class="dts">ce que les joueurs cherchaient, ce qui manque</text><text x="1060" y="602" class="tag">grand modèle · Opus</text>
+        <text x="10" y="684" class="dmr">AUCUN AGENT N'EN APPELLE UN AUTRE : CHACUN LIT L'ÉTAT DU MONDE, ÉCRIT DANS LA MÊME LANGUE, ET PASSE PAR LE VÉRIFICATEUR</text>
       </svg></div>
     </div>
-    <figcaption>Flèches rouges : des propositions envoyées au vérificateur.</figcaption>
+    <figcaption>Flèches rouges : des propositions envoyées au vérificateur. Les noms Haiku, Sonnet et Opus désignent une classe de vitesse et de profondeur ; chaque fournisseur a les siennes.</figcaption>
   </figure>
+</section>
+
+<!-- A2 model families -->
+<section class="blk wide tech" aria-labelledby="bA2">
+  <div class="txt">
+    <p class="lab mono"><b>07</b> Les modèles</p>
+    <h2 id="bA2">Quatre familles de modèles, chacune à sa place.</h2>
+  </div>
+  <div class="pic">
+    <div class="fam">
+      <article class="card4 dec">
+        <p class="mono">Juger · modèles de décision</p>
+        <h3>Ils tranchent, et n'écrivent jamais.</h3>
+        <p>La famille ouverte par Jev (TypeSafe AI, 15 septembre 2026), dite « System One », suivie en quelques semaines par Clef chez Cloudflare (poids ouverts), l'API Decisions d'OpenAI et d'autres. Ils lisent une situation et une question typée, et rendent oui ou non, un choix parmi plusieurs, ou un niveau, avec une probabilité. Leurs éditeurs annoncent de quelques dizaines à quelques centaines de millisecondes : 39 ms en médiane pour Clef-flash, autour de 100 ms pour Jev.</p>
+        <p class="where"><b>Ici :</b> chaque phrase du joueur (que demande-t-on, à qui, au personnage ou au monde, va-t-elle suivre) ; les conditions floues (« trop souvent », « près ») ; les promesses (échue ? tenue ?) ; chaque réplique inventée, comparée aux interdits. Sur un interdit, la question est posée deux fois, options inversées, et un désaccord compte comme un doute.</p>
+      </article>
+      <article class="card4">
+        <p class="mono">Inventer vite · petits modèles</p>
+        <h3>Classe Haiku, et ses équivalents.</h3>
+        <p>Rapides, réglés sans réflexion longue. Ils choisissent une réplique ou une option préparée et remplissent au plus trois cases.</p>
+        <p class="where"><b>Ici :</b> le premier mot, quand rien de préparé ne convient tout à fait ; la recherche web en nombre, à la conception.</p>
+      </article>
+      <article class="card4">
+        <p class="mono">Mettre en scène · modèles moyens</p>
+        <h3>Classe Sonnet.</h3>
+        <p>Ils écrivent la réaction complète en une ligne d'instructions courte, une transaction par ligne, exécutée dès qu'elle arrive.</p>
+        <p class="where"><b>Ici :</b> ce qu'un acte déclenche, en quelques secondes ; les gens et les interactions, à la conception.</p>
+      </article>
+      <article class="card4">
+        <p class="mono">Voir loin · grands modèles</p>
+        <h3>Classe Opus.</h3>
+        <p>Ils ont le temps : ils écrivent longuement, en texte lisible par l'auteur.</p>
+        <p class="where"><b>Ici :</b> le fil long de l'histoire ; ce qui pourrait venir, préparé d'avance avec sa réplique ; l'histoire elle-même, à la conception ; la lecture des parties pour les analyses du narrateur.</p>
+      </article>
+    </div>
+    <div class="why">
+      <p><strong>Pourquoi deux instruments.</strong> Inventer et juger sont deux métiers. On ne demande jamais à un modèle qui écrit de juger quand un jugement suffit, et un modèle qui juge n'écrit jamais. Chacun écrit aussi le moins possible, parce qu'un modèle lit vite et écrit lentement : la couche rapide choisit parmi des options préparées, celle du milieu écrit une ligne d'instructions courte, et seule la couche lente écrit longuement. Le vrai travail du grand modèle est de transformer l'écriture de demain en choix d'aujourd'hui.</p>
+      <p><strong>Aucune marque imposée.</strong> Le cadre tourne avec Anthropic, Google, OpenAI ou des modèles à poids ouverts sur sa propre machine. Les rôles se donnent par vitesse et par profondeur ; changer de modèle est un réglage, et le journal dit lequel a répondu.</p>
+    </div>
+  </div>
 </section>
 <!-- B pdl to pixel -->
 <section class="blk wide tech" aria-labelledby="bB">
   <div class="txt">
-    <p class="lab mono"><b>07</b> De la phrase à l'image</p>
+    <p class="lab mono"><b>08</b> De la phrase à l'image</p>
     <h2 id="bB">Une phrase devient une image, sans aucun fichier d'image stocké.</h2>
     <p>Le joueur dit « Fais tomber la pluie. » Un modèle en fait une ligne d'instructions, le vérificateur contrôle que l'histoire accorde ce pouvoir au joueur, et le moteur d'image traduit la ligne dans ses ingrédients : relief, plantes semées, matières décrites par des recettes, formes, lumière, sons synthétisés. Un lieu tient en une description et un nombre qui fixe le hasard ; tout est recalculé à chaque image avec un budget de calcul fixe, puis filmé avec les défauts de la caméra choisie. Le moteur rend compte de ce qu'il a fait, et ce qu'il n'a pas su montrer est noté pour enrichir le jeu.</p>
   </div>
@@ -502,7 +560,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
 <!-- C non deterministic -->
 <section class="blk wide tech" aria-labelledby="bC">
   <div class="txt">
-    <p class="lab mono"><b>08</b> Imprévisible, et pourtant rejouable</p>
+    <p class="lab mono"><b>09</b> Imprévisible, et pourtant rejouable</p>
     <h2 id="bC">Jamais deux fois la même partie. Chacune se rejoue à l'identique.</h2>
     <p>Ce que fait le personnage est décidé par des modèles, avec une part d'incertitude : d'une partie à l'autre, la même phrase mène ailleurs. Ce qui en découle est calculé par du code, avec un nombre qui fixe le hasard : refaire une partie à partir de son journal redonne les mêmes gestes et les mêmes images. On peut aussi la refaire avec une ligne de l'histoire changée, et voir ce qui diffère. Rien n'est figé, sauf ce qu'un auteur a écrit comme une règle ou un interdit.</p>
   </div>
@@ -533,7 +591,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
 <!-- authors and conception studio -->
 <section class="blk wide" aria-labelledby="b7">
   <div class="txt">
-    <p class="lab mono"><b>09</b> Les auteurs</p>
+    <p class="lab mono"><b>10</b> Les auteurs</p>
     <h2 id="b7">Des modèles conçoivent le monde. Un auteur le dirige.</h2>
     <p>Depuis une seule phrase, huit étapes s'enchaînent, chacune passant ce qu'elle a trouvé à la suivante. Tout ce que les modèles écrivent s'affiche pour l'auteur au fur et à mesure, en phrases courtes qu'il peut lire et modifier. Il répond à deux ou trois questions, corrige le reste avec un assistant, et chaque ajout garde le nom de qui l'a écrit. Pendant une partie, un meneur humain peut prendre la main et décider à la place des modèles.</p>
   </div>
@@ -565,7 +623,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
 <!-- lean loop -->
 <section class="blk" aria-labelledby="b8">
   <div class="txt">
-    <p class="lab mono"><b>10</b> Le jeu grandit</p>
+    <p class="lab mono"><b>11</b> Le jeu grandit</p>
     <h2 id="b8">Le narrateur a sa boucle lean.</h2>
     <p>Chaque partie est enregistrée. Le narrateur la lit de deux façons : en chiffres (où vont les joueurs, ce qu'ils demandent, quelles règles ne se déclenchent jamais, où les parties s'arrêtent) et en analyses écrites par une IA qui a lu les sessions. Il en sort des propositions, un événement, un personnage à creuser, une règle à assouplir ; il dit oui ou non, et l'histoire s'enrichit pour les joueurs suivants. Une histoire étant un dossier de mots simples, toute la boucle tourne aussi dans son propre assistant : Claude Code, Codex ou Antigravity.</p>
     <blockquote class="pull" style="margin:24px 0 0;font-size:clamp(21px,2.6vw,28px)">The game grows from play, and everything can be steered.</blockquote>
@@ -606,7 +664,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
 
 <!-- fiche technique -->
 <section class="fiche" aria-labelledby="ft">
-  <p class="lab mono"><b>11</b> Fiche technique</p>
+  <p class="lab mono"><b>12</b> Fiche technique</p>
   <h2 id="ft">Bodycam Stories en douze lignes.</h2>
   <dl class="ft">
     <div><dt>Genre</dt><dd>jeu d'histoires où des modèles d'IA font vivre le monde, vu par la caméra d'un personnage</dd></div>
@@ -616,7 +674,7 @@ dl.ft dd{margin:0;font-size:15px;color:var(--ink)}
     <div><dt>Monde</dt><dd>n'importe quel lieu, peuplé, généré par code à partir d'une phrase</dd></div>
     <div><dt>Image</dt><dd>n'importe quelle époque et quelle caméra, de la Super 8 à la bodycam</dd></div>
     <div><dt>Moteur</dt><dd>tout est calculé par code, sans image ni modèle 3D importé ; même coût par image, quel que soit le monde</dd></div>
-    <div><dt>Modèles</dt><dd>petits, moyens et grands, plus des modèles spécialisés qui tranchent les questions fermées</dd></div>
+    <div><dt>Modèles</dt><dd>modèles de décision (famille Jev), petits (classe Haiku), moyens (Sonnet), grands (Opus) ; n'importe quel fournisseur</dd></div>
     <div><dt>Temps</dt><dd>elle réagit en moins de 100 ms et répond en une à deux secondes ; le monde vit sans attendre</dd></div>
     <div><dt>Langues</dt><dd>la langue de l'histoire, sous-titrée ; français et anglais</dd></div>
     <div><dt>Écriture</dt><dd>des mots simples, dans le jeu ou avec Claude Code, Codex, Antigravity</dd></div>
