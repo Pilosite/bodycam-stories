@@ -48,9 +48,9 @@
         <p class="heard" id="heard" aria-live="polite"></p>
       </div>
       <div class="trace" id="trace" aria-live="polite">
-        <div class="tl tl-now"><span class="tl-k">now</span><div class="tl-v" id="tl-now"></div></div>
-        <div class="tl tl-scene"><span class="tl-k">scene</span><div class="tl-v" id="tl-scene"></div></div>
-        <div class="tl tl-story"><span class="tl-k">story</span><div class="tl-v" id="tl-story"></div></div>
+        <div class="tl tl-now"><span class="tl-k" data-t="lane.now">now</span><div class="tl-v" id="tl-now"></div></div>
+        <div class="tl tl-scene"><span class="tl-k" data-t="lane.scene">scene</span><div class="tl-v" id="tl-scene"></div></div>
+        <div class="tl tl-story"><span class="tl-k" data-t="lane.story">story</span><div class="tl-v" id="tl-story"></div></div>
         <details class="tl-j" id="tl-j"><summary data-t="hero.journal">Journal lines</summary><div class="jbox" id="tl-jbox"></div></details>
       </div>
       <div class="row tight hero-ctl">
@@ -61,7 +61,7 @@
   </div>
 
   <div class="synth" aria-labelledby="synth-h">
-    <h2 class="sub" id="synth-h" data-t="synth.h">Sound is made by code too</h2>
+    <h2 class="sub" id="synth-h" data-t="synth.h">Sound is a recipe too</h2>
     <div class="row tight">
       <span class="synth-p" data-t="synth.p"></span>
       <button type="button" class="btn" id="synth-0" data-mass="0.05"></button>
@@ -76,6 +76,7 @@
   <h2 id="worlds-h" data-t="worlds.title"></h2>
   <p class="one" data-t="worlds.p"></p>
   <div class="worlds" id="worlds-strip"></div>
+  <p class="note worlds-note"><span class="badge b-designed" data-t="st.designed">planned</span> <span data-t="worlds.frozen"></span></p>
 </section>
 
 <section id="invert" class="sec" aria-labelledby="invert-h">
@@ -122,9 +123,9 @@
       <div class="lanes compact" id="s4-lanes"></div>
       <details><summary data-t="clk.tune">Slow a clock down</summary>
         <div class="sliders">
-          <label class="sl"><span><span data-t="s4.delay"></span> · <b>now</b> <output id="s4-now-v"></output></span><input type="range" id="s4-now" min="0" max="1500" step="10" value="140"></label>
-          <label class="sl"><span><span data-t="s4.delay"></span> · <b>scene</b> <output id="s4-scene-v"></output></span><input type="range" id="s4-scene" min="0" max="12000" step="100" value="2600"></label>
-          <label class="sl"><span><span data-t="s4.delay"></span> · <b>story</b> <output id="s4-story-v"></output></span><input type="range" id="s4-story" min="0" max="30000" step="500" value="9000"></label>
+          <label class="sl"><span><span data-t="s4.delay"></span> · <b data-t="lane.now">now</b> <output id="s4-now-v"></output></span><input type="range" id="s4-now" min="0" max="1500" step="10" value="140"></label>
+          <label class="sl"><span><span data-t="s4.delay"></span> · <b data-t="lane.scene">scene</b> <output id="s4-scene-v"></output></span><input type="range" id="s4-scene" min="0" max="12000" step="100" value="2600"></label>
+          <label class="sl"><span><span data-t="s4.delay"></span> · <b data-t="lane.story">story</b> <output id="s4-story-v"></output></span><input type="range" id="s4-story" min="0" max="30000" step="500" value="9000"></label>
         </div>
         <p class="note" data-t="s4.storynote"></p>
       </details>
@@ -194,7 +195,7 @@
   <p class="kicker"><span class="rec-dot" aria-hidden="true"></span><span data-t="part2">II · Open the hood</span></p>
   <h2 id="hood-h" class="h-part" data-t="hood.title"></h2>
   <p class="one" data-t="hood.p"></p>
-  <div class="map" id="map" role="list" aria-label="The semantic framework"></div>
+  <div class="map" id="map" role="list" aria-label="What happens to a sentence"></div>
   <ul class="map-leg" id="map-leg"></ul>
   <nav class="toc" aria-labelledby="toc-h"><h3 id="toc-h" class="sr" data-t="toc.label">Contents</h3><ol id="toc"></ol></nav>
 </section>
@@ -299,10 +300,10 @@
   <div class="row tight">
     <h3 class="sub" data-t="s11.ledger"></h3>
     <fieldset class="seg small" id="s11-col"><legend class="sr" data-t="s11.col"></legend>
-      <label><input type="radio" name="s11-col" id="s11-col-all" value="all" checked><span>all</span></label>
-      <label><input type="radio" name="s11-col" id="s11-col-v1" value="1"><span>v1</span></label>
-      <label><input type="radio" name="s11-col" id="s11-col-v2" value="2"><span>v2</span></label>
-      <label><input type="radio" name="s11-col" id="s11-col-t" value="3"><span>target</span></label>
+      <label><input type="radio" name="s11-col" id="s11-col-all" value="all" checked><span data-t="col.all">all</span></label>
+      <label><input type="radio" name="s11-col" id="s11-col-v1" value="1"><span data-t="col.v1">v1</span></label>
+      <label><input type="radio" name="s11-col" id="s11-col-v2" value="2"><span data-t="col.v2">v2</span></label>
+      <label><input type="radio" name="s11-col" id="s11-col-t" value="3"><span data-t="col.t">target</span></label>
     </fieldset>
   </div>
   <div class="tbl" id="s11-ledger"></div>

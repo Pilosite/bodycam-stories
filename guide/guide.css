@@ -260,7 +260,7 @@ th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px soli
 thead th{font:500 11px/1.4 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);background:var(--bg-2);position:sticky;top:0}
 tbody th{font-weight:600;color:var(--ink);min-width:150px}
 .tbl code{overflow-wrap:break-word}
-#s9-kit tbody th{min-width:230px}
+#s9-kit tbody th{min-width:150px}
 td{color:var(--ink-2);min-width:160px}
 tr:last-child>*{border-bottom:0}
 #s11-ledger td,#s11-ms td{min-width:200px}
@@ -322,7 +322,7 @@ tr:last-child>*{border-bottom:0}
 .heard{font-size:12.5px;color:var(--ink-3);margin:8px 0 0;min-height:0}
 .heard:empty{display:none}
 .trace{border:1px solid var(--line);border-radius:10px;background:var(--bg-2);overflow:hidden}
-.tl{display:grid;grid-template-columns:64px minmax(0,1fr);border-bottom:1px solid var(--line)}
+.tl{display:grid;grid-template-columns:88px minmax(0,1fr);border-bottom:1px solid var(--line)}
 .tl-k{font:500 11px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;padding:14px 0 0 12px;color:var(--ink-3)}
 .tl-now .tl-k{color:var(--red-ink)}
 .tl-v{padding:10px 12px 10px 0;min-width:0;font-size:13.5px;line-height:1.45}
@@ -479,7 +479,7 @@ h2 .badge{font-size:10.5px;margin-left:8px;align-self:center;white-space:nowrap;
 .map-leg{list-style:none;padding:0;margin:0 0 8px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--ink-2)}
 /* output economy */
 .eco{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg-2)}
-.eco-r{display:grid;grid-template-columns:70px minmax(0,1fr);border-bottom:1px solid var(--line)}
+.eco-r{display:grid;grid-template-columns:88px minmax(0,1fr);border-bottom:1px solid var(--line)}
 .eco-r:last-child{border-bottom:0}
 .eco-k{font:500 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--red-ink);padding:14px 0 0 12px}
 .eco-v{display:flex;flex-direction:column;gap:4px;padding:12px 12px 12px 0;min-width:0}
@@ -524,3 +524,4 @@ h2 .badge{font-size:10.5px;margin-left:8px;align-self:center;white-space:nowrap;
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
+.worlds-note{margin-top:20px}

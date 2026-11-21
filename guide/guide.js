@@ -14,6 +14,12 @@ function t(k) {
   for (var i = 1; i < arguments.length; i++) s = s.replace('%s', arguments[i]);
   return s;
 }
+function T(k) { var v = COPY[lang] && COPY[lang][k]; return v !== undefined ? v : COPY.en[k]; }   // a table of copy.js, raw
+function lane(k) { return t('lane.' + k); }
+function table(rows, cell, first) {   // rows[0] is the head; the first cell of each row is its header
+  return '<table><thead><tr>' + rows[0].map(function (c) { return '<th scope="col">' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    rows.slice(1).map(function (r) { return '<tr>' + r.map(function (c, i) { return i === 0 ? '<th scope="row">' + (first ? first(c) : esc(c)) + '</th>' : '<td>' + (cell ? cell(c, i) : esc(c)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>';
+}
 function h(tag, attrs) {
   var e = document.createElement(tag), a = attrs || {};
   Object.keys(a).forEach(function (k) {
@@ -441,13 +447,13 @@ function s2() {
   var r = doc.statements.length ? C.source.principlesOf(doc, { layer: doc.meta.layer, author: doc.meta.author, pack: D.pack.manifest.id, ctx: CTX }) : { principles: [], errors: [] };
   errs = errs.concat(r.errors);
   var p = r.principles[0];
-  if (!p) { out.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s2.errors')), chip(errs.map(function (e) { return e.why; }).join(', ') || 'empty', 'bad'))); return; }
+  if (!p) { out.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s2.errors')), chip(errs.map(function (e) { return e.why; }).join(', ') || t('s2.empty'), 'bad'))); return; }
   out.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s2.strength')), chip(p.strength + (p.weight !== undefined ? ' ' + p.weight : ''), 'k-' + p.strength), h('span', { class: 'k' }, t('s2.form')), chip(p.form)));
   out.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s2.who')), h('span', { html: t('who.' + p.strength) })));
   var c = p.compiled;
   if (errs.length) out.append(h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s2.errors')), h('span', { class: 'bad' }, errs.map(function (e) { return e.why + (e.message ? ': ' + e.message : ''); }).join(' · '))));
   if (c && (c.status === 'compiled')) {
-    out.append(h('h3', { class: 'sub' }, t('s2.compiled'), ' · ', h('code', {}, c.kind), ' · by ', h('code', {}, c.by)));
+    out.append(h('h3', { class: 'sub' }, t('s2.compiled'), ' · ', h('code', {}, c.kind), ' · ' + t('s2.by') + ' ', h('code', {}, c.by)));
     if (c.kind === 'rule') {
       var tx = { author: { kind: 'creator', id: doc.meta.author || 'you', layer: doc.meta.layer }, horizon: p.horizon, kind: 'rule', body: c.body };
       out.append(pre(tokens(tx)));
@@ -509,7 +515,7 @@ function s3() {
       h('div', { class: 'txr-h' }, statusChip(r.status), h('code', { class: 'dim' }, '#' + r.seq)),
       pre(GLYPH[r.tx.kind] + ' ' + tokens(r.tx)),
       reasonsList(r.repair, r.reasons),
-      after.length ? h('div', { class: 'then' }, after.map(function (e) { return h('div', {}, e.type === 'rule' ? '↳ rule ' + e.rule + ' fired, in code' : '   ' + (GLYPH[e.kind] || '') + ' ' + tokens(e).split('\n')[0] + '  [' + e.status + ']'); })) : null));
+      after.length ? h('div', { class: 'then' }, after.map(function (e) { return h('div', {}, e.type === 'rule' ? '↳ ' + t('s3.fired', e.rule) : '   ' + (GLYPH[e.kind] || '') + ' ' + tokens(e).split('\n')[0] + '  [' + e.status + ']'); })) : null));
   });
 }
 
@@ -571,7 +577,7 @@ function s4Say() {
     var box = clear($('s4-lanes'));
     ['now', 'scene', 'story'].forEach(function (k) {
       var budget = C.session.LOOPS[k];
-      box.append(h('div', { class: 'lane lane-' + k }, h('div', { class: 'lane-h' }, h('b', {}, k), h('span', { class: 'dim' }, t('s4.budget') + ' ' + (budget >= 1000 ? budget / 1000 + ' s' : budget + ' ms'))),
+      box.append(h('div', { class: 'lane lane-' + k }, h('div', { class: 'lane-h' }, h('b', {}, lane(k)), h('span', { class: 'dim' }, t('s4.budget') + ' ' + (budget >= 1000 ? budget / 1000 + ' s' : budget + ' ms'))),
         h('ol', {}, lanes[k], k !== 'now' && state[k] === 'pending' ? h('li', { class: 'it pending' }, h('span', { class: 'ms' }, '…'), h('span', {}, t('s4.pending') + ' · ' + (delay[k] / 1000).toFixed(1) + ' s')) : null)));
     });
   }
@@ -593,7 +599,7 @@ function s4Say() {
 }
 
 /* ---------------------------------------------------------------- 5. invention and judgement */
-function s5Questions() { var sel = clear($('s5-q')), cur = sel.value || 'D3'; D.docs.decisions.forEach(function (d) { opt(sel, d.id, d.id + ' · ' + d.clock + ' · ' + d.question.replace(/<[^>]+>/g, ''), d.id === cur); }); }
+function s5Questions() { var sel = clear($('s5-q')), cur = sel.value || 'D3'; D.docs.decisions.forEach(function (d) { var q = T('q')[d.id]; opt(sel, d.id, lane(d.clock) + ' · ' + (q ? q[0] : d.question.replace(/<[^>]+>/g, '')), d.id === cur); }); }
 // The rule of docs/architecture.md "Rules of use", applied: thresholds, both orders on an absolute, one fallback chain.
 function judge(o) {
   var by = o.dm ? 'dm' : o.fg ? 'fg' : 'code';
@@ -607,7 +613,8 @@ function s5() {
   var bin = /bool/.test(d.type); $('s5-abs').disabled = !bin; if (!bin) $('s5-abs').checked = false;
   $('s5-p2-wrap').hidden = !$('s5-abs').checked;
   $('s5-p-v').textContent = (+$('s5-p').value).toFixed(2); $('s5-p2-v').textContent = (+$('s5-p2').value).toFixed(2);
-  clear($('s5-qinfo')).append(h('div', { class: 'kv' }, chip(d.id, 'strong'), chip(d.clock), chip(d.type)), h('p', { html: d.question }), h('p', { class: 'dim', html: '→ ' + d.code }));
+  var q = T('q')[d.id] || [d.question, d.code];
+  clear($('s5-qinfo')).append(h('div', { class: 'kv' }, chip(lane(d.clock), 'strong'), chip(t('type.' + d.type))), h('p', { html: q[0] }), h('p', { class: 'dim', html: '→ ' + q[1] }));
   var j = judge({ p: +$('s5-p').value, p2: +$('s5-p2').value, both: $('s5-abs').checked, hi: +$('s5-hi').value, lo: +$('s5-lo').value, dm: $('s5-dm').checked, fg: $('s5-fg').checked });
   clear($('s5-out')).append(h('div', { class: 'verdict v-' + j.outcome }, h('span', { class: 'k' }, t('s5.out')), h('strong', {}, j.uncertain ? t('s5.unc') + ' ' + t('s5.ask') : t('s5.' + j.outcome))),
     h('div', { class: 'kv' }, h('span', { class: 'k' }, t('s5.by')), chip(t('by.' + j.answered_by)), j.answered_by === 'code' ? null : canned()),
@@ -647,7 +654,7 @@ function s6() {
   var step = +$('s6-step').value, ans = document.querySelector('input[name="s6-ans"]:checked').value, str = document.querySelector('input[name="s6-str"]:checked').value, ver = document.querySelector('input[name="s6-ver"]:checked').value;
   $('s6-ver-wrap').hidden = str !== 'tendency' || ans === 'refused';
   var r = BENCH.find(function (x) { return x.id === 'c01'; });
-  clear($('s6-said')).append(h('span', { class: 'voice' }, '« ' + (r[lang] || r.en) + ' »'), ' ', h('small', { class: 'dim' }, 'bench c01 · ' + stName('fallen-pine')));
+  clear($('s6-said')).append(h('span', { class: 'voice' }, '« ' + (r[lang] || r.en) + ' »'), ' ', h('small', { class: 'dim' }, stName('fallen-pine')));
   $('s6-step-v').textContent = t('step.' + step);
   var steps = clear($('s6-steps'));
   for (var k = 0; k <= 4; k++) steps.append(h('li', { class: k === step ? 'on' : k < step ? 'past' : '' }, t('step.' + k)));
@@ -657,7 +664,7 @@ function s6() {
       h('p', { class: 'dim' }, t('s6.history') + ': ', cm.history.map(function (x) { return x.status + ' #' + x.seq; }).join(' → ')));
     var why = ans === 'refused' ? 's6.why.refused' : cm.status === 'kept' ? (cm.strength === 'hard' ? 's6.why.kept' : null) : cm.status === 'broken' ? (cm.strength === 'hard' ? 's6.why.broke' : null) : cm.status === 'due' ? 's6.why.due' : 's6.why.notyet';
     if (why) out.append(h('p', { html: t(why) }));
-    if (cm.strength === 'tendency' && (cm.status === 'kept' || cm.status === 'broken')) out.append(h('p', {}, canned(), ' D7 → ', h('code', {}, cm.status)));
+    if (cm.strength === 'tendency' && (cm.status === 'kept' || cm.status === 'broken')) out.append(h('p', {}, canned(), ' ' + t('s6.judged') + ' ', h('code', {}, t('cm.' + cm.status))));
   }
   var from = R.marks[R.marks.length - 1];
   if (from === E.length && R.marks.length > 1) from = R.marks[R.marks.length - 2];   // nothing new at this step: show the previous one
@@ -762,7 +769,7 @@ function s8Show(scroll) {
   $('s8-seq-v').textContent = '#' + e.seq + ' · ' + e.type;
   var kv = function (k, v) { return h('div', { class: 'kv' }, h('span', { class: 'k' }, k), v); };
   out.append(kv(t('s8.who'), h('code', {}, e.type === 'tx' ? who(e.author) : e.type === 'rule' ? (e.author ? who(e.author) + ' · ' : '') + 'run by code' : e.type === 'model_call' ? 'model · ' + e.tier : e.input ? 'input' : 'core')));
-  if (e.loop) out.append(kv(t('s8.clock'), [chip(e.loop, 'strong'), e.latency_ms !== undefined ? chip(e.latency_ms + ' / ' + e.budget_ms + ' ms') : null, e.late ? chip(t('s4.late'), 'bad') : null]));
+  if (e.loop) out.append(kv(t('s8.clock'), [chip(lane(e.loop), 'strong'), e.latency_ms !== undefined ? chip(e.latency_ms + ' / ' + e.budget_ms + ' ms') : null, e.late ? chip(t('s4.late'), 'bad') : null]));
   var what = e.type === 'tx' ? GLYPH[e.kind] + ' ' + tokens(e) : e.type === 'principles' ? e.records.length + ' principle records' : json(Object.assign({}, e, { scene: undefined, records: undefined, proposed: undefined }));
   out.append(kv(t('s8.what'), pre(what)));
   var rl = e.type === 'tx' && reasonsList(e.repair, e.reasons); if (rl) out.append(rl);
@@ -838,15 +845,20 @@ function s10() {
     if (c === 'decide') return node ? 'node' : host ? 'host' : 'code';
     return host ? 'host' : 'none';          // ADR 0008: the node serves embed and decide; generative tiers only if Q2 is answered
   };
-  clear($('s10-out')).append(h('table', {}, h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'capability'), h('th', { scope: 'col' }, 'loop'), h('th', { scope: 'col' }, t('s4.budget')), h('th', { scope: 'col' }, t('s10.serves')))),
-    h('tbody', {}, caps.map(function (c) { var b = C.session.LOOPS[c[1]], s = serve(c[0]); return h('tr', {}, h('th', { scope: 'row' }, t('cap.' + c[0])), h('td', {}, c[1]), h('td', {}, b >= 1000 ? b / 1000 + ' s' : b + ' ms'), h('td', {}, chip(t('srv.' + s), s === 'node' ? 'strong' : s === 'none' ? 'dim' : ''))); }))));
-  clear($('s10-adr')).append(t('s10.adr') + ' ', chip(D.docs.adr8.status), ' · ', h('span', { html: D.docs.adr8.routes }));
+  clear($('s10-out')).append(h('table', {}, h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, t('s10.capcol')), h('th', { scope: 'col' }, t('s10.rhythmcol')), h('th', { scope: 'col' }, t('s4.budget')), h('th', { scope: 'col' }, t('s10.serves')))),
+    h('tbody', {}, caps.map(function (c) { var b = C.session.LOOPS[c[1]], s = serve(c[0]); return h('tr', {}, h('th', { scope: 'row' }, t('cap.' + c[0])), h('td', {}, lane(c[1])), h('td', {}, b >= 1000 ? b / 1000 + ' s' : b + ' ms'), h('td', {}, chip(t('srv.' + s), s === 'node' ? 'strong' : s === 'none' ? 'dim' : ''))); }))));
+  clear($('s10-adr')).append(t('s10.adr') + ' ', h('span', { html: (D.docs.adr8.routes.match(/<code>[^<]*<\/code>/g) || []).join(' · ') }));
 }
 
 /* ---------------------------------------------------------------- 11. scope and milestones (docs, read at build time) */
 function s11() {
-  var feel = clear($('s11-feel')); D.docs.scope.feel.forEach(function (x) { feel.append(h('li', { html: x })); });
-  $('s11-ledger').innerHTML = D.docs.scope.table; $('s11-ms').innerHTML = D.docs.milestones; $('s9-kit').innerHTML = D.docs.kit;
+  // The feel list, the ledger, the state of the work and the kit are written in copy.js, in plain words, from
+  // docs/scope.md, docs/milestones.md and docs/creator-kit.md (which use the team's own labels).
+  var feel = clear($('s11-feel')); T('feel').forEach(function (x) { feel.append(h('li', { html: x })); });
+  var badge0 = function (s) { return '<span class="badge b-' + s + '">' + esc(t('st.' + s)) + '</span>'; };
+  $('s11-ledger').innerHTML = table(T('ledger'));
+  $('s11-ms').innerHTML = table(T('ms'), function (c, i) { return i === 2 ? badge0(c) : esc(c); });
+  $('s9-kit').innerHTML = table(T('kit'), function (c, i) { return i === 2 ? badge0(c) : esc(c); }, function (c) { return '<code>' + esc(c) + '</code>'; });
   s11Col();
 }
 function s11Col() {
@@ -906,7 +918,7 @@ function eco() {
     { k: 'story', ex: src, vs: null },
   ];
   put(clear($('eco')), rows.map(function (r) {
-    return h('div', { class: 'eco-r' }, h('span', { class: 'eco-k' }, r.k), h('div', { class: 'eco-v' }, h('b', {}, t('eco.' + r.k)), h('span', { class: 'dim' }, t('eco.' + r.k + '.p')),
+    return h('div', { class: 'eco-r' }, h('span', { class: 'eco-k' }, lane(r.k)), h('div', { class: 'eco-v' }, h('b', {}, t('eco.' + r.k)), h('span', { class: 'dim' }, t('eco.' + r.k + '.p')),
       h('code', { class: 'eco-ex' }, r.ex), h('span', { class: 'eco-n' }, t('eco.chars', r.ex.length) + (r.vs ? ' · ' + t('eco.vs.' + r.k, r.vs.length) : ''))));
   }));
 }
