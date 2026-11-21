@@ -39,6 +39,8 @@ Nothing is applied without a person's yes. Accepted proposals enter as data, wit
 
 **4. Everything is steerable.** All that tunes behaviour is data in the repository and visible in the tools: vocabulary, model tiers and adapters, prompts, confidence thresholds, latency budgets, principles, packs. A change is a commit; a session records the versions it ran on, so any behaviour can be traced to the data that produced it and replayed against a change.
 
+**5. The narrator's lean loop.** For whoever keeps a story alive, the harvest closes a loop: write, let people play, read what happened, improve or extend the scenario and its events, and again. Reading takes two forms, both over the same records: **figures** (where players go, what they ask most, which rules fire and which never do, promises kept and broken, where sessions end, what was asked and could not be done) and **insights** written by a model that has read the sessions (what players were trying to do, what surprised them, what the story lacks), each insight pointing to the sessions it comes from. Because a story is a folder of plain words in a repository and a harvest is a set of files, the whole loop runs in the narrator's own assistant (Claude Code, Codex, Antigravity or another) as well as in the project's tools: `story harvest` gives the figures and the proposals, the assistant reads the records and writes the insights, the narrator decides.
+
 ## Consequences
 
 - P17 grows: what happened can be read, and it feeds the engine and the stories.
