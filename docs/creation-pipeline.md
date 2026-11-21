@@ -1,6 +1,6 @@
 # Creation pipeline: what the opening promises, and what is real
 
-Status: inventory and mapping for the coordinator. Not a design, not a decision. Written 20 Nov 2026; §6 added by the conception lot (ADR 0011), which made the story half of "from prompt to procedural" real in a first version.
+Status: inventory and mapping for the coordinator. Not a design, not a decision. Written 20 Nov 2026; §6 added by the conception lot (ADR 0011), which made the story half of "from prompt to procedural" real in a first version; §7 added by the studio lot (21 Nov, `briefs/conception-v2.md`: W1, W2, W3, W5, W9 in part, W12 in part). The tables of §1 to §3 describe the recorded replay, which is unchanged; §7 says which rows now also exist live.
 
 Premise (Toine): the opening's loading sequence is taken as the functional and technical script of the real creation pipeline and of the live agents during play. This page lists what that script contains, maps each part to the architecture (`docs/architecture.md`, `docs/adr/0004-model-tiers.md`, `docs/scope.md`), and says what is real today. P19 ("nothing staged") is the yardstick.
 
@@ -192,3 +192,43 @@ After « Décrire un monde » has built a place (the builder's chain, rows 1, 4,
 | C7 | Out of the page | the creator's assistant, or a saved answer | `node tools/story.mjs sketch "<sentence>" --place <file> [--answer <file>] [--answers <json>] [--prompt]` writes a pack folder that `check`, `play`, `explain` and `whatif` take | **real** (no model in the tool: `--prompt` prints what to ask, `--answer` reads what was answered; without it, the code fallback, said so) | a model call from the tool (no key in the repo, Q2) |
 
 Still staged in the opening itself (rows 1 to 7): the recorded replays. A prompt that matches no replay goes to the real chain, which now ends in a conceived story.
+
+## 7. The conception studio (briefs/conception-v2.md): the opening made true
+
+A prompt that no recorded preparation matches now runs the **studio** (`core/studio.js`, stages, tiers, prompts and budgets as data in `src/studio.json`), and the opening draws itself from its **creation events** instead of a replay. Files: `core/studio.js` (pure), `src/studio.json`, `src/conception.js` (the panel, the calls), the conception block of `src/main.js` (model port, world builder), `src/ouverture.js` (`vivre`, the live network), `src/model-port.js` (`create`, `search`), `tools/story.mjs sketch --stages`, `tests/studio.test.mjs`, `tools/studio-smoke.mjs`.
+
+The stages (one agent each; parallel where nothing depends; each fails soft):
+
+| Stage | Agent · tier · instrument | Reads | Writes (authoring source) |
+|---|---|---|---|
+| understand | 1 · mid · invention | the sentence | the brief: where, when, who, kind (story or free), the player, powers proposed, research topics |
+| research | one worker per topic (≤ 3, budget) · fast · invention, and `search` when the port has it | brief | findings, each with its source; with no search the source is "the model's knowledge", said as such (code enforces it) |
+| environment | the world builder (`construire`: plan, place, check, review) · its own tiers | sentence + findings | the place file; its steps are build events |
+| people | 1 · mid · invention | brief, findings | the carrier (strong sheet), the others (light, with `@presence`), the bank lines, facts about them |
+| interactions | 1 · mid · invention | brief, findings, place, people | what things afford, rules, moments inviting a promise, **powers** granted, open or refused (ADR 0012, as statements in `rules/powers.pdl`), at most one pattern instance |
+| arc | 1 · large · invention, only when the brief says `story` | brief, place's path, people | the question, 2 to 5 stations along the path with what is found at each, beats, endings; a free place gets none and the event says so |
+| questions | 1 · mid · invention | brief, people | up to three questions, with the model's guess as a fact (streamed: each question shows as soon as it is written) |
+| check | code | every part | `compilePack` + the sketch's references + the arc's; errors blamed to the stage that wrote the file; **one repair round per failing stage** (its own errors, its own previous answer); a stage still failing is left out (the people's part is replaced by a code carrier); the code sketch when nothing holds |
+
+Creation events (W1), one schema: `seq, t_ms, stage, agent, role, tier, instrument, kind (query, finding, draft, check, build, question), status (pending, writing, step, done, failed, repaired, skipped, fallback), latency_ms, text, wrote (source lines), source, adapter`. `writing` events (the lines of a streamed answer, as they arrive) go to the listeners only; all others form the **creation journal**, kept with the pack (`creation.json`, `manifest.creation`) and added to the harvest record (`creation`, the sentence removed when stripped; failed, repaired and fallen-back stages join `slow_or_doubtful`).
+
+Rows of §3 that now exist live (the replay rows stay staged where the replay is shown, and the replay now says it is one):
+
+| # | Row | Live status | Note |
+|---|---|---|---|
+| 1 | Understand the request | **real** (understand stage) | no coordinates, no geocoding |
+| 2 | Place research | **partly**: real calls, real findings with their source; the source is the model's knowledge | `search` is declared on the port and used when present; no server serves it yet (W8) |
+| 3 | Place photos | not designed (unchanged) | W11 |
+| 4 | Findings tied to settings | **partly**: findings feed the builder's description and the people's prompt, each finding says what it supports | no field-level provenance (W7) |
+| 5 | Character research | **partly**: a research topic about the people, same as row 2 | |
+| 6 | Character findings to settings | **real** for sheets (people stage, W9 first part): the architecture's sheet, from brief and findings | not yet read by the persona block (W9 rest) |
+| 7 | Write PDL | **partly**: the language panel shows the real authoring source each agent writes, line by line | no model compiler of `!` statements (W10) |
+| 8 | Check | **real**: the pack check of the studio, shown in the scroll with its errors and repairs | the place's geometric check stays inside the builder's steps |
+| 9 | Build and arrive | **real** (unchanged), then the conception panel | |
+| net | Agent network (§1.2) | **real** in live mode: one node per agent really called, by tier; pulses follow what each agent reads; the counters are calls, findings, lines written and seconds | no tokens per second (not measured); no model family names, no translator row; a `web` row appears only when a search really happened |
+| W12 | Stages the opening lacked | **partly**: people, interactions, powers, beats, stations (2 to 5, played with the existing transitions), endings | lines in one language only; endings are judged by the model at play |
+
+Out of the page: `node tools/story.mjs sketch "<sentence>" --place <file> --stages <dir>` writes each agent's prompt to `<dir>/<agent>.prompt.txt` and reads its answer from `<dir>/<agent>.txt` (a missing answer is a failed stage); run again as answers are written. The first lot's one-call sketch remains the fallback when only one call is affordable (`runStudio({ affordable: 1 })`).
+
+Measured (no model in this container): unit tests with canned answers per stage (`tests/studio.test.mjs`, 6 tests); one browser run of the opening with a stand-in sampler (`tools/studio-smoke.mjs`). Nothing is measured yet with a real model: the number of calls of a full run is 8 to 10 (plus the builder's 2 to 4), and the stages' latencies are the first thing to read in the creation journal of a real run.
+
