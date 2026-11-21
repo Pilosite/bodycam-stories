@@ -1,0 +1,5 @@
+=== findings
+- Les pins craquent et résinent au feu ; on brûle surtout des branches mortes ramassées au sol | the model's knowledge | place
+- Un feu de camp se fait dans un cercle de pierres, loin des arbres, et on garde un seau d'eau à côté | Guide du camping, p. 12 | place
+- La nuit sous les pins, la lampe frontale ne porte qu'à quelques mètres ; au-delà, tout est noir | the model's knowledge | light
+- On entend les grillons, le feu, parfois une chouette | the model's knowledge | sound

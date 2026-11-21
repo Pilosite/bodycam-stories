@@ -1,0 +1,11 @@
+=== brief
+title: Elle n'est pas revenue
+lang: fr
+where: un camping sous les pins, un sentier qui part du feu
+when: une nuit d'été
+who: un père et ses deux enfants ; la mère est partie chercher du bois et ne revient pas ; le père porte la caméra
+kind: story
+story: Claire n'est pas revenue ; Marc doit comprendre pourquoi sans affoler les enfants.
+player: une voix dans l'oreille de Marc
+powers: le vent
+topics: place: un feu de camp en forêt de pins la nuit; people: une famille en camping

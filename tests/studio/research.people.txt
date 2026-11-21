@@ -1,0 +1,4 @@
+=== findings
+- Les parents parlent bas le soir pour ne pas réveiller les petits, et plaisantent pour rassurer | the model's knowledge | voice
+- Un enfant de quatre ans a froid vite et réclame sa mère au moment de dormir | the model's knowledge | people
+- Les chaises pliantes en toile sont l'objet de chaque membre de la famille, chacun la sienne | the model's knowledge | people

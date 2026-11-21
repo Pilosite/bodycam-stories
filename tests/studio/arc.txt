@@ -1,0 +1,24 @@
+=== arc
+question: Où est Claire, et pourquoi n'est-elle pas revenue ?
+=== stations
+station voiture | La voiture | along 2 | side -1 | reach | finds f.car-keys | line arrive.car
+station feu | Le feu | along 11 | side 0.5 | reach feu, chaise-2, glaciere | finds f.chair-empty, f.cooler | line arrive.fire
+station sentier | Le départ du sentier | along 30 | side 0 | reach | finds f.lamp-left | line arrive.path
+=== beats
+beat camp | Le camp | stations voiture, feu | establish f.car-keys
+beat sentier | Le sentier | stations sentier | establish f.lamp-left
+=== endings
+ending back | Elle revient | requires f.lamp-left | when Marc décide d'attendre au feu avec les enfants | line ending.back
+ending search | Il part la chercher | requires f.lamp-left, f.car-keys | when Marc décide de partir avec les enfants, la lampe à la main | line ending.search
+=== lines
+arrive.car: Les clés sont encore sur le contact.
+arrive.fire: Le feu baisse.
+arrive.path: Sa lampe. Elle est partie sans sa lampe.
+ending.back: On l'attend ici. Elle revient toujours.
+ending.search: Manon, prends la main de ton frère. On y va.
+=== file facts/arc.pdl
+# arc-facts — what the arc needs
+@id arc-facts  @kind facts  @lang fr  @scope story  @horizon story
+! Les clés de la voiture sont restées sur le contact. {f.car-keys}
+! La lampe de Claire est posée au départ du sentier. {f.lamp-left}
+? Claire voulait-elle partir ? -- les signes se lisent des deux façons. {f.wanted-leave}

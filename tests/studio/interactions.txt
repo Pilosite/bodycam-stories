@@ -1,0 +1,37 @@
+=== lines
+chair.read: Sa chaise. Son gilet est encore dessus.
+cooler.read: Elle a pris deux bières. Deux.
+understand: Elle n'est pas partie chercher du bois.
+fire.read: Il faut remettre du bois. Le sien.
+=== file rules/interactions.pdl
+# interactions — what can be done here
+@id interactions  @kind rules  @lang fr  @scope story  @horizon story
+~0.7 Le feu baisse si personne n'y remet du bois ; Marc peut en remettre. {i.fire-low}
+~0.6 La glacière s'ouvre ; Marc y compte ce qui manque. {i.cooler-open}
+when look.at(feu) once -> reveal(f.fire), say(fire.read) {r.fire-read}
+? La voix peut-elle lui faire promettre de rester près des enfants ? -- un moment à offrir quand il veut partir chercher Claire. {i.promise-stay}
+=== file facts/things.pdl
+# things-facts — what the rules reveal
+@id things-facts  @kind facts  @lang fr  @scope story  @horizon story
+! La chaise de droite est celle de Claire. {f.chair-empty}
+! Deux bières manquent dans la glacière. {f.cooler}
+! Le feu a été fait par Claire, avec du bois qu'elle avait déjà ramassé. {f.fire}
+=== file rules/powers.pdl
+# powers — what the voice may do to the world
+@id powers  @kind rules  @lang en  @scope story  @horizon story
+~0.6 The voice can make the wind rise in the pines once Marc trusts it. {p.wind}
+!! The voice never puts out the fire: the children are there. {p.no-fire}
+!! The voice never moves a person. {p.no-person}
+=== file patterns/claire.pdl
+# claire-absent — pattern instance
+@id claire-absent  @kind pattern-instance  @pattern absent-one
+## bind
+bind absent = claire
+bind witness = marc
+bind trace = chaise-2 fact=f.chair-empty line=chair.read
+bind trace = glaciere fact=f.cooler line=cooler.read
+bind resting_place = chaise-2
+bind truth_clue = f.cooler
+bind truth = f.fight
+bind understand_line = understand
+bind absence = f.claire-absent

@@ -218,10 +218,50 @@ export function sketchPack(sketch, { sentence = '', place = {}, base = {}, id = 
     sketch: { format: SKETCH_FORMAT, sentence: String(sentence), source: sketch.source || 'model', about: A, cannot_show: cannot,
       questions: (sketch.questions || []).map(q => ({ id: q.id, target: q.target, text: q.text, options: q.options })) },
   };
-  const stations = { version: 0, note: 'One station built from the place (core/sketch.js): every thing of the place is within reach.', start: STATION,
+  const arc = sketch.arc && Array.isArray(sketch.arc.stations) && sketch.arc.stations.length >= 2 ? arcOf(sketch.arc, { place, lang, title, bank }) : null;
+  const stations = arc ? arc.stations : { version: 0, note: 'One station built from the place (core/sketch.js): every thing of the place is within reach.', start: STATION,
     stations: [{ id: STATION, name: { [lang]: P.title || STATION }, beat: 'open', along_m: 0, side_m: 0, heading: 'path', within_reach: P.things.map(t => t.id), visible: P.things.map(t => t.id), connects: [], arrive_line: 'greet' }] };
-  const beats = { version: 0, question: { [lang]: A.stake || '' }, beats: [{ id: 'open', name: { [lang]: title }, stations: [STATION], enter: { on: 'session.start' }, establish: ['f.place'] }], endings: [] };
+  const beats = arc ? arc.beats : { version: 0, question: { [lang]: A.stake || '' }, beats: [{ id: 'open', name: { [lang]: title }, stations: [STATION], enter: { on: 'session.start' }, establish: ['f.place'] }], endings: [] };
+  if (arc) { manifest.sketch.arc = { stations: stations.stations.map(s => s.id), beats: beats.beats.map(b => b.id), endings: beats.endings.map(e => e.id) }; if (!beats.question[lang]) beats.question[lang] = A.stake || ''; }
   return { manifest, texts, place: clone(place), stations, beats, lines: { [lang]: { lang, lines: bank } }, anchors: anchorsOf(place, lang) };
+}
+
+/* An arc (written by the studio's arc stage, core/studio.js): stations in order along the place's path, the things within
+   reach at each (a thing no station names goes to the nearest one: nothing is out of reach), beats of consecutive stations,
+   endings. The stations connect in a line, both ways; a transition costs battery time by its length (ADR 0003). */
+function arcOf(arc, { place = {}, lang, title, bank }) {
+  const things = (place.objets || []).filter(o => o && o.id), ids = new Set(things.map(o => o.id));
+  const num = (v, d) => Number.isFinite(+v) ? +v : d;
+  const seen = new Set(), list = [];
+  for (const s of arc.stations) { if (!s || !/^[a-z][a-z0-9-]{0,40}$/.test(s.id || '') || seen.has(s.id)) continue; seen.add(s.id); list.push(s); }
+  list.sort((a, b) => num(a.along, 0) - num(b.along, 0));
+  const st = list.map(s => ({ id: s.id, name: { [lang]: s.name || s.id }, beat: null, along_m: Math.round(Math.max(0, num(s.along, 0)) * 10) / 10, side_m: Math.round(Math.max(-6, Math.min(6, num(s.side, 0))) * 10) / 10,
+    heading: 'path', within_reach: (s.reach || []).filter(x => ids.has(x)), finds: (s.finds || []).slice(0, 6), visible: things.map(o => o.id), connects: [],
+    arrive_line: s.line || null }));
+  for (const o of things) if (!st.some(s => s.within_reach.includes(o.id))) {
+    let k = 0; st.forEach((s, i) => { if (Math.abs(s.along_m - num(o.devant, 0)) < Math.abs(st[k].along_m - num(o.devant, 0))) k = i; });
+    st[k].within_reach.push(o.id);
+  }
+  st.forEach((s, i) => { for (const j of [i - 1, i + 1]) if (st[j]) s.connects.push({ to: st[j].id, cost_s: Math.round(Math.abs(st[j].along_m - s.along_m) / 1.1) + 5 }); });
+  const order = st.map(s => s.id), bs = [];
+  for (const b of arc.beats || []) {
+    if (!b || !/^[a-z][a-z0-9-]{0,40}$/.test(b.id || '') || bs.some(x => x.id === b.id)) continue;
+    const mine = (b.stations || []).filter(x => order.includes(x) && !bs.some(y => y.stations.includes(x)));
+    if (mine.length) bs.push({ id: b.id, name: { [lang]: b.name || b.id }, stations: mine, establish: (b.establish || []).slice(0, 8) });
+  }
+  if (!bs.length) bs.push({ id: 'open', name: { [lang]: title }, stations: [], establish: [] });
+  for (const id of order) if (!bs.some(b => b.stations.includes(id))) {          // a station no beat holds joins the beat before it
+    const i = order.indexOf(id), prev = bs.find(b => b.stations.includes(order[i - 1])) || bs[0]; prev.stations.push(id);
+  }
+  for (const b of bs) b.stations.sort((x, y) => order.indexOf(x) - order.indexOf(y));
+  bs.sort((a, b) => order.indexOf(a.stations[0]) - order.indexOf(b.stations[0]));
+  bs.forEach((b, i) => { b.enter = i === 0 ? { on: 'session.start' } : { on: 'station.entered', station: b.stations[0] }; for (const s of b.stations) st.find(x => x.id === s).beat = b.id; });
+  if (bs[0].establish.indexOf('f.place') < 0) bs[0].establish.unshift('f.place');
+  const endings = (arc.endings || []).filter(e => e && /^[a-z][a-z0-9-]{0,40}$/.test(e.id || '')).slice(0, 3)
+    .map(e => ({ id: e.id, family: { [lang]: e.name || e.id }, requires: (e.requires || []).slice(0, 6), when: e.when || '', line: e.line || null, trigger: 'decision' }));
+  for (const s of st) if (!s.arrive_line || !bank[s.arrive_line]) s.arrive_line = s === st[0] ? 'greet' : s.arrive_line;
+  return { stations: { version: 0, note: 'Stations laid by the arc stage of the studio (core/studio.js) along the place\'s path; things no station named go to the nearest one.', start: st[0].id, stations: st },
+    beats: { version: 0, question: { [lang]: arc.question || '' }, beats: bs, endings } };
 }
 
 /* ---------------------------------------------------------------- checking: compilePack and the references a sketch uses */
@@ -267,6 +307,17 @@ export function checkSketch(pack, library = {}) {
     if (tg && /^station:/.test(tg)) errors.push(`rule ${p.id}: unknown thing ${tg.slice(8)}`);
   }
   for (const q of M.sketch.questions) if (!facts.has(q.target)) errors.push(`question ${q.target}: no fact with this id holds the model's guess`);
+  if (M.sketch.arc) {                                              // an arc: every station, beat and ending names what exists
+    for (const s of pack.stations.stations) {
+      for (const f of s.finds || []) if (!facts.has(f)) errors.push(`arc: station ${s.id} finds unknown fact ${f}`);
+      if (s.arrive_line && !bank[s.arrive_line]) errors.push(`arc: station ${s.id}: no line ${s.arrive_line}`);
+    }
+    for (const b of pack.beats.beats) for (const f of b.establish || []) if (!facts.has(f) && f !== 'f.place') errors.push(`arc: beat ${b.id} establishes unknown fact ${f}`);
+    for (const e of pack.beats.endings) {
+      for (const f of e.requires || []) if (!facts.has(f)) errors.push(`arc: ending ${e.id} requires unknown fact ${f}`);
+      if (e.line && !bank[e.line]) errors.push(`arc: ending ${e.id}: no line ${e.line}`);
+    }
+  }
   return { errors: [...new Set(errors)], compiled: c };
 }
 

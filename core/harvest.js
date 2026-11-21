@@ -4,7 +4,9 @@
      harvestRecord(journal, { gaps, meta, strip, now, journalBytes })   → record (docs/creator-kit.md, "The harvest")
        journal: the core's (entries, JSONL text) or the legacy free mode's French text journal ("JOURNAL · …", src/main.js).
        gaps:    the engine executor's gaps of a story session (src/adaptateur-core.js), journaled nowhere else.
-       meta:    what only the page knows: { mode, id, device, lang, pack: { id, version }, versions: {…} }.
+       meta:    what only the page knows: { mode, id, device, lang, pack: { id, version }, versions: {…}, creation }.
+                creation: the creation journal of a prompted world (core/studio.js creationSummary), kept as `creation`;
+                its failed, repaired and fallen-back stages join slow_or_doubtful (kind creation_<status>).
        strip:   the player's sentences are replaced by their class ("[player: go]"), in the lists and in the journal.
      parseLegacyJournal(text)                                            → { head, items } (each item keeps its seq)
      mergeRecords(records)                                               → the merged report: requests not served, grouped
@@ -123,10 +125,11 @@ export function harvestRecord(journal, { gaps = [], meta = {}, strip = false, no
     seed: r.seed ?? null, with_model: r.with_model, duration_s: r.duration_s, turns: r.turns,
     versions: Object.assign({}, legacy ? { harvest: HARVEST_VERSION } : coreVersions(), r.versions || {}, meta.versions || {}),
     summary: r.summary,
-    asked_not_doable: cap(r.asked), improvised: cap(r.improvised), slow_or_doubtful: cap(r.slow),
+    asked_not_doable: cap(r.asked), improvised: cap(r.improvised), slow_or_doubtful: cap(r.slow.concat(creationSlow(meta.creation))),
     stripped: !!strip,
     journal: { format: legacy ? 'legacy-text' : 'jsonl', text: null, cut: null },
   };
+  if (meta.creation) rec.creation = Object.assign({}, meta.creation, strip ? { sentence: null } : {});
   let text = legacy ? String(journal) : entriesOf(journal).map(e => JSON.stringify(e)).join('\n') + '\n';
   if (strip) {
     const said = r.said;                                         // every player sentence → its class, wherever it appears
@@ -148,6 +151,13 @@ export function harvestRecord(journal, { gaps = [], meta = {}, strip = false, no
     else rec.journal.cut = `journal not kept: ${text.length} bytes over ${journalBytes}`;
   } else rec.journal.cut = `journal not kept: ${text.length} bytes over ${journalBytes}`;
   return rec;
+}
+
+/* A creation's stages that did not simply land: where conception needs preparing, a better prompt or another tier. */
+function creationSlow(c) {
+  if (!c || !c.stages) return [];
+  return Object.entries(c.stages).filter(([, x]) => ['failed', 'repaired', 'fallback'].includes(x.status))
+    .map(([id, x]) => ({ seq: null, kind: 'creation_' + x.status, what: `conception stage ${id} ${x.status}${x.error ? ': ' + short(x.error, 120) : ''}`, stage: id, ms: x.latency_ms ?? null }));
 }
 
 /* ------------------------------------------------ the core's journal */
